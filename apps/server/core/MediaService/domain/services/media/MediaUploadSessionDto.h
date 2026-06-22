@@ -26,12 +26,8 @@ struct MediaUploadSessionDto
 
 bool IsValidMediaUploadSession(const MediaUploadSessionDto& session);
 MediaUploadSessionDto NormalizeMediaUploadSession(MediaUploadSessionDto session);
-bool EncodeMediaUploadSession(const MediaUploadSessionDto& session,
-                              std::string* out,
-                              std::string* error_out = nullptr);
-bool DecodeMediaUploadSession(std::string_view body,
-                              MediaUploadSessionDto* out,
-                              std::string* error_out = nullptr);
+bool EncodeMediaUploadSession(const MediaUploadSessionDto& session, std::string* out, std::string* error_out = nullptr);
+bool DecodeMediaUploadSession(std::string_view body, MediaUploadSessionDto* out, std::string* error_out = nullptr);
 memochat::json::JsonValue MediaUploadSessionToJsonValue(const MediaUploadSessionDto& session);
 bool MediaUploadSessionFromJsonValue(const memochat::json::JsonValue& value,
                                      MediaUploadSessionDto* out,

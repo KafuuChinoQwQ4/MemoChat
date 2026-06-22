@@ -46,9 +46,8 @@ inline RouteBodySchema MakeEmptyBodySchema(std::string role, std::string type_na
     return schema;
 }
 
-inline std::string_view ResolveRouteFieldSchemaName(
-    std::string_view reflected_name,
-    std::initializer_list<RouteFieldNameOverride> field_name_overrides)
+inline std::string_view ResolveRouteFieldSchemaName(std::string_view reflected_name,
+                                                    std::initializer_list<RouteFieldNameOverride> field_name_overrides)
 {
     for (const auto& override : field_name_overrides)
     {
@@ -73,8 +72,8 @@ RouteBodySchema MakeBodySchema(std::string role,
     schema.fields.reserve(field_names.size());
     for (std::string_view field_name : field_names)
     {
-        schema.fields.push_back(RouteFieldSchema{std::string(
-            ResolveRouteFieldSchemaName(field_name, field_name_overrides))});
+        schema.fields.push_back(
+            RouteFieldSchema{std::string(ResolveRouteFieldSchemaName(field_name, field_name_overrides))});
     }
 #endif
     return schema;
@@ -108,14 +107,13 @@ RouteSchemaDescriptor MakeRouteSchema(std::string method,
 }
 
 template <typename RequestDto, typename ResponseDto>
-RouteSchemaDescriptor MakeRouteSchema(
-    std::string method,
-    std::string path,
-    std::string name,
-    std::string request_type_name,
-    std::string response_type_name,
-    std::initializer_list<RouteFieldNameOverride> request_field_name_overrides,
-    std::initializer_list<RouteFieldNameOverride> response_field_name_overrides)
+RouteSchemaDescriptor MakeRouteSchema(std::string method,
+                                      std::string path,
+                                      std::string name,
+                                      std::string request_type_name,
+                                      std::string response_type_name,
+                                      std::initializer_list<RouteFieldNameOverride> request_field_name_overrides,
+                                      std::initializer_list<RouteFieldNameOverride> response_field_name_overrides)
 {
     RouteSchemaDescriptor descriptor;
     descriptor.method = std::move(method);

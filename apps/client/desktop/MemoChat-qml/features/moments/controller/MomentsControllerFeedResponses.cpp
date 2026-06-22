@@ -138,6 +138,7 @@ void MomentsController::onCommentListRsp(ReqId id, const QString& res, ErrorCode
     if (id != ReqId::ID_MOMENTS_COMMENT_LIST)
         return;
 
+    qDebug() << "[MomentsController] onCommentListRsp: err=" << err << "res=" << res.left(300);
     const qint64 pendingMomentId = _pending_comment_moments.take(ReqId::ID_MOMENTS_COMMENT_LIST);
     auto finishLoading = [this](qint64 momentId)
     {

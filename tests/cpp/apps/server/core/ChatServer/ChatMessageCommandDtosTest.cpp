@@ -18,11 +18,10 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateRevokeRequestDto>(
     std::array<std::string_view, 3>{"uid", "peer_uid", "msgid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateMessageChangedResultDto>(
-    std::array<std::string_view, 7>{
-        "error", "fromuid", "peer_uid", "msgid", "content", "changed_at_ms", "deleted"}));
+    std::array<std::string_view, 7>{"error", "fromuid", "peer_uid", "msgid", "content", "changed_at_ms", "deleted"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateMessageChangedEventDto>(
-    std::array<std::string_view, 8>{
-        "error", "event", "fromuid", "peer_uid", "msgid", "content", "changed_at_ms", "deleted"}));
+    std::array<std::string_view,
+               8>{"error", "event", "fromuid", "peer_uid", "msgid", "content", "changed_at_ms", "deleted"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateReadAckEventDto>(
     std::array<std::string_view, 5>{"error", "event", "fromuid", "peer_uid", "read_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateForwardMessageDto>(
@@ -38,21 +37,27 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupMessageChangedResultDto>(
     std::array<std::string_view, 6>{"error", "groupid", "msgid", "content", "changed_at_ms", "deleted"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupMessageChangedEventDto>(
-    std::array<std::string_view, 8>{
-        "error", "event", "groupid", "msgid", "content", "changed_at_ms", "operator_uid", "deleted"}));
+    std::array<std::string_view,
+               8>{"error", "event", "groupid", "msgid", "content", "changed_at_ms", "operator_uid", "deleted"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupReadAckEventDto>(
     std::array<std::string_view, 5>{"error", "event", "groupid", "fromuid", "read_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupInviteCreatedEventDto>(
     std::array<std::string_view, 6>{"error", "event", "groupid", "group_code", "name", "operator_uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupInviteMemberEventDto>(
-    std::array<std::string_view, 8>{
-        "error", "event", "groupid", "group_code", "name", "operator_uid", "target_user_id", "reason"}));
+    std::array<std::string_view,
+               8>{"error", "event", "groupid", "group_code", "name", "operator_uid", "target_user_id", "reason"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupApplyEventDto>(
-    std::array<std::string_view, 7>{
-        "error", "event", "groupid", "group_code", "applicant_uid", "applicant_user_id", "reason"}));
+    std::array<std::string_view,
+               7>{"error", "event", "groupid", "group_code", "applicant_uid", "applicant_user_id", "reason"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupApplyReviewedEventDto>(
-    std::array<std::string_view, 8>{
-        "error", "event", "groupid", "group_code", "applicant_uid", "applicant_user_id", "agree", "operator_uid"}));
+    std::array<std::string_view, 8>{"error",
+                                    "event",
+                                    "groupid",
+                                    "group_code",
+                                    "applicant_uid",
+                                    "applicant_user_id",
+                                    "agree",
+                                    "operator_uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupAnnouncementUpdatedEventDto>(
     std::array<std::string_view, 6>{"error", "event", "groupid", "group_code", "announcement", "operator_uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupIconUpdatedEventDto>(
@@ -68,11 +73,17 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
                                     "is_admin",
                                     "permission_bits"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupMuteChangedEventDto>(
-    std::array<std::string_view, 8>{
-        "error", "event", "groupid", "group_code", "operator_uid", "target_uid", "target_user_id", "mute_until"}));
+    std::array<std::string_view, 8>{"error",
+                                    "event",
+                                    "groupid",
+                                    "group_code",
+                                    "operator_uid",
+                                    "target_uid",
+                                    "target_user_id",
+                                    "mute_until"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupMemberKickedEventDto>(
-    std::array<std::string_view, 7>{
-        "error", "event", "groupid", "group_code", "operator_uid", "target_uid", "target_user_id"}));
+    std::array<std::string_view,
+               7>{"error", "event", "groupid", "group_code", "operator_uid", "target_uid", "target_user_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupMemberQuitEventDto>(
     std::array<std::string_view, 5>{"error", "event", "groupid", "group_code", "target_uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupDissolvedEventDto>(
@@ -108,14 +119,14 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
                                      "from_user_id",
                                      "group_code"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateSendEventDto>(
-    std::array<std::string_view, 8>{
-        "fromuid", "touid", "trace_id", "request_id", "span_id", "event_id", "accept_node", "accept_ts"}));
+    std::array<std::string_view,
+               8>{"fromuid", "touid", "trace_id", "request_id", "span_id", "event_id", "accept_node", "accept_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupSendEventDto>(
-    std::array<std::string_view, 8>{
-        "fromuid", "groupid", "trace_id", "request_id", "span_id", "event_id", "accept_node", "accept_ts"}));
+    std::array<std::string_view,
+               8>{"fromuid", "groupid", "trace_id", "request_id", "span_id", "event_id", "accept_node", "accept_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateSendResponseDto>(
-    std::array<std::string_view, 8>{
-        "error", "fromuid", "touid", "client_msg_id", "accept_node", "accept_ts", "status", "text_array"}));
+    std::array<std::string_view,
+               8>{"error", "fromuid", "touid", "client_msg_id", "accept_node", "accept_ts", "status", "text_array"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupSendResponseDto>(
     std::array<std::string_view, 16>{"error",
                                      "fromuid",
@@ -160,8 +171,8 @@ TEST(ChatMessageCommandDtosTest, ReadsPrivateEditRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsPrivateEditDefaults)
 {
-    const auto request = memochat::chat::command::ChatPrivateEditRequestFromJsonValue(
-        Parse(R"({"fromuid":11,"peer_uid":21})"));
+    const auto request =
+        memochat::chat::command::ChatPrivateEditRequestFromJsonValue(Parse(R"({"fromuid":11,"peer_uid":21})"));
 
     EXPECT_EQ(request.uid, 11);
     EXPECT_EQ(request.peer_uid, 21);
@@ -182,8 +193,8 @@ TEST(ChatMessageCommandDtosTest, ReadsPrivateForwardRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsPrivateForwardAliasesAndDefaults)
 {
-    const auto alias = memochat::chat::command::ChatPrivateForwardRequestFromJsonValue(
-        Parse(R"({"fromuid":13,"peer_uid":23})"));
+    const auto alias =
+        memochat::chat::command::ChatPrivateForwardRequestFromJsonValue(Parse(R"({"fromuid":13,"peer_uid":23})"));
     EXPECT_EQ(alias.from_uid, 13);
     EXPECT_EQ(alias.peer_uid, 23);
     EXPECT_TRUE(alias.source_msg_id.empty());
@@ -209,8 +220,8 @@ TEST(ChatMessageCommandDtosTest, ReadsPrivateRevokeRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsPrivateRevokeDefaults)
 {
-    const auto request = memochat::chat::command::ChatPrivateRevokeRequestFromJsonValue(
-        Parse(R"({"fromuid":16,"peer_uid":26})"));
+    const auto request =
+        memochat::chat::command::ChatPrivateRevokeRequestFromJsonValue(Parse(R"({"fromuid":16,"peer_uid":26})"));
 
     EXPECT_EQ(request.uid, 16);
     EXPECT_EQ(request.peer_uid, 26);
@@ -219,8 +230,12 @@ TEST(ChatMessageCommandDtosTest, ReadsPrivateRevokeDefaults)
 
 TEST(ChatMessageCommandDtosTest, WritesPrivateEditResultAndNotifyPayloads)
 {
-    const memochat::chat::command::ChatPrivateMessageChangedResultDto result{
-        .error = 0, .fromuid = 10, .peer_uid = 20, .msgid = "m-1", .content = "edited", .changed_at_ms = 1234};
+    const memochat::chat::command::ChatPrivateMessageChangedResultDto result{.error = 0,
+                                                                             .fromuid = 10,
+                                                                             .peer_uid = 20,
+                                                                             .msgid = "m-1",
+                                                                             .content = "edited",
+                                                                             .changed_at_ms = 1234};
     const auto result_json = memochat::chat::command::ToJsonValue(result);
 
     EXPECT_EQ(result_json["error"].asInt(), 0);
@@ -284,8 +299,11 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateRevokeResultAndNotifyPayloads)
 
 TEST(ChatMessageCommandDtosTest, WritesPrivateReadAckNotifyPayload)
 {
-    const memochat::chat::command::ChatPrivateReadAckEventDto event{
-        .error = 0, .event = "private_read_ack", .fromuid = 31, .peer_uid = 41, .read_ts = 7001};
+    const memochat::chat::command::ChatPrivateReadAckEventDto event{.error = 0,
+                                                                    .event = "private_read_ack",
+                                                                    .fromuid = 31,
+                                                                    .peer_uid = 41,
+                                                                    .read_ts = 7001};
     const auto event_json = memochat::chat::command::ToJsonValue(event);
 
     EXPECT_EQ(event_json["error"].asInt(), 0);
@@ -297,8 +315,8 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateReadAckNotifyPayload)
 
 TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndTextArray)
 {
-    const auto forward_meta = Parse(
-        R"({"forwarded_from_msgid":"source-1","source_from_uid":12,"prev_forward_meta":{"depth":1}})");
+    const auto forward_meta =
+        Parse(R"({"forwarded_from_msgid":"source-1","source_from_uid":12,"prev_forward_meta":{"depth":1}})");
     const memochat::chat::command::ChatPrivateForwardMessageDto message{.msgid = "client-1",
                                                                         .content = "forwarded content",
                                                                         .created_at = 5001,
@@ -339,10 +357,7 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndT
 TEST(ChatMessageCommandDtosTest, WritesPrivateForwardInitialResultWithoutOptionalPayloads)
 {
     const auto result_json = memochat::chat::command::ToJsonValue(
-        memochat::chat::command::ChatPrivateForwardResultDto{.error = 0,
-                                                             .fromuid = 13,
-                                                             .peer_uid = 35,
-                                                             .touid = 35});
+        memochat::chat::command::ChatPrivateForwardResultDto{.error = 0, .fromuid = 13, .peer_uid = 35, .touid = 35});
 
     EXPECT_EQ(result_json["error"].asInt(), 0);
     EXPECT_EQ(result_json["fromuid"].asInt(), 13);
@@ -367,8 +382,8 @@ TEST(ChatMessageCommandDtosTest, ReadsGroupEditRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsGroupEditDefaults)
 {
-    const auto request = memochat::chat::command::ChatGroupEditRequestFromJsonValue(
-        Parse(R"({"fromuid":18,"groupid":301})"));
+    const auto request =
+        memochat::chat::command::ChatGroupEditRequestFromJsonValue(Parse(R"({"fromuid":18,"groupid":301})"));
 
     EXPECT_EQ(request.uid, 18);
     EXPECT_EQ(request.group_id, 301);
@@ -389,8 +404,7 @@ TEST(ChatMessageCommandDtosTest, ReadsGroupForwardRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsGroupForwardAliasesAndDefaults)
 {
-    const auto alias =
-        memochat::chat::command::ChatGroupForwardRequestFromJsonValue(Parse(R"({"fromuid":20})"));
+    const auto alias = memochat::chat::command::ChatGroupForwardRequestFromJsonValue(Parse(R"({"fromuid":20})"));
     EXPECT_EQ(alias.from_uid, 20);
     EXPECT_EQ(alias.group_id, 0);
     EXPECT_TRUE(alias.source_msg_id.empty());
@@ -416,8 +430,8 @@ TEST(ChatMessageCommandDtosTest, ReadsGroupRevokeRequest)
 
 TEST(ChatMessageCommandDtosTest, ReadsGroupRevokeDefaults)
 {
-    const auto request = memochat::chat::command::ChatGroupRevokeRequestFromJsonValue(
-        Parse(R"({"fromuid":23,"groupid":305})"));
+    const auto request =
+        memochat::chat::command::ChatGroupRevokeRequestFromJsonValue(Parse(R"({"fromuid":23,"groupid":305})"));
 
     EXPECT_EQ(request.uid, 23);
     EXPECT_EQ(request.group_id, 305);
@@ -426,8 +440,11 @@ TEST(ChatMessageCommandDtosTest, ReadsGroupRevokeDefaults)
 
 TEST(ChatMessageCommandDtosTest, WritesGroupEditResultAndNotifyPayloads)
 {
-    const memochat::chat::command::ChatGroupMessageChangedResultDto result{
-        .error = 0, .groupid = 300, .msgid = "g-1", .content = "edited group", .changed_at_ms = 3456};
+    const memochat::chat::command::ChatGroupMessageChangedResultDto result{.error = 0,
+                                                                           .groupid = 300,
+                                                                           .msgid = "g-1",
+                                                                           .content = "edited group",
+                                                                           .changed_at_ms = 3456};
     const auto result_json = memochat::chat::command::ToJsonValue(result);
 
     EXPECT_EQ(result_json["error"].asInt(), 0);
@@ -487,8 +504,11 @@ TEST(ChatMessageCommandDtosTest, WritesGroupRevokeResultAndNotifyPayloads)
 
 TEST(ChatMessageCommandDtosTest, WritesGroupReadAckNotifyPayload)
 {
-    const memochat::chat::command::ChatGroupReadAckEventDto event{
-        .error = 0, .event = "group_read_ack", .groupid = 3301, .fromuid = 32, .read_ts = 8001};
+    const memochat::chat::command::ChatGroupReadAckEventDto event{.error = 0,
+                                                                  .event = "group_read_ack",
+                                                                  .groupid = 3301,
+                                                                  .fromuid = 32,
+                                                                  .read_ts = 8001};
     const auto event_json = memochat::chat::command::ToJsonValue(event);
 
     EXPECT_EQ(event_json["error"].asInt(), 0);
@@ -547,8 +567,8 @@ TEST(ChatMessageCommandDtosTest, WritesGroupApplyNotifyPayload)
                                                                 .groupid = 3312,
                                                                 .group_code = "G3312",
                                                                 .applicant_uid = 43,
-                                                                .applicant_user_id = std::optional<std::string>{
-                                                                    "applicant-43"},
+                                                                .applicant_user_id =
+                                                                    std::optional<std::string>{"applicant-43"},
                                                                 .reason = "please"};
     const auto event_json = memochat::chat::command::ToJsonValue(event);
 
@@ -573,15 +593,15 @@ TEST(ChatMessageCommandDtosTest, WritesGroupApplyNotifyPayload)
 
 TEST(ChatMessageCommandDtosTest, WritesGroupApplyReviewedNotifyPayload)
 {
-    const memochat::chat::command::ChatGroupApplyReviewedEventDto event{
-        .error = 0,
-        .event = "group_member_changed",
-        .groupid = 3314,
-        .group_code = "G3314",
-        .applicant_uid = 45,
-        .applicant_user_id = std::optional<std::string>{"applicant-45"},
-        .agree = true,
-        .operator_uid = 55};
+    const memochat::chat::command::ChatGroupApplyReviewedEventDto event{.error = 0,
+                                                                        .event = "group_member_changed",
+                                                                        .groupid = 3314,
+                                                                        .group_code = "G3314",
+                                                                        .applicant_uid = 45,
+                                                                        .applicant_user_id =
+                                                                            std::optional<std::string>{"applicant-45"},
+                                                                        .agree = true,
+                                                                        .operator_uid = 55};
     const auto event_json = memochat::chat::command::ToJsonValue(event);
 
     EXPECT_EQ(event_json["error"].asInt(), 0);
@@ -714,8 +734,11 @@ TEST(ChatMessageCommandDtosTest, WritesGroupMemberKickedNotifyPayload)
 
 TEST(ChatMessageCommandDtosTest, WritesGroupMemberQuitNotifyPayload)
 {
-    const memochat::chat::command::ChatGroupMemberQuitEventDto event{
-        .error = 0, .event = "group_member_quit", .groupid = 3306, .group_code = "", .target_uid = 47};
+    const memochat::chat::command::ChatGroupMemberQuitEventDto event{.error = 0,
+                                                                     .event = "group_member_quit",
+                                                                     .groupid = 3306,
+                                                                     .group_code = "",
+                                                                     .target_uid = 47};
     const auto event_json = memochat::chat::command::ToJsonValue(event);
 
     EXPECT_EQ(event_json["error"].asInt(), 0);

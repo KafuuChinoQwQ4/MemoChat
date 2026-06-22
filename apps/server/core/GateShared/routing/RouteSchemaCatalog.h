@@ -98,39 +98,39 @@ inline void AppendJsonEscaped(std::string& out, std::string_view s)
         const auto byte = static_cast<unsigned char>(c);
         switch (c)
         {
-        case '\\':
-            out += "\\\\";
-            break;
-        case '"':
-            out += "\\\"";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\b':
-            out += "\\b";
-            break;
-        case '\f':
-            out += "\\f";
-            break;
-        default:
-            if (byte < 0x20)
-            {
-                out += "\\u00";
-                out += kHexDigits[(byte >> 4) & 0x0F];
-                out += kHexDigits[byte & 0x0F];
-            }
-            else
-            {
-                out += c;
-            }
-            break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\b':
+                out += "\\b";
+                break;
+            case '\f':
+                out += "\\f";
+                break;
+            default:
+                if (byte < 0x20)
+                {
+                    out += "\\u00";
+                    out += kHexDigits[(byte >> 4) & 0x0F];
+                    out += kHexDigits[byte & 0x0F];
+                }
+                else
+                {
+                    out += c;
+                }
+                break;
         }
     }
 }

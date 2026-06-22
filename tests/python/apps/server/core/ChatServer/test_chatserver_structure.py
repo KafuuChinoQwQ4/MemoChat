@@ -411,9 +411,9 @@ class ChatServerStructureTests(unittest.TestCase):
                 self.assertNotIn('Include="message.proto"', text)
         self.assertIn('set "PROTO_ROOT=%SERVER_CORE_DIR%\\common\\proto"', start_script)
         self.assertIn('set "PROTO_FILE=%PROTO_ROOT%\\message.proto"', start_script)
-        self.assertNotIn('PROTO_FILE=%SCRIPT_DIR%\\message.proto', start_script)
-        self.assertIn("--grpc_out=\"%SCRIPT_DIR%\"", start_script)
-        self.assertIn("--cpp_out=\"%SCRIPT_DIR%\"", start_script)
+        self.assertNotIn("PROTO_FILE=%SCRIPT_DIR%\\message.proto", start_script)
+        self.assertIn('--grpc_out="%SCRIPT_DIR%"', start_script)
+        self.assertIn('--cpp_out="%SCRIPT_DIR%"', start_script)
         self.assertIn('<ClCompile Include="message.grpc.pb.cc" />', vcxproj)
         self.assertIn('<ClCompile Include="message.pb.cc" />', vcxproj)
 
@@ -1010,7 +1010,7 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, resolver_source)
 
         for token in (
-            'ports/OnlineRouteResolver.h',
+            "ports/OnlineRouteResolver.h",
             "relation_bootstrap_cache->Invalidate",
             "ResolveOnlineRoute(uid, _session_registry, _online_route_store)",
             "ResolveOnlineRoute(to_uid, _session_registry, _online_route_store)",
@@ -2066,7 +2066,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", composition_header)
         self.assertNotIn("std::unique_ptr<ChatRelationService> _chat_relation_service", composition_header)
         self.assertNotIn("std::unique_ptr<IRelationService> _chat_relation_service", logic_header_source())
-        self.assertNotIn("std::unique_ptr<IRelationSessionService> _chat_relation_session_service", logic_header_source())
+        self.assertNotIn(
+            "std::unique_ptr<IRelationSessionService> _chat_relation_session_service", logic_header_source()
+        )
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
         self.assertIn('#include "ports/IRelationSessionService.h"', registrar_source)
@@ -2360,13 +2362,17 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("class IRelationQueryServiceConfig;", composition_header)
         self.assertIn("std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", composition_header)
         self.assertIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", composition_header)
-        self.assertNotIn("std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", logic_header_source())
+        self.assertNotIn(
+            "std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config", logic_header_source()
+        )
         self.assertNotIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", logic_header_source())
 
         composition_source = runtime_composition_source()
         self.assertIn('#include "RelationQueryServiceConfig.h"', composition_source)
         self.assertIn('#include "RelationQueryServiceFactory.h"', composition_source)
-        self.assertIn("_relation_query_service_config = std::make_unique<RelationQueryServiceConfig>()", composition_source)
+        self.assertIn(
+            "_relation_query_service_config = std::make_unique<RelationQueryServiceConfig>()", composition_source
+        )
         self.assertIn("SelectRelationQueryService(*_relation_query_service_config", composition_source)
         self.assertIn("_relation_query_service_remote", composition_source)
         self.assertIn("relation_query_service", composition_source)

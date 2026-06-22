@@ -369,8 +369,7 @@ inline ChatPrivateEditRequestDto ChatPrivateEditRequestFromJsonValue(const memoc
     return request;
 }
 
-inline ChatPrivateForwardRequestDto ChatPrivateForwardRequestFromJsonValue(
-    const memochat::json::JsonValue& root)
+inline ChatPrivateForwardRequestDto ChatPrivateForwardRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ChatPrivateForwardRequestDto request;
     request.from_uid = root["fromuid"].asInt();

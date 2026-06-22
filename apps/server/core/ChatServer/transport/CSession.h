@@ -48,20 +48,14 @@ public:
     void DealExceptionSession();
 
 private:
-    // 读循环协程:取代原 AsyncReadHead⇄AsyncReadBody 互递归 lambda。
-    // co_await async_read 定长 head/body,投递 LogicSystem,直到 Close/对端断连。
-    // 用 exec::start_detached 启动(协程首行持 self 续命,完成时自释放 op state)。
-    // ⚠️ 错误分支 catch boost::system::system_error(asioexec boost 模式抛该型,
-    // 非 std::system_error);异常必须在协程内吞掉,不得逃逸(否则 start_detached
-    // 的 set_error → std::terminate)。详见 common/runtime/AsioCoScheduler.h。
-    exec::task<void> ReadLoop();
+    exec::task<void> ReadLoop(std::shared_ptr<CSession> self); // self 传值覆盖 spawn→首行窗口
 
     void HandleWrite(const boost::system::error_code& error, std::shared_ptr<CSession> shared_self);
     tcp::socket _socket;
     std::string _session_id;
     char _data[MAX_LENGTH];
-    CServer* _server;
-    bool _b_close;
+    std::atomic<CServer*> _server; // DetachServer release-store; ReadLoop acquire-load → 无数据竞争
+    std::atomic<bool> _b_close;    // 跨线程(ReadLoop读/Close写);真正停读靠 _socket.close()
     std::queue<std::shared_ptr<SendNode>> _send_que;
     std::mutex _send_lock;
 

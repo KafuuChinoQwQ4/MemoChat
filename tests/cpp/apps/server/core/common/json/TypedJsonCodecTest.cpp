@@ -40,8 +40,7 @@ TEST(TypedJsonCodecTest, ReadsTypedJsonWithGlazeMetadata)
     TypedJsonCodecSample sample;
     std::string error;
 
-    ASSERT_TRUE(memochat::json::ReadTypedJson(R"({"uid":7,"name":"bob","enabled":false})", &sample, &error))
-        << error;
+    ASSERT_TRUE(memochat::json::ReadTypedJson(R"({"uid":7,"name":"bob","enabled":false})", &sample, &error)) << error;
 
     EXPECT_EQ(sample.uid, 7);
     EXPECT_EQ(sample.name, "bob");

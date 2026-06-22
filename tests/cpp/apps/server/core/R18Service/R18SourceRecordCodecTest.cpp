@@ -9,18 +9,18 @@
 #include <string_view>
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
-static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceRecordDto>(
-    std::array<std::string_view, 11>{"id",
-                                     "name",
-                                     "version",
-                                     "path",
-                                     "format",
-                                     "source_url",
-                                     "catalog_url",
-                                     "enabled",
-                                     "builtin",
-                                     "status",
-                                     "message"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceRecordDto>(std::array<std::string_view, 11>{
+    "id",
+    "name",
+    "version",
+    "path",
+    "format",
+    "source_url",
+    "catalog_url",
+    "enabled",
+    "builtin",
+    "status",
+    "message"}));
 #endif
 
 namespace

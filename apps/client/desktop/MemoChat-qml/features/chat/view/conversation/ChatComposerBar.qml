@@ -188,9 +188,10 @@ Item {
             }
 
             SmartFeatureBar {
-                Layout.preferredWidth: 256
+                Layout.preferredWidth: 84
                 Layout.preferredHeight: 30
                 compactMode: true
+                backdrop: root.backdrop !== null ? root.backdrop : root
                 smartResult: root.smartResult
                 busy: root.smartBusy
                 statusText: root.smartStatusText

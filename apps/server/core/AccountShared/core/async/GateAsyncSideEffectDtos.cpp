@@ -123,9 +123,8 @@ GateLoginAuditPayloadDto BuildLoginAuditPayload(int uid,
     return payload;
 }
 
-GateCacheInvalidatePayloadDto BuildCacheInvalidatePayload(const std::string& email,
-                                                          const std::string& user_name,
-                                                          const std::string& reason)
+GateCacheInvalidatePayloadDto
+BuildCacheInvalidatePayload(const std::string& email, const std::string& user_name, const std::string& reason)
 {
     GateCacheInvalidatePayloadDto payload;
     payload.email = email;

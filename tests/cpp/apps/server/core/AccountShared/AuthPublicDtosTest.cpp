@@ -24,8 +24,8 @@ static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::GetUserInfo
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthResetPasswordResponseDto>(
     std::array<std::string_view, 5>{"error", "email", "user", "passwd", "varifycode"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRegisterResponseDto>(
-    std::array<std::string_view, 9>{
-        "error", "uid", "user_id", "email", "user", "passwd", "confirm", "icon", "varifycode"}));
+    std::array<std::string_view,
+               9>{"error", "uid", "user_id", "email", "user", "passwd", "confirm", "icon", "varifycode"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::ProfileUpdateResponseDto>(
     std::array<std::string_view, 6>{"error", "uid", "name", "nick", "desc", "icon"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::UserInfoResponseDto>(
@@ -92,8 +92,8 @@ TEST(AuthPublicDtosTest, DecodesRegisterRequestWithOptionalSexDefault)
     EXPECT_EQ(full.varifycode, "654321");
     EXPECT_EQ(full.sex, 2);
 
-    const auto missing_sex = gateauthsupport::AuthRegisterRequestFromJsonValue(
-        Parse(R"({"email":"alice@example.com","user":"alice","passwd":"pw","confirm":"pw","icon":"i.png","varifycode":"654321"})"));
+    const auto missing_sex = gateauthsupport::AuthRegisterRequestFromJsonValue(Parse(
+        R"({"email":"alice@example.com","user":"alice","passwd":"pw","confirm":"pw","icon":"i.png","varifycode":"654321"})"));
     EXPECT_EQ(missing_sex.sex, 0);
 }
 
@@ -115,7 +115,9 @@ TEST(AuthPublicDtosTest, DecodesProfileUpdateAndRequiredKeys)
     memochat::json::JsonValue parsed;
     gateauthsupport::ProfileUpdateRequestDto request;
     ASSERT_TRUE(gateauthsupport::DecodeProfileUpdateRequest(
-        R"({"uid":42,"name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})", &request, &parsed));
+        R"({"uid":42,"name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})",
+        &request,
+        &parsed));
 
     EXPECT_EQ(request.uid, 42);
     EXPECT_EQ(request.name, "alice");
@@ -262,15 +264,15 @@ TEST(AuthPublicDtosTest, WritesProfileResponsesWithExistingWireFields)
 
 TEST(AuthPublicDtosTest, WritesLoginUserProfileInWireOrder)
 {
-    const auto json = gateauthsupport::AuthLoginUserProfileToJsonValue(
-        gateauthsupport::AuthLoginUserProfileDto{.uid = 7,
-                                                 .user_id = "u-7",
-                                                 .name = "Alice",
-                                                 .nick = "A",
-                                                 .icon = "i.png",
-                                                 .desc = "hello",
-                                                 .email = "a@x.com",
-                                                 .sex = 2});
+    const auto json =
+        gateauthsupport::AuthLoginUserProfileToJsonValue(gateauthsupport::AuthLoginUserProfileDto{.uid = 7,
+                                                                                                  .user_id = "u-7",
+                                                                                                  .name = "Alice",
+                                                                                                  .nick = "A",
+                                                                                                  .icon = "i.png",
+                                                                                                  .desc = "hello",
+                                                                                                  .email = "a@x.com",
+                                                                                                  .sex = 2});
 
     EXPECT_EQ(memochat::json::glaze_safe_get<int>(json, "uid", 0), 7);
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(json, "user_id", ""), "u-7");
@@ -284,9 +286,12 @@ TEST(AuthPublicDtosTest, WritesLoginUserProfileInWireOrder)
 
 TEST(AuthPublicDtosTest, WritesChatEndpointInWireOrder)
 {
-    const auto json = gateauthsupport::AuthChatEndpointToJsonValue(
-        gateauthsupport::AuthChatEndpointDto{
-            .transport = "quic", .host = "10.0.0.1", .port = "8443", .server_name = "chat1", .priority = 3});
+    const auto json =
+        gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{.transport = "quic",
+                                                                                          .host = "10.0.0.1",
+                                                                                          .port = "8443",
+                                                                                          .server_name = "chat1",
+                                                                                          .priority = 3});
 
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(json, "transport", ""), "quic");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(json, "host", ""), "10.0.0.1");

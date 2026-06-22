@@ -12,26 +12,20 @@
 #include <string_view>
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
-static_assert(memochat::reflection::FieldNamesEqual<TaskEnvelope>(
-    std::array<std::string_view, 10>{"task_id",
-                                     "task_type",
-                                     "trace_id",
-                                     "request_id",
-                                     "created_at_ms",
-                                     "available_at_ms",
-                                     "retry_count",
-                                     "max_retries",
-                                     "routing_key",
-                                     "payload"}));
+static_assert(memochat::reflection::FieldNamesEqual<TaskEnvelope>(std::array<std::string_view, 10>{"task_id",
+                                                                                                   "task_type",
+                                                                                                   "trace_id",
+                                                                                                   "request_id",
+                                                                                                   "created_at_ms",
+                                                                                                   "available_at_ms",
+                                                                                                   "retry_count",
+                                                                                                   "max_retries",
+                                                                                                   "routing_key",
+                                                                                                   "payload"}));
 
 static_assert(memochat::reflection::FieldNamesEqual<AsyncEventEnvelope>(
-    std::array<std::string_view, 7>{"event_id",
-                                    "topic",
-                                    "partition_key",
-                                    "trace_id",
-                                    "request_id",
-                                    "retry_count",
-                                    "payload"}));
+    std::array<std::string_view,
+               7>{"event_id", "topic", "partition_key", "trace_id", "request_id", "retry_count", "payload"}));
 #endif
 
 namespace

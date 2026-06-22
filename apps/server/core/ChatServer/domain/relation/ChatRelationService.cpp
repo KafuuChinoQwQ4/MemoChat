@@ -370,8 +370,10 @@ RelationCommandResult ChatRelationService::AddFriendApply(const RelationCommandR
     }
     auto apply_info = std::make_shared<UserInfo>();
     bool b_info = chatusersupport::GetBaseInfo(USER_BASE_INFO + std::to_string(uid), uid, apply_info);
-    ChatRelationDtos::ChatAddFriendApplyNotifyDto notify_dto{
-        .error = ErrorCodes::Success, .applyuid = uid, .name = applyname, .desc = ""};
+    ChatRelationDtos::ChatAddFriendApplyNotifyDto notify_dto{.error = ErrorCodes::Success,
+                                                             .applyuid = uid,
+                                                             .name = applyname,
+                                                             .desc = ""};
     if (b_info)
     {
         notify_dto.icon = apply_info->icon;
@@ -442,8 +444,9 @@ RelationCommandResult ChatRelationService::AuthFriendApply(const RelationCommand
         _relation_bootstrap_cache->Invalidate(uid);
         _relation_bootstrap_cache->Invalidate(touid);
     }
-    ChatRelationDtos::ChatAuthFriendApplyNotifyDto notify_dto{
-        .error = ErrorCodes::Success, .fromuid = uid, .touid = touid};
+    ChatRelationDtos::ChatAuthFriendApplyNotifyDto notify_dto{.error = ErrorCodes::Success,
+                                                              .fromuid = uid,
+                                                              .touid = touid};
     auto current_user = std::make_shared<UserInfo>();
     bool found = chatusersupport::GetBaseInfo(USER_BASE_INFO + std::to_string(uid), uid, current_user);
     if (found)
@@ -492,8 +495,9 @@ RelationCommandResult ChatRelationService::DeleteFriend(const RelationCommandReq
     const int uid = request_dto.uid;
     const int friendUid = request_dto.friend_uid;
 
-    ChatRelationDtos::ChatDeleteFriendResponseDto response{
-        .error = ErrorCodes::Success, .fromuid = uid, .friend_uid = friendUid};
+    ChatRelationDtos::ChatDeleteFriendResponseDto response{.error = ErrorCodes::Success,
+                                                           .fromuid = uid,
+                                                           .friend_uid = friendUid};
 
     if (uid <= 0 || friendUid <= 0 || uid == friendUid)
     {

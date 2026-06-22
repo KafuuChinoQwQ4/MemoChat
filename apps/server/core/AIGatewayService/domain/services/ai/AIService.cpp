@@ -107,11 +107,10 @@ bool AIService::HandleChat(const memochat::gate::routing::GateRequest& request,
                                 chat_request.model_type,
                                 chat_request.model_name,
                                 chat_request.metadata_json);
-    memolog::LogInfo(
-        "gate.ai.chat.result",
-        "AIServer Chat returned",
-        {{"uid", std::to_string(chat_request.uid)},
-         {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}});
+    memolog::LogInfo("gate.ai.chat.result",
+                     "AIServer Chat returned",
+                     {{"uid", std::to_string(chat_request.uid)},
+                      {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}});
     const int error_code = json::glaze_safe_get<int>(result, "error", json::glaze_safe_get<int>(result, "code", 0));
     if (error_code != 0)
     {
@@ -194,11 +193,10 @@ bool AIService::HandleCreateSession(const memochat::gate::routing::GateRequest& 
                      "calling AIServer CreateSession",
                      {{"uid", std::to_string(session_request.uid)}});
     auto result = Client().CreateSession(session_request.uid, session_request.model_type, session_request.model_name);
-    memolog::LogInfo(
-        "gate.ai.session.create.result",
-        "AIServer CreateSession returned",
-        {{"uid", std::to_string(session_request.uid)},
-         {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}});
+    memolog::LogInfo("gate.ai.session.create.result",
+                     "AIServer CreateSession returned",
+                     {{"uid", std::to_string(session_request.uid)},
+                      {"code", std::to_string(json::glaze_safe_get<int>(result, "code", 0))}});
     WriteJson(response, result);
     return true;
 }

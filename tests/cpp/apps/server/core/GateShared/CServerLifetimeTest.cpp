@@ -74,15 +74,18 @@ TEST(GateCServerLifetime, CoroutineSelfParamSurvivesTemporaryOwnerAndAccepts)
         // 此刻:本测试线程内已无 CServer 强引用(临时对象已弃)。协程体尚未跑(还没 run())。
         // 若实现把 self 写成协程首行 shared_from_this(),run() 一跑首行就 bad_weak_ptr→terminate。
 
-        std::thread io_thread([&] { ioc.run(); });
+        std::thread io_thread(
+            [&]
+            {
+                ioc.run();
+            });
 
         // 给 io 线程时间跑 AcceptLoop 首行(传值 self 入帧)+ 挂到 async_accept。
         std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
         // ① 命门:协程帧的传值 self 续命成功 —— CServer 未被临时对象析构带走。
-        ASSERT_FALSE(weak.expired())
-            << "AcceptLoop 协程帧未持有 self —— 临时 owner 销毁后 CServer 已析构(说明 self "
-               "退回了首行 shared_from_this,生产里会 bad_weak_ptr→terminate)";
+        ASSERT_FALSE(weak.expired()) << "AcceptLoop 协程帧未持有 self —— 临时 owner 销毁后 CServer 已析构(说明 self "
+                                        "退回了首行 shared_from_this,生产里会 bad_weak_ptr→terminate)";
 
         // ② accept 真实生效:loopback 连一条。
         {
@@ -122,9 +125,8 @@ TEST(GateCServerLifetime, CoroutineSelfParamSurvivesTemporaryOwnerAndAccepts)
     //
     //   本测试的确定性价值在 ①②:传值 self 覆盖了"临时 owner 销毁 → ioc.run → 协程首行"窗口
     //   (未 bad_weak_ptr→terminate),且 accept 真实生效。取消/优雅退出由 prodpath spike 拥有。
-    EXPECT_FALSE(weak.expired())
-        << "ioc.stop()(无 cancel)后 AcceptLoop 仍挂在 co_await,协程帧应仍持 self(良性 "
-           "abandon-at-exit,与原回调版一致);若已失效说明 self 生命周期与预期不符";
+    EXPECT_FALSE(weak.expired()) << "ioc.stop()(无 cancel)后 AcceptLoop 仍挂在 co_await,协程帧应仍持 self(良性 "
+                                    "abandon-at-exit,与原回调版一致);若已失效说明 self 生命周期与预期不符";
 }
 
 } // namespace

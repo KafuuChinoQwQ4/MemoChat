@@ -116,9 +116,7 @@ class QmlScrollWindowHandoffTests(unittest.TestCase):
         self.assertNotIn("ChatMessageFileBody", delegate)
         self.assertNotIn("ChatMessageImageBody", delegate)
 
-        delegate_bubble_block = delegate[
-            delegate.index("ChatMessageBubble {") : delegate.index("ChatMessageMeta {")
-        ]
+        delegate_bubble_block = delegate[delegate.index("ChatMessageBubble {") : delegate.index("ChatMessageMeta {")]
         self.assertIn("x: root.bubbleX", delegate_bubble_block)
         self.assertIn("y: root.bubbleY", delegate_bubble_block)
         self.assertNotIn("anchors.left", delegate_bubble_block)

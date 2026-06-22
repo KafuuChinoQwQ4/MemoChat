@@ -10,8 +10,6 @@
 #include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/random_generator.hpp>
 
-using namespace std::chrono;
-
 namespace
 {
 std::string TrimAscii(const std::string& value)

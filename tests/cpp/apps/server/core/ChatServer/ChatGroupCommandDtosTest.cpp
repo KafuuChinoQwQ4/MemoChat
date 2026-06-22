@@ -62,8 +62,8 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::group::ChatG
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::group::ChatGroupCreateResponseDto>(
     std::array<std::string_view, 5>{"error", "groupid", "group_code", "name", "announcement"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::group::ChatGroupReviewApplyResponseDto>(
-    std::array<std::string_view, 7>{
-        "error", "apply_id", "agree", "groupid", "applicant_uid", "group_code", "applicant_user_id"}));
+    std::array<std::string_view,
+               7>{"error", "apply_id", "agree", "groupid", "applicant_uid", "group_code", "applicant_user_id"}));
 #endif
 
 namespace
@@ -80,8 +80,8 @@ memochat::json::JsonValue Parse(std::string_view body)
 
 TEST(ChatGroupCommandDtosTest, ReadsCreateGroupRequest)
 {
-    const auto request = memochat::chat::group::ChatGroupCreateRequestFromJsonValue(
-        Parse(R"({"fromuid":10,"name":"team","announcement":"hello","member_limit":128,"member_user_ids":["u1","u2","u1"]})"));
+    const auto request = memochat::chat::group::ChatGroupCreateRequestFromJsonValue(Parse(
+        R"({"fromuid":10,"name":"team","announcement":"hello","member_limit":128,"member_user_ids":["u1","u2","u1"]})"));
 
     EXPECT_EQ(request.owner_uid, 10);
     EXPECT_EQ(request.name, "team");
@@ -95,8 +95,8 @@ TEST(ChatGroupCommandDtosTest, ReadsCreateGroupRequest)
 
 TEST(ChatGroupCommandDtosTest, ReadsCreateGroupDefaultsAndIgnoresNonArrayMembers)
 {
-    const auto missing = memochat::chat::group::ChatGroupCreateRequestFromJsonValue(
-        Parse(R"({"fromuid":11,"name":"team"})"));
+    const auto missing =
+        memochat::chat::group::ChatGroupCreateRequestFromJsonValue(Parse(R"({"fromuid":11,"name":"team"})"));
     EXPECT_EQ(missing.owner_uid, 11);
     EXPECT_EQ(missing.name, "team");
     EXPECT_TRUE(missing.announcement.empty());
@@ -110,8 +110,7 @@ TEST(ChatGroupCommandDtosTest, ReadsCreateGroupDefaultsAndIgnoresNonArrayMembers
 
 TEST(ChatGroupCommandDtosTest, ReadsGroupListRequest)
 {
-    const auto request =
-        memochat::chat::group::ChatGroupListRequestFromJsonValue(Parse(R"({"fromuid":11})"));
+    const auto request = memochat::chat::group::ChatGroupListRequestFromJsonValue(Parse(R"({"fromuid":11})"));
 
     EXPECT_EQ(request.uid, 11);
 }
@@ -207,10 +206,9 @@ TEST(ChatGroupCommandDtosTest, ReadsSetAdminDefaultPermissionBits)
 
 TEST(ChatGroupCommandDtosTest, MergesSetAdminPermissionBitsAndFlags)
 {
-    const int64_t base =
-        memochat::chat::group::kGroupPermInviteUsers | memochat::chat::group::kGroupPermPinMessages;
-    const auto request = memochat::chat::group::ChatGroupSetAdminRequestFromJsonValue(
-        Parse(R"({"fromuid":22,"target_user_id":"target","groupid":901,"permission_bits":20,"can_invite_users":false,"can_manage_admins":true})"));
+    const int64_t base = memochat::chat::group::kGroupPermInviteUsers | memochat::chat::group::kGroupPermPinMessages;
+    const auto request = memochat::chat::group::ChatGroupSetAdminRequestFromJsonValue(Parse(
+        R"({"fromuid":22,"target_user_id":"target","groupid":901,"permission_bits":20,"can_invite_users":false,"can_manage_admins":true})"));
 
     EXPECT_EQ(base, memochat::chat::group::kGroupPermInviteUsers | memochat::chat::group::kGroupPermPinMessages);
     EXPECT_TRUE(request.is_admin);
@@ -222,8 +220,8 @@ TEST(ChatGroupCommandDtosTest, MergesSetAdminPermissionBitsAndFlags)
 
 TEST(ChatGroupCommandDtosTest, ClearsSetAdminPermissionBitsWhenRemovingAdmin)
 {
-    const auto request = memochat::chat::group::ChatGroupSetAdminRequestFromJsonValue(
-        Parse(R"({"fromuid":23,"target_user_id":"target","groupid":902,"is_admin":false,"permission_bits":127,"can_manage_admins":true})"));
+    const auto request = memochat::chat::group::ChatGroupSetAdminRequestFromJsonValue(Parse(
+        R"({"fromuid":23,"target_user_id":"target","groupid":902,"is_admin":false,"permission_bits":127,"can_manage_admins":true})"));
 
     EXPECT_FALSE(request.is_admin);
     EXPECT_TRUE(request.has_permission_bits);
@@ -251,8 +249,10 @@ TEST(ChatGroupCommandDtosTest, ReadsMemberActionRequestForMuteAndKick)
 TEST(ChatGroupCommandDtosTest, WritesInviteMemberResponseRoot)
 {
     const memochat::json::JsonValue out = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupInviteMemberResponseDto{
-            .error = 0, .groupid = 901, .touid = 42, .target_user_id = "u-42"});
+        memochat::chat::group::ChatGroupInviteMemberResponseDto{.error = 0,
+                                                                .groupid = 901,
+                                                                .touid = 42,
+                                                                .target_user_id = "u-42"});
 
     EXPECT_EQ(out["error"].asInt(), 0);
     EXPECT_EQ(out["groupid"].asInt64(), 901);
@@ -273,24 +273,29 @@ TEST(ChatGroupCommandDtosTest, WritesApplyJoinResponseRoot)
 TEST(ChatGroupCommandDtosTest, WritesAnnouncementUpdateResponseWithAndWithoutGroupCode)
 {
     const memochat::json::JsonValue with = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupAnnouncementUpdateResponseDto{
-            .error = 0, .groupid = 903, .announcement = "hello", .group_code = "G903"});
+        memochat::chat::group::ChatGroupAnnouncementUpdateResponseDto{.error = 0,
+                                                                      .groupid = 903,
+                                                                      .announcement = "hello",
+                                                                      .group_code = "G903"});
     EXPECT_EQ(with["error"].asInt(), 0);
     EXPECT_EQ(with["groupid"].asInt64(), 903);
     EXPECT_EQ(with["announcement"].asString(), "hello");
     EXPECT_EQ(with["group_code"].asString(), "G903");
 
     const memochat::json::JsonValue without = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupAnnouncementUpdateResponseDto{
-            .error = 0, .groupid = 903, .announcement = "hello"});
+        memochat::chat::group::ChatGroupAnnouncementUpdateResponseDto{.error = 0,
+                                                                      .groupid = 903,
+                                                                      .announcement = "hello"});
     EXPECT_FALSE(without.isMember("group_code")) << without.toStyledString();
 }
 
 TEST(ChatGroupCommandDtosTest, WritesIconUpdateResponseWithAndWithoutGroupCode)
 {
-    const memochat::json::JsonValue with = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupIconUpdateResponseDto{
-            .error = 0, .groupid = 905, .icon = "i.png", .group_code = "G905"});
+    const memochat::json::JsonValue with =
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupIconUpdateResponseDto{.error = 0,
+                                                                                                 .groupid = 905,
+                                                                                                 .icon = "i.png",
+                                                                                                 .group_code = "G905"});
     EXPECT_EQ(with["icon"].asString(), "i.png");
     EXPECT_EQ(with["group_code"].asString(), "G905");
 
@@ -307,17 +312,19 @@ TEST(ChatGroupCommandDtosTest, WritesQuitResponseWithAndWithoutGroupCode)
     EXPECT_EQ(with["groupid"].asInt64(), 906);
     EXPECT_EQ(with["group_code"].asString(), "G906");
 
-    const memochat::json::JsonValue without = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupQuitResponseDto{.error = 1, .groupid = 906});
+    const memochat::json::JsonValue without =
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupQuitResponseDto{.error = 1, .groupid = 906});
     EXPECT_EQ(without["error"].asInt(), 1);
     EXPECT_FALSE(without.isMember("group_code")) << without.toStyledString();
 }
 
 TEST(ChatGroupCommandDtosTest, WritesDissolveResponseWithAndWithoutOptionalTail)
 {
-    const memochat::json::JsonValue with = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupDissolveResponseDto{
-            .error = 0, .groupid = 907, .group_code = "G907", .name = "team"});
+    const memochat::json::JsonValue with =
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupDissolveResponseDto{.error = 0,
+                                                                                               .groupid = 907,
+                                                                                               .group_code = "G907",
+                                                                                               .name = "team"});
     EXPECT_EQ(with["error"].asInt(), 0);
     EXPECT_EQ(with["groupid"].asInt64(), 907);
     EXPECT_EQ(with["group_code"].asString(), "G907");
@@ -333,8 +340,12 @@ TEST(ChatGroupCommandDtosTest, WritesDissolveResponseWithAndWithoutOptionalTail)
 TEST(ChatGroupCommandDtosTest, WritesMuteMemberResponseWithAndWithoutGroupCode)
 {
     const memochat::json::JsonValue with = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupMuteMemberResponseDto{
-            .error = 0, .groupid = 908, .touid = 51, .target_user_id = "u-51", .mute_until = 1700, .group_code = "G908"});
+        memochat::chat::group::ChatGroupMuteMemberResponseDto{.error = 0,
+                                                              .groupid = 908,
+                                                              .touid = 51,
+                                                              .target_user_id = "u-51",
+                                                              .mute_until = 1700,
+                                                              .group_code = "G908"});
     EXPECT_EQ(with["error"].asInt(), 0);
     EXPECT_EQ(with["groupid"].asInt64(), 908);
     EXPECT_EQ(with["touid"].asInt(), 51);
@@ -343,8 +354,11 @@ TEST(ChatGroupCommandDtosTest, WritesMuteMemberResponseWithAndWithoutGroupCode)
     EXPECT_EQ(with["group_code"].asString(), "G908");
 
     const memochat::json::JsonValue without = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupMuteMemberResponseDto{
-            .error = 0, .groupid = 908, .touid = 51, .target_user_id = "u-51", .mute_until = 0});
+        memochat::chat::group::ChatGroupMuteMemberResponseDto{.error = 0,
+                                                              .groupid = 908,
+                                                              .touid = 51,
+                                                              .target_user_id = "u-51",
+                                                              .mute_until = 0});
     EXPECT_EQ(without["mute_until"].asInt64(), 0);
     EXPECT_FALSE(without.isMember("group_code")) << without.toStyledString();
 }
@@ -352,15 +366,20 @@ TEST(ChatGroupCommandDtosTest, WritesMuteMemberResponseWithAndWithoutGroupCode)
 TEST(ChatGroupCommandDtosTest, WritesKickMemberResponseWithAndWithoutGroupCode)
 {
     const memochat::json::JsonValue with = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupKickMemberResponseDto{
-            .error = 0, .groupid = 909, .touid = 52, .target_user_id = "u-52", .group_code = "G909"});
+        memochat::chat::group::ChatGroupKickMemberResponseDto{.error = 0,
+                                                              .groupid = 909,
+                                                              .touid = 52,
+                                                              .target_user_id = "u-52",
+                                                              .group_code = "G909"});
     EXPECT_EQ(with["touid"].asInt(), 52);
     EXPECT_EQ(with["target_user_id"].asString(), "u-52");
     EXPECT_EQ(with["group_code"].asString(), "G909");
 
     const memochat::json::JsonValue without = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupKickMemberResponseDto{
-            .error = 7, .groupid = 909, .touid = 52, .target_user_id = "u-52"});
+        memochat::chat::group::ChatGroupKickMemberResponseDto{.error = 7,
+                                                              .groupid = 909,
+                                                              .touid = 52,
+                                                              .target_user_id = "u-52"});
     EXPECT_EQ(without["error"].asInt(), 7);
     EXPECT_FALSE(without.isMember("group_code")) << without.toStyledString();
 }
@@ -370,14 +389,13 @@ TEST(ChatGroupCommandDtosTest, WritesKickMemberResponseWithAndWithoutGroupCode)
 // GroupResponseFormatter::ApplyPermissionFlags() at the call site (slice AZ boundary).
 TEST(ChatGroupCommandDtosTest, SetAdminResponseShellOmitsPermissionFlags)
 {
-    const memochat::json::JsonValue out = memochat::chat::group::ToJsonValue(
-        memochat::chat::group::ChatGroupSetAdminResponseDto{
-            .error = 0,
-            .groupid = 910,
-            .touid = 53,
-            .target_user_id = "u-53",
-            .is_admin = true,
-            .permission_bits = 7});
+    const memochat::json::JsonValue out =
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupSetAdminResponseDto{.error = 0,
+                                                                                               .groupid = 910,
+                                                                                               .touid = 53,
+                                                                                               .target_user_id = "u-53",
+                                                                                               .is_admin = true,
+                                                                                               .permission_bits = 7});
 
     EXPECT_EQ(out["error"].asInt(), 0);
     EXPECT_EQ(out["groupid"].asInt64(), 910);
@@ -423,8 +441,10 @@ TEST(ChatGroupCommandDtosTest, WritesGroupHistoryShellWithDynamicMessagesAndGrou
     // DTO owns the 4 scalars; messages array sits after the shell and the
     // caller-gated group_code is appended last (current wire order).
     memochat::json::JsonValue rtvalue =
-        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupHistoryResponseDto{
-            .error = 0, .groupid = 920, .has_more = true, .next_before_seq = 4242});
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupHistoryResponseDto{.error = 0,
+                                                                                              .groupid = 920,
+                                                                                              .has_more = true,
+                                                                                              .next_before_seq = 4242});
     rtvalue["messages"] = memochat::json::arrayValue;
     append(rtvalue["messages"], Parse(R"({"msgid":"m-1","content":"hi"})"));
     rtvalue["group_code"] = "G920";
@@ -443,8 +463,10 @@ TEST(ChatGroupCommandDtosTest, WritesGroupHistoryShellWithDynamicMessagesAndGrou
 TEST(ChatGroupCommandDtosTest, GroupHistoryShellOmitsMessagesAndGroupCode)
 {
     const memochat::json::JsonValue out =
-        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupHistoryResponseDto{
-            .error = 3, .groupid = 920, .has_more = false, .next_before_seq = 0});
+        memochat::chat::group::ToJsonValue(memochat::chat::group::ChatGroupHistoryResponseDto{.error = 3,
+                                                                                              .groupid = 920,
+                                                                                              .has_more = false,
+                                                                                              .next_before_seq = 0});
     EXPECT_EQ(out["error"].asInt(), 3);
     EXPECT_FALSE(memochat::json::glaze_safe_get<bool>(out, "has_more", true));
     EXPECT_FALSE(out.isMember("messages")) << out.toStyledString();

@@ -25,7 +25,10 @@ public:
     // posts from unverifiable authors are hidden rather than leaked).
     std::vector<int> FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids);
 
-    bool Enabled() const { return !_endpoint.empty(); }
+    bool Enabled() const
+    {
+        return !_endpoint.empty();
+    }
 
 private:
     std::string _endpoint;

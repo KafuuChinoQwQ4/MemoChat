@@ -15,8 +15,8 @@
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentUserProfileDto>(
     std::array<std::string_view, 4>{"user_id", "user_name", "user_nick", "user_icon"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentItemOutputDto>(
-    std::array<std::string_view, 8>{
-        "seq", "media_type", "media_key", "thumb_key", "content", "width", "height", "duration_ms"}));
+    std::array<std::string_view,
+               8>{"seq", "media_type", "media_key", "thumb_key", "content", "width", "height", "duration_ms"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentLikeOutputDto>(
     std::array<std::string_view, 4>{"uid", "user_nick", "user_icon", "created_at"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentOutputDto>(
@@ -63,9 +63,8 @@ static_assert(
         std::array<std::string_view, 4>{"error", "moment_id", "delete_", "comment_count"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentListResponseDto>(
     std::array<std::string_view, 5>{"error", "moment_id", "has_more", "comment_count", "comments"}));
-static_assert(
-    memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentLikeResponseDto>(
-        std::array<std::string_view, 6>{"error", "comment_id", "has_liked", "like_count", "like_names", "likes"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentLikeResponseDto>(
+    std::array<std::string_view, 6>{"error", "comment_id", "has_liked", "like_count", "like_names", "likes"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentsAuthFieldsDto>(
     std::array<std::string_view, 2>{"uid", "login_ticket"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentPublishRequestDto>(
@@ -77,8 +76,8 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::mo
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentLikeRequestDto>(
     std::array<std::string_view, 4>{"uid", "login_ticket", "moment_id", "like"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentRequestDto>(
-    std::array<std::string_view, 8>{
-        "uid", "login_ticket", "moment_id", "content", "reply_uid", "comment_id", "delete_", "delete_mode"}));
+    std::array<std::string_view,
+               8>{"uid", "login_ticket", "moment_id", "content", "reply_uid", "comment_id", "delete_", "delete_mode"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentListRequestDto>(
     std::array<std::string_view, 5>{"uid", "login_ticket", "moment_id", "last_comment_id", "limit"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentLikeRequestDto>(
@@ -202,8 +201,8 @@ TEST(MomentsOutputDtosTest, ConvertsLikesAndFiltersLikeNames)
     ASSERT_EQ(names.size(), 1);
     EXPECT_EQ(names[0], "Like A");
 
-    const memochat::json::JsonValue likes_json =
-        memochat::gate::services::moments::ToJsonValue(memochat::gate::services::moments::ToMomentLikeOutputDtos(likes));
+    const memochat::json::JsonValue likes_json = memochat::gate::services::moments::ToJsonValue(
+        memochat::gate::services::moments::ToMomentLikeOutputDtos(likes));
     ASSERT_TRUE(likes_json.isArray());
     ASSERT_EQ(likes_json.size(), 2);
     EXPECT_EQ(likes_json[0]["uid"].asInt(), 50);
@@ -313,8 +312,12 @@ TEST(MomentsOutputDtosTest, ConvertsMomentWithFlattenedProfileAndArrays)
 
 TEST(MomentsOutputDtosTest, MissingOptionalListsStillSerializeAsEmptyArrays)
 {
-    const auto dto =
-        memochat::gate::services::moments::ToMomentOutputDto(MakeMoment(), false, MakeProfile(), nullptr, nullptr, nullptr);
+    const auto dto = memochat::gate::services::moments::ToMomentOutputDto(MakeMoment(),
+                                                                          false,
+                                                                          MakeProfile(),
+                                                                          nullptr,
+                                                                          nullptr,
+                                                                          nullptr);
     const memochat::json::JsonValue root = memochat::gate::services::moments::ToJsonValue(dto);
 
     ASSERT_TRUE(root["items"].isArray());
@@ -347,8 +350,12 @@ TEST(MomentsOutputDtosTest, WritesMomentIdLikeListAndDetailResponses)
     EXPECT_EQ(memochat::json::glaze_safe_get<int>(like_json, "like_count", 0), 9);
 
     const MomentContentInfo content = MakeContent();
-    const auto moment =
-        memochat::gate::services::moments::ToMomentOutputDto(MakeMoment(), true, MakeProfile(), &content, nullptr, nullptr);
+    const auto moment = memochat::gate::services::moments::ToMomentOutputDto(MakeMoment(),
+                                                                             true,
+                                                                             MakeProfile(),
+                                                                             &content,
+                                                                             nullptr,
+                                                                             nullptr);
     memochat::gate::services::moments::MomentListResponseDto list_response;
     list_response.error = 0;
     list_response.has_more = true;

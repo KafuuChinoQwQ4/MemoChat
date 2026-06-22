@@ -125,8 +125,8 @@ TEST(CallSessionCacheDtoTest, RejectsInvalidCacheSession)
     EXPECT_FALSE(memochat::call::DecodeCallSessionCache("not-json", &session));
     EXPECT_FALSE(memochat::call::DecodeCallSessionCache(R"({"call_id":""})", &session));
     EXPECT_FALSE(memochat::call::DecodeCallSessionCache(R"({"room_name":"room-only"})", &session));
-    EXPECT_FALSE(memochat::call::DecodeCallSessionCache(R"({"call_id":"call-4"})",
-                                                        static_cast<CallSessionInfo*>(nullptr)));
+    EXPECT_FALSE(
+        memochat::call::DecodeCallSessionCache(R"({"call_id":"call-4"})", static_cast<CallSessionInfo*>(nullptr)));
 }
 
 TEST(CallSessionCacheDtoTest, ReportsNullEncodeOutput)

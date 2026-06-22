@@ -317,16 +317,10 @@ void HttpConnection::HandleReq()
             {
                 try
                 {
-                    auto* ioc = gateglobals::g_main_ioc;
                     bool handled = self->_request.method() == http::verb::delete_
                                        ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
                                        : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
-                    if (!ioc)
-                    {
-                        self->WriteErrorResponse(http::status::internal_server_error, "internal error\r\n");
-                        return;
-                    }
-                    boost::asio::post(*ioc,
+                    boost::asio::post(self->_socket.get_executor(),
                                       [self, handled]()
                                       {
                                           try
@@ -364,15 +358,12 @@ void HttpConnection::HandleReq()
                 catch (const std::exception& e)
                 {
                     memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
-                    if (auto* ioc = gateglobals::g_main_ioc)
-                    {
-                        boost::asio::post(*ioc,
-                                          [self]()
-                                          {
-                                              self->WriteErrorResponse(http::status::internal_server_error,
-                                                                       "internal error\r\n");
-                                          });
-                    }
+                    boost::asio::post(self->_socket.get_executor(),
+                                      [self]()
+                                      {
+                                          self->WriteErrorResponse(http::status::internal_server_error,
+                                                                   "internal error\r\n");
+                                      });
                 }
             });
         return;

@@ -70,8 +70,7 @@ TEST(CrossModuleRouteSchemaCatalogTest, HasNoCrossModuleDuplicateRoutePaths)
 
     const std::vector<std::string> duplicates = FindDuplicateRoutePaths(catalog);
 
-    EXPECT_TRUE(duplicates.empty())
-        << "cross-module route collisions: " << JoinDuplicates(duplicates);
+    EXPECT_TRUE(duplicates.empty()) << "cross-module route collisions: " << JoinDuplicates(duplicates);
 }
 
 // Proves the guard actually fires: injecting a synthetic module that re-registers

@@ -16,8 +16,7 @@ namespace memochat::reflection
 namespace detail
 {
 
-template <typename>
-inline constexpr bool always_false_v = false;
+template <typename> inline constexpr bool always_false_v = false;
 
 } // namespace detail
 
@@ -31,8 +30,7 @@ template <typename T> consteval std::size_t FieldCount()
 template <typename T, std::size_t I> consteval std::string_view FieldName()
 {
     static_assert(I < FieldCount<T>(), "Field index is out of range");
-    auto members =
-        std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, std::meta::access_context::current());
+    auto members = std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, std::meta::access_context::current());
     return std::meta::identifier_of(members[I]);
 }
 

@@ -120,18 +120,12 @@ QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
     {
         gateHost = QStringLiteral("127.0.0.1");
     }
-    const int configuredPort = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/port")), 8080);
+    const int configuredPort = parsePort(gateConfigValue(settings, QStringLiteral("GateServer/port")), 8080);
     const int h1DirectPort =
-        parsePort(gateConfigValue(settings,
-                                  QStringLiteral("GateServer/http_port")),
-                                  configuredPort);
-    const int h2Port = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/http2_port")), 0);
-    const int h3Port = parsePort(
-        gateConfigValue(settings, QStringLiteral("GateServer/http3_port")), 0);
-    const QString preferred = gateConfigValue(settings,
-                                              QStringLiteral("GateServer/preferred_http_protocol"));
+        parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http_port")), configuredPort);
+    const int h2Port = parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http2_port")), 0);
+    const int h3Port = parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http3_port")), 0);
+    const QString preferred = gateConfigValue(settings, QStringLiteral("GateServer/preferred_http_protocol"));
 
     if (url.host().compare(gateHost, Qt::CaseInsensitive) != 0)
     {

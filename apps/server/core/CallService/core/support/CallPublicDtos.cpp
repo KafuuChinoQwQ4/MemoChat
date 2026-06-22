@@ -94,35 +94,6 @@ CallTokenRequestDto CallTokenRequestFromJsonValue(const memochat::json::JsonValu
     return request;
 }
 
-memochat::json::JsonValue CallAuthRequestToJsonValue(const CallAuthRequestDto& request)
-{
-    memochat::json::JsonValue root(memochat::json::object_t{});
-    root["uid"] = request.uid;
-    root["token"] = request.token;
-    root["call_id"] = request.call_id;
-    return root;
-}
-
-memochat::json::JsonValue CallStartRequestToJsonValue(const CallStartRequestDto& request)
-{
-    memochat::json::JsonValue root(memochat::json::object_t{});
-    root["uid"] = request.uid;
-    root["token"] = request.token;
-    root["peer_uid"] = request.peer_uid;
-    root["call_type"] = request.call_type;
-    return root;
-}
-
-memochat::json::JsonValue CallTokenRequestToJsonValue(const CallTokenRequestDto& request)
-{
-    memochat::json::JsonValue root(memochat::json::object_t{});
-    root["uid"] = request.uid;
-    root["token"] = request.token;
-    root["call_id"] = request.call_id;
-    root["role"] = request.role;
-    return root;
-}
-
 memochat::json::JsonValue CallEventResponseToJsonValue(const CallEventResponseDto& response)
 {
     return TypedJsonToJsonValue(response);

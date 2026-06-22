@@ -96,9 +96,6 @@ CallAuthRequestDto CallAuthRequestFromJsonValue(const memochat::json::JsonValue&
 CallStartRequestDto CallStartRequestFromJsonValue(const memochat::json::JsonValue& root);
 CallTokenRequestDto CallTokenRequestFromJsonValue(const memochat::json::JsonValue& root);
 
-memochat::json::JsonValue CallAuthRequestToJsonValue(const CallAuthRequestDto& request);
-memochat::json::JsonValue CallStartRequestToJsonValue(const CallStartRequestDto& request);
-memochat::json::JsonValue CallTokenRequestToJsonValue(const CallTokenRequestDto& request);
 memochat::json::JsonValue CallEventResponseToJsonValue(const CallEventResponseDto& response);
 memochat::json::JsonValue CallStartResponseToJsonValue(const CallStartResponseDto& response);
 memochat::json::JsonValue CallTokenResponseToJsonValue(const CallTokenResponseDto& response);

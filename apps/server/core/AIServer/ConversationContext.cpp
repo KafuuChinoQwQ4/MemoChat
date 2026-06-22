@@ -18,9 +18,9 @@ ConversationContext::ConversationContext(const std::string& sid,
     , model_type(mt)
     , model_name(mn)
 {
-    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                   std::chrono::system_clock::now().time_since_epoch())
-                   .count();
+    auto now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     created_at = now;
     last_active_at = now;
 }
@@ -31,9 +31,9 @@ void ConversationContext::AddUserMessage(const std::string& content)
     m.msg_id = boost::uuids::to_string(boost::uuids::random_generator()());
     m.role = "user";
     m.content = content;
-    m.created_at = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       std::chrono::system_clock::now().time_since_epoch())
-                       .count();
+    m.created_at =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     messages.push_back(std::move(m));
     last_active_at = m.created_at;
 }
@@ -44,9 +44,9 @@ void ConversationContext::AddAssistantMessage(const std::string& content)
     m.msg_id = boost::uuids::to_string(boost::uuids::random_generator()());
     m.role = "assistant";
     m.content = content;
-    m.created_at = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       std::chrono::system_clock::now().time_since_epoch())
-                       .count();
+    m.created_at =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     messages.push_back(std::move(m));
     last_active_at = m.created_at;
 }

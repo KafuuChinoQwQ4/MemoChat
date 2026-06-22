@@ -81,9 +81,8 @@ GateLoginAuditPayloadDto BuildLoginAuditPayload(int uid,
                                                 const std::string& chat_port,
                                                 bool login_cache_hit);
 
-GateCacheInvalidatePayloadDto BuildCacheInvalidatePayload(const std::string& email,
-                                                          const std::string& user_name,
-                                                          const std::string& reason);
+GateCacheInvalidatePayloadDto
+BuildCacheInvalidatePayload(const std::string& email, const std::string& user_name, const std::string& reason);
 
 GateKafkaEventEnvelopeDto BuildKafkaEventEnvelope(const std::string& event_id,
                                                   const std::string& topic,

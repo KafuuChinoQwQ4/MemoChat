@@ -8,9 +8,7 @@
 namespace
 {
 
-template <typename T> bool WriteTypedJsonNoThrow(const T& value,
-                                                 std::string* out,
-                                                 std::string* error_out)
+template <typename T> bool WriteTypedJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
     try
     {

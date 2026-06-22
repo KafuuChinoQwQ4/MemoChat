@@ -1633,16 +1633,17 @@ std::vector<int> PostgresDao::FilterFriendUids(int viewer_uid, const std::vector
             params.append(author_uids[i]);
         }
         const auto rows = txn.exec(
-            "SELECT a.uid FROM (SELECT unnest(ARRAY[" + in_clause + "]::int[]) AS uid) AS a "
-            "WHERE EXISTS ("
-            "    SELECT 1 FROM friend f "
-            "    WHERE ((f.self_id = a.uid AND f.friend_id = $1) OR (f.self_id = $1 AND f.friend_id = a.uid))"
-            ") "
-            "OR EXISTS ("
-            "    SELECT 1 FROM friend_apply fa "
-            "    WHERE fa.status = 1 "
-            "      AND ((fa.from_uid = a.uid AND fa.to_uid = $1) OR (fa.from_uid = $1 AND fa.to_uid = a.uid))"
-            ")",
+            "SELECT a.uid FROM (SELECT unnest(ARRAY[" + in_clause +
+                "]::int[]) AS uid) AS a "
+                "WHERE EXISTS ("
+                "    SELECT 1 FROM friend f "
+                "    WHERE ((f.self_id = a.uid AND f.friend_id = $1) OR (f.self_id = $1 AND f.friend_id = a.uid))"
+                ") "
+                "OR EXISTS ("
+                "    SELECT 1 FROM friend_apply fa "
+                "    WHERE fa.status = 1 "
+                "      AND ((fa.from_uid = a.uid AND fa.to_uid = $1) OR (fa.from_uid = $1 AND fa.to_uid = a.uid))"
+                ")",
             params);
         result.reserve(rows.size());
         for (const auto& row : rows)

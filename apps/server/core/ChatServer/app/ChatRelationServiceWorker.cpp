@@ -233,7 +233,13 @@ int main(int argc, char** argv)
         auto task_bus = BuildTaskBus();
         auto async_event_bus = BuildAsyncEventBus();
         TaskDispatcher task_publisher(
-            task_bus, []() { return false; }, nullptr, nullptr);
+            task_bus,
+            []()
+            {
+                return false;
+            },
+            nullptr,
+            nullptr);
         EventBusPublisher event_publisher(async_event_bus);
 
         ChatRelationService relation_service(&relation_repository,

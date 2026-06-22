@@ -191,15 +191,15 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         rtdto.text_array = normalized;
     }
 
-    auto event_payload = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateSendEventDto{
-        .fromuid = uid,
-        .touid = touid,
-        .trace_id = root.get("trace_id", "").asString(),
-        .request_id = root.get("request_id", "").asString(),
-        .span_id = root.get("span_id", "").asString(),
-        .event_id = first_msg_id,
-        .accept_node = memochat::chatruntime::SelfServerName(),
-        .accept_ts = static_cast<int64_t>(accept_ts)});
+    auto event_payload = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateSendEventDto{.fromuid = uid,
+                                                    .touid = touid,
+                                                    .trace_id = root.get("trace_id", "").asString(),
+                                                    .request_id = root.get("request_id", "").asString(),
+                                                    .span_id = root.get("span_id", "").asString(),
+                                                    .event_id = first_msg_id,
+                                                    .accept_node = memochat::chatruntime::SelfServerName(),
+                                                    .accept_ts = static_cast<int64_t>(accept_ts)});
     event_payload["text_array"] = normalized;
 
     if (kafka_primary || kafka_shadow)
@@ -273,13 +273,12 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     const std::string& source_msg_id = command.source_msg_id;
     std::string client_msg_id = command.client_msg_id;
 
-    memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{
-            .error = ErrorCodes::Success,
-            .fromuid = from_uid,
-            .peer_uid = peer_uid,
-            .touid = peer_uid,
-            .client_msg_id = client_msg_id});
+    memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateForwardResultDto{.error = ErrorCodes::Success,
+                                                        .fromuid = from_uid,
+                                                        .peer_uid = peer_uid,
+                                                        .touid = peer_uid,
+                                                        .client_msg_id = client_msg_id});
 
     const auto result = [&rtvalue]()
     {
@@ -365,21 +364,20 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
         return result();
     }
 
-    const memochat::json::JsonValue msg_obj =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardMessageDto{
-            .msgid = info.msg_id,
-            .content = info.content,
-            .created_at = now_ms,
-            .reply_to_server_msg_id = info.reply_to_server_msg_id,
-            .forward_meta = forward_meta});
-    rtvalue = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{
-        .error = ErrorCodes::Success,
-        .fromuid = from_uid,
-        .peer_uid = peer_uid,
-        .touid = peer_uid,
-        .client_msg_id = client_msg_id,
-        .created_at = now_ms,
-        .msg = msg_obj});
+    const memochat::json::JsonValue msg_obj = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateForwardMessageDto{.msgid = info.msg_id,
+                                                         .content = info.content,
+                                                         .created_at = now_ms,
+                                                         .reply_to_server_msg_id = info.reply_to_server_msg_id,
+                                                         .forward_meta = forward_meta});
+    rtvalue =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{.error = ErrorCodes::Success,
+                                                                                        .fromuid = from_uid,
+                                                                                        .peer_uid = peer_uid,
+                                                                                        .touid = peer_uid,
+                                                                                        .client_msg_id = client_msg_id,
+                                                                                        .created_at = now_ms,
+                                                                                        .msg = msg_obj});
 
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
@@ -471,12 +469,12 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     }
     _message_repository->UpsertPrivateReadState(uid, peer_uid, read_ts);
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateReadAckEventDto{
-        .error = ErrorCodes::Success,
-        .event = "private_read_ack",
-        .fromuid = uid,
-        .peer_uid = peer_uid,
-        .read_ts = read_ts});
+    const auto notify =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateReadAckEventDto{.error = ErrorCodes::Success,
+                                                                                       .event = "private_read_ack",
+                                                                                       .fromuid = uid,
+                                                                                       .peer_uid = peer_uid,
+                                                                                       .read_ts = read_ts});
     _delivery_gateway->PushPayload({peer_uid}, ID_NOTIFY_PRIVATE_READ_ACK_REQ, notify);
     return result();
 }
@@ -500,14 +498,13 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
     const std::string& content = command.content;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedResultDto{
-            .error = ErrorCodes::Success,
-            .fromuid = uid,
-            .peer_uid = peer_uid,
-            .msgid = target_msg_id,
-            .content = content,
-            .changed_at_ms = now_ms});
+    memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateMessageChangedResultDto{.error = ErrorCodes::Success,
+                                                               .fromuid = uid,
+                                                               .peer_uid = peer_uid,
+                                                               .msgid = target_msg_id,
+                                                               .content = content,
+                                                               .changed_at_ms = now_ms});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_EDIT_PRIVATE_MSG_RSP,
@@ -536,15 +533,14 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
         return result();
     }
 
-    const memochat::json::JsonValue notify =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "private_msg_edited",
-            .fromuid = uid,
-            .peer_uid = peer_uid,
-            .msgid = target_msg_id,
-            .content = content,
-            .changed_at_ms = now_ms});
+    const memochat::json::JsonValue notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateMessageChangedEventDto{.error = ErrorCodes::Success,
+                                                              .event = "private_msg_edited",
+                                                              .fromuid = uid,
+                                                              .peer_uid = peer_uid,
+                                                              .msgid = target_msg_id,
+                                                              .content = content,
+                                                              .changed_at_ms = now_ms});
     _delivery_gateway->PushPayload({uid, peer_uid}, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
     return result();
 }
@@ -568,15 +564,14 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
     const std::string& target_msg_id = command.msgid;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedResultDto{
-            .error = ErrorCodes::Success,
-            .fromuid = uid,
-            .peer_uid = peer_uid,
-            .msgid = target_msg_id,
-            .content = "[消息已撤回]",
-            .changed_at_ms = now_ms,
-            .deleted = true});
+    memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateMessageChangedResultDto{.error = ErrorCodes::Success,
+                                                               .fromuid = uid,
+                                                               .peer_uid = peer_uid,
+                                                               .msgid = target_msg_id,
+                                                               .content = "[消息已撤回]",
+                                                               .changed_at_ms = now_ms,
+                                                               .deleted = true});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_REVOKE_PRIVATE_MSG_RSP,
@@ -605,16 +600,15 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
         return result();
     }
 
-    const memochat::json::JsonValue notify =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateMessageChangedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "private_msg_revoked",
-            .fromuid = uid,
-            .peer_uid = peer_uid,
-            .msgid = target_msg_id,
-            .content = "[消息已撤回]",
-            .changed_at_ms = now_ms,
-            .deleted = true});
+    const memochat::json::JsonValue notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateMessageChangedEventDto{.error = ErrorCodes::Success,
+                                                              .event = "private_msg_revoked",
+                                                              .fromuid = uid,
+                                                              .peer_uid = peer_uid,
+                                                              .msgid = target_msg_id,
+                                                              .content = "[消息已撤回]",
+                                                              .changed_at_ms = now_ms,
+                                                              .deleted = true});
     _delivery_gateway->PushPayload({uid, peer_uid}, ID_NOTIFY_PRIVATE_MSG_CHANGED_REQ, notify);
     return result();
 }
@@ -639,10 +633,10 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     const std::string& before_msg_id = command.before_msg_id;
     const int limit = command.limit;
 
-    memochat::json::JsonValue rtvalue = ChatHistoryCommand::ToJsonValue(ChatHistoryCommand::ChatPrivateHistoryResponseDto{
-        .error = ErrorCodes::Success,
-        .peer_uid = peer_uid,
-        .has_more = false});
+    memochat::json::JsonValue rtvalue =
+        ChatHistoryCommand::ToJsonValue(ChatHistoryCommand::ChatPrivateHistoryResponseDto{.error = ErrorCodes::Success,
+                                                                                          .peer_uid = peer_uid,
+                                                                                          .has_more = false});
     rtvalue["messages"] = memochat::json::arrayValue;
     const auto result = [&rtvalue]()
     {

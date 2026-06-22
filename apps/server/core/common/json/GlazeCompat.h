@@ -3,13 +3,10 @@
 #ifndef MEMOCHAT_JSON_GLAZECOMPAT_INCLUDED
 #define MEMOCHAT_JSON_GLAZECOMPAT_INCLUDED
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cstddef>
-#include <glaze/json/generic.hpp>
-#include <bit>
-#include <glaze/json/write.hpp>
 #include <map>
 #include <memory>
 #include <optional>
@@ -22,6 +19,18 @@
 #include <sstream>
 #include <iterator>
 #include <algorithm>
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
+
+#include <glaze/json/generic.hpp>
+#include <glaze/json/write.hpp>
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 namespace memochat::json
 {

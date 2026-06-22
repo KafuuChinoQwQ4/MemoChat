@@ -150,8 +150,8 @@ void GateAsyncSideEffects::PublishUserProfileChanged(int uid,
                                                      const std::string& icon,
                                                      int sex)
 {
-    const auto payload = gateasync::ToJsonValue(
-        gateasync::BuildUserProfileChangedPayload(uid, user_id, email, name, nick, icon, sex));
+    const auto payload =
+        gateasync::ToJsonValue(gateasync::BuildUserProfileChangedPayload(uid, user_id, email, name, nick, icon, sex));
     std::string error;
     if (!PublishKafka("user.profile.changed.v1", std::to_string(uid), "user_profile_changed", payload, &error))
     {
@@ -169,14 +169,8 @@ void GateAsyncSideEffects::PublishAuditLogin(int uid,
                                              const std::string& chat_port,
                                              bool login_cache_hit)
 {
-    const auto payload = gateasync::ToJsonValue(gateasync::BuildLoginAuditPayload(
-        uid,
-        user_id,
-        email,
-        chat_server,
-        chat_host,
-        chat_port,
-        login_cache_hit));
+    const auto payload = gateasync::ToJsonValue(
+        gateasync::BuildLoginAuditPayload(uid, user_id, email, chat_server, chat_host, chat_port, login_cache_hit));
     std::string error;
     if (!PublishKafka("audit.login.v1", std::to_string(uid), "gate_login_succeeded", payload, &error))
     {
@@ -220,18 +214,18 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
         return false;
     }
     std::string serialized;
-    if (!gateasync::EncodeGateKafkaEventEnvelope(gateasync::BuildKafkaEventEnvelope(
-                                                     boost::uuids::to_string(boost::uuids::random_generator()()),
-                                                     topic,
-                                                     partition_key,
-                                                     event_type,
-                                                     memolog::TraceContext::GetTraceId(),
-                                                     memolog::TraceContext::GetRequestId(),
-                                                     NowMsGate(),
-                                                     0,
-                                                     payload),
-                                                 &serialized,
-                                                 error))
+    if (!gateasync::EncodeGateKafkaEventEnvelope(
+            gateasync::BuildKafkaEventEnvelope(boost::uuids::to_string(boost::uuids::random_generator()()),
+                                               topic,
+                                               partition_key,
+                                               event_type,
+                                               memolog::TraceContext::GetTraceId(),
+                                               memolog::TraceContext::GetRequestId(),
+                                               NowMsGate(),
+                                               0,
+                                               payload),
+            &serialized,
+            error))
     {
         return false;
     }
@@ -288,18 +282,18 @@ bool GateAsyncSideEffects::PublishRabbit(const std::string& routing_key,
         return false;
     }
     std::string serialized;
-    if (!gateasync::EncodeGateRabbitTaskEnvelope(gateasync::BuildRabbitTaskEnvelope(
-                                                     boost::uuids::to_string(boost::uuids::random_generator()()),
-                                                     task_type,
-                                                     memolog::TraceContext::GetTraceId(),
-                                                     memolog::TraceContext::GetRequestId(),
-                                                     NowMsGate(),
-                                                     0,
-                                                     5,
-                                                     routing_key,
-                                                     payload),
-                                                 &serialized,
-                                                 error))
+    if (!gateasync::EncodeGateRabbitTaskEnvelope(
+            gateasync::BuildRabbitTaskEnvelope(boost::uuids::to_string(boost::uuids::random_generator()()),
+                                               task_type,
+                                               memolog::TraceContext::GetTraceId(),
+                                               memolog::TraceContext::GetRequestId(),
+                                               NowMsGate(),
+                                               0,
+                                               5,
+                                               routing_key,
+                                               payload),
+            &serialized,
+            error))
     {
         return false;
     }

@@ -57,8 +57,8 @@ constexpr std::size_t kMaxQueuedExports = 1024;
 
 long long NowUnixMicros()
 {
-    using namespace std::chrono;
-    return duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch())
+        .count();
 }
 
 ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw)

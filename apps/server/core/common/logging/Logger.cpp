@@ -51,16 +51,15 @@ std::string ToLevelString(spdlog::level::level_enum level)
 
 std::string NowIso8601()
 {
-    using namespace std::chrono;
-    const auto now = system_clock::now();
-    const auto tt = system_clock::to_time_t(now);
+    const auto now = std::chrono::system_clock::now();
+    const auto tt = std::chrono::system_clock::to_time_t(now);
     std::tm tm{};
 #ifdef _WIN32
     gmtime_s(&tm, &tt);
 #else
     gmtime_r(&tt, &tm);
 #endif
-    const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
     char buf[32]{0};
     std::snprintf(buf,
                   sizeof(buf),

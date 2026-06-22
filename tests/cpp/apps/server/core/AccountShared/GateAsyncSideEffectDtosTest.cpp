@@ -12,8 +12,8 @@
 static_assert(memochat::reflection::FieldNamesEqual<gateasync::GateUserProfileChangedPayloadDto>(
     std::array<std::string_view, 7>{"uid", "user_id", "email", "name", "nick", "icon", "sex"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateasync::GateLoginAuditPayloadDto>(
-    std::array<std::string_view, 7>{
-        "uid", "user_id", "email", "chat_server", "chat_host", "chat_port", "login_cache_hit"}));
+    std::array<std::string_view,
+               7>{"uid", "user_id", "email", "chat_server", "chat_host", "chat_port", "login_cache_hit"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateasync::GateCacheInvalidatePayloadDto>(
     std::array<std::string_view, 4>{"email", "user_name", "reason", "cache_domain"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateasync::GateKafkaEventEnvelopeDto>(
@@ -53,14 +53,8 @@ memochat::json::JsonValue MakePayload()
 
 TEST(GateAsyncSideEffectDtosTest, BuildsUserProfilePayloadWithExistingWireFieldNames)
 {
-    const auto payload =
-        gateasync::ToJsonValue(gateasync::BuildUserProfileChangedPayload(42,
-                                                                         "u-42",
-                                                                         "alice@example.com",
-                                                                         "alice",
-                                                                         "Alice",
-                                                                         "icon.png",
-                                                                         2));
+    const auto payload = gateasync::ToJsonValue(
+        gateasync::BuildUserProfileChangedPayload(42, "u-42", "alice@example.com", "alice", "Alice", "icon.png", 2));
 
     EXPECT_EQ(payload["uid"].asInt(), 42);
     EXPECT_EQ(payload["user_id"].asString(), "u-42");
@@ -73,13 +67,8 @@ TEST(GateAsyncSideEffectDtosTest, BuildsUserProfilePayloadWithExistingWireFieldN
 
 TEST(GateAsyncSideEffectDtosTest, BuildsLoginAuditPayloadWithExistingWireFieldNames)
 {
-    const auto payload = gateasync::ToJsonValue(gateasync::BuildLoginAuditPayload(42,
-                                                                                  "u-42",
-                                                                                  "alice@example.com",
-                                                                                  "chat-1",
-                                                                                  "127.0.0.1",
-                                                                                  "50055",
-                                                                                  true));
+    const auto payload = gateasync::ToJsonValue(
+        gateasync::BuildLoginAuditPayload(42, "u-42", "alice@example.com", "chat-1", "127.0.0.1", "50055", true));
 
     EXPECT_EQ(payload["uid"].asInt(), 42);
     EXPECT_EQ(payload["user_id"].asString(), "u-42");
@@ -115,23 +104,23 @@ TEST(GateAsyncSideEffectDtosTest, RejectsInvalidCacheInvalidatePayload)
     EXPECT_FALSE(gateasync::DecodeCacheInvalidatePayload(std::string_view("not-json"), &decoded));
     EXPECT_FALSE(gateasync::DecodeCacheInvalidatePayload(std::string_view(R"({"reason":"missing-email"})"), &decoded));
     EXPECT_FALSE(gateasync::DecodeCacheInvalidatePayload(std::string_view(R"({"email":""})"), &decoded));
-    EXPECT_FALSE(gateasync::DecodeCacheInvalidatePayload(std::string_view(R"({"email":"alice@example.com"})"),
-                                                         static_cast<gateasync::GateCacheInvalidatePayloadDto*>(
-                                                             nullptr)));
+    EXPECT_FALSE(
+        gateasync::DecodeCacheInvalidatePayload(std::string_view(R"({"email":"alice@example.com"})"),
+                                                static_cast<gateasync::GateCacheInvalidatePayloadDto*>(nullptr)));
 }
 
 TEST(GateAsyncSideEffectDtosTest, EncodesKafkaEventEnvelopeWithDynamicPayload)
 {
     std::string body;
     ASSERT_TRUE(gateasync::EncodeGateKafkaEventEnvelope(gateasync::BuildKafkaEventEnvelope("event-1",
-                                                                                          "audit.login.v1",
-                                                                                          "42",
-                                                                                          "gate_login_succeeded",
-                                                                                          "trace-1",
-                                                                                          "request-1",
-                                                                                          1000,
-                                                                                          0,
-                                                                                          MakePayload()),
+                                                                                           "audit.login.v1",
+                                                                                           "42",
+                                                                                           "gate_login_succeeded",
+                                                                                           "trace-1",
+                                                                                           "request-1",
+                                                                                           1000,
+                                                                                           0,
+                                                                                           MakePayload()),
                                                         &body));
 
     memochat::json::JsonValue root;
@@ -153,14 +142,14 @@ TEST(GateAsyncSideEffectDtosTest, EncodesRabbitTaskEnvelopeWithDynamicPayload)
 {
     std::string body;
     ASSERT_TRUE(gateasync::EncodeGateRabbitTaskEnvelope(gateasync::BuildRabbitTaskEnvelope("task-1",
-                                                                                          "gate_cache_invalidate",
-                                                                                          "trace-1",
-                                                                                          "request-1",
-                                                                                          1000,
-                                                                                          0,
-                                                                                          5,
-                                                                                          "gate.cache.invalidate",
-                                                                                          MakePayload()),
+                                                                                           "gate_cache_invalidate",
+                                                                                           "trace-1",
+                                                                                           "request-1",
+                                                                                           1000,
+                                                                                           0,
+                                                                                           5,
+                                                                                           "gate.cache.invalidate",
+                                                                                           MakePayload()),
                                                         &body));
 
     memochat::json::JsonValue root;
@@ -182,30 +171,16 @@ TEST(GateAsyncSideEffectDtosTest, ReportsNullEncodeOutput)
 {
     std::string error;
 
-    EXPECT_FALSE(gateasync::EncodeGateKafkaEventEnvelope(gateasync::BuildKafkaEventEnvelope("event-1",
-                                                                                           "topic",
-                                                                                           "key",
-                                                                                           "type",
-                                                                                           "trace",
-                                                                                           "request",
-                                                                                           1,
-                                                                                           0,
-                                                                                           MakePayload()),
-                                                         nullptr,
-                                                         &error));
+    EXPECT_FALSE(gateasync::EncodeGateKafkaEventEnvelope(
+        gateasync::BuildKafkaEventEnvelope("event-1", "topic", "key", "type", "trace", "request", 1, 0, MakePayload()),
+        nullptr,
+        &error));
     EXPECT_EQ(error, "output pointer is null");
 
     error.clear();
-    EXPECT_FALSE(gateasync::EncodeGateRabbitTaskEnvelope(gateasync::BuildRabbitTaskEnvelope("task-1",
-                                                                                           "task",
-                                                                                           "trace",
-                                                                                           "request",
-                                                                                           1,
-                                                                                           0,
-                                                                                           5,
-                                                                                           "routing",
-                                                                                           MakePayload()),
-                                                         nullptr,
-                                                         &error));
+    EXPECT_FALSE(gateasync::EncodeGateRabbitTaskEnvelope(
+        gateasync::BuildRabbitTaskEnvelope("task-1", "task", "trace", "request", 1, 0, 5, "routing", MakePayload()),
+        nullptr,
+        &error));
     EXPECT_EQ(error, "output pointer is null");
 }

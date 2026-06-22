@@ -19,9 +19,8 @@ inline constexpr int64_t kGroupPermManageAdmins = 1LL << 3;
 inline constexpr int64_t kGroupPermPinMessages = 1LL << 4;
 inline constexpr int64_t kGroupPermBanUsers = 1LL << 5;
 inline constexpr int64_t kGroupPermManageTopics = 1LL << 6;
-inline constexpr int64_t kDefaultAdminPermBits =
-    kGroupPermChangeGroupInfo | kGroupPermDeleteMessages | kGroupPermInviteUsers | kGroupPermPinMessages |
-    kGroupPermBanUsers;
+inline constexpr int64_t kDefaultAdminPermBits = kGroupPermChangeGroupInfo | kGroupPermDeleteMessages |
+                                                 kGroupPermInviteUsers | kGroupPermPinMessages | kGroupPermBanUsers;
 
 struct ChatGroupListRowDto
 {

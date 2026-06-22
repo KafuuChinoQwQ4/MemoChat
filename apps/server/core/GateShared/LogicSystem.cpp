@@ -6,6 +6,7 @@
 #include "transports/h3/listener/GateHttp3Connection.h"
 #include "logging/Logger.h"
 #include "logging/TraceContext.h"
+#include <string_view>
 
 namespace
 {
@@ -95,26 +96,45 @@ LogicSystem::~LogicSystem()
 {
 }
 
-bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> con)
+bool LogicSystem::DispatchH1(const std::string& path,
+                             std::shared_ptr<HttpConnection> con,
+                             const std::map<std::string, HttpHandler>& exact,
+                             const std::vector<std::pair<std::string, HttpHandler>>& prefix,
+                             std::string_view method,
+                             std::string_view dispatch_event,
+                             std::string_view prefix_event,
+                             std::string_view not_found_event)
 {
-    auto exact = _get_handlers.find(path);
-    if (exact != _get_handlers.end())
+    auto it = exact.find(path);
+    if (it != exact.end())
     {
-        exact->second(con);
+        if (!dispatch_event.empty())
+        {
+            memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
+            memolog::LogInfo(std::string(dispatch_event), "dispatch route", {{"route", path}});
+        }
+        it->second(con);
         return true;
     }
 
-    for (const auto& [prefix, handler] : _get_prefix_handlers)
+    for (const auto& [pfx, handler] : prefix)
     {
-        if (MatchesRoutePrefix(path, prefix))
+        if (MatchesRoutePrefix(path, pfx))
         {
+            if (!prefix_event.empty())
+            {
+                memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
+                memolog::LogInfo(std::string(prefix_event),
+                                 "dispatch prefix route",
+                                 {{"route", path}, {"prefix", pfx}});
+            }
             handler(con);
             return true;
         }
     }
 
     memochat::gate::routing::GateResponse response;
-    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("GET", path, con);
+    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest(std::string(method), path, con);
     ApplyRouteTraceContext(request);
     if (_route_registry.Dispatch(request, response))
     {
@@ -122,81 +142,40 @@ bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> co
         return true;
     }
 
+    if (!not_found_event.empty())
+    {
+        memolog::LogWarn(std::string(not_found_event), "route not found", {{"route", path}});
+    }
     return false;
+}
+
+bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> con)
+{
+    return DispatchH1(path, con, _get_handlers, _get_prefix_handlers, "GET", "", "", "");
 }
 
 bool LogicSystem::HandlePost(std::string path, std::shared_ptr<HttpConnection> con)
 {
-    auto exact = _post_handlers.find(path);
-    if (exact != _post_handlers.end())
-    {
-        memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
-        memolog::LogInfo("gate.http.post.dispatch", "dispatch post route", {{"route", path}});
-        exact->second(con);
-        return true;
-    }
-
-    for (const auto& [prefix, handler] : _post_prefix_handlers)
-    {
-        if (MatchesRoutePrefix(path, prefix))
-        {
-            memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
-            memolog::LogInfo("gate.http.post.dispatch_prefix",
-                             "dispatch post prefix route",
-                             {{"route", path}, {"prefix", prefix}});
-            handler(con);
-            return true;
-        }
-    }
-
-    memochat::gate::routing::GateResponse response;
-    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("POST", path, con);
-    ApplyRouteTraceContext(request);
-    if (_route_registry.Dispatch(request, response))
-    {
-        memochat::gate::adapters::h1::H1RouteAdapter::ApplyGateResponse(response, con);
-        return true;
-    }
-
-    memolog::LogWarn("gate.http.post.not_found", "post route not found", {{"route", path}});
-    return false;
+    return DispatchH1(path,
+                      con,
+                      _post_handlers,
+                      _post_prefix_handlers,
+                      "POST",
+                      "gate.http.post.dispatch",
+                      "gate.http.post.dispatch_prefix",
+                      "gate.http.post.not_found");
 }
 
 bool LogicSystem::HandleDelete(std::string path, std::shared_ptr<HttpConnection> con)
 {
-    auto exact = _delete_handlers.find(path);
-    if (exact != _delete_handlers.end())
-    {
-        memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
-        memolog::LogInfo("gate.http.delete.dispatch", "dispatch delete route", {{"route", path}});
-        exact->second(con);
-        return true;
-    }
-
-    for (const auto& [prefix, handler] : _delete_prefix_handlers)
-    {
-        if (MatchesRoutePrefix(path, prefix))
-        {
-            memolog::TraceContext::SetTraceId(con ? con->_trace_id : "");
-            memolog::LogInfo("gate.http.delete.dispatch_prefix",
-                             "dispatch delete prefix route",
-                             {{"route", path}, {"prefix", prefix}});
-            handler(con);
-            return true;
-        }
-    }
-
-    memochat::gate::routing::GateResponse response;
-    const auto request = memochat::gate::adapters::h1::H1RouteAdapter::BuildGateRequest("DELETE", path, con);
-    ApplyRouteTraceContext(request);
-    if (_route_registry.Dispatch(request, response))
-    {
-        memochat::gate::adapters::h1::H1RouteAdapter::ApplyGateResponse(response, con);
-        return true;
-    }
-
-    memolog::LogWarn("gate.http.delete.not_found", "delete route not found", {{"route", path}});
-    return false;
+    return DispatchH1(path,
+                      con,
+                      _delete_handlers,
+                      _delete_prefix_handlers,
+                      "DELETE",
+                      "gate.http.delete.dispatch",
+                      "gate.http.delete.dispatch_prefix",
+                      "gate.http.delete.not_found");
 }
 
 void LogicSystem::RegGet(std::string url, Http3Handler handler)

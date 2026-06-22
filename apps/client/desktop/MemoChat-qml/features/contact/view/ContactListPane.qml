@@ -23,10 +23,9 @@ Item {
             id: newFriendEntry
             Layout.fillWidth: true
             Layout.preferredHeight: 56
-            color: newFriendArea.pressed ? Qt.rgba(1, 1, 1, 0.26)
-                                         : newFriendArea.containsMouse ? Qt.rgba(1, 1, 1, 0.20)
-                                                                      : Qt.rgba(1, 1, 1, 0.14)
-            border.color: Qt.rgba(1, 1, 1, 0.34)
+            color: newFriendArea.pressed ? Qt.rgba(1, 1, 1, 0.18)
+                                         : newFriendArea.containsMouse ? Qt.rgba(1, 1, 1, 0.12)
+                                                                      : "transparent"
 
             Behavior on color {
                 ColorAnimation {
@@ -93,8 +92,17 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 24
-            color: Qt.rgba(1, 1, 1, 0.12)
-            border.color: Qt.rgba(1, 1, 1, 0.30)
+            color: "transparent"
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                height: 1
+                color: Qt.rgba(1, 1, 1, 0.22)
+            }
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter

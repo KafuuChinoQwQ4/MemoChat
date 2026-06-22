@@ -66,8 +66,7 @@ TEST(ChatRelationGroupDtosTest, WritesGroupListRowWithPermissionFlags)
     row.is_all_muted = 1;
     row.role = 2;
     row.permission_bits = memochat::chat::output::kGroupPermChangeGroupInfo |
-                          memochat::chat::output::kGroupPermInviteUsers |
-                          memochat::chat::output::kGroupPermBanUsers;
+                          memochat::chat::output::kGroupPermInviteUsers | memochat::chat::output::kGroupPermBanUsers;
 
     const memochat::json::JsonValue json = memochat::chat::output::ToJsonValue(row);
 

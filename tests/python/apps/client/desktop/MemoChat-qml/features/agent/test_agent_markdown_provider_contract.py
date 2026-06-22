@@ -107,7 +107,7 @@ class AgentMarkdownProviderContractTests(unittest.TestCase):
         self.assertIn("currentModel: root.currentModel", pane)
         self.assertIn('import "../runtime/AgentProviderRuntime.js" as AgentProviderRuntime', conversation)
         self.assertRegex(conversation, r"\bproperty\s+string\s+currentModel\s*:")
-        self.assertIn("modelName: model.modelName || root.currentModel || \"\"", conversation)
+        self.assertIn('modelName: model.modelName || root.currentModel || ""', conversation)
         self.assertIn("aiAvatar: AgentProviderRuntime.providerAvatarSource", conversation)
 
         self.assertRegex(delegate, r"\bproperty\s+string\s+modelName\s*:")

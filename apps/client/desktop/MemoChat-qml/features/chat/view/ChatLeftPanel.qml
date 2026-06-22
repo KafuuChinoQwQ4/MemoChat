@@ -237,8 +237,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Qt.rgba(1, 1, 1, 0.08)
-            border.color: Qt.rgba(1, 1, 1, 0.28)
+            color: "transparent"
 
             Loader {
                 id: sessionPaneLoader

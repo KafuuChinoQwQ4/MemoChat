@@ -37,8 +37,12 @@ struct RenamedResponseDto
 
 TEST(RouteSchemaTest, BuildsRequestAndResponseFieldSchemasFromDtoFields)
 {
-    const auto schema = memochat::gate::routing::MakeRouteSchema<SampleRequestDto, SampleResponseDto>(
-        "POST", "/media/status", "media.status", "SampleRequestDto", "SampleResponseDto");
+    const auto schema =
+        memochat::gate::routing::MakeRouteSchema<SampleRequestDto, SampleResponseDto>("POST",
+                                                                                      "/media/status",
+                                                                                      "media.status",
+                                                                                      "SampleRequestDto",
+                                                                                      "SampleResponseDto");
 
     EXPECT_EQ(schema.method, "POST");
     EXPECT_EQ(schema.path, "/media/status");
@@ -60,8 +64,12 @@ TEST(RouteSchemaTest, BuildsRequestAndResponseFieldSchemasFromDtoFields)
 
 TEST(RouteSchemaTest, AppliesExplicitFieldNameOverridesWithoutChangingFieldOrder)
 {
-    const auto default_schema = memochat::gate::routing::MakeRouteSchema<RenamedRequestDto, RenamedResponseDto>(
-        "POST", "/moments/comment", "moments.comment", "RenamedRequestDto", "RenamedResponseDto");
+    const auto default_schema =
+        memochat::gate::routing::MakeRouteSchema<RenamedRequestDto, RenamedResponseDto>("POST",
+                                                                                        "/moments/comment",
+                                                                                        "moments.comment",
+                                                                                        "RenamedRequestDto",
+                                                                                        "RenamedResponseDto");
 
     ASSERT_EQ(default_schema.request.fields.size(), 3U);
     EXPECT_EQ(default_schema.request.fields[0].name, "uid");
@@ -71,14 +79,14 @@ TEST(RouteSchemaTest, AppliesExplicitFieldNameOverridesWithoutChangingFieldOrder
     EXPECT_EQ(default_schema.response.fields[0].name, "error");
     EXPECT_EQ(default_schema.response.fields[1].name, "delete_");
 
-    const auto schema = memochat::gate::routing::MakeRouteSchema<RenamedRequestDto, RenamedResponseDto>(
-        "POST",
-        "/moments/comment",
-        "moments.comment",
-        "RenamedRequestDto",
-        "RenamedResponseDto",
-        {{"delete_", "delete"}},
-        {{"delete_", "delete"}});
+    const auto schema =
+        memochat::gate::routing::MakeRouteSchema<RenamedRequestDto, RenamedResponseDto>("POST",
+                                                                                        "/moments/comment",
+                                                                                        "moments.comment",
+                                                                                        "RenamedRequestDto",
+                                                                                        "RenamedResponseDto",
+                                                                                        {{"delete_", "delete"}},
+                                                                                        {{"delete_", "delete"}});
 
     ASSERT_EQ(schema.request.fields.size(), 3U);
     EXPECT_EQ(schema.request.fields[0].name, "uid");
@@ -91,8 +99,7 @@ TEST(RouteSchemaTest, AppliesExplicitFieldNameOverridesWithoutChangingFieldOrder
 
 TEST(RouteSchemaTest, BuildsNoBodyRouteSchema)
 {
-    const auto schema =
-        memochat::gate::routing::MakeRouteSchemaWithoutBody("GET", "/health", "health.check");
+    const auto schema = memochat::gate::routing::MakeRouteSchemaWithoutBody("GET", "/health", "health.check");
 
     EXPECT_EQ(schema.method, "GET");
     EXPECT_EQ(schema.path, "/health");
@@ -107,10 +114,13 @@ TEST(RouteSchemaTest, BuildsNoBodyRouteSchema)
 
 TEST(RouteSchemaTest, RendersDeterministicRouteSchemaSnapshot)
 {
-    const auto route = memochat::gate::routing::MakeRouteSchema<SampleRequestDto, SampleResponseDto>(
-        "POST", "/media/status", "media.status", "SampleRequestDto", "SampleResponseDto");
-    const auto health =
-        memochat::gate::routing::MakeRouteSchemaWithoutBody("GET", "/health", "health.check");
+    const auto route =
+        memochat::gate::routing::MakeRouteSchema<SampleRequestDto, SampleResponseDto>("POST",
+                                                                                      "/media/status",
+                                                                                      "media.status",
+                                                                                      "SampleRequestDto",
+                                                                                      "SampleResponseDto");
+    const auto health = memochat::gate::routing::MakeRouteSchemaWithoutBody("GET", "/health", "health.check");
 
     const std::string snapshot = memochat::gate::routing::RenderRouteSchemaSnapshot({route, health});
 

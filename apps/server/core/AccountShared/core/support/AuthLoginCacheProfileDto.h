@@ -24,9 +24,7 @@ struct AuthLoginCacheProfileDto
 AuthLoginCacheProfileDto ToLoginCacheProfileDto(const UserInfo& user_info);
 void ApplyLoginCacheProfileDto(const AuthLoginCacheProfileDto& dto, UserInfo& user_info);
 bool EncodeLoginCacheProfile(const UserInfo& user_info, std::string* out, std::string* error_out = nullptr);
-bool DecodeLoginCacheProfile(std::string_view body,
-                             AuthLoginCacheProfileDto* out,
-                             std::string* error_out = nullptr);
+bool DecodeLoginCacheProfile(std::string_view body, AuthLoginCacheProfileDto* out, std::string* error_out = nullptr);
 bool DecodeLoginCacheProfile(std::string_view body, UserInfo* out, std::string* error_out = nullptr);
 
 } // namespace gateauthsupport

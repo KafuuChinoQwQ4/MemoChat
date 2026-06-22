@@ -4,7 +4,6 @@ from typing import Any, Awaitable, Callable
 
 from langgraph.graph import END, StateGraph
 
-
 AgentGraphState = dict[str, Any]
 AgentGraphNode = Callable[[AgentGraphState], Awaitable[AgentGraphState]]
 

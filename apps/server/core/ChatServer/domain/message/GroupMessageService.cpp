@@ -219,13 +219,13 @@ MessageCommandResult GroupMessageService::CreateGroup(const MessageCommandReques
 
     if (!members.empty())
     {
-        const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupInviteCreatedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "group_invite",
-            .groupid = group_id,
-            .group_code = group_code,
-            .name = group_name,
-            .operator_uid = owner_uid});
+        const auto notify = ChatMessageCommand::ToJsonValue(
+            ChatMessageCommand::ChatGroupInviteCreatedEventDto{.error = ErrorCodes::Success,
+                                                               .event = "group_invite",
+                                                               .groupid = group_id,
+                                                               .group_code = group_code,
+                                                               .name = group_name,
+                                                               .operator_uid = owner_uid});
         _delivery_gateway->PushPayload(members, ID_NOTIFY_GROUP_INVITE_REQ, notify);
     }
     return result();
@@ -247,8 +247,8 @@ MessageCommandResult GroupMessageService::GetGroupList(const MessageCommandReque
     const auto command = ChatGroupCommand::ChatGroupListRequestFromJsonValue(root);
     const int uid = command.uid;
 
-    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupListResponseDto{
-        .error = ErrorCodes::Success});
+    memochat::json::JsonValue rtvalue =
+        ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupListResponseDto{.error = ErrorCodes::Success});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_GET_GROUP_LIST_RSP, JsonToWireString(rtvalue)};
@@ -287,11 +287,11 @@ MessageCommandResult GroupMessageService::InviteGroupMember(const MessageCommand
         to_uid = 0;
     }
 
-    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupInviteMemberResponseDto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .touid = to_uid,
-        .target_user_id = target_user_id});
+    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(
+        ChatGroupCommand::ChatGroupInviteMemberResponseDto{.error = ErrorCodes::Success,
+                                                           .groupid = group_id,
+                                                           .touid = to_uid,
+                                                           .target_user_id = target_user_id});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_INVITE_GROUP_MEMBER_RSP, JsonToWireString(rtvalue)};
@@ -311,15 +311,15 @@ MessageCommandResult GroupMessageService::InviteGroupMember(const MessageCommand
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupInviteMemberEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_invite",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .name = group_info ? group_info->name : "",
-        .operator_uid = from_uid,
-        .target_user_id = target_user_id,
-        .reason = reason});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupInviteMemberEventDto{.error = ErrorCodes::Success,
+                                                          .event = "group_invite",
+                                                          .groupid = group_id,
+                                                          .group_code = group_info ? group_info->group_code : "",
+                                                          .name = group_info ? group_info->name : "",
+                                                          .operator_uid = from_uid,
+                                                          .target_user_id = target_user_id,
+                                                          .reason = reason});
     _delivery_gateway->PushPayload({to_uid}, ID_NOTIFY_GROUP_INVITE_REQ, notify);
     return result();
 }
@@ -348,10 +348,10 @@ MessageCommandResult GroupMessageService::ApplyJoinGroup(const MessageCommandReq
     }
     const std::string& reason = command.reason;
 
-    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupApplyJoinResponseDto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .group_code = group_code});
+    memochat::json::JsonValue rtvalue =
+        ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupApplyJoinResponseDto{.error = ErrorCodes::Success,
+                                                                                      .groupid = group_id,
+                                                                                      .group_code = group_code});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_APPLY_JOIN_GROUP_RSP, JsonToWireString(rtvalue)};
@@ -384,14 +384,14 @@ MessageCommandResult GroupMessageService::ApplyJoinGroup(const MessageCommandReq
     {
         applicant_user_id = applicant->user_id;
     }
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupApplyEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_apply",
-        .groupid = group_id,
-        .group_code = group_code,
-        .applicant_uid = from_uid,
-        .applicant_user_id = applicant_user_id,
-        .reason = reason});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupApplyEventDto{.error = ErrorCodes::Success,
+                                                   .event = "group_apply",
+                                                   .groupid = group_id,
+                                                   .group_code = group_code,
+                                                   .applicant_uid = from_uid,
+                                                   .applicant_user_id = applicant_user_id,
+                                                   .reason = reason});
     _delivery_gateway->PushPayload(admins, ID_NOTIFY_GROUP_APPLY_REQ, notify);
     return result();
 }
@@ -420,8 +420,7 @@ MessageCommandResult GroupMessageService::ReviewGroupApply(const MessageCommandR
     rtdto.agree = agree;
     const auto result = [&rtdto]()
     {
-        return MessageCommandResult{ID_REVIEW_GROUP_APPLY_RSP,
-                                    JsonToWireString(ChatGroupCommand::ToJsonValue(rtdto))};
+        return MessageCommandResult{ID_REVIEW_GROUP_APPLY_RSP, JsonToWireString(ChatGroupCommand::ToJsonValue(rtdto))};
     };
 
     if (reviewer_uid <= 0 || apply_id <= 0)
@@ -467,15 +466,15 @@ MessageCommandResult GroupMessageService::ReviewGroupApply(const MessageCommandR
     {
         applicant_user_id = applicant->user_id;
     }
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupApplyReviewedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_member_changed",
-        .groupid = apply_info->group_id,
-        .group_code = apply_group ? apply_group->group_code : "",
-        .applicant_uid = apply_info->applicant_uid,
-        .applicant_user_id = applicant_user_id,
-        .agree = agree,
-        .operator_uid = reviewer_uid});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupApplyReviewedEventDto{.error = ErrorCodes::Success,
+                                                           .event = "group_member_changed",
+                                                           .groupid = apply_info->group_id,
+                                                           .group_code = apply_group ? apply_group->group_code : "",
+                                                           .applicant_uid = apply_info->applicant_uid,
+                                                           .applicant_user_id = applicant_user_id,
+                                                           .agree = agree,
+                                                           .operator_uid = reviewer_uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -512,8 +511,7 @@ MessageCommandResult GroupMessageService::GroupChatMessage(const MessageCommandR
     }
     const auto result = [&rtdto]()
     {
-        return MessageCommandResult{ID_GROUP_CHAT_MSG_RSP,
-                                    JsonToWireString(ChatMessageCommand::ToJsonValue(rtdto))};
+        return MessageCommandResult{ID_GROUP_CHAT_MSG_RSP, JsonToWireString(ChatMessageCommand::ToJsonValue(rtdto))};
     };
 
     if (from_uid <= 0 || group_id <= 0 || !msg.isObject())
@@ -600,15 +598,15 @@ MessageCommandResult GroupMessageService::GroupChatMessage(const MessageCommandR
         rtdto.group_code = group_info->group_code;
     }
 
-    auto event_payload = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupSendEventDto{
-        .fromuid = from_uid,
-        .groupid = static_cast<int64_t>(group_id),
-        .trace_id = root.get("trace_id", "").asString(),
-        .request_id = root.get("request_id", "").asString(),
-        .span_id = root.get("span_id", "").asString(),
-        .event_id = client_msg_id,
-        .accept_node = memochat::chatruntime::SelfServerName(),
-        .accept_ts = static_cast<int64_t>(accept_ts)});
+    auto event_payload = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupSendEventDto{.fromuid = from_uid,
+                                                  .groupid = static_cast<int64_t>(group_id),
+                                                  .trace_id = root.get("trace_id", "").asString(),
+                                                  .request_id = root.get("request_id", "").asString(),
+                                                  .span_id = root.get("span_id", "").asString(),
+                                                  .event_id = client_msg_id,
+                                                  .accept_node = memochat::chatruntime::SelfServerName(),
+                                                  .accept_ts = static_cast<int64_t>(accept_ts)});
     event_payload["msg"] = msg;
     if (sender_info)
     {
@@ -705,11 +703,11 @@ MessageCommandResult GroupMessageService::GroupHistory(const MessageCommandReque
     const int64_t before_seq = command.before_seq;
     const int limit = command.limit;
 
-    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupHistoryResponseDto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .has_more = false,
-        .next_before_seq = 0});
+    memochat::json::JsonValue rtvalue =
+        ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupHistoryResponseDto{.error = ErrorCodes::Success,
+                                                                                    .groupid = group_id,
+                                                                                    .has_more = false,
+                                                                                    .next_before_seq = 0});
     rtvalue["messages"] = memochat::json::arrayValue;
     const auto result = [&rtvalue]()
     {
@@ -804,13 +802,12 @@ MessageCommandResult GroupMessageService::EditGroupMessage(const MessageCommandR
     const std::string& content = command.content;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMessageChangedResultDto{
-            .error = ErrorCodes::Success,
-            .groupid = group_id,
-            .msgid = target_msg_id,
-            .content = content,
-            .changed_at_ms = now_ms});
+    memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMessageChangedResultDto{.error = ErrorCodes::Success,
+                                                             .groupid = group_id,
+                                                             .msgid = target_msg_id,
+                                                             .content = content,
+                                                             .changed_at_ms = now_ms});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_EDIT_GROUP_MSG_RSP, JsonToWireString(rtvalue)};
@@ -843,15 +840,14 @@ MessageCommandResult GroupMessageService::EditGroupMessage(const MessageCommandR
         }
     }
 
-    const memochat::json::JsonValue notify =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMessageChangedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "group_msg_edited",
-            .groupid = group_id,
-            .msgid = target_msg_id,
-            .content = content,
-            .changed_at_ms = now_ms,
-            .operator_uid = uid});
+    const memochat::json::JsonValue notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMessageChangedEventDto{.error = ErrorCodes::Success,
+                                                            .event = "group_msg_edited",
+                                                            .groupid = group_id,
+                                                            .msgid = target_msg_id,
+                                                            .content = content,
+                                                            .changed_at_ms = now_ms,
+                                                            .operator_uid = uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
     return result();
 }
@@ -876,14 +872,13 @@ MessageCommandResult GroupMessageService::RevokeGroupMessage(const MessageComman
     const std::string& target_msg_id = command.msgid;
     const int64_t now_ms = NowMs();
 
-    memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMessageChangedResultDto{
-            .error = ErrorCodes::Success,
-            .groupid = group_id,
-            .msgid = target_msg_id,
-            .content = "[消息已撤回]",
-            .changed_at_ms = now_ms,
-            .deleted = true});
+    memochat::json::JsonValue rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMessageChangedResultDto{.error = ErrorCodes::Success,
+                                                             .groupid = group_id,
+                                                             .msgid = target_msg_id,
+                                                             .content = "[消息已撤回]",
+                                                             .changed_at_ms = now_ms,
+                                                             .deleted = true});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_REVOKE_GROUP_MSG_RSP, JsonToWireString(rtvalue)};
@@ -916,16 +911,15 @@ MessageCommandResult GroupMessageService::RevokeGroupMessage(const MessageComman
         }
     }
 
-    const memochat::json::JsonValue notify =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMessageChangedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "group_msg_revoked",
-            .groupid = group_id,
-            .msgid = target_msg_id,
-            .content = "[消息已撤回]",
-            .changed_at_ms = now_ms,
-            .operator_uid = uid,
-            .deleted = true});
+    const memochat::json::JsonValue notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMessageChangedEventDto{.error = ErrorCodes::Success,
+                                                            .event = "group_msg_revoked",
+                                                            .groupid = group_id,
+                                                            .msgid = target_msg_id,
+                                                            .content = "[消息已撤回]",
+                                                            .changed_at_ms = now_ms,
+                                                            .operator_uid = uid,
+                                                            .deleted = true});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, 0);
     return result();
 }
@@ -951,11 +945,10 @@ MessageCommandResult GroupMessageService::ForwardGroupMessage(const MessageComma
     std::string client_msg_id = command.client_msg_id;
 
     memochat::json::JsonValue rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupForwardResultDto{
-            .error = ErrorCodes::Success,
-            .fromuid = from_uid,
-            .groupid = group_id,
-            .client_msg_id = client_msg_id});
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupForwardResultDto{.error = ErrorCodes::Success,
+                                                                                      .fromuid = from_uid,
+                                                                                      .groupid = group_id,
+                                                                                      .client_msg_id = client_msg_id});
     const auto result = [&rtvalue]()
     {
         return MessageCommandResult{ID_FORWARD_GROUP_MSG_RSP, JsonToWireString(rtvalue)};
@@ -1056,21 +1049,20 @@ MessageCommandResult GroupMessageService::ForwardGroupMessage(const MessageComma
             forwarded_forward_meta = parsed_forward_meta;
         }
     }
-    const memochat::json::JsonValue forwarded_msg =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupForwardMessageDto{
-            .msgid = info.msg_id,
-            .msgtype = info.msg_type,
-            .content = info.content,
-            .mentions = mentions,
-            .file_name = info.file_name,
-            .mime = info.mime,
-            .size = info.size,
-            .forwarded_from_msgid = source_msg_id,
-            .created_at = now_ms,
-            .server_msg_id = server_msg_id,
-            .group_seq = group_seq,
-            .reply_to_server_msg_id = info.reply_to_server_msg_id,
-            .forward_meta = forwarded_forward_meta});
+    const memochat::json::JsonValue forwarded_msg = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupForwardMessageDto{.msgid = info.msg_id,
+                                                       .msgtype = info.msg_type,
+                                                       .content = info.content,
+                                                       .mentions = mentions,
+                                                       .file_name = info.file_name,
+                                                       .mime = info.mime,
+                                                       .size = info.size,
+                                                       .forwarded_from_msgid = source_msg_id,
+                                                       .created_at = now_ms,
+                                                       .server_msg_id = server_msg_id,
+                                                       .group_seq = group_seq,
+                                                       .reply_to_server_msg_id = info.reply_to_server_msg_id,
+                                                       .forward_meta = forwarded_forward_meta});
 
     ChatMessageCommand::ChatGroupForwardResultDto result_dto{.error = ErrorCodes::Success,
                                                              .fromuid = from_uid,
@@ -1157,12 +1149,12 @@ MessageCommandResult GroupMessageService::GroupReadAck(const MessageCommandReque
             recipients.push_back(member->uid);
         }
     }
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupReadAckEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_read_ack",
-        .groupid = group_id,
-        .fromuid = uid,
-        .read_ts = read_ts});
+    const auto notify =
+        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupReadAckEventDto{.error = ErrorCodes::Success,
+                                                                                     .event = "group_read_ack",
+                                                                                     .groupid = group_id,
+                                                                                     .fromuid = uid,
+                                                                                     .read_ts = read_ts});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify, uid);
     return result();
 }
@@ -1185,10 +1177,9 @@ MessageCommandResult GroupMessageService::UpdateGroupAnnouncement(const MessageC
     const int64_t group_id = command.group_id;
     const std::string& announcement = command.announcement;
 
-    ChatGroupCommand::ChatGroupAnnouncementUpdateResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .announcement = announcement};
+    ChatGroupCommand::ChatGroupAnnouncementUpdateResponseDto rtdto{.error = ErrorCodes::Success,
+                                                                   .groupid = group_id,
+                                                                   .announcement = announcement};
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1218,14 +1209,13 @@ MessageCommandResult GroupMessageService::UpdateGroupAnnouncement(const MessageC
         }
     }
 
-    const auto notify =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupAnnouncementUpdatedEventDto{
-            .error = ErrorCodes::Success,
-            .event = "group_announcement_updated",
-            .groupid = group_id,
-            .group_code = group_info ? group_info->group_code : "",
-            .announcement = announcement,
-            .operator_uid = uid});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupAnnouncementUpdatedEventDto{.error = ErrorCodes::Success,
+                                                                 .event = "group_announcement_updated",
+                                                                 .groupid = group_id,
+                                                                 .group_code = group_info ? group_info->group_code : "",
+                                                                 .announcement = announcement,
+                                                                 .operator_uid = uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1249,10 +1239,9 @@ MessageCommandResult GroupMessageService::UpdateGroupIcon(const MessageCommandRe
     const int64_t group_id = command.group_id;
     const std::string& icon = command.icon;
 
-    ChatGroupCommand::ChatGroupIconUpdateResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .icon = icon};
+    ChatGroupCommand::ChatGroupIconUpdateResponseDto rtdto{.error = ErrorCodes::Success,
+                                                           .groupid = group_id,
+                                                           .icon = icon};
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1287,13 +1276,13 @@ MessageCommandResult GroupMessageService::UpdateGroupIcon(const MessageCommandRe
         }
     }
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupIconUpdatedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_icon_updated",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .icon = icon,
-        .operator_uid = uid});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupIconUpdatedEventDto{.error = ErrorCodes::Success,
+                                                         .event = "group_icon_updated",
+                                                         .groupid = group_id,
+                                                         .group_code = group_info ? group_info->group_code : "",
+                                                         .icon = icon,
+                                                         .operator_uid = uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1324,13 +1313,13 @@ MessageCommandResult GroupMessageService::SetGroupAdmin(const MessageCommandRequ
         target_uid = 0;
     }
 
-    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupSetAdminResponseDto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .touid = target_uid,
-        .target_user_id = target_user_id,
-        .is_admin = is_admin,
-        .permission_bits = requested_permission_bits});
+    memochat::json::JsonValue rtvalue = ChatGroupCommand::ToJsonValue(
+        ChatGroupCommand::ChatGroupSetAdminResponseDto{.error = ErrorCodes::Success,
+                                                       .groupid = group_id,
+                                                       .touid = target_uid,
+                                                       .target_user_id = target_user_id,
+                                                       .is_admin = is_admin,
+                                                       .permission_bits = requested_permission_bits});
     GroupResponseFormatter::ApplyPermissionFlags(rtvalue, requested_permission_bits);
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
@@ -1360,16 +1349,16 @@ MessageCommandResult GroupMessageService::SetGroupAdmin(const MessageCommandRequ
             recipients.push_back(one->uid);
         }
     }
-    auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupAdminChangedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_admin_changed",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .operator_uid = uid,
-        .target_uid = target_uid,
-        .target_user_id = target_user_id,
-        .is_admin = is_admin,
-        .permission_bits = requested_permission_bits});
+    auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupAdminChangedEventDto{.error = ErrorCodes::Success,
+                                                          .event = "group_admin_changed",
+                                                          .groupid = group_id,
+                                                          .group_code = group_info ? group_info->group_code : "",
+                                                          .operator_uid = uid,
+                                                          .target_uid = target_uid,
+                                                          .target_user_id = target_user_id,
+                                                          .is_admin = is_admin,
+                                                          .permission_bits = requested_permission_bits});
     GroupResponseFormatter::ApplyPermissionFlags(notify, requested_permission_bits);
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
@@ -1400,12 +1389,11 @@ MessageCommandResult GroupMessageService::MuteGroupMember(const MessageCommandRe
     }
     const int64_t mute_until = (mute_seconds > 0) ? NowSec() + mute_seconds : 0;
 
-    ChatGroupCommand::ChatGroupMuteMemberResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .touid = target_uid,
-        .target_user_id = target_user_id,
-        .mute_until = mute_until};
+    ChatGroupCommand::ChatGroupMuteMemberResponseDto rtdto{.error = ErrorCodes::Success,
+                                                           .groupid = group_id,
+                                                           .touid = target_uid,
+                                                           .target_user_id = target_user_id,
+                                                           .mute_until = mute_until};
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1435,15 +1423,15 @@ MessageCommandResult GroupMessageService::MuteGroupMember(const MessageCommandRe
             recipients.push_back(one->uid);
         }
     }
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMuteChangedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_mute_changed",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .operator_uid = uid,
-        .target_uid = target_uid,
-        .target_user_id = target_user_id,
-        .mute_until = mute_until});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMuteChangedEventDto{.error = ErrorCodes::Success,
+                                                         .event = "group_mute_changed",
+                                                         .groupid = group_id,
+                                                         .group_code = group_info ? group_info->group_code : "",
+                                                         .operator_uid = uid,
+                                                         .target_uid = target_uid,
+                                                         .target_user_id = target_user_id,
+                                                         .mute_until = mute_until});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1472,11 +1460,10 @@ MessageCommandResult GroupMessageService::KickGroupMember(const MessageCommandRe
         target_uid = 0;
     }
 
-    ChatGroupCommand::ChatGroupKickMemberResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id,
-        .touid = target_uid,
-        .target_user_id = target_user_id};
+    ChatGroupCommand::ChatGroupKickMemberResponseDto rtdto{.error = ErrorCodes::Success,
+                                                           .groupid = group_id,
+                                                           .touid = target_uid,
+                                                           .target_user_id = target_user_id};
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1507,14 +1494,14 @@ MessageCommandResult GroupMessageService::KickGroupMember(const MessageCommandRe
     }
     recipients.push_back(target_uid);
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMemberKickedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_member_kicked",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .operator_uid = uid,
-        .target_uid = target_uid,
-        .target_user_id = target_user_id});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMemberKickedEventDto{.error = ErrorCodes::Success,
+                                                          .event = "group_member_kicked",
+                                                          .groupid = group_id,
+                                                          .group_code = group_info ? group_info->group_code : "",
+                                                          .operator_uid = uid,
+                                                          .target_uid = target_uid,
+                                                          .target_user_id = target_user_id});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1537,9 +1524,7 @@ MessageCommandResult GroupMessageService::QuitGroup(const MessageCommandRequest&
     const int uid = command.uid;
     const int64_t group_id = command.group_id;
 
-    ChatGroupCommand::ChatGroupQuitResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id};
+    ChatGroupCommand::ChatGroupQuitResponseDto rtdto{.error = ErrorCodes::Success, .groupid = group_id};
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
     if (group_info)
@@ -1569,12 +1554,12 @@ MessageCommandResult GroupMessageService::QuitGroup(const MessageCommandRequest&
         }
     }
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupMemberQuitEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_member_quit",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .target_uid = uid});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupMemberQuitEventDto{.error = ErrorCodes::Success,
+                                                        .event = "group_member_quit",
+                                                        .groupid = group_id,
+                                                        .group_code = group_info ? group_info->group_code : "",
+                                                        .target_uid = uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }
@@ -1596,9 +1581,7 @@ MessageCommandResult GroupMessageService::DissolveGroup(const MessageCommandRequ
     const int uid = command.uid;
     const int64_t group_id = command.group_id;
 
-    ChatGroupCommand::ChatGroupDissolveResponseDto rtdto{
-        .error = ErrorCodes::Success,
-        .groupid = group_id};
+    ChatGroupCommand::ChatGroupDissolveResponseDto rtdto{.error = ErrorCodes::Success, .groupid = group_id};
 
     std::shared_ptr<GroupInfo> group_info;
     _relation_repository->GetGroupById(group_id, group_info);
@@ -1643,13 +1626,13 @@ MessageCommandResult GroupMessageService::DissolveGroup(const MessageCommandRequ
         return result();
     }
 
-    const auto notify = ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatGroupDissolvedEventDto{
-        .error = ErrorCodes::Success,
-        .event = "group_dissolved",
-        .groupid = group_id,
-        .group_code = group_info ? group_info->group_code : "",
-        .name = group_info ? group_info->name : "",
-        .operator_uid = uid});
+    const auto notify = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatGroupDissolvedEventDto{.error = ErrorCodes::Success,
+                                                       .event = "group_dissolved",
+                                                       .groupid = group_id,
+                                                       .group_code = group_info ? group_info->group_code : "",
+                                                       .name = group_info ? group_info->name : "",
+                                                       .operator_uid = uid});
     _delivery_gateway->PushPayload(recipients, ID_NOTIFY_GROUP_MEMBER_CHANGED_REQ, notify);
     return result();
 }

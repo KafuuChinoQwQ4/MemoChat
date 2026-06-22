@@ -107,9 +107,9 @@ TEST(MediaPublicDtosTest, KeepsLegacySafeGetDefaultsForWrongTypes)
 TEST(MediaPublicDtosTest, DecodesCompleteRequestWithExistingWireFieldNames)
 {
     memochat::media::MediaUploadCompleteRequestDto request;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadCompleteRequest(
-        R"({"uid":42,"token":"token-1","upload_id":"upload-1"})",
-        &request));
+    ASSERT_TRUE(
+        memochat::media::DecodeMediaUploadCompleteRequest(R"({"uid":42,"token":"token-1","upload_id":"upload-1"})",
+                                                          &request));
 
     EXPECT_EQ(request.uid, 42);
     EXPECT_EQ(request.token, "token-1");

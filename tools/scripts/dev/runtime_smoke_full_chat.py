@@ -778,7 +778,9 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gate-url", default="http://127.0.0.1:80")
     parser.add_argument("--postgres-container", default="memochat-postgres")
-    parser.add_argument("--account-db", default="memo_account", help="database owning the user/user_id account aggregate")
+    parser.add_argument(
+        "--account-db", default="memo_account", help="database owning the user/user_id account aggregate"
+    )
     parser.add_argument("--media-db", default="memo_media", help="database owning chat_media_asset metadata")
     parser.add_argument("--redis-container", default="memochat-redis")
     parser.add_argument("--minio-container", default="memochat-minio")

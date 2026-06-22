@@ -81,9 +81,7 @@ struct MomentCommentLikeRequestDto
 int64_t MomentsReadInt64(const memochat::json::JsonValue& obj, const char* key, int64_t fallback = 0);
 int MomentsReadInt(const memochat::json::JsonValue& obj, const char* key, int fallback = 0);
 bool MomentsReadBool(const memochat::json::JsonValue& obj, const char* key, bool fallback = false);
-std::string MomentsReadString(const memochat::json::JsonValue& obj,
-                              const char* key,
-                              const std::string& fallback = {});
+std::string MomentsReadString(const memochat::json::JsonValue& obj, const char* key, const std::string& fallback = {});
 
 void NormalizeMomentPublicItem(MomentItemInfo& item);
 

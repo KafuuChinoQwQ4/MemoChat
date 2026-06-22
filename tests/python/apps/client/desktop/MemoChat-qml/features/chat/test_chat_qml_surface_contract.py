@@ -358,11 +358,17 @@ class ChatQmlSurfaceContractTests(unittest.TestCase):
         self.assertNotIn("session.model_name || currentModelName", side_pane)
 
         self.assertIn("signal agentSessionRenamed(string sessionId, string title)", left_panel)
-        self.assertIn("onSessionRenamed: function(sessionId, title) { root.agentSessionRenamed(sessionId, title) }", left_panel)
+        self.assertIn(
+            "onSessionRenamed: function(sessionId, title) { root.agentSessionRenamed(sessionId, title) }", left_panel
+        )
         self.assertIn("onAgentSessionRenamed: function(sessionId, title) {", normal_face)
         self.assertIn("agent.renameSession(sessionId, title)", normal_face)
-        self.assertIn("Q_INVOKABLE void renameSession(const QString& sessionId, const QString& title);", controller_header)
-        self.assertIn("void AgentController::renameSession(const QString& sessionId, const QString& title)", controller_sessions)
+        self.assertIn(
+            "Q_INVOKABLE void renameSession(const QString& sessionId, const QString& title);", controller_header
+        )
+        self.assertIn(
+            "void AgentController::renameSession(const QString& sessionId, const QString& title)", controller_sessions
+        )
 
 
 if __name__ == "__main__":

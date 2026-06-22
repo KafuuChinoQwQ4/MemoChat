@@ -257,28 +257,10 @@ TEST(CallRouteSchemaTest, BuildsFieldInventoriesFromCallDtos)
 
     ExpectFields(schemas[0].request, {"uid", "token", "peer_uid", "call_type"});
     ExpectFields(schemas[0].response,
-                 {"error",
-                  "event_type",
-                  "call_id",
-                  "room_name",
-                  "call_type",
-                  "caller_uid",
-                  "callee_uid",
-                  "caller_name",
-                  "callee_name",
-                  "caller_icon",
-                  "callee_icon",
-                  "started_at",
-                  "accepted_at",
-                  "ended_at",
-                  "expires_at",
-                  "state",
-                  "reason",
-                  "trace_id",
-                  "livekit_url",
-                  "peer_uid",
-                  "peer_name",
-                  "peer_icon"});
+                 {"error",       "event_type",  "call_id",     "room_name",   "call_type",   "caller_uid",
+                  "callee_uid",  "caller_name", "callee_name", "caller_icon", "callee_icon", "started_at",
+                  "accepted_at", "ended_at",    "expires_at",  "state",       "reason",      "trace_id",
+                  "livekit_url", "peer_uid",    "peer_name",   "peer_icon"});
 
     for (std::size_t i = 1; i <= 4; ++i)
     {
