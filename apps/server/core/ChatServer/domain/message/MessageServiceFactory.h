@@ -15,6 +15,7 @@
 std::unique_ptr<IPrivateMessageService> CreateInProcessPrivateMessageService(ISessionRegistry* session_registry,
                                                                              IOnlineRouteStore* online_route_store,
                                                                              IMessageRepository* message_repository,
+                                                                             IRelationRepository* relation_repository,
                                                                              IDeliveryGateway* delivery_gateway,
                                                                              IEventPublisher* event_publisher);
 
@@ -27,6 +28,7 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
                                                                     ISessionRegistry* session_registry,
                                                                     IOnlineRouteStore* online_route_store,
                                                                     IMessageRepository* message_repository,
+                                                                    IRelationRepository* relation_repository,
                                                                     IDeliveryGateway* delivery_gateway,
                                                                     IEventPublisher* event_publisher);
 

@@ -86,6 +86,8 @@ QVariant ChatMessageModel::data(const QModelIndex& index, int role) const
             return entry.content;
         case FromUidRole:
             return entry.fromUid;
+        case FromUserIdRole:
+            return entry.fromUserId;
         case ToUidRole:
             return entry.toUid;
         case OutgoingRole:
@@ -155,5 +157,6 @@ QHash<int, QByteArray> ChatMessageModel::roleNames() const
             {ReplyToServerMsgIdRole, "replyToServerMsgId"},
             {ForwardMetaRole, "forwardMeta"},
             {EditedAtMsRole, "editedAtMs"},
-            {DeletedAtMsRole, "deletedAtMs"}};
+            {DeletedAtMsRole, "deletedAtMs"},
+            {FromUserIdRole, "fromUserId"}};
 }

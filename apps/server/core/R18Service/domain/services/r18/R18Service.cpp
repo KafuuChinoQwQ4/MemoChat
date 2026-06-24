@@ -220,6 +220,30 @@ bool R18Service::HandleDisableSource(const memochat::gate::routing::GateRequest&
         });
 }
 
+bool R18Service::HandleDeleteSource(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(request,
+                             response,
+                             [](const JsonValue& src, JsonValue& root, const std::string&)
+                             {
+                                 const auto body = memochat::r18::R18SourceToggleRequestFromJsonValue(src);
+                                 if (!RequireAuth(body, root))
+                                     return true;
+                                 std::string error;
+                                 if (!memochat::r18::R18SourceService::Instance().DeleteSource(body.source_id, &error))
+                                 {
+                                     root["error"] = ErrorCodes::Error_Json;
+                                     root["message"] = error;
+                                     return true;
+                                 }
+                                 memochat::r18::R18SourceToggleResponseDto resp;
+                                 resp.source_id = body.source_id;
+                                 WriteOk(root, memochat::r18::R18SourceToggleResponseToJsonValue(resp));
+                                 return true;
+                             });
+}
+
 bool R18Service::HandleSearch(const memochat::gate::routing::GateRequest& request,
                               memochat::gate::routing::GateResponse& response)
 {
@@ -229,10 +253,7 @@ bool R18Service::HandleSearch(const memochat::gate::routing::GateRequest& reques
                              {
                                  const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
                                  if (!RequireAuth(body, root))
-                                 {
                                      return true;
-                                 }
-
                                  WriteOk(root,
                                          memochat::r18::R18SourceService::Instance()
                                              .Search(body.source_id, body.keyword, body.page, body.uid, body.token));
@@ -249,10 +270,7 @@ bool R18Service::HandleComicDetail(const memochat::gate::routing::GateRequest& r
                              {
                                  const auto body = memochat::r18::R18ComicDetailRequestFromJsonValue(src);
                                  if (!RequireAuth(body, root))
-                                 {
                                      return true;
-                                 }
-
                                  WriteOk(root,
                                          memochat::r18::R18SourceService::Instance().Detail(body.source_id,
                                                                                             body.comic_id,
@@ -271,10 +289,7 @@ bool R18Service::HandleChapterPages(const memochat::gate::routing::GateRequest& 
                              {
                                  const auto body = memochat::r18::R18ChapterPagesRequestFromJsonValue(src);
                                  if (!RequireAuth(body, root))
-                                 {
                                      return true;
-                                 }
-
                                  WriteOk(root,
                                          memochat::r18::R18SourceService::Instance().Pages(body.source_id,
                                                                                            body.chapter_id,
@@ -293,15 +308,12 @@ bool R18Service::HandleFavoriteToggle(const memochat::gate::routing::GateRequest
                              {
                                  const auto body = memochat::r18::R18FavoriteToggleRequestFromJsonValue(src);
                                  if (!RequireAuth(body, root))
-                                 {
                                      return true;
-                                 }
-
-                                 memochat::r18::R18FavoriteToggleResponseDto favorite_response;
-                                 favorite_response.source_id = body.source_id;
-                                 favorite_response.comic_id = body.comic_id;
-                                 favorite_response.favorited = body.favorited;
-                                 WriteOk(root, memochat::r18::R18FavoriteToggleResponseToJsonValue(favorite_response));
+                                 memochat::r18::R18FavoriteToggleResponseDto resp;
+                                 resp.source_id = body.source_id;
+                                 resp.comic_id = body.comic_id;
+                                 resp.favorited = body.favorited;
+                                 WriteOk(root, memochat::r18::R18FavoriteToggleResponseToJsonValue(resp));
                                  return true;
                              });
 }
@@ -315,16 +327,13 @@ bool R18Service::HandleHistoryUpdate(const memochat::gate::routing::GateRequest&
                              {
                                  const auto body = memochat::r18::R18HistoryUpdateRequestFromJsonValue(src);
                                  if (!RequireAuth(body, root))
-                                 {
                                      return true;
-                                 }
-
-                                 memochat::r18::R18HistoryUpdateResponseDto history_response;
-                                 history_response.source_id = body.source_id;
-                                 history_response.comic_id = body.comic_id;
-                                 history_response.chapter_id = body.chapter_id;
-                                 history_response.page_index = body.page_index;
-                                 WriteOk(root, memochat::r18::R18HistoryUpdateResponseToJsonValue(history_response));
+                                 memochat::r18::R18HistoryUpdateResponseDto resp;
+                                 resp.source_id = body.source_id;
+                                 resp.comic_id = body.comic_id;
+                                 resp.chapter_id = body.chapter_id;
+                                 resp.page_index = body.page_index;
+                                 WriteOk(root, memochat::r18::R18HistoryUpdateResponseToJsonValue(resp));
                                  return true;
                              });
 }
@@ -362,7 +371,6 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
         response.body = "token invalid";
         return true;
     }
-
     const std::string source_id = QueryParam(request, "source_id", kDefaultR18SourceId);
     const std::string image_url = QueryParam(request, "image_url");
     try
@@ -370,7 +378,7 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
         auto payload = memochat::r18::R18SourceService::Instance().FetchImage(source_id, image_url);
         response.status = 200;
         response.content_type = payload.content_type;
-        response.body = payload.body;
+        response.body = std::move(payload.body);
     }
     catch (const std::exception& exc)
     {

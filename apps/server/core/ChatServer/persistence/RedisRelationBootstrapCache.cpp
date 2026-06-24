@@ -7,9 +7,20 @@
 #include <memory>
 #include <string>
 
+namespace
+{
+constexpr int kRelationBootstrapCacheSchemaVersion = 2;
+
+bool RelationBootstrapCachePayloadIsCurrent(const memochat::json::JsonValue& cached)
+{
+    return cached.isObject() && cached.get("schema_version", 0).asInt() == kRelationBootstrapCacheSchemaVersion;
+}
+} // namespace
+
 std::string RedisRelationBootstrapCache::CacheKey(int uid) const
 {
-    return std::string("relation_bootstrap_") + std::to_string(uid);
+    return std::string("relation_bootstrap_v") + std::to_string(kRelationBootstrapCacheSchemaVersion) + "_" +
+           std::to_string(uid);
 }
 
 int RedisRelationBootstrapCache::TtlSec() const
@@ -52,6 +63,11 @@ bool RedisRelationBootstrapCache::TryAppend(int uid, memochat::json::JsonValue& 
         return false;
     }
 
+    if (!RelationBootstrapCachePayloadIsCurrent(cached))
+    {
+        return false;
+    }
+
     if (cached.isMember("apply_list"))
     {
         out["apply_list"] = cached["apply_list"];
@@ -70,9 +86,12 @@ void RedisRelationBootstrapCache::Store(int uid, const memochat::json::JsonValue
         return;
     }
 
+    memochat::json::JsonValue versioned_payload = payload;
+    versioned_payload["schema_version"] = kRelationBootstrapCacheSchemaVersion;
+
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
-    const auto json = memochat::json::writeString(builder, payload);
+    const auto json = memochat::json::writeString(builder, versioned_payload);
     if (json.empty())
     {
         return;

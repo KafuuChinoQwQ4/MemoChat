@@ -11,6 +11,7 @@ struct PrivateChatCacheRow
     QString msgId;
     QString content;
     int fromUid = 0;
+    QString fromUserId;
     int toUid = 0;
     qint64 createdAt = 0;
     qint64 replyToServerMsgId = 0;
@@ -24,6 +25,7 @@ struct GroupChatCacheRow
     QString msgId;
     QString content;
     int fromUid = 0;
+    QString fromUserId;
     QString fromName;
     QString fromIcon;
     qint64 createdAt = 0;

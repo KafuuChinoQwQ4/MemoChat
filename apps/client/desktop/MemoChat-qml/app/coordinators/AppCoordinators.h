@@ -127,6 +127,7 @@ struct RelationBootstrapPort
     std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextContactPage;
     std::function<void(const std::vector<std::shared_ptr<FriendInfo>>&)> setContacts;
     std::function<void(const std::shared_ptr<FriendInfo>&)> upsertContact;
+    std::function<void()> refreshContactProfiles;
     std::function<void()> markContactPageLoaded;
     std::function<void()> refreshContactLoadMoreState;
     std::function<void(bool)> setContactsReady;

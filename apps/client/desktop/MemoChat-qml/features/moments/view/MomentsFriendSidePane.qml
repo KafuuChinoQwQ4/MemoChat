@@ -106,6 +106,9 @@ Item {
                     height: 58
                     radius: 10
                     property bool selected: uid === root.selectedUid
+                    readonly property string identityText: userId && userId.length > 0
+                                                           ? ("ID: " + userId)
+                                                           : "ID: 未分配"
                     color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.22)
                                     : (friendArea.containsMouse ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(1, 1, 1, 0.04))
                     border.color: selected ? Qt.rgba(0.54, 0.70, 0.93, 0.50)
@@ -155,7 +158,7 @@ Item {
 
                             Label {
                                 Layout.fillWidth: true
-                                text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                text: momentFriendDelegate.identityText
                                 color: "#6a7b92"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight

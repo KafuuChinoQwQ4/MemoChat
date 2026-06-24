@@ -230,6 +230,15 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
 
     const int conv_uid_min = std::min(from_uid, to_uid);
     const int conv_uid_max = std::max(from_uid, to_uid);
+    std::string sender_public_user_id = root.get("from_user_id", "").asString();
+    if (sender_public_user_id.empty() && _relation_repository)
+    {
+        const auto sender_info = _relation_repository->GetUserByUid(from_uid);
+        if (sender_info)
+        {
+            sender_public_user_id = sender_info->user_id;
+        }
+    }
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
     text_msg_req.set_touid(to_uid);
@@ -237,6 +246,10 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
     notify_payload["error"] = ErrorCodes::Success;
     notify_payload["fromuid"] = from_uid;
     notify_payload["touid"] = to_uid;
+    if (!sender_public_user_id.empty())
+    {
+        notify_payload["from_user_id"] = sender_public_user_id;
+    }
     notify_payload["text_array"] = memochat::json::arrayValue;
     std::string first_msg_id;
 
@@ -249,6 +262,7 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
         msg.conv_uid_max = conv_uid_max;
         msg.from_uid = from_uid;
         msg.to_uid = to_uid;
+        msg.from_user_id = sender_public_user_id;
         msg.created_at = txt_obj.get("created_at", 0).asInt64();
         msg.reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
         msg.edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
@@ -281,6 +295,10 @@ void AsyncEventDispatcher::HandlePrivateAsyncEvent(const memochat::json::JsonVal
         one["msgid"] = msg.msg_id;
         one["content"] = msg.content;
         one["created_at"] = static_cast<int64_t>(msg.created_at);
+        if (!sender_public_user_id.empty())
+        {
+            one["from_user_id"] = sender_public_user_id;
+        }
         if (msg.reply_to_server_msg_id > 0)
         {
             one["reply_to_server_msg_id"] = static_cast<int64_t>(msg.reply_to_server_msg_id);

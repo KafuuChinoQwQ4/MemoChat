@@ -476,6 +476,13 @@ Item {
                         onSourceCatalogInputEdited: function(text) { root.sourceCatalogInput = text }
                         onOfficialCatalogRequested: root.openOfficialSourceCatalog()
                         onOfficialCatalogRefreshRequested: root.refreshOfficialSourceCatalog()
+                        onPresetSourceSelected: function(sourceId) {
+                            if (root.r18Controller) {
+                                root.r18Controller.selectSource(sourceId)
+                                root.sourceViewMode = 2
+                                root.loadSourceFeed("")
+                            }
+                        }
                         onSourceCatalogPathRequested: {
                             if (root.r18Controller) {
                                 var path = root.r18Controller.pickSourceCatalogPath()
@@ -490,6 +497,9 @@ Item {
                             }
                         }
                         onImportedSourceOpenRequested: function(sourceId) { root.openImportedSource(sourceId) }
+                        onImportedSourceDeleteRequested: function(sourceId) {
+                            if (root.r18Controller) root.r18Controller.deleteSource(sourceId)
+                        }
                         onSourceEnabledChanged: function(sourceId, enabled) {
                             if (root.r18Controller) {
                                 root.r18Controller.enableSource(sourceId, enabled)

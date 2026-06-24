@@ -221,6 +221,7 @@ struct PrivateMessageInfo
     int conv_uid_max;
     int from_uid;
     int to_uid;
+    std::string from_user_id;
     std::string content;
     int64_t created_at;
     int64_t reply_to_server_msg_id;

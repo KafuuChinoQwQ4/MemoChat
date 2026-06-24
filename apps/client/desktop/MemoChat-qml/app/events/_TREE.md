@@ -10,6 +10,6 @@
 | `AppChatDispatcherEventRouter.h` | 聊天分发事件路由器声明，聚合各聊天事件服务 |
 | `AppChatDispatcherGroupResponseHandlers.h` | 群组响应处理器集合声明 |
 | `AppHttpEventRouter.cpp` | HTTP 事件路由器实现 |
-| `AppHttpEventRouter.h` | HTTP 事件路由器声明（登录/注册/重置/设置响应） |
+| `AppHttpEventRouter.h` | HTTP 事件路由器声明（登录/注册/重置/设置/联系人资料响应） |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -83,8 +83,11 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     {
         ChatUserProfileDto profile;
         DecodeChatUserProfileCache(info_str, &profile);
-        FillUserInfoFromChatUserProfile(profile, *userinfo);
-        return true;
+        if (!profile.user_id.empty())
+        {
+            FillUserInfoFromChatUserProfile(profile, *userinfo);
+            return true;
+        }
     }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(uid);

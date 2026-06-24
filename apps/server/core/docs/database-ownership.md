@@ -21,8 +21,8 @@ Helm 配置、本所有权矩阵三者一致**时才算真实落地——`test_d
 说明:
 - Media/Moments/Call 已拆出独立数据库 + 专属应用角色(最小权限)。
 - Register/Login/Account 共享 `memo_account`(账号域),用 `memo_account_app` 角色。
-- ChatServer 主库仍是历史名 `memo_pg`(chat 域自有),用 `memochat` 角色;chatserver1/2
-  另有 `[AccountPostgres]` 桥接 `memo_account` 以读账号资料。
+- ChatServer 主库仍是历史名 `memo_pg`(chat 域自有),用 `memochat` 角色;ChatServer ingress
+  和独立 chat worker 配置另有 `[AccountPostgres]` 桥接 `memo_account` 以读账号资料。
 - R18 与 AIServer 仍共享 legacy `memo_pg` / `memochat`,属历史遗留共享,未拆分。
 
 ## 其他数据存储

@@ -11,6 +11,8 @@ Item {
     property bool hasCurrentChat: false
     property bool isGroupChat: false
     property int currentGroupRole: 1
+    property int selfUid: 0
+    property string selfUserId: ""
     property string selfName: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string peerAvatar: "qrc:/res/head_1.jpg"
@@ -37,7 +39,7 @@ Item {
     signal replyMessage(string msgId, string senderName, string previewText)
     signal mentionRequested(string mentionText)
     signal editRequested(string msgId, string text)
-    signal avatarProfileRequested(int uid, string name, string icon)
+    signal avatarProfileRequested(int uid, string name, string icon, string userId)
 
     function minContentY() {
         return messageList.originY
@@ -143,7 +145,8 @@ Item {
         delegate: ChatMessageDelegate {
             width: messageList.width
             msgId: model.msgId
-            senderUid: model.outgoing ? 0 : model.fromUid
+            senderUid: model.outgoing ? root.selfUid : model.fromUid
+            senderUserId: model.outgoing ? root.selfUserId : model.fromUserId
             outgoing: model.outgoing
             msgType: model.msgType
             content: model.content
@@ -178,7 +181,7 @@ Item {
             onRevokeRequested: function(msgId) { root.revokeMessage(msgId) }
             onReplyRequested: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
             onMentionRequested: function(mentionText) { root.mentionRequested(mentionText) }
-            onAvatarClicked: function(uid, name, icon) { root.avatarProfileRequested(uid, name, icon) }
+            onAvatarClicked: function(uid, name, icon, userId) { root.avatarProfileRequested(uid, name, icon, userId) }
             onEditRequested: function(msgId, text) { root.editRequested(msgId, text) }
         }
     }

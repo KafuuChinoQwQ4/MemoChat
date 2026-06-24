@@ -38,7 +38,7 @@ RowLayout {
     signal groupManagementPanelActiveChangedByUser(bool active)
     signal switchAccountToLoginRequested()
     signal petPreviewRequested(var petAssetSettings)
-    signal avatarProfileRequested(int uid, string name, string icon)
+    signal avatarProfileRequested(int uid, string name, string icon, string userId)
 
     function stageValue(start, span) {
         return ChatShellRuntime.stageValue(root.revealProgress, start, span)
@@ -225,8 +225,8 @@ RowLayout {
             onPetPreviewRequested: function(petAssetSettings) {
                 root.petPreviewRequested(petAssetSettings)
             }
-            onAvatarProfileRequested: function(uid, name, icon) {
-                root.avatarProfileRequested(uid, name, icon)
+            onAvatarProfileRequested: function(uid, name, icon, userId) {
+                root.avatarProfileRequested(uid, name, icon, userId)
             }
         }
 

@@ -130,8 +130,15 @@ class Phase2DbSplitContractTests(unittest.TestCase):
                 self.assertEqual("memo_account", ini["Postgres"]["Database"], f"{cfg} should target memo_account")
                 self.assertEqual("memo_account_app", ini["Postgres"]["User"])
 
-        # ChatServer keeps chat tables on memo_pg but reads user via [AccountPostgres].
-        for cfg in ("chatserver1.ini", "chatserver2.ini"):
+        # ChatServer and independent chat workers keep chat tables on memo_pg but read user via [AccountPostgres].
+        for cfg in (
+            "chatserver1.ini",
+            "chatserver2.ini",
+            "chatrelationquery1.ini",
+            "chatrelationservice1.ini",
+            "chatmessageservice1.ini",
+            "chatdeliveryworker1.ini",
+        ):
             ini = read_ini(REPO_ROOT / "apps" / "server" / "core" / "ChatServer" / cfg)
             with self.subTest(cfg=cfg):
                 self.assertEqual("memo_pg", ini["Postgres"]["Database"], f"{cfg} chat tables stay on memo_pg")

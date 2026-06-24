@@ -21,19 +21,45 @@ Popup {
     property string profileBack: ""
     property int profileSex: 0
     property bool isFriend: false
+    property string fallbackName: ""
+    property string fallbackIcon: ""
+    property string fallbackUserId: ""
+    readonly property string profileIdentityText: root.profileUserId && root.profileUserId.length > 0
+                                                  ? ("ID: " + root.profileUserId)
+                                                  : "ID: 未分配"
+
+    function reloadProfileFromController() {
+        var profile = contactController ? contactController.contactProfileByUid(profileUid) : ({})
+        var hasProfile = profile && profile.uid !== undefined
+        isFriend = hasProfile && profile.isFriend === true
+        profileName = hasProfile ? (profile.name || fallbackName || "用户") : (fallbackName || "用户")
+        profileNick = hasProfile ? (profile.nick || fallbackName || "") : (fallbackName || "")
+        profileIcon = hasProfile ? (profile.icon || fallbackIcon || "qrc:/res/head_1.jpg") : (fallbackIcon || "qrc:/res/head_1.jpg")
+        profileUserId = hasProfile ? (profile.userId || fallbackUserId || "") : (fallbackUserId || "")
+        profileDesc = hasProfile ? (profile.desc || "") : ""
+        profileBack = isFriend ? (profile.back || "") : ""
+        profileSex = hasProfile ? (profile.sex || 0) : 0
+    }
 
     function openProfile(uid, fallbackName, fallbackIcon, fallbackUserId) {
         profileUid = uid || 0
-        var profile = contactController ? contactController.contactProfileByUid(profileUid) : ({})
-        isFriend = profile && profile.uid !== undefined
-        profileName = isFriend ? (profile.name || fallbackName || "用户") : (fallbackName || "用户")
-        profileNick = isFriend ? (profile.nick || fallbackName || "") : (fallbackName || "")
-        profileIcon = isFriend ? (profile.icon || fallbackIcon || "qrc:/res/head_1.jpg") : (fallbackIcon || "qrc:/res/head_1.jpg")
-        profileUserId = isFriend ? (profile.userId || fallbackUserId || "") : (fallbackUserId || "")
-        profileDesc = isFriend ? (profile.desc || "") : ""
-        profileBack = isFriend ? (profile.back || "") : ""
-        profileSex = isFriend ? (profile.sex || 0) : 0
+        root.fallbackName = fallbackName || ""
+        root.fallbackIcon = fallbackIcon || ""
+        root.fallbackUserId = fallbackUserId || ""
+        reloadProfileFromController()
+        if (profileUid > 0 && profileUserId.length === 0 && contactController) {
+            contactController.refreshContactProfileByUid(profileUid)
+        }
         open()
+    }
+
+    Connections {
+        target: root.contactController
+        function onContactProfilesChanged() {
+            if (root.opened && root.profileUid > 0) {
+                root.reloadProfileFromController()
+            }
+        }
     }
 
     background: Rectangle {
@@ -82,7 +108,7 @@ Popup {
         Label {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: root.profileUserId ? ("ID: " + root.profileUserId) : ("UID: " + root.profileUid)
+            text: root.profileIdentityText
             color: "#6b7280"
             font.pixelSize: 13
         }

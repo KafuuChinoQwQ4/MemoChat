@@ -38,6 +38,13 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
         });
     registry.Register(
         "POST",
+        "/api/r18/source/delete",
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleDeleteSource(request, response);
+        });
+    registry.Register(
+        "POST",
         "/api/r18/search",
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {

@@ -30,5 +30,9 @@ void AppPortRegistry::bindContactFeaturePorts()
     _features.contactController.setCommandPort(ContactCommandPort{[this]()
                                                                   {
                                                                       jumpChatWithCurrentContact();
+                                                                  },
+                                                                  [this]()
+                                                                  {
+                                                                      requestRelationBootstrap();
                                                                   }});
 }

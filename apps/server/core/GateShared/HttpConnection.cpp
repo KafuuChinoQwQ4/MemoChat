@@ -285,27 +285,63 @@ void HttpConnection::HandleReq()
 
     if (_request.method() == http::verb::get)
     {
-        PreParseGetParam();
-        bool success = LogicSystem::GetInstance()->HandleGet(_get_url, shared_from_this());
-        if (!success)
-        {
-            _response.result(http::status::not_found);
-            _response.set(http::field::content_type, "text/plain");
-            beast::ostream(_response.body()) << "url not found\r\n";
-            WriteResponse();
-            return;
-        }
-        if (HasStreamingResponse())
-        {
-            return;
-        }
-
-        if (_response.result() == http::status::unknown)
-        {
-            _response.result(http::status::ok);
-        }
-        _response.set(http::field::server, "GateServer");
-        WriteResponse();
+        // GET handlers can issue blocking work (e.g. R18 proxies fetch upstream images
+        // synchronously). Offload to the worker pool — same pattern as POST/DELETE below —
+        // so a slow handler never stalls the io_context thread and starves other requests.
+        auto self = shared_from_this();
+        GateWorkerPool::GetInstance()->post(
+            [self]()
+            {
+                try
+                {
+                    self->PreParseGetParam();
+                    bool success = LogicSystem::GetInstance()->HandleGet(self->_get_url, self);
+                    boost::asio::post(self->_socket.get_executor(),
+                                      [self, success]()
+                                      {
+                                          try
+                                          {
+                                              if (self->HasStreamingResponse())
+                                              {
+                                                  return;
+                                              }
+                                              if (!success)
+                                              {
+                                                  self->_response.result(http::status::not_found);
+                                                  self->_response.set(http::field::content_type, "text/plain");
+                                                  beast::ostream(self->_response.body()) << "url not found\r\n";
+                                              }
+                                              else
+                                              {
+                                                  if (self->_response.result() == http::status::unknown)
+                                                  {
+                                                      self->_response.result(http::status::ok);
+                                                  }
+                                              }
+                                              self->_response.set(http::field::server, "GateServer");
+                                              self->WriteResponse();
+                                          }
+                                          catch (const std::exception& e)
+                                          {
+                                              memolog::LogError("http.response.exception",
+                                                                "http response exception",
+                                                                {{"error", e.what()}});
+                                              self->WriteErrorResponse(http::status::internal_server_error,
+                                                                       "internal error\r\n");
+                                          }
+                                      });
+                }
+                catch (const std::exception& e)
+                {
+                    memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
+                    boost::asio::post(self->_socket.get_executor(),
+                                      [self]()
+                                      {
+                                          self->WriteErrorResponse(http::status::internal_server_error,
+                                                                   "internal error\r\n");
+                                      });
+                }
+            });
         return;
     }
 

@@ -9,6 +9,8 @@ Rectangle {
 
     property Item backdrop: null
     property string peerName: ""
+    property int selfUid: 0
+    property string selfUserId: ""
     property string selfName: ""
     property string selfAvatar: "qrc:/res/head_1.jpg"
     property string peerAvatar: "qrc:/res/head_1.jpg"
@@ -63,7 +65,7 @@ Rectangle {
     signal editMessage(string msgId, string text)
     signal replyMessage(string msgId, string senderName, string previewText)
     signal cancelReplyMessage()
-    signal avatarProfileRequested(int uid, string name, string icon)
+    signal avatarProfileRequested(int uid, string name, string icon, string userId)
 
     function minContentY() {
         return messageList.minContentY()
@@ -321,6 +323,8 @@ Rectangle {
                 hasCurrentChat: root.hasCurrentChat
                 isGroupChat: root.isGroupChat
                 currentGroupRole: root.currentGroupRole
+                selfUid: root.selfUid
+                selfUserId: root.selfUserId
                 selfName: root.selfName
                 selfAvatar: root.selfAvatar
                 peerAvatar: root.peerAvatar
@@ -344,7 +348,9 @@ Rectangle {
                 onReplyMessage: function(msgId, senderName, previewText) { root.replyMessage(msgId, senderName, previewText) }
                 onMentionRequested: function(mentionText) { composer.insertMention(mentionText) }
                 onEditRequested: function(msgId, text) { smartActionPopups.openEditDialog(msgId, text) }
-                onAvatarProfileRequested: function(uid, name, icon) { root.avatarProfileRequested(uid, name, icon) }
+                onAvatarProfileRequested: function(uid, name, icon, userId) {
+                    root.avatarProfileRequested(uid, name, icon, userId)
+                }
             }
 
             ChatSmartActionPopups {

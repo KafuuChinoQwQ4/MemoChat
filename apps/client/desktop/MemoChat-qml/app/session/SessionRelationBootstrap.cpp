@@ -35,20 +35,20 @@ void SessionRelationBootstrap::requestRelationBootstrap()
 void SessionRelationBootstrap::onRelationBootstrapUpdated()
 {
     const RelationBootstrapSnapshot snapshot = _port.snapshot();
-    if (!snapshot.isChatPage)
-    {
-        return;
-    }
+    _port.refreshContactProfiles();
 
-    _port.setChatListInitialized(false);
-    _port.ensureChatListInitialized();
-
-    const auto friendSnapshot = _port.friendListSnapshot();
-    for (const auto& friendInfo : friendSnapshot)
+    if (snapshot.isChatPage)
     {
-        if (friendInfo)
+        _port.setChatListInitialized(false);
+        _port.ensureChatListInitialized();
+
+        const auto friendSnapshot = _port.friendListSnapshot();
+        for (const auto& friendInfo : friendSnapshot)
         {
-            _port.upsertChatListFriend(friendInfo);
+            if (friendInfo)
+            {
+                _port.upsertChatListFriend(friendInfo);
+            }
         }
     }
 
@@ -72,6 +72,11 @@ void SessionRelationBootstrap::onRelationBootstrapUpdated()
     _port.setContactsReady(true);
 
     _port.refreshApplySnapshot();
+
+    if (!snapshot.isChatPage)
+    {
+        return;
+    }
 
     _port.refreshDialogModelIncremental();
     _port.flushIncomingMessageRouter();

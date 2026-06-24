@@ -9,7 +9,8 @@ Item {
     property string defaultAvatarSource: "qrc:/res/head_1.jpg"
     property int senderUid: 0
     property string senderName: ""
-    signal avatarClicked(int uid, string name, string icon)
+    property string senderUserId: ""
+    signal avatarClicked(int uid, string name, string icon, string userId)
 
     Rectangle {
         width: root.avatarSize
@@ -56,7 +57,7 @@ Item {
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource)
+            onClicked: root.avatarClicked(root.senderUid, root.senderName, root.avatarSource, root.senderUserId)
         }
     }
 }

@@ -12,6 +12,7 @@ Rectangle {
     property string contactNick: ""
     property string contactIcon: "qrc:/res/head_1.jpg"
     property string contactBack: ""
+    property int contactUid: 0
     property int contactSex: 0
     property string contactUserId: ""
     property bool hasCurrentContact: false
@@ -86,6 +87,7 @@ Rectangle {
                 contactNick: root.contactNick
                 contactIcon: root.contactIcon
                 contactBack: root.contactBack
+                contactUid: root.contactUid
                 contactSex: root.contactSex
                 contactUserId: root.contactUserId
                 onMessageChatClicked: root.messageChatRequested()

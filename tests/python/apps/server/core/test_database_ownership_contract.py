@@ -142,10 +142,9 @@ class DatabaseOwnershipContractTests(unittest.TestCase):
                 ini = read_ini(path)
                 self.assertEqual("memo_pg", ini["Postgres"]["Database"])
                 self.assertEqual("memochat", ini["Postgres"]["User"])
-                if path.name in {"chatserver1.ini", "chatserver2.ini"}:
-                    self.assertTrue(ini.has_section("AccountPostgres"))
-                    self.assertEqual("memo_account", ini["AccountPostgres"]["Database"])
-                    self.assertEqual("memo_account_app", ini["AccountPostgres"]["User"])
+                self.assertTrue(ini.has_section("AccountPostgres"))
+                self.assertEqual("memo_account", ini["AccountPostgres"]["Database"])
+                self.assertEqual("memo_account_app", ini["AccountPostgres"]["User"])
 
     def test_helm_values_expose_domain_postgres_roles(self):
         values = read(HELM_VALUES)

@@ -240,9 +240,11 @@ class ShellViewModelContractTests(unittest.TestCase):
         shell_content = read(FEATURES / "chat/view/ChatShellContent.qml")
 
         self.assertIn("Q_INVOKABLE QVariantMap contactProfileByUid(int uid) const;", contact_header)
+        self.assertIn("Q_INVOKABLE void refreshContactProfileByUid(int uid);", contact_header)
         self.assertIn("QVariantMap ContactController::contactProfileByUid(int uid) const", contact_source)
         self.assertIn("property var contactController: null", popup)
         self.assertIn("contactController ? contactController.contactProfileByUid(profileUid) : ({})", popup)
+        self.assertIn("isFriend = hasProfile && profile.isFriend === true", popup)
         self.assertIn("contactController.deleteFriend(root.profileUid)", popup)
         self.assertNotIn("property var appController", popup)
         self.assertNotIn("appController.", popup)

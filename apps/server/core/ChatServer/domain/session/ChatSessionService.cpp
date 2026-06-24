@@ -37,12 +37,14 @@ ChatSessionService::ChatSessionService(LogicSystem& logic,
                                        ISessionRegistry* session_registry,
                                        IOnlineRouteStore* online_route_store,
                                        IRelationQueryService* relation_query_service,
+                                       IRelationRepository* relation_repository,
                                        IChatSessionConfig* session_config,
                                        IChatSessionRepository* session_repository)
     : _logic(logic)
     , _session_registry(session_registry)
     , _online_route_store(online_route_store)
     , _relation_query_service(relation_query_service)
+    , _relation_repository(relation_repository)
     , _session_config(session_config)
     , _session_repository(session_repository)
 {
@@ -467,9 +469,19 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
 
             for (const auto& [sender_uid, sender_msgs] : msgs_by_sender)
             {
+                std::string sender_public_user_id;
+                if (_relation_repository)
+                {
+                    const auto sender_info = _relation_repository->GetUserByUid(sender_uid);
+                    if (sender_info)
+                    {
+                        sender_public_user_id = sender_info->user_id;
+                    }
+                }
                 memochat::json::JsonValue text_array(memochat::json::array_t{});
                 for (const auto& msg : sender_msgs)
                 {
+                    msg->from_user_id = sender_public_user_id;
                     const memochat::json::JsonValue element = memochat::chat::history::output::ToJsonValue(
                         memochat::chat::history::output::ChatPrivateOfflinePushMessageFromInfo(*msg));
                     append(text_array, element);
@@ -479,6 +491,8 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
                     memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto{.error = ErrorCodes::Success,
                                                                                      .fromuid = sender_uid,
                                                                                      .touid = uid,
+                                                                                     .from_user_id =
+                                                                                         sender_public_user_id,
                                                                                      .text_array = text_array});
 
                 session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);

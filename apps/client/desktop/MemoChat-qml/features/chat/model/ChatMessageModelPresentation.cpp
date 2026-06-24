@@ -1,6 +1,7 @@
 #include "ChatMessageModel.h"
 
 #include <QDateTime>
+#include <QTimeZone>
 #include <algorithm>
 
 namespace
@@ -30,7 +31,7 @@ QString weekdayText(int dayOfWeek)
 
 QDateTime localDateTimeForMs(qint64 createdAt)
 {
-    return QDateTime::fromMSecsSinceEpoch(createdAt, Qt::LocalTime);
+    return QDateTime::fromMSecsSinceEpoch(createdAt, QTimeZone(QTimeZone::LocalTime));
 }
 
 bool sameMinuteBucket(const QDateTime& lhs, const QDateTime& rhs)

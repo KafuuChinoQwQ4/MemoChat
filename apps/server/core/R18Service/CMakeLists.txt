@@ -14,6 +14,12 @@ add_library(GateR18Core STATIC
     domain/services/r18/R18PublicDtos.h
     domain/services/r18/R18SourceRecordCodec.cpp
     domain/services/r18/R18SourceRecordCodec.h
+    domain/services/r18/R18AdapterUtils.cpp
+    domain/services/r18/R18AdapterUtils.h
+    domain/services/r18/R18JmAdapter.cpp
+    domain/services/r18/R18JmAdapter.h
+    domain/services/r18/R18PicacgAdapter.cpp
+    domain/services/r18/R18PicacgAdapter.h
     domain/services/r18/R18SourceService.cpp
     domain/services/r18/R18SourceService.h
 )

@@ -60,6 +60,42 @@ set_default() {
     fi
 }
 
+set_wslg_llvmpipe_rendering_defaults() {
+    export QSG_RHI_BACKEND="opengl"
+    export QT_OPENGL="software"
+    export GALLIUM_DRIVER="llvmpipe"
+    export MESA_LOADER_DRIVER_OVERRIDE="llvmpipe"
+    export LIBGL_ALWAYS_SOFTWARE="1"
+    export MEMOCHAT_WSLG_GL_FALLBACK="llvmpipe"
+}
+
+can_create_glx_context() {
+    if ! command -v glxinfo >/dev/null 2>&1; then
+        return 0
+    fi
+    glxinfo -B >/dev/null 2>&1
+}
+
+maybe_fallback_wslg_rendering() {
+    if [[ "${MEMOCHAT_DISABLE_WSLG_GL_FALLBACK:-0}" == "1" ]]; then
+        return 0
+    fi
+    if ! grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
+        return 0
+    fi
+    if [[ "${QSG_RHI_BACKEND:-}" != "opengl" || "${QT_OPENGL:-}" != "desktop" ]]; then
+        return 0
+    fi
+    if [[ "${GALLIUM_DRIVER:-}" != "d3d12" || "${MESA_LOADER_DRIVER_OVERRIDE:-}" != "d3d12" ]]; then
+        return 0
+    fi
+    if can_create_glx_context; then
+        return 0
+    fi
+    echo "[WARN] WSLg d3d12 OpenGL context is unavailable; falling back to llvmpipe software rendering." >&2
+    set_wslg_llvmpipe_rendering_defaults
+}
+
 select_input_method() {
     local qt_module="$1"
     local gtk_module="$2"
@@ -203,6 +239,7 @@ if grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
     set_default MESA_LOADER_DRIVER_OVERRIDE "d3d12"
     set_default LIBGL_ALWAYS_SOFTWARE "0"
 fi
+maybe_fallback_wslg_rendering
 
 if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]] && command -v dbus-launch >/dev/null 2>&1; then
     eval "$(dbus-launch --sh-syntax)" >/dev/null 2>&1 || true
@@ -272,6 +309,7 @@ print_diagnostics() {
     echo "  GALLIUM_DRIVER:   ${GALLIUM_DRIVER:-<unset>}"
     echo "  MESA_DRIVER:      ${MESA_LOADER_DRIVER_OVERRIDE:-<unset>}"
     echo "  GL_SOFTWARE:      ${LIBGL_ALWAYS_SOFTWARE:-<unset>}"
+    echo "  GL_FALLBACK:      ${MEMOCHAT_WSLG_GL_FALLBACK:-<unset>}"
     echo "  QML_DISK_CACHE:   ${QML_DISABLE_DISK_CACHE:-enabled}"
     echo "  DISPLAY:          ${DISPLAY:-<unset>}"
     echo "  WAYLAND_DISPLAY:  ${WAYLAND_DISPLAY:-<unset>}"

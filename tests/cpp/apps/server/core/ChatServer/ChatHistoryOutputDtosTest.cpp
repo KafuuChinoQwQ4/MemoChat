@@ -10,25 +10,27 @@
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::history::output::ChatHistoryDynamicJson>(
     std::array<std::string_view, 2>{"present", "value"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::history::output::ChatPrivateHistoryMessageDto>(
-    std::array<std::string_view, 9>{"msgid",
-                                    "content",
-                                    "fromuid",
-                                    "touid",
-                                    "created_at",
-                                    "reply_to_server_msg_id",
-                                    "forward_meta",
-                                    "edited_at_ms",
-                                    "deleted_at_ms"}));
+    std::array<std::string_view, 10>{"msgid",
+                                     "content",
+                                     "fromuid",
+                                     "touid",
+                                     "from_user_id",
+                                     "created_at",
+                                     "reply_to_server_msg_id",
+                                     "forward_meta",
+                                     "edited_at_ms",
+                                     "deleted_at_ms"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::history::output::ChatPrivateOfflinePushMessageDto>(
-    std::array<std::string_view, 7>{"msgid",
+    std::array<std::string_view, 8>{"msgid",
                                     "content",
+                                    "from_user_id",
                                     "created_at",
                                     "reply_to_server_msg_id",
                                     "forward_meta",
                                     "edited_at_ms",
                                     "deleted_at_ms"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto>(
-    std::array<std::string_view, 4>{"error", "fromuid", "touid", "text_array"}));
+    std::array<std::string_view, 5>{"error", "fromuid", "touid", "from_user_id", "text_array"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::history::output::ChatGroupHistoryMessageDto>(
     std::array<std::string_view, 19>{"msgid",
                                      "groupid",
@@ -61,6 +63,7 @@ PrivateMessageInfo MakePrivateMessage()
     info.content = "hello";
     info.from_uid = 10;
     info.to_uid = 20;
+    info.from_user_id = "u100000010";
     info.created_at = 123456;
     info.reply_to_server_msg_id = 9001;
     info.forward_meta_json = R"({"forwarded_from_msgid":"source-1","depth":2})";
@@ -105,6 +108,7 @@ TEST(ChatHistoryOutputDtosTest, WritesPrivateHistoryMessageWithOptionalDynamicFi
     EXPECT_EQ(json["content"].asString(), "hello");
     EXPECT_EQ(json["fromuid"].asInt(), 10);
     EXPECT_EQ(json["touid"].asInt(), 20);
+    EXPECT_EQ(json["from_user_id"].asString(), "u100000010");
     EXPECT_EQ(json["created_at"].asInt64(), 123456);
     EXPECT_EQ(json["reply_to_server_msg_id"].asInt64(), 9001);
     EXPECT_EQ(json["forward_meta"]["forwarded_from_msgid"].asString(), "source-1");
@@ -158,6 +162,7 @@ TEST(ChatHistoryOutputDtosTest, WritesPrivateOfflinePushMessageWithoutRootIdenti
 
     EXPECT_EQ(json["msgid"].asString(), "private-1");
     EXPECT_EQ(json["content"].asString(), "hello");
+    EXPECT_EQ(json["from_user_id"].asString(), "u100000010");
     EXPECT_EQ(json["created_at"].asInt64(), 123456);
     EXPECT_EQ(json["reply_to_server_msg_id"].asInt64(), 9001);
     EXPECT_EQ(json["forward_meta"]["forwarded_from_msgid"].asString(), "source-1");
@@ -222,14 +227,17 @@ TEST(ChatHistoryOutputDtosTest, WritesPrivateOfflinePushNotifyRootWithMessageArr
         memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto{.error = 0,
                                                                          .fromuid = 10,
                                                                          .touid = 20,
+                                                                         .from_user_id = "u100000010",
                                                                          .text_array = text_array});
 
     EXPECT_EQ(json["error"].asInt(), 0);
     EXPECT_EQ(json["fromuid"].asInt(), 10);
     EXPECT_EQ(json["touid"].asInt(), 20);
+    EXPECT_EQ(json["from_user_id"].asString(), "u100000010");
     ASSERT_TRUE(json["text_array"].isArray()) << json.toStyledString();
     ASSERT_EQ(json["text_array"].size(), 1);
     EXPECT_EQ(json["text_array"][0]["msgid"].asString(), "private-1");
+    EXPECT_EQ(json["text_array"][0]["from_user_id"].asString(), "u100000010");
     EXPECT_FALSE(json["text_array"][0].isMember("fromuid")) << json.toStyledString();
     EXPECT_FALSE(json["text_array"][0].isMember("touid")) << json.toStyledString();
 }

@@ -2,12 +2,16 @@
 #define CONTACTCONTROLLER_H
 
 #include <QObject>
+#include <QHash>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QSet>
 #include <QString>
 #include <functional>
 #include <memory>
 #include <vector>
+
+#include "global.h"
 
 class AddFriendApply;
 class ApplyRequestModel;
@@ -23,6 +27,7 @@ class SearchResultModel;
 struct ContactCommandPort
 {
     std::function<void()> openCurrentContactChat;
+    std::function<void()> requestRelationBootstrap;
 };
 
 struct ContactBootstrapPort
@@ -41,6 +46,9 @@ struct ContactApplyBootstrapPort
 class ContactController : public QObject
 {
     Q_OBJECT
+    Q_MOC_INCLUDE("ApplyRequestModel.h")
+    Q_MOC_INCLUDE("FriendListModel.h")
+    Q_MOC_INCLUDE("SearchResultModel.h")
     Q_PROPERTY(int contactPane READ contactPane NOTIFY contactPaneChanged)
     Q_PROPERTY(QString currentContactName READ currentContactName NOTIFY currentContactChanged)
     Q_PROPERTY(QString currentContactNick READ currentContactNick NOTIFY currentContactChanged)
@@ -98,6 +106,7 @@ public:
     Q_INVOKABLE void requestAddFriend(int uid, const QString& bakName, const QVariantList& labels = QVariantList());
     Q_INVOKABLE void approveFriend(int uid, const QString& backName, const QVariantList& labels = QVariantList());
     Q_INVOKABLE QVariantMap contactProfileByUid(int uid) const;
+    Q_INVOKABLE void refreshContactProfileByUid(int uid);
     Q_INVOKABLE void deleteFriend(int uid);
     Q_INVOKABLE void showApplyRequests();
     Q_INVOKABLE void jumpChatWithCurrentContact();
@@ -112,6 +121,7 @@ public:
                        const QVariantList& labels) const;
     void sendApproveFriend(int selfUid, int targetUid, const QString& remark, const QVariantList& labels) const;
     void sendDeleteFriend(int selfUid, int friendUid) const;
+    void handleContactHttpFinished(ReqId id, const QString& res, ErrorCodes err);
     void setCommandPort(ContactCommandPort port);
     void setBootstrapPort(ContactBootstrapPort port);
     void setApplyBootstrapPort(ContactApplyBootstrapPort port);
@@ -132,6 +142,7 @@ public:
     void upsertContact(const std::shared_ptr<FriendInfo>& friendInfo);
     void upsertContact(const std::shared_ptr<AuthInfo>& authInfo);
     void upsertContact(const std::shared_ptr<AuthRsp>& authRsp);
+    void refreshContactProfiles();
     void removeContactByUid(int uid);
     void setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies);
     void upsertApply(const std::shared_ptr<ApplyInfo>& apply);
@@ -180,6 +191,7 @@ signals:
     void canLoadMoreContactsChanged();
     void contactsReadyChanged();
     void applyReadyChanged();
+    void contactProfilesChanged();
     void currentContactSelected(int uid);
 
 private:
@@ -208,9 +220,13 @@ private:
     bool _can_load_more_contacts = false;
     bool _contacts_ready = false;
     bool _apply_ready = false;
+    QHash<int, QVariantMap> _profile_lookup_cache;
+    QSet<int> _profile_lookup_pending_uids;
 
     void setHasPendingApply(bool hasPending);
     void refreshContactLoadMoreState();
+    void refreshCurrentContactFromStore();
+    void requestPublicProfileByUid(int uid);
 };
 
 #endif // CONTACTCONTROLLER_H

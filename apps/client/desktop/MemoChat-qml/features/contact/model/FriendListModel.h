@@ -72,14 +72,14 @@ signals:
 private:
     struct FriendEntry
     {
-        int uid;
+        int uid = 0;
         QString userId;
         QString name;
         QString nick;
         QString icon;
         QString desc;
         QString lastMsg;
-        int sex;
+        int sex = 0;
         QString back;
         QString dialogType;
         int unreadCount = 0;
@@ -91,6 +91,9 @@ private:
     };
 
     static QString normalizeIcon(QString icon);
+    FriendEntry toEntry(const std::shared_ptr<FriendInfo>& friendInfo) const;
+    FriendEntry mergeWithCurrentEntry(const FriendEntry& entry) const;
+    static FriendEntry mergeSparseEntry(const FriendEntry& entry, const FriendEntry& existing);
     void upsert(const FriendEntry& entry);
 
     std::vector<FriendEntry> _items;

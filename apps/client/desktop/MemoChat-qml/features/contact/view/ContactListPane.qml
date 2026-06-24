@@ -150,6 +150,9 @@ Item {
 
                 delegate: Rectangle {
                     id: contactDelegate
+                    readonly property string contactIdentityText: userId && userId.length > 0
+                                                          ? ("ID: " + userId)
+                                                          : "ID: 未分配"
                     width: ListView.view.width
                     height: 58
                     color: {
@@ -218,7 +221,7 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                text: contactDelegate.contactIdentityText
                                 color: "#6c7c92"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight

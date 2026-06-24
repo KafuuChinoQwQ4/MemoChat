@@ -1253,15 +1253,18 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("ports/ISessionRegistry.h", session_header)
         self.assertIn("ports/IOnlineRouteStore.h", session_header)
         self.assertIn("ports/IRelationQueryService.h", session_header)
+        self.assertIn("ports/IRelationRepository.h", session_header)
         self.assertNotIn("ports/IRelationService.h", session_header)
         compact_session_header = " ".join(session_header.split())
         self.assertIn("ChatSessionService(LogicSystem& logic,", compact_session_header)
         self.assertIn("ISessionRegistry* session_registry", compact_session_header)
         self.assertIn("IOnlineRouteStore* online_route_store", compact_session_header)
         self.assertIn("IRelationQueryService* relation_query_service", compact_session_header)
+        self.assertIn("IRelationRepository* relation_repository", compact_session_header)
         self.assertIn("ISessionRegistry* _session_registry", session_header)
         self.assertIn("IOnlineRouteStore* _online_route_store", session_header)
         self.assertIn("IRelationQueryService* _relation_query_service", session_header)
+        self.assertIn("IRelationRepository* _relation_repository", session_header)
 
         session_source = (DOMAIN_SESSION_DIR / "ChatSessionService.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "UserMgr.h"', session_source)
@@ -1291,6 +1294,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("UserMgr::GetInstance().get()", constructor_block)
         self.assertIn("_online_route_store.get()", constructor_block)
         self.assertIn("_chat_relation_service.get()", constructor_block)
+        self.assertIn("_relation_repository.get()", constructor_block)
 
     def test_chat_session_service_uses_session_config_and_repository_ports(self):
         config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IChatSessionConfig.h"
@@ -1416,12 +1420,15 @@ class ChatServerStructureTests(unittest.TestCase):
         private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
         self.assertIn("ports/ISessionRegistry.h", private_header)
         self.assertIn("ports/IOnlineRouteStore.h", private_header)
+        self.assertIn("ports/IRelationRepository.h", private_header)
         compact_private_header = " ".join(private_header.split())
         self.assertIn("PrivateMessageService(ISessionRegistry* session_registry,", compact_private_header)
         self.assertIn("ISessionRegistry* session_registry", compact_private_header)
         self.assertIn("IOnlineRouteStore* online_route_store", compact_private_header)
+        self.assertIn("IRelationRepository* relation_repository", compact_private_header)
         self.assertIn("ISessionRegistry* _session_registry", private_header)
         self.assertIn("IOnlineRouteStore* _online_route_store", private_header)
+        self.assertIn("IRelationRepository* _relation_repository", private_header)
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "RedisMgr.h"', private_source)
@@ -1504,6 +1511,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("ports/IMessageRepository.h", private_header)
         self.assertIn("IMessageRepository* message_repository", private_header)
         self.assertIn("IMessageRepository* _message_repository", private_header)
+        self.assertIn("IRelationRepository* relation_repository", private_header)
+        self.assertIn("IRelationRepository* _relation_repository", private_header)
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "PostgresMgr.h"', private_source)
@@ -1748,6 +1757,14 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("RedisMgr::GetInstance()->Get", cache_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->SetEx", cache_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->Del", cache_adapter_source)
+        self.assertIn("kRelationBootstrapCacheSchemaVersion = 2", cache_adapter_source)
+        self.assertIn('std::string("relation_bootstrap_v")', cache_adapter_source)
+        self.assertIn(
+            'cached.get("schema_version", 0).asInt() == kRelationBootstrapCacheSchemaVersion', cache_adapter_source
+        )
+        self.assertIn(
+            'versioned_payload["schema_version"] = kRelationBootstrapCacheSchemaVersion', cache_adapter_source
+        )
 
         relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.h").read_text(encoding="utf-8")
         self.assertIn("ports/IRelationBootstrapCache.h", relation_header)
@@ -1808,6 +1825,32 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("*_relation_service_config", constructor_block)
         self.assertIn("_relation_repository.get()", constructor_block)
         self.assertIn("_relation_bootstrap_cache.get()", constructor_block)
+
+    def test_user_base_info_cache_miss_when_public_user_id_is_absent(self):
+        user_support = (CHATSERVER_DIR / "domain/users/ChatUserSupport.cpp").read_text(encoding="utf-8")
+        transport = (CHATSERVER_DIR / "transport/ChatServiceImpl.cpp").read_text(encoding="utf-8")
+
+        support_body = extract_function(
+            user_support,
+            "bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>& userinfo)",
+        )
+        self.assertIn("DecodeChatUserProfileCache(info_str, &profile);", support_body)
+        self.assertIn("if (!profile.user_id.empty())", support_body)
+        self.assertIn("FillUserInfoFromChatUserProfile(profile, *userinfo);", support_body)
+        self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", support_body)
+        self.assertLess(
+            support_body.index("if (!profile.user_id.empty())"),
+            support_body.index("PostgresMgr::GetInstance()->GetUser(uid)"),
+        )
+
+        transport_body = extract_function(
+            transport,
+            "bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo)",
+        )
+        self.assertIn('userinfo->user_id = root["user_id"].asString();', transport_body)
+        self.assertIn("if (userinfo->user_id.empty())", transport_body)
+        self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", transport_body)
+        self.assertIn('redis_root["user_id"] = userinfo->user_id;', transport_body)
         self.assertIn("_message_delivery_service.get()", constructor_block)
         self.assertIn("_task_dispatcher.get()", constructor_block)
         self.assertIn("_async_event_dispatcher.get()", constructor_block)
@@ -2732,6 +2775,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn('#include "logging/Logger.h"', factory_source)
         self.assertIn("<stdexcept>", factory_source)
         self.assertIn("std::make_unique<PrivateMessageService>", factory_source)
+        self.assertIn("IRelationRepository* relation_repository", factory_source)
+        self.assertIn("relation_repository,", factory_source)
         self.assertIn("std::make_unique<GroupMessageService>", factory_source)
         self.assertIn('backend == "inprocess"', factory_source)
         self.assertIn('backend == "grpc" || backend == "remote"', factory_source)

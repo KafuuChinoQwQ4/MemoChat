@@ -39,6 +39,7 @@ public:
 
     memochat::json::JsonValue ListSources();
     bool EnableSource(const std::string& id, bool enabled, std::string* error);
+    bool DeleteSource(const std::string& id, std::string* error);
     R18SourceRecord ImportZip(const std::string& file_name,
                               const std::string& manifest_json,
                               const std::string& binary,

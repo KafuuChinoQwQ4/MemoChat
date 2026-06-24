@@ -282,7 +282,9 @@ void ChatMessageDispatcher::registerGroupHandlers()
                          const QString fromName =
                              jsonObj.value("from_nick").toString(jsonObj.value("from_name").toString());
                          const QString fromIcon = jsonObj.value("from_icon").toString();
-                         auto groupMsg = std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon);
+                         const QString fromUserId = jsonObj.value("from_user_id").toString();
+                         auto groupMsg =
+                             std::make_shared<GroupChatMsg>(groupId, fromUid, msgObj, fromName, fromIcon, fromUserId);
                          emit sig_group_chat_msg(groupMsg);
                      });
 }

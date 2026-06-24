@@ -1,5 +1,13 @@
 #include "FriendListModel.h"
 
+namespace
+{
+QString nonEmptyOrExisting(const QString& next, const QString& existing)
+{
+    return next.trimmed().isEmpty() ? existing : next;
+}
+} // namespace
+
 FriendListModel::FriendListModel(QObject* parent)
     : QAbstractListModel(parent)
 {
@@ -93,7 +101,7 @@ void FriendListModel::upsert(const FriendEntry& entry)
     if (idx >= 0)
     {
         FriendEntry& stored = _items[static_cast<size_t>(idx)];
-        stored = entry;
+        stored = mergeSparseEntry(entry, stored);
         const QModelIndex modelIndex = index(idx, 0);
         emit dataChanged(modelIndex, modelIndex);
         return;
@@ -103,4 +111,29 @@ void FriendListModel::upsert(const FriendEntry& entry)
     _items.push_back(entry);
     endInsertRows();
     emit countChanged();
+}
+
+FriendListModel::FriendEntry FriendListModel::mergeSparseEntry(const FriendEntry& entry, const FriendEntry& existing)
+{
+    FriendEntry merged = existing;
+    merged.uid = entry.uid;
+    merged.userId = nonEmptyOrExisting(entry.userId, existing.userId);
+    merged.name = nonEmptyOrExisting(entry.name, existing.name);
+    merged.nick = nonEmptyOrExisting(entry.nick, existing.nick);
+    merged.icon = nonEmptyOrExisting(entry.icon, existing.icon);
+    merged.desc = nonEmptyOrExisting(entry.desc, existing.desc);
+    merged.lastMsg = nonEmptyOrExisting(entry.lastMsg, existing.lastMsg);
+    merged.back = nonEmptyOrExisting(entry.back, existing.back);
+    merged.dialogType = nonEmptyOrExisting(entry.dialogType, existing.dialogType);
+    if (entry.sex != 0)
+    {
+        merged.sex = entry.sex;
+    }
+    merged.unreadCount = entry.unreadCount;
+    merged.pinnedRank = entry.pinnedRank;
+    merged.draftText = entry.draftText;
+    merged.lastMsgTs = entry.lastMsgTs;
+    merged.muteState = entry.muteState;
+    merged.mentionCount = entry.mentionCount;
+    return merged;
 }

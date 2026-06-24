@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QHash>
+#include <QString>
 #include <QVariantMap>
 #include <QVector>
 
@@ -25,7 +26,8 @@ public:
         OrderRole,
         FormatRole,
         MessageRole,
-        TagsRole
+        TagsRole,
+        BuiltinRole
     };
 
     explicit R18ListModel(QObject* parent = nullptr);
@@ -42,6 +44,7 @@ public:
 
     void setItems(const QVariantList& items);
     void appendItems(const QVariantList& items);
+    bool removeBySourceId(const QString& sourceId);
     void clear();
 
 signals:

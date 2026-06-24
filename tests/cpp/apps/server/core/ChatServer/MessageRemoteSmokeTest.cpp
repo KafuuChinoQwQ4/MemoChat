@@ -303,7 +303,7 @@ TEST(MessageRemoteSmokeTest, ConfiguredGrpcBackendSelectsRemoteAdapters)
         EXPECT_EQ(endpoint, expected_endpoint);
     }
 
-    auto private_service = CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto private_service = CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
     auto group_service = CreateGroupMessageService(config, nullptr, nullptr, nullptr, nullptr);
 
     ASSERT_NE(private_service, nullptr);

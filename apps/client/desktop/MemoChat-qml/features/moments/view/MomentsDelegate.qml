@@ -23,6 +23,7 @@ Rectangle {
     property string userName: momentData ? momentData.userName : ""
     property string userNick: momentData ? momentData.userNick : ""
     property string userIcon: momentData ? momentData.userIcon : "qrc:/res/head_1.jpg"
+    property string userId: momentData ? momentData.userId : ""
     property string location: momentData ? momentData.location : ""
     property var createdAt: momentData ? momentData.createdAt : 0
     property int likeCount: momentData ? momentData.likeCount : 0
@@ -38,7 +39,7 @@ Rectangle {
 
     signal likeClicked()
     signal commentClicked()
-    signal avatarClicked()
+    signal avatarClicked(int uid, string name, string icon, string userId)
     signal deleteClicked()
 
     GlassSurface {
@@ -65,7 +66,10 @@ Rectangle {
             userIcon: root.userIcon
             locationText: root.location ? root.location : root.timeAgoText(root.createdAt)
             canDelete: root.canDelete
-            onAvatarClicked: root.avatarClicked()
+            onAvatarClicked: root.avatarClicked(root.uid,
+                                                root.userNick || root.userName || "用户",
+                                                root.userIcon,
+                                                root.userId)
             onDeleteClicked: root.deleteClicked()
         }
 

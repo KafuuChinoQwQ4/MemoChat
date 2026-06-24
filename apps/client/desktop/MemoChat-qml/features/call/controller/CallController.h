@@ -25,6 +25,8 @@ struct CallCommandPort
 class CallController : public QObject
 {
     Q_OBJECT
+    Q_MOC_INCLUDE("CallSessionModel.h")
+    Q_MOC_INCLUDE("LivekitBridge.h")
     Q_PROPERTY(CallSessionModel* callSession READ callSession NOTIFY callSurfaceChanged)
     Q_PROPERTY(LivekitBridge* livekitBridge READ livekitBridge NOTIFY callSurfaceChanged)
 
