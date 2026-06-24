@@ -40,7 +40,8 @@ public:
         ReplyToServerMsgIdRole,
         ForwardMetaRole,
         EditedAtMsRole,
-        DeletedAtMsRole
+        DeletedAtMsRole,
+        FromUserIdRole
     };
 
     explicit ChatMessageModel(QObject* parent = nullptr);
@@ -82,6 +83,7 @@ private:
         QString content;
         QString rawContent;
         int fromUid;
+        QString fromUserId;
         int toUid;
         bool outgoing;
         QString msgType;

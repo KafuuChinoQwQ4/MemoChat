@@ -5,6 +5,7 @@
 #include "ports/IMessageRepository.h"
 #include "ports/IOnlineRouteStore.h"
 #include "ports/IPrivateMessageService.h"
+#include "ports/IRelationRepository.h"
 #include "ports/ISessionRegistry.h"
 
 #include <memory>
@@ -18,6 +19,7 @@ public:
     PrivateMessageService(ISessionRegistry* session_registry,
                           IOnlineRouteStore* online_route_store,
                           IMessageRepository* message_repository,
+                          IRelationRepository* relation_repository,
                           IDeliveryGateway* delivery_gateway,
                           IEventPublisher* event_publisher);
 
@@ -48,6 +50,7 @@ private:
     ISessionRegistry* _session_registry = nullptr;
     IOnlineRouteStore* _online_route_store = nullptr;
     IMessageRepository* _message_repository = nullptr;
+    IRelationRepository* _relation_repository = nullptr;
     IDeliveryGateway* _delivery_gateway = nullptr;
     IEventPublisher* _event_publisher = nullptr;
 };

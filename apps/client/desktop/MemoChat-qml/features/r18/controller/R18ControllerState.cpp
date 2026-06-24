@@ -76,3 +76,14 @@ void R18Controller::setSearchState(int page, bool hasMore)
     _current_search_has_more = hasMore;
     emit searchStateChanged();
 }
+
+void R18Controller::setPendingDeleteSourceId(const QString& sourceId)
+{
+    const QString normalizedSourceId = sourceId.trimmed();
+    if (_pending_delete_source_id == normalizedSourceId)
+    {
+        return;
+    }
+    _pending_delete_source_id = normalizedSourceId;
+    emit pendingDeleteSourceChanged();
+}

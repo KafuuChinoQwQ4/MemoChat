@@ -4,6 +4,7 @@
 #include "ports/IChatSessionRepository.h"
 #include "ports/IOnlineRouteStore.h"
 #include "ports/IRelationQueryService.h"
+#include "ports/IRelationRepository.h"
 #include "ports/ISessionRegistry.h"
 
 #include <memory>
@@ -19,6 +20,7 @@ public:
                        ISessionRegistry* session_registry,
                        IOnlineRouteStore* online_route_store,
                        IRelationQueryService* relation_query_service,
+                       IRelationRepository* relation_repository,
                        IChatSessionConfig* session_config,
                        IChatSessionRepository* session_repository);
 
@@ -32,6 +34,7 @@ private:
     ISessionRegistry* _session_registry = nullptr;
     IOnlineRouteStore* _online_route_store = nullptr;
     IRelationQueryService* _relation_query_service = nullptr;
+    IRelationRepository* _relation_repository = nullptr;
     IChatSessionConfig* _session_config = nullptr;
     IChatSessionRepository* _session_repository = nullptr;
 };

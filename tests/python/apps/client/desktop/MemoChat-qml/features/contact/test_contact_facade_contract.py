@@ -88,6 +88,7 @@ class ContactFacadeContractTests(unittest.TestCase):
             "Q_INVOKABLE void requestAddFriend(int uid, const QString& bakName, const QVariantList& labels = QVariantList());",
             "Q_INVOKABLE void approveFriend(int uid, const QString& backName, const QVariantList& labels = QVariantList());",
             "Q_INVOKABLE QVariantMap contactProfileByUid(int uid) const;",
+            "Q_INVOKABLE void refreshContactProfileByUid(int uid);",
             "Q_INVOKABLE void deleteFriend(int uid);",
             "Q_INVOKABLE void showApplyRequests();",
             "Q_INVOKABLE void jumpChatWithCurrentContact();",
@@ -97,6 +98,7 @@ class ContactFacadeContractTests(unittest.TestCase):
             "void syncCurrentContact(int uid,",
             "void setCommandPort(ContactCommandPort port);",
             "struct ContactCommandPort",
+            "void contactProfilesChanged();",
         )
         for token in expected_tokens:
             with self.subTest(token=token):
@@ -119,6 +121,62 @@ class ContactFacadeContractTests(unittest.TestCase):
         payload_source = read(CONTACT / "controller/ContactRequestPayloads.cpp")
         self.assertIn("QJsonObject buildDeleteFriendPayload(int selfUid, int friendUid);", payload_header)
         self.assertIn("QJsonObject buildDeleteFriendPayload(int selfUid, int friendUid)", payload_source)
+
+    def test_sparse_contact_upserts_preserve_existing_user_id(self):
+        user_mgr_friends = read(CLIENT / "core/session/UserMgrFriends.cpp")
+        friend_model = read(CONTACT / "model/FriendListModel.cpp")
+
+        for source in (user_mgr_friends, friend_model):
+            with self.subTest(source=source[:40]):
+                self.assertIn("QString nonEmptyOrExisting(const QString& next, const QString& existing)", source)
+                self.assertIn("return next.trimmed().isEmpty() ? existing : next;", source)
+
+        self.assertIn("void mergeSparseFriendInfo(FriendInfo& stored, const FriendInfo& next)", user_mgr_friends)
+        self.assertIn("stored._user_id = nonEmptyOrExisting(next._user_id, stored._user_id);", user_mgr_friends)
+        self.assertIn("void upsertSparseFriendInfo(", user_mgr_friends)
+        self.assertIn("const auto listInfo = findFriendInList(friends, friendInfo->_uid);", user_mgr_friends)
+        self.assertIn("const auto target = listInfo ? listInfo : mapIter.value();", user_mgr_friends)
+        self.assertIn("friendMap[friendInfo->_uid] = target;", user_mgr_friends)
+        self.assertIn(
+            "upsertSparseFriendInfo(_friend_list, _friend_map, std::make_shared<FriendInfo>(auth_rsp));",
+            user_mgr_friends,
+        )
+        self.assertIn(
+            "upsertSparseFriendInfo(_friend_list, _friend_map, std::make_shared<FriendInfo>(auth_info));",
+            user_mgr_friends,
+        )
+        self.assertNotIn("_friend_map[friend_info->_uid] = friend_info;\n}", user_mgr_friends)
+
+        upsert_body = extract_function(friend_model, "void FriendListModel::upsert(const FriendEntry& entry)")
+        merge_body = extract_function(
+            friend_model,
+            "FriendListModel::FriendEntry FriendListModel::mergeSparseEntry(const FriendEntry& entry, const FriendEntry& existing)",
+        )
+        self.assertIn("stored = mergeSparseEntry(entry, stored);", upsert_body)
+        self.assertIn("merged.userId = nonEmptyOrExisting(entry.userId, existing.userId);", merge_body)
+        self.assertIn("merged.name = nonEmptyOrExisting(entry.name, existing.name);", merge_body)
+        self.assertNotIn("stored = entry;", upsert_body)
+
+        mutations = read(CONTACT / "model/FriendListModelMutations.cpp")
+        self.assertIn("FriendListModel::FriendEntry FriendListModel::toEntry", mutations)
+        self.assertIn("FriendListModel::FriendEntry FriendListModel::mergeWithCurrentEntry", mutations)
+        set_friends_body = extract_function(
+            mutations,
+            "void FriendListModel::setFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends)",
+        )
+        self.assertIn("std::vector<FriendEntry> nextItems;", set_friends_body)
+        self.assertIn("nextItems.push_back(mergeWithCurrentEntry(toEntry(friendInfo)));", set_friends_body)
+        self.assertIn("_items = std::move(nextItems);", set_friends_body)
+        upsert_batch_body = extract_function(
+            mutations,
+            "void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>& friends, bool resetFirst)",
+        )
+        reset_body = upsert_batch_body[: upsert_batch_body.index("bool changed = false;")]
+        self.assertIn("nextItems.push_back(mergeWithCurrentEntry(toEntry(friendInfo)));", reset_body)
+        self.assertIn("_items = std::move(nextItems);", reset_body)
+        non_reset_body = upsert_batch_body[upsert_batch_body.index("bool changed = false;") :]
+        self.assertIn("upsert(toEntry(friendInfo));", non_reset_body)
+        self.assertNotIn("_items[static_cast<size_t>(existingIdx)] = entry;", non_reset_body)
 
     def test_appcontroller_exposes_additive_contact_composition_surface(self):
         header = read(APP / "controller/AppController.h")
@@ -166,6 +224,14 @@ class ContactFacadeContractTests(unittest.TestCase):
         bootstrap_body = extract_function(app_models, "void AppController::bootstrapContacts")
         ensure_body = extract_function(app_navigation, "void AppController::ensureContactsInitialized")
         contact_ensure_body = extract_function(contact_source, "void ContactController::ensureContactsInitialized")
+        contact_set_body = extract_function(
+            contact_source,
+            "void ContactController::setContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts)",
+        )
+        contact_upsert_body = extract_function(
+            contact_source,
+            "void ContactController::upsertContact(const std::shared_ptr<FriendInfo>& friendInfo)",
+        )
 
         self.assertIn("_features.contactController.ensureContactsInitialized();", bootstrap_body)
         self.assertIn("_features.contactController.ensureContactsInitialized();", ensure_body)
@@ -189,6 +255,9 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("_bootstrap_port.markPageLoaded", contact_ensure_body)
         self.assertIn("setCanLoadMoreContacts(!_bootstrap_port.loadFinished());", contact_ensure_body)
         self.assertIn("setContactsReady(true);", contact_ensure_body)
+        self.assertIn("refreshCurrentContactFromStore();", contact_set_body)
+        self.assertIn("refreshCurrentContactFromStore();", contact_upsert_body)
+        self.assertIn("void refreshCurrentContactFromStore();", contact_header)
         self.assertIn("return _gateway.userMgr()->GetConListPerPage();", port_binder)
         self.assertIn("_gateway.userMgr()->UpdateContactLoadedCount();", port_binder)
         self.assertNotIn("return _gateway.userMgr()->GetConListPerPage();", app_controller)
@@ -247,14 +316,26 @@ class ContactFacadeContractTests(unittest.TestCase):
         relation_port = relation_port[: relation_port.index("};") + 2]
         relation_updated = extract_function(relation, "void SessionRelationBootstrap::onRelationBootstrapUpdated")
         refresh_body = extract_function(contact_source, "void ContactController::refreshApplySnapshot")
+        refresh_profiles_body = extract_function(contact_source, "void ContactController::refreshContactProfiles")
 
         self.assertIn("std::function<void()> refreshApplySnapshot;", relation_port)
+        self.assertIn("std::function<void()> refreshContactProfiles;", relation_port)
+        self.assertIn("std::function<std::vector<std::shared_ptr<FriendInfo>>()> friendListSnapshot;", relation_port)
+        self.assertIn("std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextContactPage;", relation_port)
         self.assertNotIn("refreshApplyModel", relation_port)
         self.assertNotIn("setApplyReady", relation_port)
+        self.assertIn("_port.refreshContactProfiles();", relation_updated)
+        self.assertIn("const auto contactList = _port.nextContactPage();", relation_updated)
         self.assertIn("_port.refreshApplySnapshot();", relation_updated)
         self.assertNotIn("_port.refreshApplyModel();", relation_updated)
         self.assertNotIn("_port.setApplyReady(true);", relation_updated)
         self.assertIn("void refreshApplySnapshot();", contact_header)
+        self.assertIn("void refreshContactProfiles();", contact_header)
+        self.assertIn("void handleContactHttpFinished(ReqId id, const QString& res, ErrorCodes err);", contact_header)
+        self.assertIn("_features.contactController.refreshContactProfiles();", port_binder)
+        self.assertIn("const auto friends = _gateway->userMgr()->GetFriendListSnapshot();", refresh_profiles_body)
+        self.assertIn("_contact_list_model->indexOfUid(friendInfo->_uid) >= 0", refresh_profiles_body)
+        self.assertIn("_contact_list_model->upsertFriend(friendInfo);", refresh_profiles_body)
         self.assertIn("_apply_bootstrap_port.applySnapshot", refresh_body)
         self.assertIn("setApplies(applies);", refresh_body)
         self.assertIn("setApplyReady(true);", refresh_body)
@@ -536,6 +617,173 @@ class ContactFacadeContractTests(unittest.TestCase):
 
         self.assertIn("Component.onCompleted: contact.ensureContactsInitialized()", left_panel)
         self.assertIn("friendModel: contact.contactListModel", shell_page)
+
+    def test_chat_avatar_profile_flow_carries_public_user_id_fallback(self):
+        user_message_data = read(CLIENT / "core/session/UserMessageData.h")
+        private_dispatcher = read(CLIENT / "core/network/ChatMessageDispatcherPrivate.cpp")
+        group_dispatcher = read(CLIENT / "core/network/ChatMessageDispatcherGroup.cpp")
+        group_history = read(CLIENT / "core/network/ChatMessageDispatcherGroupHistory.cpp")
+        payload_service = read(CLIENT / "features/chat/services/MessagePayloadService.cpp")
+        cache_header = read(CLIENT / "features/chat/cache/ChatCacheMessageCodec.h")
+        private_cache = read(CLIENT / "features/chat/cache/PrivateChatCacheStore.cpp")
+        group_cache = read(CLIENT / "features/chat/cache/GroupChatCacheStore.cpp")
+        model_header = read(CLIENT / "features/chat/model/ChatMessageModel.h")
+        model_cpp = read(CLIENT / "features/chat/model/ChatMessageModel.cpp")
+        model_content = read(CLIENT / "features/chat/model/ChatMessageModelContent.cpp")
+        message_avatar = read(CHAT_VIEW / "conversation/MessageAvatar.qml")
+        message_delegate = read(CHAT_VIEW / "conversation/ChatMessageDelegate.qml")
+        message_list = read(CHAT_VIEW / "conversation/ChatMessageListView.qml")
+        conversation = read(CHAT_VIEW / "ChatConversationPane.qml")
+        shell_content = read(CHAT_VIEW / "ChatShellContent.qml")
+        normal_face = read(CHAT_VIEW / "ChatNormalFace.qml")
+        modal_layer = read(CHAT_VIEW / "ChatModalLayer.qml")
+        shell_page = read(SHELL_PAGE)
+        profile_popup = read(CONTACT / "view/ContactProfilePopup.qml")
+
+        for source, token in (
+            (user_message_data, "QString _from_user_id;"),
+            (private_dispatcher, 'jsonObj["from_user_id"].toString()'),
+            (group_dispatcher, 'jsonObj.value("from_user_id").toString()'),
+            (group_history, 'message.value("from_user_id").toString()'),
+            (payload_service, 'pickString(payload, msgObj, "from_user_id")'),
+            (cache_header, "QString fromUserId;"),
+            (private_cache, "from_user_id TEXT"),
+            (group_cache, "from_user_id TEXT"),
+            (model_header, "FromUserIdRole"),
+            (model_cpp, "case FromUserIdRole:\n            return entry.fromUserId;"),
+            (model_cpp, '{FromUserIdRole, "fromUserId"}'),
+            (model_content, "entry.fromUserId = message->_from_user_id;"),
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, source)
+
+        for source in (message_avatar, message_delegate, message_list, conversation, shell_content, normal_face):
+            with self.subTest(qml=source[:60]):
+                self.assertIn("string userId", source)
+
+        self.assertIn("property string senderUserId", message_avatar)
+        self.assertIn(
+            "root.avatarClicked(root.senderUid, root.senderName, root.avatarSource, root.senderUserId)",
+            message_avatar,
+        )
+        self.assertIn("property string senderUserId", message_delegate)
+        self.assertIn("senderUserId: root.senderUserId", message_delegate)
+        self.assertIn("property int selfUid: 0", message_list)
+        self.assertIn('property string selfUserId: ""', message_list)
+        self.assertIn("senderUid: model.outgoing ? root.selfUid : model.fromUid", message_list)
+        self.assertIn("senderUserId: model.outgoing ? root.selfUserId : model.fromUserId", message_list)
+        self.assertIn("property int selfUid: 0", conversation)
+        self.assertIn('property string selfUserId: ""', conversation)
+        self.assertIn("selfUid: root.selfUid", conversation)
+        self.assertIn("selfUserId: root.selfUserId", conversation)
+        self.assertIn("selfUid: shell.currentUserUid", shell_content)
+        self.assertIn("selfUserId: shell.currentUserId", shell_content)
+        self.assertIn(
+            "root.avatarProfileRequested(uid, name, icon, userId)",
+            message_list,
+        )
+        self.assertIn("function openProfile(uid, name, icon, userId)", modal_layer)
+        self.assertIn('contactProfilePopup.openProfile(uid, name, icon, userId || "")', modal_layer)
+        self.assertIn('modalLayer.openProfile(uid, name, icon, userId || "")', shell_page)
+        self.assertIn("readonly property string profileIdentityText", profile_popup)
+        self.assertIn("root.profileUserId && root.profileUserId.length > 0", profile_popup)
+        self.assertIn(': "ID: 未分配"', profile_popup)
+        self.assertNotIn('"UID: " + root.profileUid', profile_popup)
+        self.assertIn("function reloadProfileFromController()", profile_popup)
+        self.assertIn("contactController.refreshContactProfileByUid(profileUid)", profile_popup)
+        self.assertIn("function onContactProfilesChanged()", profile_popup)
+        self.assertIn("root.reloadProfileFromController()", profile_popup)
+        self.assertIn("var hasProfile = profile && profile.uid !== undefined", profile_popup)
+        self.assertIn("isFriend = hasProfile && profile.isFriend === true", profile_popup)
+
+    def test_contact_profile_popup_can_fetch_public_user_id_by_uid_without_exposing_internal_uid(self):
+        contact_header = read(CONTACT / "controller/ContactController.h")
+        contact_source = read(CONTACT / "controller/ContactController.cpp")
+        http_header = read(CLIENT / "core/network/httpmgr.h")
+        http_source = read(CLIENT / "core/network/httpmgr.cpp")
+        global_header = read(CLIENT / "core/common/global.h")
+        app_http_binder = read(APP / "composition/AppHttpSignalBinder.cpp")
+        app_http_router_h = read(APP / "events/AppHttpEventRouter.h")
+        app_http_router_cpp = read(APP / "events/AppHttpEventRouter.cpp")
+        profile_popup = read(CONTACT / "view/ContactProfilePopup.qml")
+
+        self.assertIn("ID_GET_USER_INFO = 1026", global_header)
+        self.assertIn("CONTACTMOD = 6", global_header)
+        self.assertIn("void sig_contact_mod_finish(ReqId id, QString res, ErrorCodes err);", http_header)
+        self.assertIn("emit sig_contact_mod_finish(id, res, err);", http_source)
+        self.assertIn("&HttpMgr::sig_contact_mod_finish", app_http_binder)
+        self.assertIn("&AppHttpEventRouter::onContactHttpFinished", app_http_binder)
+        self.assertIn("ContactController& contactController", app_http_router_h)
+        self.assertIn("void onContactHttpFinished(ReqId id, QString res, ErrorCodes err);", app_http_router_h)
+        self.assertIn("_contact_controller.handleContactHttpFinished(id, res, err);", app_http_router_cpp)
+        self.assertIn("QHash<int, QVariantMap> _profile_lookup_cache;", contact_header)
+        self.assertIn("QSet<int> _profile_lookup_pending_uids;", contact_header)
+        self.assertIn("void ContactController::requestPublicProfileByUid(int uid)", contact_source)
+        self.assertIn("ReqId::ID_GET_USER_INFO", contact_source)
+        self.assertIn("Modules::CONTACTMOD", contact_source)
+        self.assertIn('QStringLiteral("/get_user_info")', contact_source)
+        self.assertIn("QVariantMap publicProfileMapFromJson", contact_source)
+        self.assertIn('{"isFriend", false}', contact_source)
+        self.assertIn('{"isFriend", true}', contact_source)
+        self.assertIn("if (alreadyHasPublicId)", contact_source)
+        self.assertIn("requestPublicProfileByUid(uid);", contact_source)
+        self.assertIn("profile.isFriend === true", profile_popup)
+        self.assertNotIn('"UID: " + root.profileUid', profile_popup)
+
+    def test_contact_identity_views_hide_internal_uid_when_public_id_is_missing(self):
+        contact_list = read(CONTACT / "view/ContactListPane.qml")
+        contact_pane = read(CONTACT / "view/ContactPane.qml")
+        friend_info = read(CONTACT / "view/FriendInfoPane.qml")
+        apply_delegate = read(CONTACT / "view/ApplyRequestDelegate.qml")
+        dialog_entry_builder = read(CHAT_VIEW.parent / "services/DialogListEntryBuilder.cpp")
+        moments_delegate = read(CLIENT / "features/moments/view/MomentsDelegate.qml")
+        moments_feed = read(CLIENT / "features/moments/view/MomentsFeedPane.qml")
+        moments_side = read(CLIENT / "features/moments/view/MomentsFriendSidePane.qml")
+        create_group = read(CLIENT / "features/group/view/CreateGroupDialog.qml")
+        find_friend = read(CHAT_VIEW / "sidebar/ChatFindFriendPopup.qml")
+        shell_content = read(CHAT_VIEW / "ChatShellContent.qml")
+
+        self.assertIn("readonly property string contactIdentityText", contact_list)
+        self.assertIn('? ("ID: " + userId)', contact_list)
+        self.assertIn(': "ID: 未分配"', contact_list)
+        self.assertNotIn('"UID: " + uid', contact_list)
+        self.assertIn("text: contactDelegate.contactIdentityText", contact_list)
+        self.assertIn("property int contactUid: 0", contact_pane)
+        self.assertIn("contactUid: root.contactUid", contact_pane)
+        self.assertIn("property int contactUid: 0", friend_info)
+        self.assertIn("readonly property string contactIdentityText", friend_info)
+        self.assertIn("? root.contactUserId", friend_info)
+        self.assertIn(': "未分配"', friend_info)
+        self.assertNotIn('"UID: " + root.contactUid', friend_info)
+        self.assertIn("text: root.contactIdentityText", friend_info)
+        self.assertIn("contactUid: contact.currentContactUid", shell_content)
+        self.assertIn("readonly property string identityText", apply_delegate)
+        self.assertIn('? ("ID: " + root.userId)', apply_delegate)
+        self.assertIn(': "ID: 未分配"', apply_delegate)
+        self.assertNotIn('"UID: " + root.uid', apply_delegate)
+        self.assertIn("root.desc.length > 0 ? root.desc : root.identityText", apply_delegate)
+        self.assertIn('QStringLiteral("用户")', dialog_entry_builder)
+        self.assertNotIn("QString::number(uid)", dialog_entry_builder)
+        self.assertNotIn("QString::number(friendInfo->_uid)", dialog_entry_builder)
+        self.assertIn('property string userId: momentData ? momentData.userId : ""', moments_delegate)
+        self.assertIn("signal avatarClicked(int uid, string name, string icon, string userId)", moments_delegate)
+        self.assertIn("root.avatarClicked(root.uid,", moments_delegate)
+        self.assertIn("root.userId)", moments_delegate)
+        self.assertIn("onAvatarClicked: function(uid, name, icon, userId)", moments_feed)
+        self.assertIn("contactProfilePopup.openProfile(uid,", moments_feed)
+        self.assertNotIn(
+            "onAvatarClicked: {\n                                    contactProfilePopup.openProfile(model.uid",
+            moments_feed,
+        )
+        self.assertIn("readonly property string identityText", moments_side)
+        self.assertIn('? ("ID: " + userId)', moments_side)
+        self.assertIn(': "ID: 未分配"', moments_side)
+        self.assertNotIn('"UID: " + uid', moments_side)
+        self.assertIn("text: momentFriendDelegate.identityText", moments_side)
+        self.assertIn('text: userId && userId.length > 0 ? userId : "未分配"', create_group)
+        self.assertNotIn('"UID: " + uid', create_group)
+        self.assertIn('text: "ID: " + (userId && userId.length > 0 ? userId : "未分配")', find_friend)
+        self.assertNotIn('"UID: " + uid', find_friend)
 
     def test_migrated_contact_qml_avoids_old_controller_contact_surface(self):
         qml_sources = {

@@ -17,6 +17,7 @@ std::shared_ptr<TextChatData> buildHistoryTextMessage(const QJsonObject& message
     const qint64 editedAtMs = message.value("edited_at_ms").toVariant().toLongLong();
     const qint64 deletedAtMs = message.value("deleted_at_ms").toVariant().toLongLong();
     const QString state = ChatMessageDispatcherGroupPayload::messageState(message);
+    const QString fromUserId = message.value("from_user_id").toString();
 
     return std::make_shared<TextChatData>(message.value("msgid").toString(),
                                           message.value("content").toString(),
@@ -31,6 +32,7 @@ std::shared_ptr<TextChatData> buildHistoryTextMessage(const QJsonObject& message
                                           replyToServerMsgId,
                                           forwardMetaJson,
                                           editedAtMs,
-                                          deletedAtMs);
+                                          deletedAtMs,
+                                          fromUserId);
 }
 } // namespace ChatMessageDispatcherGroupHistory

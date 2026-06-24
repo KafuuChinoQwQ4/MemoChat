@@ -168,6 +168,30 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn("dbus-launch", source)
         self.assertIn("[input method]", source)
 
+    def test_wslg_client_startup_falls_back_when_d3d12_glx_is_unavailable(self):
+        launcher = read(START_QML_SCRIPT)
+        for token in (
+            "maybe_fallback_wslg_rendering",
+            "can_create_glx_context",
+            "glxinfo -B",
+            "MEMOCHAT_DISABLE_WSLG_GL_FALLBACK",
+            "set_wslg_llvmpipe_rendering_defaults",
+            'export QSG_RHI_BACKEND="opengl"',
+            'export QT_OPENGL="software"',
+            'export GALLIUM_DRIVER="llvmpipe"',
+            'export MESA_LOADER_DRIVER_OVERRIDE="llvmpipe"',
+            'export LIBGL_ALWAYS_SOFTWARE="1"',
+            'export MEMOCHAT_WSLG_GL_FALLBACK="llvmpipe"',
+            "WSLg d3d12 OpenGL context is unavailable",
+            "GL_FALLBACK:",
+        ):
+            self.assertIn(token, launcher)
+
+        self.assertLess(
+            launcher.index('set_default GALLIUM_DRIVER "d3d12"'),
+            launcher.rindex("maybe_fallback_wslg_rendering"),
+        )
+
     def test_linux_full_stack_launcher_chains_build_deploy_backend_and_client(self):
         source = read(RUN_FULL_STACK_SCRIPT)
 

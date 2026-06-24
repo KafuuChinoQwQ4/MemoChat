@@ -55,6 +55,10 @@ RelationBootstrapPort AppPortRegistry::makeRelationBootstrapPort()
         },
         [this]()
         {
+            _features.contactController.refreshContactProfiles();
+        },
+        [this]()
+        {
             _gateway.userMgr()->UpdateContactLoadedCount();
         },
         [this]()

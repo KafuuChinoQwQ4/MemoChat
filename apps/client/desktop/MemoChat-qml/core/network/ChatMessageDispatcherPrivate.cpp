@@ -59,7 +59,8 @@ void ChatMessageDispatcher::registerPrivateMessageHandlers()
 
                          auto msg_ptr = std::make_shared<TextChatMsg>(jsonObj["fromuid"].toInt(),
                                                                       jsonObj["touid"].toInt(),
-                                                                      jsonObj["text_array"].toArray());
+                                                                      jsonObj["text_array"].toArray(),
+                                                                      jsonObj["from_user_id"].toString());
                          emit sig_text_chat_msg(msg_ptr);
                      });
 

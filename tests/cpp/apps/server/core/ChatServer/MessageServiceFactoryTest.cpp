@@ -39,7 +39,7 @@ TEST(MessageServiceFactoryTest, GrpcBackendCreatesRemotePrivateMessageAdapter)
 {
     FakeMessageServiceConfig config("grpc", "127.0.0.1:50092");
 
-    auto selected = CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto selected = CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 
     ASSERT_NE(selected, nullptr);
     EXPECT_NE(dynamic_cast<MessageGrpcServiceAdapter*>(selected.get()), nullptr);
@@ -59,7 +59,7 @@ TEST(MessageServiceFactoryTest, RemoteBackendRequiresEndpoint)
 {
     FakeMessageServiceConfig config("grpc", "");
 
-    EXPECT_THROW((void) CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr),
+    EXPECT_THROW((void) CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr),
                  std::runtime_error);
     EXPECT_THROW((void) CreateGroupMessageService(config, nullptr, nullptr, nullptr, nullptr), std::runtime_error);
 }

@@ -14,6 +14,8 @@
 #include <chrono>
 #include <iostream>
 #include "json/GlazeCompat.h"
+#include <map>
+#include <optional>
 #include <vector>
 
 namespace
@@ -39,6 +41,16 @@ bool ParseJsonObjectLocal(const std::string& payload, memochat::json::JsonValue&
     std::unique_ptr<memochat::json::JsonCharReader> reader(builder.newCharReader());
     std::string errors;
     return reader->parse(payload.data(), payload.data() + payload.size(), &root, &errors) && root.is_object();
+}
+
+std::string ResolveSenderPublicUserId(int uid, IRelationRepository* relation_repository)
+{
+    if (uid <= 0 || !relation_repository)
+    {
+        return {};
+    }
+    const auto sender_info = relation_repository->GetUserByUid(uid);
+    return sender_info ? sender_info->user_id : std::string{};
 }
 
 void LogPrivateRouteLocal(const std::string& event,
@@ -99,11 +111,13 @@ void SendMessageCommandResultLocal(const std::shared_ptr<CSession>& session, con
 PrivateMessageService::PrivateMessageService(ISessionRegistry* session_registry,
                                              IOnlineRouteStore* online_route_store,
                                              IMessageRepository* message_repository,
+                                             IRelationRepository* relation_repository,
                                              IDeliveryGateway* delivery_gateway,
                                              IEventPublisher* event_publisher)
     : _session_registry(session_registry)
     , _online_route_store(online_route_store)
     , _message_repository(message_repository)
+    , _relation_repository(relation_repository)
     , _delivery_gateway(delivery_gateway)
     , _event_publisher(event_publisher)
 {
@@ -143,6 +157,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     std::vector<PrivateMessageInfo> pending_messages;
     const int conv_uid_min = std::min(uid, touid);
     const int conv_uid_max = std::max(uid, touid);
+    const std::string sender_public_user_id = ResolveSenderPublicUserId(uid, _relation_repository);
     std::string first_msg_id;
 
     for (const auto& txt_obj : arrays)
@@ -154,6 +169,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         msg.conv_uid_max = conv_uid_max;
         msg.from_uid = uid;
         msg.to_uid = touid;
+        msg.from_user_id = sender_public_user_id;
         msg.reply_to_server_msg_id = txt_obj.get("reply_to_server_msg_id", 0).asInt64();
         msg.edited_at_ms = txt_obj.get("edited_at_ms", 0).asInt64();
         msg.deleted_at_ms = txt_obj.get("deleted_at_ms", 0).asInt64();
@@ -186,6 +202,10 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     rtdto.accept_node = memochat::chatruntime::SelfServerName();
     rtdto.accept_ts = static_cast<int64_t>(accept_ts);
     rtdto.status = kafka_primary ? "accepted" : "persisted";
+    if (!sender_public_user_id.empty())
+    {
+        rtdto.from_user_id = sender_public_user_id;
+    }
     if (!kafka_primary)
     {
         rtdto.text_array = normalized;
@@ -201,6 +221,10 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
                                                     .accept_node = memochat::chatruntime::SelfServerName(),
                                                     .accept_ts = static_cast<int64_t>(accept_ts)});
     event_payload["text_array"] = normalized;
+    if (!sender_public_user_id.empty())
+    {
+        event_payload["from_user_id"] = sender_public_user_id;
+    }
 
     if (kafka_primary || kafka_shadow)
     {
@@ -312,6 +336,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
 
     const int conv_uid_min = std::min(from_uid, peer_uid);
     const int conv_uid_max = std::max(from_uid, peer_uid);
+    const std::string sender_public_user_id = ResolveSenderPublicUserId(from_uid, _relation_repository);
     if (source_msg->conv_uid_min != conv_uid_min || source_msg->conv_uid_max != conv_uid_max)
     {
         rtvalue["error"] = ErrorCodes::GroupPermissionDenied;
@@ -331,6 +356,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     info.conv_uid_max = conv_uid_max;
     info.from_uid = from_uid;
     info.to_uid = peer_uid;
+    info.from_user_id = sender_public_user_id;
     info.content = source_msg->content;
     info.reply_to_server_msg_id = source_msg->reply_to_server_msg_id;
     info.created_at = now_ms;
@@ -364,20 +390,25 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
         return result();
     }
 
+    const std::optional<std::string> sender_public_user_id_opt =
+        sender_public_user_id.empty() ? std::optional<std::string>{}
+                                      : std::optional<std::string>{sender_public_user_id};
     const memochat::json::JsonValue msg_obj = ChatMessageCommand::ToJsonValue(
         ChatMessageCommand::ChatPrivateForwardMessageDto{.msgid = info.msg_id,
                                                          .content = info.content,
                                                          .created_at = now_ms,
                                                          .reply_to_server_msg_id = info.reply_to_server_msg_id,
-                                                         .forward_meta = forward_meta});
-    rtvalue =
-        ChatMessageCommand::ToJsonValue(ChatMessageCommand::ChatPrivateForwardResultDto{.error = ErrorCodes::Success,
-                                                                                        .fromuid = from_uid,
-                                                                                        .peer_uid = peer_uid,
-                                                                                        .touid = peer_uid,
-                                                                                        .client_msg_id = client_msg_id,
-                                                                                        .created_at = now_ms,
-                                                                                        .msg = msg_obj});
+                                                         .forward_meta = forward_meta,
+                                                         .from_user_id = sender_public_user_id_opt});
+    rtvalue = ChatMessageCommand::ToJsonValue(
+        ChatMessageCommand::ChatPrivateForwardResultDto{.error = ErrorCodes::Success,
+                                                        .fromuid = from_uid,
+                                                        .peer_uid = peer_uid,
+                                                        .touid = peer_uid,
+                                                        .client_msg_id = client_msg_id,
+                                                        .created_at = now_ms,
+                                                        .from_user_id = sender_public_user_id_opt,
+                                                        .msg = msg_obj});
 
     TextChatMsgReq text_msg_req;
     text_msg_req.set_fromuid(from_uid);
@@ -659,12 +690,21 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     }
     rtvalue["has_more"] = has_more;
     int64_t max_peer_read_ts = 0;
+    std::map<int, std::string> public_user_id_by_uid;
     for (const auto& one : messages)
     {
         if (!one)
         {
             continue;
         }
+        auto cached_user_id = public_user_id_by_uid.find(one->from_uid);
+        if (cached_user_id == public_user_id_by_uid.end())
+        {
+            cached_user_id = public_user_id_by_uid
+                                 .emplace(one->from_uid, ResolveSenderPublicUserId(one->from_uid, _relation_repository))
+                                 .first;
+        }
+        one->from_user_id = cached_user_id->second;
         const memochat::json::JsonValue item =
             ChatHistoryOutput::ToJsonValue(ChatHistoryOutput::ChatPrivateHistoryMessageFromInfo(*one));
         append(rtvalue["messages"], item);

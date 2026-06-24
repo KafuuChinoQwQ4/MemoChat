@@ -129,6 +129,7 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
                                                            UserMgr::GetInstance().get(),
                                                            _online_route_store.get(),
                                                            _message_repository.get(),
+                                                           _relation_repository.get(),
                                                            _message_delivery_service.get(),
                                                            _async_event_dispatcher.get());
     _group_message_service = CreateGroupMessageService(*_message_service_config,
@@ -151,6 +152,7 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
                                                                  UserMgr::GetInstance().get(),
                                                                  _online_route_store.get(),
                                                                  relation_query_service,
+                                                                 _relation_repository.get(),
                                                                  _session_config.get(),
                                                                  _session_repository.get());
     _delivery_runtime = std::make_unique<ChatDeliveryRuntime>(

@@ -17,6 +17,7 @@
 | --- | --- |
 | `test_architecture_review_slice_d.py` | 锁定后端微服务架构评审整改项的正向不变量 |
 | `test_database_ownership_contract.py` | 校验各服务数据库与应用角色归属矩阵一致 |
+| `test_r18_source_pagination_contract.py` | 校验 R18 漫画源分页契约，防止满页结果阻断后续加载 |
 | `test_registration_identity_contract.py` | 校验注册/身份相关的跨服务契约 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -7,10 +7,83 @@
 #include "IconPathUtils.h"
 #include "SearchResultModel.h"
 #include "global.h"
+#include "httpmgr.h"
 #include "usermgr.h"
 #include <QJsonDocument>
+#include <QJsonParseError>
+#include <QUrl>
 
 #include <utility>
+
+namespace
+{
+void assignNonEmpty(QString& target, const QString& next)
+{
+    if (!next.trimmed().isEmpty())
+    {
+        target = next;
+    }
+}
+
+QVariantMap friendProfileMap(const std::shared_ptr<FriendInfo>& friendInfo)
+{
+    if (!friendInfo)
+    {
+        return {};
+    }
+
+    return {{"uid", friendInfo->_uid},
+            {"isFriend", true},
+            {"userId", friendInfo->_user_id},
+            {"name", friendInfo->_name},
+            {"nick", friendInfo->_nick},
+            {"icon", normalizeIconForQml(friendInfo->_icon)},
+            {"desc", friendInfo->_desc},
+            {"back", friendInfo->_back},
+            {"sex", friendInfo->_sex}};
+}
+
+QVariantMap publicProfileMapFromJson(const QJsonObject& obj)
+{
+    const int uid = obj.value(QStringLiteral("uid")).toInt();
+    if (uid <= 0)
+    {
+        return {};
+    }
+    const QString icon = obj.value(QStringLiteral("icon")).toString().trimmed();
+
+    return {{"uid", uid},
+            {"isFriend", false},
+            {"userId", obj.value(QStringLiteral("user_id")).toString().trimmed()},
+             {"name", obj.value(QStringLiteral("name")).toString()},
+              {"nick", obj.value(QStringLiteral("nick")).toString()},
+               {"icon", icon.isEmpty() ? QString() : normalizeIconForQml(icon)},
+               {"desc", obj.value(QStringLiteral("desc")).toString()},
+                {"back", QString()},
+                {"sex", obj.value(QStringLiteral("sex")).toInt()}};
+}
+
+void mergeCachedPublicFields(QVariantMap& profile, const QVariantMap& cached)
+{
+    if (cached.isEmpty())
+    {
+        return;
+    }
+
+    for (const QString& key : {QStringLiteral("userId"),
+             QStringLiteral("name"), QStringLiteral("nick"), QStringLiteral("icon"), QStringLiteral("desc")})
+    {
+        if (profile.value(key).toString().trimmed().isEmpty() && !cached.value(key).toString().trimmed().isEmpty())
+        {
+            profile.insert(key, cached.value(key));
+        }
+    }
+    if (profile.value(QStringLiteral("sex")).toInt() == 0 && cached.value(QStringLiteral("sex")).toInt() != 0)
+    {
+        profile.insert(QStringLiteral("sex"), cached.value(QStringLiteral("sex")));
+    }
+}
+} // namespace
 
 ContactController::ContactController(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
@@ -294,25 +367,60 @@ void ContactController::approveFriend(int uid, const QString& backName, const QV
 
 QVariantMap ContactController::contactProfileByUid(int uid) const
 {
+    const auto cachedIt = _profile_lookup_cache.constFind(uid);
+    const QVariantMap cached = cachedIt == _profile_lookup_cache.constEnd() ? QVariantMap() : cachedIt.value();
+
     if (!_gateway || !_gateway->userMgr())
     {
-        return {};
+        return cached;
     }
 
     const auto friendInfo = _gateway->userMgr()->GetFriendById(uid);
     if (!friendInfo)
     {
-        return {};
+        return cached;
     }
 
-    return {{"uid", friendInfo->_uid},
-            {"userId", friendInfo->_user_id},
-            {"name", friendInfo->_name},
-            {"nick", friendInfo->_nick},
-            {"icon", normalizeIconForQml(friendInfo->_icon)},
-            {"desc", friendInfo->_desc},
-            {"back", friendInfo->_back},
-            {"sex", friendInfo->_sex}};
+    QVariantMap profile = friendProfileMap(friendInfo);
+    mergeCachedPublicFields(profile, cached);
+    profile.insert(QStringLiteral("isFriend"), true);
+    return profile;
+}
+
+void ContactController::refreshContactProfileByUid(int uid)
+{
+    if (uid <= 0)
+    {
+        return;
+    }
+
+    bool alreadyHasPublicId = false;
+    if (_gateway && _gateway->userMgr())
+    {
+        const auto friendInfo = _gateway->userMgr()->GetFriendById(uid);
+        if (friendInfo)
+        {
+            alreadyHasPublicId = !friendInfo->_user_id.trimmed().isEmpty();
+            if (_contact_list_model->indexOfUid(uid) >= 0)
+            {
+                _contact_list_model->upsertFriend(friendInfo);
+            }
+            refreshCurrentContactFromStore();
+            emit contactProfilesChanged();
+        }
+    }
+
+    if (alreadyHasPublicId)
+    {
+        return;
+    }
+
+    ensureContactsInitialized();
+    if (_command_port.requestRelationBootstrap)
+    {
+        _command_port.requestRelationBootstrap();
+    }
+    requestPublicProfileByUid(uid);
 }
 
 void ContactController::deleteFriend(int uid)
@@ -435,6 +543,75 @@ void ContactController::sendDeleteFriend(int selfUid, int friendUid) const
     const QJsonObject jsonObj = memochat::contact_payload::buildDeleteFriendPayload(selfUid, friendUid);
     const QByteArray jsonData = QJsonDocument(jsonObj).toJson(QJsonDocument::Compact);
     _gateway->chatTransport()->slot_send_data(ReqId::ID_DELETE_FRIEND_REQ, jsonData);
+}
+
+void ContactController::handleContactHttpFinished(ReqId id, const QString& res, ErrorCodes err)
+{
+    if (id != ReqId::ID_GET_USER_INFO)
+    {
+        return;
+    }
+
+    if (err != ErrorCodes::SUCCESS)
+    {
+        _profile_lookup_pending_uids.clear();
+        return;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(res.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject())
+    {
+        _profile_lookup_pending_uids.clear();
+        return;
+    }
+
+    const QJsonObject obj = doc.object();
+    const int error = obj.value(QStringLiteral("error")).toInt(ErrorCodes::ERR_JSON);
+    const int uid = obj.value(QStringLiteral("uid")).toInt();
+    if (uid > 0)
+    {
+        _profile_lookup_pending_uids.remove(uid);
+    }
+    if (error != ErrorCodes::SUCCESS || uid <= 0)
+    {
+        if (uid <= 0)
+        {
+            _profile_lookup_pending_uids.clear();
+        }
+        return;
+    }
+
+    const QVariantMap profile = publicProfileMapFromJson(obj);
+    if (profile.isEmpty())
+    {
+        return;
+    }
+    _profile_lookup_cache.insert(uid, profile);
+
+    if (_gateway && _gateway->userMgr())
+    {
+        const auto friendInfo = _gateway->userMgr()->GetFriendById(uid);
+        if (friendInfo)
+        {
+            assignNonEmpty(friendInfo->_user_id, profile.value(QStringLiteral("userId")).toString());
+            assignNonEmpty(friendInfo->_name, profile.value(QStringLiteral("name")).toString());
+            assignNonEmpty(friendInfo->_nick, profile.value(QStringLiteral("nick")).toString());
+            assignNonEmpty(friendInfo->_icon, profile.value(QStringLiteral("icon")).toString());
+            assignNonEmpty(friendInfo->_desc, profile.value(QStringLiteral("desc")).toString());
+            if (profile.value(QStringLiteral("sex")).toInt() != 0)
+            {
+                friendInfo->_sex = profile.value(QStringLiteral("sex")).toInt();
+            }
+            if (_contact_list_model->indexOfUid(uid) >= 0)
+            {
+                _contact_list_model->upsertFriend(friendInfo);
+            }
+        }
+    }
+
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::setCommandPort(ContactCommandPort port)
@@ -578,26 +755,53 @@ void ContactController::setCurrentContact(int uid,
 void ContactController::setContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts)
 {
     _contact_list_model->setFriends(contacts);
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::appendContacts(const std::vector<std::shared_ptr<FriendInfo>>& contacts)
 {
     _contact_list_model->appendFriends(contacts);
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::upsertContact(const std::shared_ptr<FriendInfo>& friendInfo)
 {
     _contact_list_model->upsertFriend(friendInfo);
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::upsertContact(const std::shared_ptr<AuthInfo>& authInfo)
 {
     _contact_list_model->upsertFriend(authInfo);
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::upsertContact(const std::shared_ptr<AuthRsp>& authRsp)
 {
     _contact_list_model->upsertFriend(authRsp);
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
+}
+
+void ContactController::refreshContactProfiles()
+{
+    if (_gateway && _gateway->userMgr())
+    {
+        const auto friends = _gateway->userMgr()->GetFriendListSnapshot();
+        for (const auto& friendInfo : friends)
+        {
+            if (friendInfo && _contact_list_model->indexOfUid(friendInfo->_uid) >= 0)
+            {
+                _contact_list_model->upsertFriend(friendInfo);
+            }
+        }
+    }
+    refreshCurrentContactFromStore();
+    emit contactProfilesChanged();
 }
 
 void ContactController::removeContactByUid(int uid)
@@ -607,6 +811,7 @@ void ContactController::removeContactByUid(int uid)
     {
         clearCurrentContact();
     }
+    emit contactProfilesChanged();
 }
 
 void ContactController::setApplies(const std::vector<std::shared_ptr<ApplyInfo>>& applies)
@@ -742,4 +947,43 @@ void ContactController::refreshContactLoadMoreState()
         return;
     }
     setCanLoadMoreContacts(!_gateway->userMgr()->IsLoadConFin());
+}
+
+void ContactController::refreshCurrentContactFromStore()
+{
+    if (_current_contact_uid <= 0 || !_gateway || !_gateway->userMgr())
+    {
+        return;
+    }
+
+    const auto friendInfo = _gateway->userMgr()->GetFriendById(_current_contact_uid);
+    if (!friendInfo)
+    {
+        return;
+    }
+
+    setCurrentContact(friendInfo->_uid,
+                      friendInfo->_name,
+                      friendInfo->_nick,
+                      normalizeIconForQml(friendInfo->_icon),
+                      friendInfo->_back,
+                      friendInfo->_sex,
+                      friendInfo->_user_id);
+}
+
+void ContactController::requestPublicProfileByUid(int uid)
+{
+    if (uid <= 0 || _profile_lookup_pending_uids.contains(uid) || !_gateway || !_gateway->httpMgr())
+    {
+        return;
+    }
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("uid"), uid);
+    _profile_lookup_pending_uids.insert(uid);
+    _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + QStringLiteral("/get_user_info")),
+                                          payload,
+                                          ReqId::ID_GET_USER_INFO,
+                                          Modules::CONTACTMOD,
+                                          QStringLiteral("contact-profile"));
 }

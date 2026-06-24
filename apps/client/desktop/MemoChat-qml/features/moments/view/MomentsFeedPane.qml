@@ -147,11 +147,11 @@ Rectangle {
                                         detailLoader.item.openMoment(model.momentId)
                                     }
                                 }
-                                onAvatarClicked: {
-                                    contactProfilePopup.openProfile(model.uid,
-                                                                    model.userNick || model.userName || "用户",
-                                                                    model.userIcon || "qrc:/res/head_1.jpg",
-                                                                    model.userId || "")
+                                onAvatarClicked: function(uid, name, icon, userId) {
+                                    contactProfilePopup.openProfile(uid,
+                                                                    name || "用户",
+                                                                    icon || "qrc:/res/head_1.jpg",
+                                                                    userId || "")
                                 }
                                 onDeleteClicked: {
                                     root.pendingDeleteMomentId = model.momentId

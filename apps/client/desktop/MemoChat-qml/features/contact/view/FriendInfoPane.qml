@@ -11,8 +11,12 @@ Rectangle {
     property string contactNick: ""
     property string contactIcon: "qrc:/res/head_1.jpg"
     property string contactBack: ""
+    property int contactUid: 0
     property int contactSex: 0
     property string contactUserId: ""
+    readonly property string contactIdentityText: root.contactUserId && root.contactUserId.length > 0
+                                                  ? root.contactUserId
+                                                  : "未分配"
 
     signal messageChatClicked()
     signal voiceChatClicked()
@@ -177,7 +181,7 @@ Rectangle {
                         font.pixelSize: 13
                     }
                     Label {
-                        text: root.contactUserId
+                        text: root.contactIdentityText
                         color: "#1e2a3a"
                         font.pixelSize: 13
                         elide: Text.ElideRight

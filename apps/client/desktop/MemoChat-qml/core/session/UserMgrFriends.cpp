@@ -3,6 +3,74 @@
 #include <QJsonArray>
 #include <algorithm>
 
+namespace
+{
+QString nonEmptyOrExisting(const QString& next, const QString& existing)
+{
+    return next.trimmed().isEmpty() ? existing : next;
+}
+
+void mergeSparseFriendInfo(FriendInfo& stored, const FriendInfo& next)
+{
+    stored._name = nonEmptyOrExisting(next._name, stored._name);
+    stored._nick = nonEmptyOrExisting(next._nick, stored._nick);
+    stored._icon = nonEmptyOrExisting(next._icon, stored._icon);
+    stored._desc = nonEmptyOrExisting(next._desc, stored._desc);
+    stored._back = nonEmptyOrExisting(next._back, stored._back);
+    stored._last_msg = nonEmptyOrExisting(next._last_msg, stored._last_msg);
+    stored._user_id = nonEmptyOrExisting(next._user_id, stored._user_id);
+    if (!next._dialog_type.trimmed().isEmpty())
+    {
+        stored._dialog_type = next._dialog_type;
+    }
+    if (next._sex != 0)
+    {
+        stored._sex = next._sex;
+    }
+}
+
+std::shared_ptr<FriendInfo> findFriendInList(std::vector<std::shared_ptr<FriendInfo>>& friends, int uid)
+{
+    const auto iter = std::find_if(friends.begin(),
+                                   friends.end(),
+                                   [uid](const std::shared_ptr<FriendInfo>& info)
+                                   {
+                                       return info && info->_uid == uid;
+                                   });
+    return iter == friends.end() ? nullptr : *iter;
+}
+
+void upsertSparseFriendInfo(std::vector<std::shared_ptr<FriendInfo>>& friends,
+                            QMap<int, std::shared_ptr<FriendInfo>>& friendMap,
+                            const std::shared_ptr<FriendInfo>& friendInfo)
+{
+    if (!friendInfo)
+    {
+        return;
+    }
+
+    auto mapIter = friendMap.find(friendInfo->_uid);
+    const auto listInfo = findFriendInList(friends, friendInfo->_uid);
+    if (mapIter == friendMap.end() && !listInfo)
+    {
+        friends.push_back(friendInfo);
+        friendMap[friendInfo->_uid] = friendInfo;
+        return;
+    }
+
+    const auto target = listInfo ? listInfo : mapIter.value();
+    if (!target)
+    {
+        friends.push_back(friendInfo);
+        friendMap[friendInfo->_uid] = friendInfo;
+        return;
+    }
+
+    mergeSparseFriendInfo(*target, *friendInfo);
+    friendMap[friendInfo->_uid] = target;
+}
+} // namespace
+
 void UserMgr::AppendFriendList(QJsonArray array)
 {
     _friend_list.clear();
@@ -140,24 +208,12 @@ bool UserMgr::CheckFriendById(int uid)
 
 void UserMgr::AddFriend(std::shared_ptr<AuthRsp> auth_rsp)
 {
-    auto friend_info = std::make_shared<FriendInfo>(auth_rsp);
-    auto iter = _friend_map.find(friend_info->_uid);
-    if (iter == _friend_map.end())
-    {
-        _friend_list.push_back(friend_info);
-    }
-    _friend_map[friend_info->_uid] = friend_info;
+    upsertSparseFriendInfo(_friend_list, _friend_map, std::make_shared<FriendInfo>(auth_rsp));
 }
 
 void UserMgr::AddFriend(std::shared_ptr<AuthInfo> auth_info)
 {
-    auto friend_info = std::make_shared<FriendInfo>(auth_info);
-    auto iter = _friend_map.find(friend_info->_uid);
-    if (iter == _friend_map.end())
-    {
-        _friend_list.push_back(friend_info);
-    }
-    _friend_map[friend_info->_uid] = friend_info;
+    upsertSparseFriendInfo(_friend_list, _friend_map, std::make_shared<FriendInfo>(auth_info));
 }
 
 std::shared_ptr<FriendInfo> UserMgr::GetFriendById(int uid)

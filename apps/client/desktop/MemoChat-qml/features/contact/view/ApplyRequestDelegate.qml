@@ -18,6 +18,9 @@ Rectangle {
     property string icon: ""
     property bool approved: false
     property bool pending: false
+    readonly property string identityText: root.userId.length > 0
+                                           ? ("ID: " + root.userId)
+                                           : "ID: 未分配"
 
     signal approveClicked(int uid, string name)
 
@@ -61,7 +64,7 @@ Rectangle {
             }
 
             Label {
-                text: root.desc.length > 0 ? root.desc : ("ID: " + (root.userId.length > 0 ? root.userId : root.uid))
+                text: root.desc.length > 0 ? root.desc : root.identityText
                 color: "#63748c"
                 elide: Text.ElideRight
                 Layout.fillWidth: true

@@ -341,6 +341,7 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
             "nextContactPage",
             "setContacts",
             "upsertContact",
+            "refreshContactProfiles",
             "markContactPageLoaded",
             "refreshContactLoadMoreState",
             "setContactsReady",
@@ -355,6 +356,16 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
         self.assertNotIn("notifyPendingApplyChanged", relation_port)
 
         self.assertIn("_port.ensureChatListInitialized();", relation_updated)
+        self.assertIn("_port.refreshContactProfiles();", relation_updated)
+        self.assertIn("const auto contactList = _port.nextContactPage();", relation_updated)
+        self.assertLess(
+            relation_updated.index("_port.refreshContactProfiles();"),
+            relation_updated.index("if (snapshot.isChatPage)"),
+        )
+        self.assertLess(
+            relation_updated.index("_port.refreshApplySnapshot();"),
+            relation_updated.index("if (!snapshot.isChatPage)"),
+        )
         self.assertIn("_port.refreshApplySnapshot();", relation_updated)
         self.assertIn("_port.refreshDialogModelIncremental();", relation_updated)
         self.assertIn("_port.flushIncomingMessageRouter();", relation_updated)

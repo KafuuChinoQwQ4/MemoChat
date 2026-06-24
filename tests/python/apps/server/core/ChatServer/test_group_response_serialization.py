@@ -40,6 +40,10 @@ def extract_function(source: str, signature: str) -> str:
     raise AssertionError(f"Function body not found for {signature}")
 
 
+def normalized(source: str) -> str:
+    return " ".join(source.split())
+
+
 class GroupResponseSerializationTests(unittest.TestCase):
     def test_group_responses_use_object_json_not_double_serialized_strings(self):
         source = GROUP_MESSAGE_SERVICE.read_text(encoding="utf-8")
@@ -58,14 +62,12 @@ class GroupResponseSerializationTests(unittest.TestCase):
         self.assertIn('out["pending_group_apply_list"] = memochat::json::arrayValue;', source)
         self.assertLess(
             source.index('out["group_list"] = memochat::json::arrayValue;'),
-            source.index('out["group_list"].append(one);'),
+            source.index('out["group_list"].append(ChatOutput::ToJsonValue(row));'),
         )
         self.assertLess(
             source.index('out["pending_group_apply_list"] = memochat::json::arrayValue;'),
-            source.index('out["pending_group_apply_list"].append(one);'),
+            source.index('out["pending_group_apply_list"].append(ChatOutput::ToJsonValue(row));'),
         )
-        self.assertNotIn('append(out["group_list"], one);', source)
-        self.assertNotIn('append(out["pending_group_apply_list"], one);', source)
 
     def test_group_history_response_initializes_messages_array(self):
         source = GROUP_MESSAGE_SERVICE.read_text(encoding="utf-8")
@@ -94,6 +96,47 @@ class GroupResponseSerializationTests(unittest.TestCase):
         )
         self.assertIn("JsonToWireString(rtvalue)", handler)
         self.assertNotIn("session->Send(rtvalue.and_then", handler)
+
+    def test_private_message_payloads_carry_public_user_id(self):
+        private_source = PRIVATE_MESSAGE_SERVICE.read_text(encoding="utf-8")
+        command_dtos = (REPO_ROOT / "apps/server/core/ChatServer/domain/ChatMessageCommandDtos.h").read_text(
+            encoding="utf-8"
+        )
+        history_dtos = (REPO_ROOT / "apps/server/core/ChatServer/domain/ChatHistoryOutputDtos.h").read_text(
+            encoding="utf-8"
+        )
+        async_dispatcher = (REPO_ROOT / "apps/server/core/ChatServer/messaging/AsyncEventDispatcher.cpp").read_text(
+            encoding="utf-8"
+        )
+        grpc_notify = (REPO_ROOT / "apps/server/core/ChatServer/transport/ChatServiceImpl.cpp").read_text(
+            encoding="utf-8"
+        )
+        session_source = (REPO_ROOT / "apps/server/core/ChatServer/domain/session/ChatSessionService.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("std::optional<std::string> from_user_id;", command_dtos)
+        self.assertIn('value["from_user_id"] = *dto.from_user_id;', command_dtos)
+        self.assertIn("std::string from_user_id;", history_dtos)
+        self.assertIn('item["from_user_id"] = dto.from_user_id;', history_dtos)
+        self.assertIn('root["from_user_id"] = dto.from_user_id;', history_dtos)
+
+        send_handler = extract_function(private_source, "MessageCommandResult PrivateMessageService::TextChatMessage")
+        self.assertIn("ResolveSenderPublicUserId(uid, _relation_repository)", send_handler)
+        self.assertIn("msg.from_user_id = sender_public_user_id;", send_handler)
+        self.assertIn("rtdto.from_user_id = sender_public_user_id;", send_handler)
+        self.assertIn('event_payload["from_user_id"] = sender_public_user_id;', send_handler)
+
+        history_handler = extract_function(private_source, "MessageCommandResult PrivateMessageService::PrivateHistory")
+        self.assertIn("ResolveSenderPublicUserId(one->from_uid, _relation_repository)", history_handler)
+        self.assertIn("one->from_user_id = cached_user_id->second;", history_handler)
+
+        self.assertIn('notify_payload["from_user_id"] = sender_public_user_id;', async_dispatcher)
+        self.assertIn('one["from_user_id"] = sender_public_user_id;', async_dispatcher)
+        self.assertIn('rtvalue["from_user_id"] = sender_info->user_id;', grpc_notify)
+        self.assertIn('element["from_user_id"] = sender_info->user_id;', grpc_notify)
+        self.assertIn("msg->from_user_id = sender_public_user_id;", session_source)
+        self.assertIn(".from_user_id = sender_public_user_id", normalized(session_source))
 
     def test_group_list_is_stored_before_group_response_signal(self):
         source = CHAT_MESSAGE_DISPATCHER_GROUP.read_text(encoding="utf-8")

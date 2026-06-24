@@ -54,7 +54,8 @@ std::shared_ptr<TextChatData> privateMessageFromCacheRow(const PrivateChatCacheR
                                           row.replyToServerMsgId,
                                           row.forwardMetaJson,
                                           editedAtMs,
-                                          deletedAtMs);
+                                          deletedAtMs,
+                                          row.fromUserId);
 }
 
 std::shared_ptr<TextChatData> groupMessageFromCacheRow(const GroupChatCacheRow& row)
@@ -74,5 +75,6 @@ std::shared_ptr<TextChatData> groupMessageFromCacheRow(const GroupChatCacheRow& 
                                           row.replyToServerMsgId,
                                           row.forwardMetaJson,
                                           editedAtMs,
-                                          deletedAtMs);
+                                          deletedAtMs,
+                                          row.fromUserId);
 }

@@ -1,11 +1,15 @@
 #include "ApplyRequestModel.h"
+#include "ClientGateway.h"
 #include "ContactController.h"
 #include "FriendListModel.h"
 #include "SearchResultModel.h"
 #include "userdata.h"
+#include "usermgr.h"
 
 #include <gtest/gtest.h>
 
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QString>
 #include <memory>
 #include <vector>
@@ -54,6 +58,28 @@ QVariantMap row(FriendListModel* model, int index)
 QVariantMap row(ApplyRequestModel* model, int index)
 {
     return model->get(index);
+}
+
+QJsonObject friendJson(int uid, const QString& name, const QString& userId)
+{
+    QJsonObject item;
+    item.insert(QStringLiteral("uid"), uid);
+    item.insert(QStringLiteral("name"), name);
+    item.insert(QStringLiteral("nick"), name + QStringLiteral("Nick"));
+    item.insert(QStringLiteral("icon"), QStringLiteral("head.png"));
+    item.insert(QStringLiteral("sex"), 1);
+    item.insert(QStringLiteral("desc"), QStringLiteral("desc ") + name);
+    item.insert(QStringLiteral("back"), QStringLiteral("remark ") + name);
+    item.insert(QStringLiteral("user_id"), userId);
+    return item;
+}
+
+void setCurrentFriend(ContactController& controller, int uid, const QString& name, const QString& userId = QString())
+{
+    const QString nick = name + QStringLiteral("Nick");
+    const QString icon = QStringLiteral("head.png");
+    const QString remark = QStringLiteral("remark ") + name;
+    controller.setCurrentContact(uid, name, nick, icon, remark, 1, userId);
 }
 } // namespace
 
@@ -113,6 +139,109 @@ TEST(ContactControllerTest, SelectContactIndexUpdatesCurrentContactAndPane)
     controller.selectContactIndex(10);
     EXPECT_EQ(controller.currentContactUid(), 202);
     EXPECT_EQ(controller.contactPane(), 1);
+}
+
+TEST(ContactControllerTest, RefreshesSelectedContactPublicUserIdWhenStoreUpdates)
+{
+    ClientGateway gateway;
+    ContactController controller(&gateway);
+    gateway.userMgr()->ResetSession();
+
+    gateway.userMgr()->AppendFriendList(QJsonArray{friendJson(203, QStringLiteral("Faye"), QString())});
+    auto stale = gateway.userMgr()->GetFriendById(203);
+    ASSERT_NE(stale, nullptr);
+
+    controller.setContacts({stale});
+    setCurrentFriend(controller, 203, QStringLiteral("Faye"));
+    ASSERT_TRUE(controller.currentContactUserId().isEmpty());
+
+    gateway.userMgr()->AppendFriendList(
+        QJsonArray{friendJson(203, QStringLiteral("Faye"), QStringLiteral("u203203203"))});
+    auto fresh = gateway.userMgr()->GetFriendById(203);
+    ASSERT_NE(fresh, nullptr);
+    controller.upsertContact(fresh);
+
+    EXPECT_EQ(controller.currentContactUid(), 203);
+    EXPECT_EQ(controller.currentContactUserId(), QStringLiteral("u203203203"));
+}
+
+TEST(ContactControllerTest, RefreshContactProfilesSyncsListRowsFromStoreSnapshot)
+{
+    ClientGateway gateway;
+    ContactController controller(&gateway);
+    gateway.userMgr()->ResetSession();
+
+    gateway.userMgr()->AppendFriendList(QJsonArray{friendJson(204, QStringLiteral("Gia"), QString())});
+    auto stale = gateway.userMgr()->GetFriendById(204);
+    ASSERT_NE(stale, nullptr);
+    controller.setContacts({stale});
+    setCurrentFriend(controller, 204, QStringLiteral("Gia"));
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 1);
+    EXPECT_TRUE(row(controller.contactListModel(), 0).value(QStringLiteral("userId")).toString().isEmpty());
+
+    gateway.userMgr()->AppendFriendList(QJsonArray{
+        friendJson(204,
+                   QStringLiteral("Gia"), QStringLiteral("u204204204")),
+                   friendJson(205, QStringLiteral("Hidden"), QStringLiteral("u205205205")),
+                   });
+
+    controller.refreshContactProfiles();
+
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 1);
+    EXPECT_EQ(
+        row(controller.contactListModel(), 0).value(QStringLiteral("userId")).toString(), QStringLiteral("u204204204"));
+    EXPECT_EQ(controller.currentContactUid(), 204);
+    EXPECT_EQ(controller.currentContactUserId(), QStringLiteral("u204204204"));
+    EXPECT_EQ(controller.contactListModel()->indexOfUid(205), -1);
+}
+
+TEST(ContactControllerTest, ContactHttpProfileLookupCachesPublicUserIdForNonFriendProfile)
+{
+    ContactController controller(nullptr);
+
+    controller.handleContactHttpFinished(
+        ReqId::ID_GET_USER_INFO,
+        QStringLiteral(
+            R"({"error":0,"uid":206,"user_id":"u206206206","name":"Hera","nick":"HeraNick","icon":"","desc":"public desc","sex":2})"),
+            ErrorCodes::SUCCESS);
+
+    const QVariantMap profile = controller.contactProfileByUid(206);
+    EXPECT_EQ(profile.value(QStringLiteral("uid")).toInt(), 206);
+    EXPECT_FALSE(profile.value(QStringLiteral("isFriend")).toBool());
+    EXPECT_EQ(profile.value(QStringLiteral("userId")).toString(), QStringLiteral("u206206206"));
+    EXPECT_EQ(profile.value(QStringLiteral("name")).toString(), QStringLiteral("Hera"));
+    EXPECT_EQ(profile.value(QStringLiteral("nick")).toString(), QStringLiteral("HeraNick"));
+    EXPECT_EQ(profile.value(QStringLiteral("desc")).toString(), QStringLiteral("public desc"));
+    EXPECT_EQ(profile.value(QStringLiteral("sex")).toInt(), 2);
+}
+
+TEST(ContactControllerTest, ContactHttpProfileLookupBackfillsFriendListAndCurrentContact)
+{
+    ClientGateway gateway;
+    ContactController controller(&gateway);
+    gateway.userMgr()->ResetSession();
+
+    gateway.userMgr()->AppendFriendList(QJsonArray{friendJson(207, QStringLiteral("Ira"), QString())});
+    auto stale = gateway.userMgr()->GetFriendById(207);
+    ASSERT_NE(stale, nullptr);
+    controller.setContacts({stale});
+    setCurrentFriend(controller, 207, QStringLiteral("Ira"));
+    ASSERT_TRUE(controller.currentContactUserId().isEmpty());
+    ASSERT_TRUE(row(controller.contactListModel(), 0).value(QStringLiteral("userId")).toString().isEmpty());
+
+    controller.handleContactHttpFinished(
+        ReqId::ID_GET_USER_INFO,
+        QStringLiteral(
+            R"({"error":0,"uid":207,"user_id":"u207207207","name":"Ira","nick":"IraNick","icon":"","desc":"fresh desc","sex":1})"),
+            ErrorCodes::SUCCESS);
+
+    const QVariantMap profile = controller.contactProfileByUid(207);
+    EXPECT_TRUE(profile.value(QStringLiteral("isFriend")).toBool());
+    EXPECT_EQ(profile.value(QStringLiteral("userId")).toString(), QStringLiteral("u207207207"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 0).value(QStringLiteral("userId")).toString(), QStringLiteral("u207207207"));
+    EXPECT_EQ(controller.currentContactUid(), 207);
+    EXPECT_EQ(controller.currentContactUserId(), QStringLiteral("u207207207"));
 }
 
 TEST(ContactControllerTest, UpdatesSearchModelPendingAndStatus)

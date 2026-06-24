@@ -86,6 +86,7 @@ ChatMessageModel::MessageEntry ChatMessageModel::toEntry(const std::shared_ptr<T
     entry.senderName = message->_from_name;
     entry.senderIcon = normalizeSenderIcon(message->_from_icon);
     entry.fromUid = message->_from_uid;
+    entry.fromUserId = message->_from_user_id;
     entry.toUid = message->_to_uid;
     entry.outgoing = (message->_from_uid == selfUid);
     entry.showAvatar = true;

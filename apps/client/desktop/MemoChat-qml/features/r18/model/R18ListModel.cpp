@@ -57,6 +57,8 @@ QVariant R18ListModel::data(const QModelIndex& index, int role) const
             return item.value(QStringLiteral("message"), item.value(QStringLiteral("description")));
         case TagsRole:
             return item.value(QStringLiteral("tags"));
+        case BuiltinRole:
+            return item.value(QStringLiteral("builtin"), false);
         default:
             return {};
     }
@@ -78,6 +80,7 @@ QHash<int, QByteArray> R18ListModel::roleNames() const
         {FormatRole, "format"},
         {MessageRole, "message"},
         {TagsRole, "tags"},
+        {BuiltinRole, "builtin"},
     };
 }
 
@@ -120,6 +123,35 @@ void R18ListModel::appendItems(const QVariantList& items)
     }
     endInsertRows();
     emit countChanged();
+}
+
+bool R18ListModel::removeBySourceId(const QString& sourceId)
+{
+    const QString normalizedSourceId = sourceId.trimmed();
+    if (normalizedSourceId.isEmpty())
+    {
+        return false;
+    }
+
+    for (int row = 0; row < _items.size(); ++row)
+    {
+        const auto& item = _items.at(row);
+        const auto itemSourceIdValue = item.value(
+            QStringLiteral("source_id"), item.value(QStringLiteral("id"), item.value(QStringLiteral("key"))));
+        const QString itemSourceId = itemSourceIdValue.toString().trimmed();
+        if (itemSourceId != normalizedSourceId)
+        {
+            continue;
+        }
+
+        beginRemoveRows(QModelIndex(), row, row);
+        _items.removeAt(row);
+        endRemoveRows();
+        emit countChanged();
+        return true;
+    }
+
+    return false;
 }
 
 void R18ListModel::clear()

@@ -12,6 +12,9 @@ Rectangle {
     property string sourceUrl: ""
     property bool enabledState: true
     property bool hasEnabledState: false
+    property bool canDelete: false
+    property bool deleting: false
+    property bool builtinSource: false
     property bool selected: false
     property color itemFillColor: Qt.rgba(1, 1, 1, 0.14)
     property color itemHoverFillColor: Qt.rgba(0.75, 0.87, 1.0, 0.22)
@@ -29,6 +32,7 @@ Rectangle {
 
     signal enableToggled(string sourceId, bool enabled)
     signal openRequested(string sourceId)
+    signal deleteRequested(string sourceId)
 
     width: ListView.view ? ListView.view.width : 360
     height: 96
@@ -46,42 +50,42 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 4
 
+            Text {
+                Layout.fillWidth: true
+                text: root.title || root.itemId || "漫画源"
+                color: root.textPrimaryColor
+                font.pixelSize: 16
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
 
-                Text {
-                    Layout.fillWidth: true
-                    text: root.title || root.itemId || "漫画源"
-                    color: root.textPrimaryColor
-                    font.pixelSize: 16
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-
                 Rectangle {
-                    visible: root.hasEnabledState
-                    Layout.preferredWidth: 56
-                    Layout.preferredHeight: 22
-                    radius: 11
-                    color: root.enabledState ? Qt.rgba(0.66, 0.82, 0.70, 0.34)
-                                             : Qt.rgba(0.90, 0.60, 0.60, 0.26)
+                    visible: root.builtinSource
+                    Layout.preferredWidth: 52
+                    Layout.preferredHeight: 20
+                    radius: 10
+                    color: Qt.rgba(0.35, 0.48, 0.62, 0.16)
+                    border.color: Qt.rgba(0.28, 0.42, 0.56, 0.22)
 
                     Text {
                         anchors.centerIn: parent
-                        text: root.enabledState ? "启用" : "停用"
-                        color: root.textPrimaryColor
+                        text: "内置源"
+                        color: root.textSecondaryColor
                         font.pixelSize: 11
                     }
                 }
-            }
 
-            Text {
-                Layout.fillWidth: true
-                text: root.statusText
-                color: root.textSecondaryColor
-                font.pixelSize: 12
-                elide: Text.ElideRight
+                Text {
+                    Layout.fillWidth: true
+                    text: root.builtinSource ? (root.statusText + " · 不可删除") : root.statusText
+                    color: root.textSecondaryColor
+                    font.pixelSize: 12
+                    elide: Text.ElideRight
+                }
             }
 
             Text {
@@ -96,15 +100,44 @@ Rectangle {
         GlassButton {
             Layout.preferredWidth: 72
             Layout.preferredHeight: 34
-            visible: root.hasEnabledState
-            text: root.enabledState ? "停用" : "启用"
+            visible: root.hasEnabledState && root.enabledState
+            text: "停用"
             textPixelSize: 13
             textColor: root.textSecondaryColor
             cornerRadius: 17
             normalColor: root.secondaryButtonColor
             hoverColor: root.secondaryButtonHoverColor
             pressedColor: root.secondaryButtonPressedColor
-            onClicked: root.enableToggled(root.sourceId, !root.enabledState)
+            onClicked: root.enableToggled(root.sourceId, false)
+        }
+
+        GlassButton {
+            Layout.preferredWidth: 72
+            Layout.preferredHeight: 34
+            visible: root.hasEnabledState && !root.enabledState
+            text: "启用"
+            textPixelSize: 13
+            textColor: root.textSecondaryColor
+            cornerRadius: 17
+            normalColor: root.secondaryButtonColor
+            hoverColor: root.secondaryButtonHoverColor
+            pressedColor: root.secondaryButtonPressedColor
+            onClicked: root.enableToggled(root.sourceId, true)
+        }
+
+        GlassButton {
+            Layout.preferredWidth: 72
+            Layout.preferredHeight: 34
+            visible: root.canDelete || root.deleting
+            enabled: root.canDelete && !root.deleting
+            text: root.deleting ? "删除中" : "删除"
+            textPixelSize: 13
+            textColor: Qt.rgba(0.75, 0.22, 0.22, 0.9)
+            cornerRadius: 17
+            normalColor: Qt.rgba(0.85, 0.25, 0.25, 0.13)
+            hoverColor: Qt.rgba(0.85, 0.25, 0.25, 0.22)
+            pressedColor: Qt.rgba(0.85, 0.25, 0.25, 0.30)
+            onClicked: root.deleteRequested(root.sourceId)
         }
 
         GlassButton {

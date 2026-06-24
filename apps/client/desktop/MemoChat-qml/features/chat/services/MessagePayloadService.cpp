@@ -28,6 +28,16 @@ qint64 pickRawLongLong(const QJsonObject& primary, const QJsonObject& secondary,
     }
     return qMax<qint64>(0, value);
 }
+
+QString pickString(const QJsonObject& primary, const QJsonObject& secondary, const char* key)
+{
+    QString value = primary.value(QLatin1String(key)).toString().trimmed();
+    if (value.isEmpty())
+    {
+        value = secondary.value(QLatin1String(key)).toString().trimmed();
+    }
+    return value;
+}
 } // namespace
 
 qint64 MessagePayloadService::normalizeEpochMs(qint64 value, bool useNowWhenEmpty)
@@ -136,6 +146,7 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildPrivateHistoryMessage(
     const qint64 editedAtMs = normalizeEpochMs(obj.value(QStringLiteral("edited_at_ms")).toVariant().toLongLong());
     const qint64 deletedAtMs = normalizeEpochMs(obj.value(QStringLiteral("deleted_at_ms")).toVariant().toLongLong());
     const QString content = obj.value(QStringLiteral("content")).toString();
+    const QString fromUserId = obj.value(QStringLiteral("from_user_id")).toString().trimmed();
     return std::make_shared<TextChatData>(
         obj.value(QStringLiteral("msgid")).toString(),
                   content,
@@ -151,7 +162,8 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildPrivateHistoryMessage(
                                           obj.value(QStringLiteral("reply_to_server_msg_id")).toVariant().toLongLong(),
                                                     extractForwardMetaJson(obj.value(QStringLiteral("forward_meta"))),
                                                                            editedAtMs,
-                                                                           deletedAtMs);
+                                                                           deletedAtMs,
+                                                                           fromUserId);
 }
 
 std::shared_ptr<TextChatData>
@@ -172,6 +184,7 @@ MessagePayloadService::buildPrivateForwardedMessage(const QJsonObject& payload, 
     }
     const qint64 editedAtMs = pickLongLong(payload, msgObj, "edited_at_ms");
     const qint64 deletedAtMs = pickLongLong(payload, msgObj, "deleted_at_ms");
+    const QString fromUserId = pickString(payload, msgObj, "from_user_id");
     return std::make_shared<TextChatData>(msgId,
                                           content,
                                           fromUid,
@@ -185,7 +198,8 @@ MessagePayloadService::buildPrivateForwardedMessage(const QJsonObject& payload, 
                                                         replyToServerMsgId,
                                                         forwardMetaJson,
                                                         editedAtMs,
-                                                        deletedAtMs);
+                                                        deletedAtMs,
+                                                        fromUserId);
 }
 
 std::shared_ptr<TextChatData> MessagePayloadService::buildGroupAckMessage(const QJsonObject& payload,
@@ -211,6 +225,7 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildGroupAckMessage(const 
     }
     const qint64 editedAtMs = pickLongLong(payload, msgObj, "edited_at_ms");
     const qint64 deletedAtMs = pickLongLong(payload, msgObj, "deleted_at_ms");
+    const QString fromUserId = pickString(payload, msgObj, "from_user_id");
     return std::make_shared<TextChatData>(
         msgId,
         content,
@@ -225,7 +240,8 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildGroupAckMessage(const 
                             replyToServerMsgId,
                             forwardMetaJson,
                             editedAtMs,
-                            deletedAtMs);
+                            deletedAtMs,
+                            fromUserId);
 }
 
 std::shared_ptr<TextChatData> MessagePayloadService::buildGroupIncomingMessage(const GroupChatMsg& msg)
@@ -250,5 +266,7 @@ std::shared_ptr<TextChatData> MessagePayloadService::buildGroupIncomingMessage(c
                                           msg._msg->_reply_to_server_msg_id,
                                           msg._msg->_forward_meta_json,
                                           msg._msg->_edited_at_ms,
-                                          msg._msg->_deleted_at_ms);
+                                          msg._msg->_deleted_at_ms,
+                                          msg._from_user_id.trimmed().isEmpty() ? msg._msg->_from_user_id
+                                                                                : msg._from_user_id);
 }

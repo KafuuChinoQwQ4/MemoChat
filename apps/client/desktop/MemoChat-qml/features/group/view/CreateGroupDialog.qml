@@ -183,7 +183,7 @@ Popup {
 
                             Label {
                                 Layout.fillWidth: true
-                                text: userId && userId.length > 0 ? userId : ("UID: " + uid)
+                                text: userId && userId.length > 0 ? userId : "未分配"
                                 color: "#6a7b92"
                                 font.pixelSize: 11
                                 elide: Text.ElideRight

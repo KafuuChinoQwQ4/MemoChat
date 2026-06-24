@@ -153,6 +153,13 @@ ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context, const TextCha
     rtvalue["error"] = ErrorCodes::Success;
     rtvalue["fromuid"] = request->fromuid();
     rtvalue["touid"] = request->touid();
+    std::shared_ptr<UserInfo> sender_info = std::make_shared<UserInfo>();
+    const bool has_sender_info =
+        GetBaseInfo(USER_BASE_INFO + std::to_string(request->fromuid()), request->fromuid(), sender_info);
+    if (has_sender_info && !sender_info->user_id.empty())
+    {
+        rtvalue["from_user_id"] = sender_info->user_id;
+    }
 
     memochat::json::JsonValue text_array;
     for (auto& msg : request->textmsgs())
@@ -160,6 +167,10 @@ ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context, const TextCha
         memochat::json::JsonValue element;
         element["content"] = msg.msgcontent();
         element["msgid"] = msg.msgid();
+        if (has_sender_info && !sender_info->user_id.empty())
+        {
+            element["from_user_id"] = sender_info->user_id;
+        }
         std::shared_ptr<PrivateMessageInfo> private_msg;
         int64_t created_at = 0;
         if ((MongoMgr::GetInstance()->Enabled() &&
@@ -201,6 +212,27 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         userinfo->desc = root["desc"].asString();
         userinfo->sex = root["sex"].asInt();
         userinfo->icon = root["icon"].asString();
+        if (userinfo->user_id.empty())
+        {
+            auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
+            if (user_info == nullptr)
+            {
+                return false;
+            }
+            userinfo = user_info;
+
+            memochat::json::JsonValue redis_root;
+            redis_root["uid"] = uid;
+            redis_root["user_id"] = userinfo->user_id;
+            redis_root["pwd"] = userinfo->pwd;
+            redis_root["name"] = userinfo->name;
+            redis_root["email"] = userinfo->email;
+            redis_root["nick"] = userinfo->nick;
+            redis_root["desc"] = userinfo->desc;
+            redis_root["sex"] = userinfo->sex;
+            redis_root["icon"] = userinfo->icon;
+            RedisMgr::GetInstance()->Set(base_key, redis_root.toStyledString());
+        }
     }
     else
     {

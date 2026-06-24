@@ -1,5 +1,43 @@
 #include "FriendListModel.h"
 
+#include <utility>
+
+FriendListModel::FriendEntry FriendListModel::toEntry(const std::shared_ptr<FriendInfo>& friendInfo) const
+{
+    FriendEntry entry;
+    if (!friendInfo)
+    {
+        return entry;
+    }
+    entry.uid = friendInfo->_uid;
+    entry.userId = friendInfo->_user_id;
+    entry.name = friendInfo->_name;
+    entry.nick = friendInfo->_nick;
+    entry.icon = normalizeIcon(friendInfo->_icon);
+    entry.desc = friendInfo->_desc;
+    entry.lastMsg = friendInfo->_last_msg;
+    entry.sex = friendInfo->_sex;
+    entry.back = friendInfo->_back;
+    entry.dialogType = friendInfo->_dialog_type;
+    entry.unreadCount = friendInfo->_unread_count;
+    entry.pinnedRank = friendInfo->_pinned_rank;
+    entry.draftText = friendInfo->_draft_text;
+    entry.lastMsgTs = friendInfo->_last_msg_ts;
+    entry.muteState = friendInfo->_mute_state;
+    entry.mentionCount = friendInfo->_mention_count;
+    return entry;
+}
+
+FriendListModel::FriendEntry FriendListModel::mergeWithCurrentEntry(const FriendEntry& entry) const
+{
+    const int idx = indexOfUid(entry.uid);
+    if (idx < 0)
+    {
+        return entry;
+    }
+    return mergeSparseEntry(entry, _items[static_cast<size_t>(idx)]);
+}
+
 void FriendListModel::clear()
 {
     if (_items.empty())
@@ -15,9 +53,8 @@ void FriendListModel::clear()
 
 void FriendListModel::setFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends)
 {
-    beginResetModel();
-    _items.clear();
-    _items.reserve(friends.size());
+    std::vector<FriendEntry> nextItems;
+    nextItems.reserve(friends.size());
     for (const auto& friendInfo : friends)
     {
         if (!friendInfo)
@@ -25,25 +62,11 @@ void FriendListModel::setFriends(const std::vector<std::shared_ptr<FriendInfo>>&
             continue;
         }
 
-        FriendEntry entry;
-        entry.uid = friendInfo->_uid;
-        entry.userId = friendInfo->_user_id;
-        entry.name = friendInfo->_name;
-        entry.nick = friendInfo->_nick;
-        entry.icon = normalizeIcon(friendInfo->_icon);
-        entry.desc = friendInfo->_desc;
-        entry.lastMsg = friendInfo->_last_msg;
-        entry.sex = friendInfo->_sex;
-        entry.back = friendInfo->_back;
-        entry.dialogType = friendInfo->_dialog_type;
-        entry.unreadCount = friendInfo->_unread_count;
-        entry.pinnedRank = friendInfo->_pinned_rank;
-        entry.draftText = friendInfo->_draft_text;
-        entry.lastMsgTs = friendInfo->_last_msg_ts;
-        entry.muteState = friendInfo->_mute_state;
-        entry.mentionCount = friendInfo->_mention_count;
-        _items.push_back(entry);
+        nextItems.push_back(mergeWithCurrentEntry(toEntry(friendInfo)));
     }
+
+    beginResetModel();
+    _items = std::move(nextItems);
     endResetModel();
     emit countChanged();
 }
@@ -68,24 +91,7 @@ void FriendListModel::upsertFriend(const std::shared_ptr<FriendInfo>& friendInfo
         return;
     }
 
-    FriendEntry entry;
-    entry.uid = friendInfo->_uid;
-    entry.userId = friendInfo->_user_id;
-    entry.name = friendInfo->_name;
-    entry.nick = friendInfo->_nick;
-    entry.icon = normalizeIcon(friendInfo->_icon);
-    entry.desc = friendInfo->_desc;
-    entry.lastMsg = friendInfo->_last_msg;
-    entry.sex = friendInfo->_sex;
-    entry.back = friendInfo->_back;
-    entry.dialogType = friendInfo->_dialog_type;
-    entry.unreadCount = friendInfo->_unread_count;
-    entry.pinnedRank = friendInfo->_pinned_rank;
-    entry.draftText = friendInfo->_draft_text;
-    entry.lastMsgTs = friendInfo->_last_msg_ts;
-    entry.muteState = friendInfo->_mute_state;
-    entry.mentionCount = friendInfo->_mention_count;
-    upsert(entry);
+    upsert(toEntry(friendInfo));
 }
 
 void FriendListModel::upsertFriend(const std::shared_ptr<AuthInfo>& authInfo)
@@ -139,9 +145,8 @@ void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>
 
     if (resetFirst)
     {
-        beginResetModel();
-        _items.clear();
-        _items.reserve(friends.size());
+        std::vector<FriendEntry> nextItems;
+        nextItems.reserve(friends.size());
         for (const auto& friendInfo : friends)
         {
             if (!friendInfo)
@@ -149,25 +154,11 @@ void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>
                 continue;
             }
 
-            FriendEntry entry;
-            entry.uid = friendInfo->_uid;
-            entry.userId = friendInfo->_user_id;
-            entry.name = friendInfo->_name;
-            entry.nick = friendInfo->_nick;
-            entry.icon = normalizeIcon(friendInfo->_icon);
-            entry.desc = friendInfo->_desc;
-            entry.lastMsg = friendInfo->_last_msg;
-            entry.sex = friendInfo->_sex;
-            entry.back = friendInfo->_back;
-            entry.dialogType = friendInfo->_dialog_type;
-            entry.unreadCount = friendInfo->_unread_count;
-            entry.pinnedRank = friendInfo->_pinned_rank;
-            entry.draftText = friendInfo->_draft_text;
-            entry.lastMsgTs = friendInfo->_last_msg_ts;
-            entry.muteState = friendInfo->_mute_state;
-            entry.mentionCount = friendInfo->_mention_count;
-            _items.push_back(entry);
+            nextItems.push_back(mergeWithCurrentEntry(toEntry(friendInfo)));
         }
+
+        beginResetModel();
+        _items = std::move(nextItems);
         endResetModel();
         emit countChanged();
         return;
@@ -182,37 +173,7 @@ void FriendListModel::upsertBatch(const std::vector<std::shared_ptr<FriendInfo>>
             continue;
         }
 
-        FriendEntry entry;
-        entry.uid = friendInfo->_uid;
-        entry.userId = friendInfo->_user_id;
-        entry.name = friendInfo->_name;
-        entry.nick = friendInfo->_nick;
-        entry.icon = normalizeIcon(friendInfo->_icon);
-        entry.desc = friendInfo->_desc;
-        entry.lastMsg = friendInfo->_last_msg;
-        entry.sex = friendInfo->_sex;
-        entry.back = friendInfo->_back;
-        entry.dialogType = friendInfo->_dialog_type;
-        entry.unreadCount = friendInfo->_unread_count;
-        entry.pinnedRank = friendInfo->_pinned_rank;
-        entry.draftText = friendInfo->_draft_text;
-        entry.lastMsgTs = friendInfo->_last_msg_ts;
-        entry.muteState = friendInfo->_mute_state;
-        entry.mentionCount = friendInfo->_mention_count;
-
-        const int existingIdx = indexOfUid(entry.uid);
-        if (existingIdx >= 0)
-        {
-            _items[static_cast<size_t>(existingIdx)] = entry;
-            emit dataChanged(index(existingIdx, 0), index(existingIdx, 0));
-        }
-        else
-        {
-            const int insertRow = rowCount();
-            beginInsertRows(QModelIndex(), insertRow, insertRow);
-            _items.push_back(entry);
-            endInsertRows();
-        }
+        upsert(toEntry(friendInfo));
         changed = true;
     }
 

@@ -8,7 +8,10 @@
 
 void AppController::bindAppHttpSignals()
 {
-    _http_event_router = std::make_unique<AppHttpEventRouter>(*_session_coordinator, _features.profileController, this);
+    _http_event_router = std::make_unique<AppHttpEventRouter>(*_session_coordinator,
+                                                              _features.profileController,
+                                                              _features.contactController,
+                                                              this);
     connect(_gateway.httpMgr().get(),
             &HttpMgr::sig_login_mod_finish,
             _http_event_router.get(),
@@ -32,4 +35,8 @@ void AppController::bindAppHttpSignals()
             {
                 _call_coordinator->onCallHttpFinished(id, std::move(res), err);
             });
+    connect(_gateway.httpMgr().get(),
+            &HttpMgr::sig_contact_mod_finish,
+            _http_event_router.get(),
+            &AppHttpEventRouter::onContactHttpFinished);
 }

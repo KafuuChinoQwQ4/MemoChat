@@ -94,7 +94,7 @@ PrivateChatCacheStore::loadRecentMessages(int ownerUid, int peerUid, int limit) 
     }
 
     QSqlQuery query(_db);
-    query.prepare("SELECT msg_id, content, from_uid, to_uid, created_at, "
+    query.prepare("SELECT msg_id, content, from_uid, from_user_id, to_uid, created_at, "
                   "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms "
                   "FROM private_chat_msg "
                   "WHERE owner_uid = ? AND peer_uid = ? "
@@ -114,12 +114,13 @@ PrivateChatCacheStore::loadRecentMessages(int ownerUid, int peerUid, int limit) 
         row.msgId = query.value(0).toString();
         row.content = query.value(1).toString();
         row.fromUid = query.value(2).toInt();
-        row.toUid = query.value(3).toInt();
-        row.createdAt = query.value(4).toLongLong();
-        row.replyToServerMsgId = query.value(5).toLongLong();
-        row.forwardMetaJson = query.value(6).toString();
-        row.editedAtMs = query.value(7).toLongLong();
-        row.deletedAtMs = query.value(8).toLongLong();
+        row.fromUserId = query.value(3).toString();
+        row.toUid = query.value(4).toInt();
+        row.createdAt = query.value(5).toLongLong();
+        row.replyToServerMsgId = query.value(6).toLongLong();
+        row.forwardMetaJson = query.value(7).toString();
+        row.editedAtMs = query.value(8).toLongLong();
+        row.deletedAtMs = query.value(9).toLongLong();
         messages.push_back(privateMessageFromCacheRow(row));
     }
 
@@ -138,9 +139,9 @@ void PrivateChatCacheStore::upsertMessages(int ownerUid,
 
     QSqlQuery query(_db);
     query.prepare("INSERT OR REPLACE INTO private_chat_msg("
-                  "owner_uid, peer_uid, msg_id, from_uid, to_uid, content, created_at, "
+                  "owner_uid, peer_uid, msg_id, from_uid, from_user_id, to_uid, content, created_at, "
                   "reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms) "
-                  "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                  "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     _db.transaction();
     for (const auto& msg : messages)
@@ -153,6 +154,7 @@ void PrivateChatCacheStore::upsertMessages(int ownerUid,
         query.addBindValue(peerUid);
         query.addBindValue(msg->_msg_id);
         query.addBindValue(msg->_from_uid);
+        query.addBindValue(msg->_from_user_id);
         query.addBindValue(msg->_to_uid);
         query.addBindValue(msg->_msg_content);
         query.addBindValue(normalizeChatCacheTimestamp(msg->_created_at));
@@ -204,6 +206,7 @@ bool PrivateChatCacheStore::ensureSchema()
                     "peer_uid INTEGER NOT NULL,"
                     "msg_id TEXT NOT NULL,"
                     "from_uid INTEGER NOT NULL,"
+                    "from_user_id TEXT,"
                     "to_uid INTEGER NOT NULL,"
                     "content TEXT NOT NULL,"
                     "created_at INTEGER NOT NULL,"
@@ -219,6 +222,7 @@ bool PrivateChatCacheStore::ensureSchema()
     query.exec("ALTER TABLE private_chat_msg ADD COLUMN forward_meta_json TEXT");
     query.exec("ALTER TABLE private_chat_msg ADD COLUMN edited_at_ms INTEGER NOT NULL DEFAULT 0");
     query.exec("ALTER TABLE private_chat_msg ADD COLUMN deleted_at_ms INTEGER NOT NULL DEFAULT 0");
+    query.exec("ALTER TABLE private_chat_msg ADD COLUMN from_user_id TEXT");
 
     if (!query.exec("CREATE INDEX IF NOT EXISTS idx_private_chat_owner_peer_created "
                     "ON private_chat_msg(owner_uid, peer_uid, created_at)"))

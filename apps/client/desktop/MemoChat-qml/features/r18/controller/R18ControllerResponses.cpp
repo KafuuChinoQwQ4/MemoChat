@@ -7,7 +7,15 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
 {
     if (root.value(QStringLiteral("error")).toInt() != 0)
     {
-        setError(root.value(QStringLiteral("message")).toString(QStringLiteral("R18 请求失败")));
+        const QString message = root.value(QStringLiteral("message")).toString(QStringLiteral("R18 请求失败"));
+        if (op == QStringLiteral("source_delete"))
+        {
+            setPendingDeleteSourceId({});
+            setError(QStringLiteral("删除漫画源失败: %1").arg(message));
+            refreshSources();
+            return;
+        }
+        setError(message);
         return;
     }
 
@@ -52,6 +60,31 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
     else if (op == QStringLiteral("favorite"))
     {
         setCurrentFavorite(data.value(QStringLiteral("favorited")).toBool());
+    }
+    else if (op == QStringLiteral("source_delete"))
+    {
+        setPendingDeleteSourceId({});
+        const QString sourceId = data.value(QStringLiteral("source_id")).toString().trimmed();
+        if (!sourceId.isEmpty())
+        {
+            _sources.removeBySourceId(sourceId);
+            if (_current_source_id == sourceId)
+            {
+                _current_source_id.clear();
+                emit currentSourceChanged();
+                _comics.clear();
+                _chapters.clear();
+                _pages.clear();
+                _current_comic.clear();
+                emit currentComicChanged();
+                setCurrentFavorite(false);
+                setCurrentPageIndex(1);
+                setSearchState(0, false);
+            }
+        }
+        setStatusText(sourceId.isEmpty() ? QStringLiteral("漫画源已删除，请刷新列表确认")
+                                         : QStringLiteral("漫画源已删除: %1").arg(sourceId));
+        refreshSources();
     }
     else if (op == QStringLiteral("source_state") || op == QStringLiteral("import"))
     {

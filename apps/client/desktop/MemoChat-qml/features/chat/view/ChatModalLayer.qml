@@ -28,8 +28,8 @@ Item {
         }
     }
 
-    function openProfile(uid, name, icon, extra) {
-        contactProfilePopup.openProfile(uid, name, icon, extra || "")
+    function openProfile(uid, name, icon, userId) {
+        contactProfilePopup.openProfile(uid, name, icon, userId || "")
     }
 
     Loader {

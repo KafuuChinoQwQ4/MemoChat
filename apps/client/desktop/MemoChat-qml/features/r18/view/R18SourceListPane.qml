@@ -10,6 +10,7 @@ Item {
 
     property var sourceModel: null
     property string currentSourceId: ""
+    property string pendingDeleteSourceId: ""
     property bool loading: false
     property color itemFillColor: Qt.rgba(1, 1, 1, 0.14)
     property color itemHoverFillColor: Qt.rgba(0.75, 0.87, 1.0, 0.22)
@@ -27,6 +28,7 @@ Item {
 
     signal sourceEnabledChanged(string sourceId, bool enabled)
     signal importedSourceOpenRequested(string sourceId)
+    signal importedSourceDeleteRequested(string sourceId)
 
     function modelCount(model) {
         return model && model.count !== undefined ? model.count : 0
@@ -42,6 +44,46 @@ Item {
             return formatText + " · 已暂存"
         }
         return formatText + " · " + statusText
+    }
+
+    function sourceIsReserved(sourceId, data) {
+        var id = sourceId || ""
+        if (id.length === 0 && data) {
+            id = data.source_id || data.id || data.key || ""
+        }
+        if (data && data.builtin === true) {
+            return true
+        }
+        return id === "mock" || id === "jm.official" || id === "picacg.official"
+    }
+
+    function sourceIsImported(data, format, url) {
+        var formatText = format ? String(format) : ""
+        if (formatText === "source-js" || formatText === "zip" || formatText === "staged-js") {
+            return true
+        }
+        if (data && data.path && String(data.path).length > 0) {
+            return true
+        }
+        return url && String(url).length > 0
+    }
+
+    function sourceIdFromRow(sourceId, itemId, data) {
+        if (sourceId && sourceId.length > 0) {
+            return sourceId
+        }
+        if (data) {
+            if (data.source_id && data.source_id.length > 0) {
+                return data.source_id
+            }
+            if (data.id && data.id.length > 0) {
+                return data.id
+            }
+            if (data.key && data.key.length > 0) {
+                return data.key
+            }
+        }
+        return itemId || ""
     }
 
     ColumnLayout {
@@ -83,12 +125,21 @@ Item {
                 required property var status
                 required property var format
                 required property var message
+                required property bool builtin
 
+                readonly property string resolvedSourceId: root.sourceIdFromRow(sourceId, itemId, data)
+                readonly property bool reservedSource: builtin || root.sourceIsReserved(resolvedSourceId, data)
+                readonly property bool importedSource: root.sourceIsImported(data, format, url)
+
+                sourceId: resolvedSourceId
                 statusText: root.sourceStatusText(status, format)
                 sourceUrl: url || message || ""
                 enabledState: data.enabled === undefined ? true : data.enabled
                 hasEnabledState: data.enabled !== undefined
-                selected: root.currentSourceId === sourceId
+                deleting: root.pendingDeleteSourceId === resolvedSourceId
+                builtinSource: reservedSource
+                canDelete: resolvedSourceId.length > 0 && !root.loading && !reservedSource && importedSource
+                selected: root.currentSourceId === resolvedSourceId
                 itemFillColor: root.itemFillColor
                 itemHoverFillColor: root.itemHoverFillColor
                 itemSelectedFillColor: root.itemSelectedFillColor
@@ -107,6 +158,9 @@ Item {
                 }
                 onOpenRequested: function(sourceId) {
                     root.importedSourceOpenRequested(sourceId)
+                }
+                onDeleteRequested: function(sourceId) {
+                    root.importedSourceDeleteRequested(sourceId)
                 }
             }
         }

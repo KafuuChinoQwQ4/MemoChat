@@ -75,10 +75,6 @@ target_include_directories(contact_controller_gtest PRIVATE
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/utils
 )
 
-target_compile_options(contact_controller_gtest PRIVATE
-    -include ${CMAKE_CURRENT_LIST_DIR}/ContactControllerOpaqueTypes.h
-)
-
 add_dependencies(gtest_tests contact_controller_gtest)
 
 include(GoogleTest)

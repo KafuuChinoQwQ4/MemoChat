@@ -19,6 +19,8 @@ public:
                             memochat::gate::routing::GateResponse& response);
     bool HandleDisableSource(const memochat::gate::routing::GateRequest& request,
                              memochat::gate::routing::GateResponse& response);
+    bool HandleDeleteSource(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
     bool HandleSearch(const memochat::gate::routing::GateRequest& request,
                       memochat::gate::routing::GateResponse& response);
     bool HandleComicDetail(const memochat::gate::routing::GateRequest& request,

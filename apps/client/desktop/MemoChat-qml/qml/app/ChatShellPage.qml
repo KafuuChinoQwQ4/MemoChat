@@ -194,8 +194,8 @@ Rectangle {
             onPetPreviewRequested: function(petAssetSettings) {
                 root.petPreviewRequested(petAssetSettings)
             }
-            onAvatarProfileRequested: function(uid, name, icon) {
-                modalLayer.openProfile(uid, name, icon, "")
+            onAvatarProfileRequested: function(uid, name, icon, userId) {
+                modalLayer.openProfile(uid, name, icon, userId || "")
             }
         }
 

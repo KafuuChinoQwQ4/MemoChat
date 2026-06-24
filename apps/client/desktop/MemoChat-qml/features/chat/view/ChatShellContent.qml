@@ -23,7 +23,7 @@ Item {
     signal switchAccountToLoginRequested()
     signal agentGameSetupRequested(string kind)
     signal petPreviewRequested(var petAssetSettings)
-    signal avatarProfileRequested(int uid, string name, string icon)
+    signal avatarProfileRequested(int uid, string name, string icon, string userId)
 
     visible: root.viewMode === 0
 
@@ -35,6 +35,8 @@ Item {
             ChatConversationPane {
                 backdrop: root.backdrop
                 peerName: chat.currentChatPeerName
+                selfUid: shell.currentUserUid
+                selfUserId: shell.currentUserId
                 selfName: shell.currentUserNick && shell.currentUserNick.length > 0
                           ? shell.currentUserNick
                           : shell.currentUserName
@@ -74,11 +76,12 @@ Item {
                 onRevokeMessage: function(msgId) { group.revokeGroupMessage(msgId) }
                 onEditMessage: function(msgId, text) { group.editGroupMessage(msgId, text) }
                 onReplyMessage: function(msgId, senderName, previewText) { chat.beginReplyMessage(msgId, senderName, previewText) }
-                onAvatarProfileRequested: function(uid, name, icon) {
+                onAvatarProfileRequested: function(uid, name, icon, userId) {
                     if (uid > 0) {
                         root.avatarProfileRequested(uid,
                                                     name || chat.currentChatPeerName || "用户",
-                                                    icon || chat.currentChatPeerIcon || "qrc:/res/head_1.jpg")
+                                                    icon || chat.currentChatPeerIcon || "qrc:/res/head_1.jpg",
+                                                    userId || "")
                     }
                 }
                 onCancelReplyMessage: chat.cancelReplyMessage()
@@ -104,6 +107,7 @@ Item {
                 contactNick: contact.currentContactNick
                 contactIcon: contact.currentContactIcon
                 contactBack: contact.currentContactBack
+                contactUid: contact.currentContactUid
                 contactSex: contact.currentContactSex
                 contactUserId: contact.currentContactUserId
                 hasCurrentContact: contact.hasCurrentContact

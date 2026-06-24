@@ -16,6 +16,7 @@ Item {
     property string fileName: ""
     property string senderName: ""
     property int senderUid: 0
+    property string senderUserId: ""
     property bool showOutgoingSenderName: false
     property bool showAvatar: true
     property bool showTimeDivider: false
@@ -42,7 +43,7 @@ Item {
     signal editRequested(string msgId, string text)
     signal revokeRequested(string msgId)
     signal translateRequested(string msgId, string text)
-    signal avatarClicked(int uid, string name, string icon)
+    signal avatarClicked(int uid, string name, string icon, string userId)
 
     property int avatarSize: 34
     property int avatarSlotWidth: 42
@@ -194,7 +195,8 @@ Item {
             defaultAvatarSource: root.defaultAvatarSource
             senderUid: root.senderUid
             senderName: root.senderName
-            onAvatarClicked: function(uid, name, icon) { root.avatarClicked(uid, name, icon) }
+            senderUserId: root.senderUserId
+            onAvatarClicked: function(uid, name, icon, userId) { root.avatarClicked(uid, name, icon, userId) }
         }
 
         MessageAvatar {
@@ -208,7 +210,8 @@ Item {
             defaultAvatarSource: root.defaultAvatarSource
             senderUid: root.senderUid
             senderName: root.senderName
-            onAvatarClicked: function(uid, name, icon) { root.avatarClicked(uid, name, icon) }
+            senderUserId: root.senderUserId
+            onAvatarClicked: function(uid, name, icon, userId) { root.avatarClicked(uid, name, icon, userId) }
         }
     }
 

@@ -99,6 +99,7 @@ class ProfileFacadeContractTests(unittest.TestCase):
         profile_state = read(APP / "controller/AppControllerProfileState.cpp")
 
         self.assertIn("_profile_controller.handleSettingsHttpFinished(id, res, err);", http_event_router)
+        self.assertIn("_contact_controller.handleContactHttpFinished(id, res, err);", http_event_router)
         for forbidden in (
             "_features.authController.parseJson",
             "UpdateNickAndDesc",

@@ -149,7 +149,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: root.sourceHelpVisible
-        text: "该地址应指向 index.json；也可以输入本地目录，例如 D:\\Venera，刷新时会自动读取目录下的 index.json。"
+        text: "该地址应指向 index.json 格式的漫画源目录文件，刷新后会读取其中的源列表。"
         color: root.textMutedColor
         font.pixelSize: 13
         wrapMode: Text.WordWrap

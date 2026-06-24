@@ -164,8 +164,12 @@ public:
         out = members;
         return true;
     }
-    std::shared_ptr<UserInfo> GetUserByUid(int) override
+    std::shared_ptr<UserInfo> GetUserByUid(int uid) override
     {
+        if (sender && sender->uid != 0 && sender->uid != uid)
+        {
+            return nullptr;
+        }
         return sender;
     }
     bool GetGroupById(int64_t, std::shared_ptr<GroupInfo>& out) override
@@ -330,7 +334,8 @@ TEST(SendPathGoldenTest, PrivateBadInputRoot)
     StubMessageRepository repo;
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.TextChatMessage(MakeRequest(R"({"fromuid":0,"touid":20,"text_array":[]})"));
     const JsonValue out = Parse(result.payload_json);
@@ -351,7 +356,11 @@ TEST(SendPathGoldenTest, PrivatePersistedSuccessRoot)
     repo.save_private_ok = true;
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    relation.sender = std::make_shared<UserInfo>();
+    relation.sender->uid = 10;
+    relation.sender->user_id = "u100000010";
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.TextChatMessage(
         MakeRequest(R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-1","content":"hello"}]})"));
@@ -365,9 +374,11 @@ TEST(SendPathGoldenTest, PrivatePersistedSuccessRoot)
     EXPECT_TRUE(out.isMember("accept_node")) << result.payload_json; // value volatile (SelfServerName)
     EXPECT_TRUE(out.isMember("accept_ts")) << result.payload_json;   // value volatile (NowMs)
     EXPECT_EQ(out["status"].asString(), "persisted");
+    EXPECT_EQ(out["from_user_id"].asString(), "u100000010");
     ASSERT_TRUE(out["text_array"].isArray()) << result.payload_json;
     EXPECT_EQ(out["text_array"][0]["msgid"].asString(), "m-1");
     EXPECT_EQ(out["text_array"][0]["content"].asString(), "hello");
+    EXPECT_EQ(out["text_array"][0]["from_user_id"].asString(), "u100000010");
 }
 
 TEST(SendPathGoldenTest, PrivatePersistedRepoFailRoot)
@@ -376,7 +387,8 @@ TEST(SendPathGoldenTest, PrivatePersistedRepoFailRoot)
     repo.save_private_ok = false; // SavePrivateMessage fails
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.TextChatMessage(
         MakeRequest(R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-2","content":"hi"}]})"));
@@ -513,7 +525,8 @@ TEST(SendPathGoldenTest, PrivateSendItemPreservesForwardMetaAndReplyFields)
     StubMessageRepository repo;
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.TextChatMessage(MakeRequest(
         R"({"fromuid":10,"touid":20,"text_array":[{"msgid":"m-9","content":"hi","reply_to_server_msg_id":555,"forward_meta":{"src":"a"},"edited_at_ms":123}]})"));
@@ -534,7 +547,8 @@ TEST(SendPathGoldenTest, PrivateHistoryBadInputRoot)
     StubMessageRepository repo;
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.PrivateHistory(MakeRequest(R"({"fromuid":0,"peer_uid":20,"limit":10})"));
     const memochat::json::JsonValue out = Parse(result.payload_json);
@@ -551,7 +565,8 @@ TEST(SendPathGoldenTest, PrivateHistorySuccessEmptyRoot)
     StubMessageRepository repo; // GetPrivateHistory returns true, empty
     StubDeliveryGateway delivery;
     StubEventPublisher publisher;
-    PrivateMessageService service(nullptr, nullptr, &repo, &delivery, &publisher);
+    StubRelationRepository relation;
+    PrivateMessageService service(nullptr, nullptr, &repo, &relation, &delivery, &publisher);
 
     const auto result = service.PrivateHistory(MakeRequest(R"({"fromuid":10,"peer_uid":20,"limit":10})"));
     const memochat::json::JsonValue out = Parse(result.payload_json);

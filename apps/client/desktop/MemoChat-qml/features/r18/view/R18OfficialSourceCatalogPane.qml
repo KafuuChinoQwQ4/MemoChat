@@ -30,6 +30,7 @@ Item {
     signal officialCatalogRefreshRequested()
     signal sourceHelpToggled()
     signal officialSourceImportRequested(int sourceIndex)
+    signal presetSourceSelected(string sourceId)
 
     function modelCount(model) {
         return model && model.count !== undefined ? model.count : 0
@@ -81,7 +82,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38
                     text: root.sourceCatalogInput
-                    placeholderText: "https://.../index.json 或 D:\\Venera"
+                    placeholderText: "https://.../index.json"
                     placeholderTextColor: root.placeholderColor
                     color: root.textPrimaryColor
                     selectByMouse: true
@@ -105,7 +106,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     visible: root.sourceHelpVisible
-                    text: "该地址应指向 index.json；也可以选择本地目录，例如 D:\\Venera，刷新后会读取目录中的 index.json。"
+                    text: "该地址应指向 index.json 格式的漫画源目录文件。"
                     color: root.textSecondaryColor
                     font.pixelSize: 13
                     lineHeight: 1.2
@@ -153,6 +154,81 @@ Item {
                         hoverColor: root.secondaryButtonHoverColor
                         pressedColor: root.secondaryButtonPressedColor
                         onClicked: root.officialCatalogRefreshRequested()
+                    }
+                }
+            }
+        }
+
+        // 预置仓库 —— 直接拉 JS 导入，不经目录中转
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            Text {
+                text: "预置仓库"
+                color: root.textPrimaryColor
+                font.pixelSize: 13
+                font.bold: true
+            }
+
+            Repeater {
+                model: [
+                    { name: "禁漫天堂 JMComic",  subtitle: "内置官方适配器 · 直连 JM API",     sourceId: "jm.official" },
+                    { name: "哔咔漫画 Picacg",   subtitle: "内置官方适配器 · 直连 Picacg API", sourceId: "picacg.official" }
+                ]
+
+                delegate: Rectangle {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    height: 72
+                    radius: 8
+                    color: presetMouse.containsMouse ? Qt.rgba(0.94, 0.97, 1.0, 0.74) : "transparent"
+                    border.color: "transparent"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 18
+                        spacing: 12
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 3
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.name
+                                color: root.textPrimaryColor
+                                font.pixelSize: 17
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.subtitle
+                                color: root.textSecondaryColor
+                                font.pixelSize: 13
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        GlassButton {
+                            Layout.preferredWidth: 96
+                            Layout.preferredHeight: 40
+                            text: "添加"
+                            textPixelSize: 15
+                            textColor: "#ffffff"
+                            cornerRadius: 20
+                            normalColor: root.importButtonColor
+                            hoverColor: root.importButtonHoverColor
+                            pressedColor: root.importButtonPressedColor
+                            onClicked: root.presetSourceSelected(modelData.sourceId)
+                        }
+                    }
+
+                    MouseArea {
+                        id: presetMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
                     }
                 }
             }

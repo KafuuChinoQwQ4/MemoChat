@@ -16,7 +16,7 @@ QString trimmedOrFallback(const QString& value, const QString& fallback)
 std::shared_ptr<AuthInfo>
 DialogListEntryBuilder::buildPlaceholderAuthInfo(int uid, const QVariantMap& dialogItem, const QString& defaultIcon)
 {
-    QString fallbackName = QString::number(uid);
+    QString fallbackName = QStringLiteral("用户");
     QString fallbackNick = fallbackName;
     QString fallbackIcon = defaultIcon;
 
@@ -106,7 +106,7 @@ QString DialogListEntryBuilder::privateDisplayName(const std::shared_ptr<FriendI
     {
         return name;
     }
-    return friendInfo->_uid > 0 ? QString::number(friendInfo->_uid) : QString();
+    return QStringLiteral("用户");
 }
 
 void DialogListEntryBuilder::applyFriendProfileToPrivateSeed(DialogEntrySeed& seed,

@@ -160,7 +160,7 @@ Popup {
                             }
 
                             Label {
-                                text: "ID: " + (userId && userId.length > 0 ? userId : uid)
+                                text: "ID: " + (userId && userId.length > 0 ? userId : "未分配")
                                 color: "#5f6f85"
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true

@@ -26,7 +26,8 @@ struct TextChatData
                                                            qint64 reply_to_server_msg_id = 0,
                                                            const QString& forward_meta_json = QString(),
                                                            qint64 edited_at_ms = 0,
-                                                           qint64 deleted_at_ms = 0)
+                                                           qint64 deleted_at_ms = 0,
+                                                           const QString& from_user_id = QString())
         : _msg_id(msg_id)
                  , _msg_content(msg_content)
                  , _from_uid(fromuid)
@@ -41,6 +42,7 @@ struct TextChatData
                  , _forward_meta_json(forward_meta_json)
                  , _edited_at_ms(edited_at_ms)
                  , _deleted_at_ms(deleted_at_ms)
+                 , _from_user_id(from_user_id)
     {
         if (_created_at <= 0)
         {
@@ -86,6 +88,7 @@ struct TextChatData
     QString _forward_meta_json;
     qint64 _edited_at_ms;
     qint64 _deleted_at_ms;
+    QString _from_user_id;
 };
 
 struct GroupChatData
@@ -106,7 +109,8 @@ struct GroupChatData
                   qint64 edited_at_ms = 0,
                   qint64 deleted_at_ms = 0,
                   const QJsonArray& mentions = QJsonArray(),
-                  bool mention_all = false)
+                  bool mention_all = false,
+                  const QString& from_user_id = QString())
         : _msg_id(msg_id)
         , _msg_content(msg_content)
         , _from_uid(fromuid)
@@ -124,6 +128,7 @@ struct GroupChatData
         , _deleted_at_ms(deleted_at_ms)
         , _mentions(mentions)
         , _mention_all(mention_all)
+        , _from_user_id(from_user_id)
     {
     }
 
@@ -144,6 +149,7 @@ struct GroupChatData
     qint64 _deleted_at_ms;
     QJsonArray _mentions;
     bool _mention_all;
+    QString _from_user_id;
 };
 
 struct GroupChatMsg
@@ -152,11 +158,13 @@ struct GroupChatMsg
                  int fromuid,
                  QJsonObject msg_obj,
                  const QString& from_name = QString(),
-                 const QString& from_icon = QString())
+                 const QString& from_icon = QString(),
+                 const QString& from_user_id = QString())
         : _group_id(groupid)
         , _from_uid(fromuid)
         , _from_name(from_name)
         , _from_icon(from_icon)
+        , _from_user_id(from_user_id)
     {
         auto content = msg_obj.value("content").toString();
         auto msgid = msg_obj.value("msgid").toString();
@@ -212,21 +220,24 @@ struct GroupChatMsg
                                                edited_at_ms,
                                                deleted_at_ms,
                                                mentions,
-                                               mention_all);
+                                               mention_all,
+                                               from_user_id);
     }
 
     qint64 _group_id;
     int _from_uid;
     QString _from_name;
     QString _from_icon;
+    QString _from_user_id;
     std::shared_ptr<GroupChatData> _msg;
 };
 
 struct TextChatMsg
 {
-    TextChatMsg(int fromuid, int touid, QJsonArray arrays)
+    TextChatMsg(int fromuid, int touid, QJsonArray arrays, const QString& from_user_id = QString())
         : _to_uid(touid)
         , _from_uid(fromuid)
+        , _from_user_id(from_user_id)
     {
         for (auto msg_data : arrays)
         {
@@ -257,21 +268,29 @@ struct TextChatMsg
             }
             auto edited_at_ms = msg_obj["edited_at_ms"].toVariant().toLongLong();
             auto deleted_at_ms = msg_obj["deleted_at_ms"].toVariant().toLongLong();
-            auto msg_ptr = std::make_shared<TextChatData>(
-                msgid,
-                content,
-                fromuid,
-                touid,
-                QString(),
-                createdAt,
-                QString(),
-                QStringLiteral("sent"), 0, 0, reply_to_server_msg_id, forward_meta_json, edited_at_ms, deleted_at_ms);
+            const QString msgFromUserId = msg_obj["from_user_id"].toString(from_user_id).trimmed();
+            auto msg_ptr = std::make_shared<TextChatData>(msgid,
+                                                          content,
+                                                          fromuid,
+                                                          touid,
+                                                          QString(),
+                                                          createdAt,
+                                                          QString(),
+                                                          QStringLiteral("sent"),
+                                                                         0,
+                                                                         0,
+                                                                         reply_to_server_msg_id,
+                                                                         forward_meta_json,
+                                                                         edited_at_ms,
+                                                                         deleted_at_ms,
+                                                                         msgFromUserId);
             _chat_msgs.push_back(msg_ptr);
         }
     }
 
     int _to_uid;
     int _from_uid;
+    QString _from_user_id;
     std::vector<std::shared_ptr<TextChatData>> _chat_msgs;
 };
 

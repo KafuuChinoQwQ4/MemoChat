@@ -25,9 +25,11 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateReadAckEventDto>(
     std::array<std::string_view, 5>{"error", "event", "fromuid", "peer_uid", "read_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateForwardMessageDto>(
-    std::array<std::string_view, 5>{"msgid", "content", "created_at", "reply_to_server_msg_id", "forward_meta"}));
+    std::array<std::string_view,
+               6>{"msgid", "content", "created_at", "reply_to_server_msg_id", "forward_meta", "from_user_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateForwardResultDto>(
-    std::array<std::string_view, 7>{"error", "fromuid", "peer_uid", "touid", "client_msg_id", "created_at", "msg"}));
+    std::array<std::string_view,
+               8>{"error", "fromuid", "peer_uid", "touid", "client_msg_id", "created_at", "from_user_id", "msg"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupEditRequestDto>(
     std::array<std::string_view, 4>{"uid", "group_id", "msgid", "content"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupForwardRequestDto>(
@@ -125,8 +127,15 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::Cha
     std::array<std::string_view,
                8>{"fromuid", "groupid", "trace_id", "request_id", "span_id", "event_id", "accept_node", "accept_ts"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatPrivateSendResponseDto>(
-    std::array<std::string_view,
-               8>{"error", "fromuid", "touid", "client_msg_id", "accept_node", "accept_ts", "status", "text_array"}));
+    std::array<std::string_view, 9>{"error",
+                                    "fromuid",
+                                    "touid",
+                                    "client_msg_id",
+                                    "accept_node",
+                                    "accept_ts",
+                                    "status",
+                                    "from_user_id",
+                                    "text_array"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::chat::command::ChatGroupSendResponseDto>(
     std::array<std::string_view, 16>{"error",
                                      "fromuid",
@@ -313,6 +322,30 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateReadAckNotifyPayload)
     EXPECT_EQ(event_json["read_ts"].asInt64(), 7001);
 }
 
+TEST(ChatMessageCommandDtosTest, WritesPrivateSendResponseWithSenderPublicUserId)
+{
+    memochat::json::JsonValue text_array(memochat::json::array_t{});
+    text_array.append(Parse(R"({"msgid":"client-1","content":"hello","from_user_id":"u100000012"})"));
+
+    const memochat::chat::command::ChatPrivateSendResponseDto response{.error = 0,
+                                                                       .fromuid = 12,
+                                                                       .touid = 34,
+                                                                       .client_msg_id = "client-1",
+                                                                       .accept_node = "chatserver1",
+                                                                       .accept_ts = 5001,
+                                                                       .status = "persisted",
+                                                                       .from_user_id = "u100000012",
+                                                                       .text_array = text_array};
+    const auto json = memochat::chat::command::ToJsonValue(response);
+
+    EXPECT_EQ(json["error"].asInt(), 0);
+    EXPECT_EQ(json["fromuid"].asInt(), 12);
+    EXPECT_EQ(json["touid"].asInt(), 34);
+    EXPECT_EQ(json["from_user_id"].asString(), "u100000012");
+    ASSERT_TRUE(json["text_array"].isArray()) << json.toStyledString();
+    EXPECT_EQ(json["text_array"][0]["from_user_id"].asString(), "u100000012");
+}
+
 TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndTextArray)
 {
     const auto forward_meta =
@@ -321,7 +354,8 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndT
                                                                         .content = "forwarded content",
                                                                         .created_at = 5001,
                                                                         .reply_to_server_msg_id = 9001,
-                                                                        .forward_meta = forward_meta};
+                                                                        .forward_meta = forward_meta,
+                                                                        .from_user_id = "u100000012"};
     const auto message_json = memochat::chat::command::ToJsonValue(message);
 
     EXPECT_EQ(message_json["msgid"].asString(), "client-1");
@@ -330,6 +364,7 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndT
     EXPECT_EQ(message_json["reply_to_server_msg_id"].asInt64(), 9001);
     EXPECT_EQ(message_json["forward_meta"]["forwarded_from_msgid"].asString(), "source-1");
     EXPECT_EQ(message_json["forward_meta"]["prev_forward_meta"]["depth"].asInt(), 1);
+    EXPECT_EQ(message_json["from_user_id"].asString(), "u100000012");
 
     const memochat::chat::command::ChatPrivateForwardResultDto result{.error = 0,
                                                                       .fromuid = 12,
@@ -337,6 +372,7 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndT
                                                                       .touid = 34,
                                                                       .client_msg_id = "client-1",
                                                                       .created_at = 5001,
+                                                                      .from_user_id = "u100000012",
                                                                       .msg = message_json};
     const auto result_json = memochat::chat::command::ToJsonValue(result);
 
@@ -346,11 +382,13 @@ TEST(ChatMessageCommandDtosTest, WritesPrivateForwardResultWithNestedMessageAndT
     EXPECT_EQ(result_json["touid"].asInt(), 34);
     EXPECT_EQ(result_json["client_msg_id"].asString(), "client-1");
     EXPECT_EQ(result_json["created_at"].asInt64(), 5001);
+    EXPECT_EQ(result_json["from_user_id"].asString(), "u100000012");
     EXPECT_EQ(result_json["msg"]["msgid"].asString(), "client-1");
     const auto text_array = result_json["text_array"];
     ASSERT_TRUE(text_array.isArray()) << result_json.toStyledString();
     const auto text_item = text_array[0];
     EXPECT_EQ(text_item["msgid"].asString(), "client-1");
+    EXPECT_EQ(text_item["from_user_id"].asString(), "u100000012");
     EXPECT_EQ(text_item["forward_meta"]["source_from_uid"].asInt(), 12);
 }
 

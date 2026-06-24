@@ -30,6 +30,7 @@ class R18Controller : public QObject
     Q_PROPERTY(int currentPageIndex READ currentPageIndex NOTIFY currentPageChanged)
     Q_PROPERTY(int currentSearchPage READ currentSearchPage NOTIFY searchStateChanged)
     Q_PROPERTY(bool currentSearchHasMore READ currentSearchHasMore NOTIFY searchStateChanged)
+    Q_PROPERTY(QString pendingDeleteSourceId READ pendingDeleteSourceId NOTIFY pendingDeleteSourceChanged)
 
 public:
     explicit R18Controller(ClientGateway* gateway, QObject* parent = nullptr);
@@ -98,6 +99,10 @@ public:
     {
         return _current_search_has_more;
     }
+    QString pendingDeleteSourceId() const
+    {
+        return _pending_delete_source_id;
+    }
 
     Q_INVOKABLE void refreshSources();
     Q_INVOKABLE void refreshHistory();
@@ -111,6 +116,7 @@ public:
     Q_INVOKABLE void openComic(const QString& sourceId, const QString& comicId);
     Q_INVOKABLE void openChapter(const QString& sourceId, const QString& chapterId);
     Q_INVOKABLE void enableSource(const QString& sourceId, bool enabled);
+    Q_INVOKABLE void deleteSource(const QString& sourceId);
     Q_INVOKABLE void importSourcePackage(const QString& filePath, const QString& manifestJson = QString());
     Q_INVOKABLE void toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited);
     Q_INVOKABLE void
@@ -126,6 +132,7 @@ signals:
     void currentPageChanged();
     void officialSourceCatalogUrlChanged();
     void searchStateChanged();
+    void pendingDeleteSourceChanged();
 
 private:
     void postJson(const QString& path, const QJsonObject& payload, const QString& op);
@@ -142,6 +149,7 @@ private:
     void setCurrentFavorite(bool favorite);
     void setCurrentPageIndex(int pageIndex);
     void setSearchState(int page, bool hasMore);
+    void setPendingDeleteSourceId(const QString& sourceId);
     void handleResponse(const QString& op, const QJsonObject& root);
 
     ClientGateway* _gateway = nullptr;
@@ -164,4 +172,5 @@ private:
     int _current_search_page = 0;
     bool _current_search_has_more = false;
     int _pending_search_page = 0;
+    QString _pending_delete_source_id;
 };

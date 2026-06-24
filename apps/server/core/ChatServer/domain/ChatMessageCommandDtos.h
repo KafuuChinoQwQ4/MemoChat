@@ -79,7 +79,7 @@ struct ChatPrivateSendEventDto
 // Private send-path response root (TextChatMessage rtvalue). Built once across
 // the branches by typed field assignment; the optional tail fields are emitted
 // only when engaged, in the exact current wire order: error, fromuid, touid,
-// client_msg_id, accept_node, accept_ts, status, text_array.
+// client_msg_id, accept_node, accept_ts, status, from_user_id, text_array.
 struct ChatPrivateSendResponseDto
 {
     int error = 0;
@@ -89,6 +89,7 @@ struct ChatPrivateSendResponseDto
     std::optional<std::string> accept_node;
     std::optional<int64_t> accept_ts;
     std::optional<std::string> status;
+    std::optional<std::string> from_user_id;
     std::optional<memochat::json::JsonValue> text_array;
 };
 
@@ -136,6 +137,7 @@ struct ChatPrivateForwardMessageDto
     int64_t created_at = 0;
     int64_t reply_to_server_msg_id = 0;
     memochat::json::JsonValue forward_meta;
+    std::optional<std::string> from_user_id;
 };
 
 struct ChatPrivateForwardResultDto
@@ -146,6 +148,7 @@ struct ChatPrivateForwardResultDto
     int touid = 0;
     std::string client_msg_id;
     int64_t created_at = 0;
+    std::optional<std::string> from_user_id;
     memochat::json::JsonValue msg;
 };
 
@@ -440,6 +443,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateSendResponseDto& d
     {
         value["status"] = *dto.status;
     }
+    if (dto.from_user_id.has_value())
+    {
+        value["from_user_id"] = *dto.from_user_id;
+    }
     if (dto.text_array.has_value())
     {
         value["text_array"] = *dto.text_array;
@@ -571,6 +578,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateForwardMessageDto&
         value["reply_to_server_msg_id"] = static_cast<int64_t>(dto.reply_to_server_msg_id);
     }
     value["forward_meta"] = dto.forward_meta;
+    if (dto.from_user_id.has_value())
+    {
+        value["from_user_id"] = *dto.from_user_id;
+    }
     return value;
 }
 
@@ -588,6 +599,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateForwardResultDto& 
     if (dto.created_at > 0)
     {
         value["created_at"] = static_cast<int64_t>(dto.created_at);
+    }
+    if (dto.from_user_id.has_value())
+    {
+        value["from_user_id"] = *dto.from_user_id;
     }
     if (!dto.msg.isNull())
     {

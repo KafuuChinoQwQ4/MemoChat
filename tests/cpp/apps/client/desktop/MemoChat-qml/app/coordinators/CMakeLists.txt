@@ -92,3 +92,40 @@ target_include_directories(media_coordinator_gtest PRIVATE
 
 add_dependencies(gtest_tests media_coordinator_gtest)
 gtest_discover_tests(media_coordinator_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(session_relation_bootstrap_gtest
+    SessionRelationBootstrapTest.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/session/SessionRelationBootstrap.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators/AppCoordinators.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListService.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListService.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListEntryBuilder.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListEntryBuilder.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListTypes.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/userdata.cpp
+)
+set_target_properties(session_relation_bootstrap_gtest PROPERTIES AUTOMOC ON)
+set_target_properties(session_relation_bootstrap_gtest PROPERTIES
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(session_relation_bootstrap_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Widgets
+)
+
+target_include_directories(session_relation_bootstrap_gtest PRIVATE
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/connection
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/common
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services
+)
+
+add_dependencies(gtest_tests session_relation_bootstrap_gtest)
+gtest_discover_tests(session_relation_bootstrap_gtest TEST_DISCOVERY_MODE POST_BUILD)

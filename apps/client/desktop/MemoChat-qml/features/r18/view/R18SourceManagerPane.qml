@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
 
@@ -49,9 +50,11 @@ Item {
     signal sourceCatalogInputEdited(string text)
     signal officialCatalogRequested()
     signal officialCatalogRefreshRequested()
+    signal presetSourceSelected(string sourceId)
     signal sourceCatalogPathRequested()
     signal officialSourceImportRequested(int sourceIndex)
     signal importedSourceOpenRequested(string sourceId)
+    signal importedSourceDeleteRequested(string sourceId)
     signal sourceEnabledChanged(string sourceId, bool enabled)
     signal sourceFeedKeywordEdited(string keyword)
     signal sourceFeedRequested(string keyword)
@@ -61,6 +64,22 @@ Item {
 
     function modelCount(model) {
         return model && model.count !== undefined ? model.count : 0
+    }
+
+    function sourceTitleForId(sourceId) {
+        var model = root.r18Controller ? root.r18Controller.sourceModel : null
+        var count = root.modelCount(model)
+        for (var i = 0; i < count; ++i) {
+            var row = model.get(i)
+            if (!row) {
+                continue
+            }
+            var rowId = row.source_id || row.sourceId || row.id || row.key || ""
+            if (rowId === sourceId) {
+                return row.title || row.name || sourceId
+            }
+        }
+        return sourceId
     }
 
     ColumnLayout {
@@ -190,6 +209,7 @@ Item {
                         Layout.fillHeight: true
                         sourceModel: root.r18Controller ? root.r18Controller.sourceModel : null
                         currentSourceId: root.currentSourceId
+                        pendingDeleteSourceId: root.r18Controller ? root.r18Controller.pendingDeleteSourceId : ""
                         loading: root.loading
                         itemFillColor: root.itemFillColor
                         itemHoverFillColor: root.itemHoverFillColor
@@ -209,6 +229,11 @@ Item {
                         }
                         onImportedSourceOpenRequested: function(sourceId) {
                             root.importedSourceOpenRequested(sourceId)
+                        }
+                        onImportedSourceDeleteRequested: function(sourceId) {
+                            root.pendingDeleteSourceId = sourceId || ""
+                            root.pendingDeleteSourceTitle = root.sourceTitleForId(root.pendingDeleteSourceId)
+                            pendingDeleteDialog.open()
                         }
                     }
                 }
@@ -235,6 +260,7 @@ Item {
                 onSourceCatalogInputEdited: function(text) { root.sourceCatalogInputEdited(text) }
                 onOfficialCatalogRefreshRequested: root.officialCatalogRefreshRequested()
                 onSourceHelpToggled: root.sourceHelpToggled()
+                onPresetSourceSelected: function(sourceId) { root.presetSourceSelected(sourceId) }
                 onOfficialSourceImportRequested: function(sourceIndex) {
                     root.officialSourceImportRequested(sourceIndex)
                 }
@@ -284,6 +310,40 @@ Item {
                 onReloadRequested: root.sourceFeedRequested("")
                 onTagSelected: function(tag) { root.tagSearchRequested(tag) }
             }
+        }
+    }
+
+    property string pendingDeleteSourceId: ""
+    property string pendingDeleteSourceTitle: ""
+
+    Dialog {
+        id: pendingDeleteDialog
+        modal: true
+        title: "删除漫画源"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        anchors.centerIn: Overlay.overlay
+
+        Text {
+            width: 280
+            text: root.pendingDeleteSourceId.length > 0
+                  ? ("确认删除漫画源 “" + (root.pendingDeleteSourceTitle || root.pendingDeleteSourceId)
+                     + "”？\n确认后会从已导入源列表移除。")
+                  : "确认删除这个漫画源？"
+            color: root.textPrimaryColor
+            font.pixelSize: 13
+            wrapMode: Text.Wrap
+        }
+
+        onAccepted: {
+            if (root.pendingDeleteSourceId.length > 0) {
+                root.importedSourceDeleteRequested(root.pendingDeleteSourceId)
+            }
+            root.pendingDeleteSourceId = ""
+            root.pendingDeleteSourceTitle = ""
+        }
+        onRejected: {
+            root.pendingDeleteSourceId = ""
+            root.pendingDeleteSourceTitle = ""
         }
     }
 }

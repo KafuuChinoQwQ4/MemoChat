@@ -48,7 +48,15 @@ void R18Controller::postJson(const QString& path, const QJsonObject& payload, co
                 {
                     if (!quiet)
                     {
-                        setError(QStringLiteral("R18 网络请求失败: %1").arg(networkErrorText));
+                        if (op == QStringLiteral("source_delete"))
+                        {
+                            setPendingDeleteSourceId({});
+                            setError(QStringLiteral("删除漫画源失败: %1").arg(networkErrorText));
+                        }
+                        else
+                        {
+                            setError(QStringLiteral("R18 网络请求失败: %1").arg(networkErrorText));
+                        }
                     }
                     return;
                 }
@@ -56,7 +64,15 @@ void R18Controller::postJson(const QString& path, const QJsonObject& payload, co
                 {
                     if (!quiet)
                     {
-                        setError(QStringLiteral("R18 HTTP %1").arg(httpStatus));
+                        if (op == QStringLiteral("source_delete"))
+                        {
+                            setPendingDeleteSourceId({});
+                            setError(QStringLiteral("删除漫画源失败: HTTP %1").arg(httpStatus));
+                        }
+                        else
+                        {
+                            setError(QStringLiteral("R18 HTTP %1").arg(httpStatus));
+                        }
                     }
                     return;
                 }
@@ -65,6 +81,10 @@ void R18Controller::postJson(const QString& path, const QJsonObject& payload, co
                 {
                     if (!quiet)
                     {
+                        if (op == QStringLiteral("source_delete"))
+                        {
+                            setPendingDeleteSourceId({});
+                        }
                         setError(QStringLiteral("R18 响应格式错误"));
                     }
                     return;
@@ -115,6 +135,11 @@ void R18Controller::getJson(const QUrl& url, const QString& op)
                         map[QStringLiteral("catalog_url")] = catalogUrl.toString();
                         const QUrl scriptUrl = resolveOfficialSourceUrl(map);
                         map[QStringLiteral("source_url")] = scriptUrl.toString();
+                        // 确保 QML title 角色有值（venera-configs 用 name 而非 title）
+                        if (!map.contains(QStringLiteral("title")))
+                        {
+                            map[QStringLiteral("title")] = map.value(QStringLiteral("name"));
+                        }
                         entry = map;
                     }
                     _official_sources.setItems(items);

@@ -22,6 +22,7 @@ struct ChatPrivateHistoryMessageDto
     std::string content;
     int fromuid = 0;
     int touid = 0;
+    std::string from_user_id;
     int64_t created_at = 0;
     int64_t reply_to_server_msg_id = 0;
     ChatHistoryDynamicJson forward_meta;
@@ -33,6 +34,7 @@ struct ChatPrivateOfflinePushMessageDto
 {
     std::string msgid;
     std::string content;
+    std::string from_user_id;
     int64_t created_at = 0;
     int64_t reply_to_server_msg_id = 0;
     ChatHistoryDynamicJson forward_meta;
@@ -45,6 +47,7 @@ struct ChatPrivateOfflinePushNotifyDto
     int error = 0;
     int fromuid = 0;
     int touid = 0;
+    std::string from_user_id;
     memochat::json::JsonValue text_array;
 };
 
@@ -111,6 +114,7 @@ inline ChatPrivateHistoryMessageDto ChatPrivateHistoryMessageFromInfo(const Priv
     dto.content = info.content;
     dto.fromuid = info.from_uid;
     dto.touid = info.to_uid;
+    dto.from_user_id = info.from_user_id;
     dto.created_at = info.created_at;
     dto.reply_to_server_msg_id = info.reply_to_server_msg_id;
     dto.forward_meta = ParseHistoryJsonValue(info.forward_meta_json);
@@ -124,6 +128,7 @@ inline ChatPrivateOfflinePushMessageDto ChatPrivateOfflinePushMessageFromInfo(co
     ChatPrivateOfflinePushMessageDto dto;
     dto.msgid = info.msg_id;
     dto.content = info.content;
+    dto.from_user_id = info.from_user_id;
     dto.created_at = info.created_at;
     dto.reply_to_server_msg_id = info.reply_to_server_msg_id;
     dto.forward_meta = ParseHistoryJsonValue(info.forward_meta_json);
@@ -164,6 +169,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateHistoryMessageDto&
     item["content"] = dto.content;
     item["fromuid"] = dto.fromuid;
     item["touid"] = dto.touid;
+    if (!dto.from_user_id.empty())
+    {
+        item["from_user_id"] = dto.from_user_id;
+    }
     item["created_at"] = static_cast<int64_t>(dto.created_at);
     if (dto.reply_to_server_msg_id > 0)
     {
@@ -189,6 +198,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateOfflinePushMessage
     memochat::json::JsonValue item;
     item["msgid"] = dto.msgid;
     item["content"] = dto.content;
+    if (!dto.from_user_id.empty())
+    {
+        item["from_user_id"] = dto.from_user_id;
+    }
     item["created_at"] = static_cast<int64_t>(dto.created_at);
     if (dto.reply_to_server_msg_id > 0)
     {
@@ -215,6 +228,10 @@ inline memochat::json::JsonValue ToJsonValue(const ChatPrivateOfflinePushNotifyD
     root["error"] = dto.error;
     root["fromuid"] = dto.fromuid;
     root["touid"] = dto.touid;
+    if (!dto.from_user_id.empty())
+    {
+        root["from_user_id"] = dto.from_user_id;
+    }
     root["text_array"] = dto.text_array;
     return root;
 }

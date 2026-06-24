@@ -7,6 +7,7 @@
 #include "global.h"
 
 class AppSessionCoordinator;
+class ContactController;
 class ProfileController;
 
 class AppHttpEventRouter : public QObject
@@ -16,6 +17,7 @@ class AppHttpEventRouter : public QObject
 public:
     AppHttpEventRouter(AppSessionCoordinator& sessionCoordinator,
                        ProfileController& profileController,
+                       ContactController& contactController,
                        QObject* parent = nullptr);
 
 public slots:
@@ -23,10 +25,12 @@ public slots:
     void onRegisterHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onResetHttpFinished(ReqId id, QString res, ErrorCodes err);
     void onSettingsHttpFinished(ReqId id, QString res, ErrorCodes err);
+    void onContactHttpFinished(ReqId id, QString res, ErrorCodes err);
 
 private:
     AppSessionCoordinator& _session_coordinator;
     ProfileController& _profile_controller;
+    ContactController& _contact_controller;
 };
 
 #endif // APPHTTPEVENTROUTER_H

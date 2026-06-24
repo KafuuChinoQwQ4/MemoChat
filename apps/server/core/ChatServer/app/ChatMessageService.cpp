@@ -179,6 +179,7 @@ int main(int argc, char** argv)
         PrivateMessageService private_message_service(UserMgr::GetInstance().get(),
                                                       &online_route_store,
                                                       &message_repository,
+                                                      &relation_repository,
                                                       &delivery_gateway,
                                                       &event_publisher);
         GroupMessageService group_message_service(&message_repository,
