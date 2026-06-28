@@ -10,6 +10,10 @@ void AppPortRegistry::bindContactFeaturePorts()
                              },
                              [this]()
                              {
+                                 return _gateway.userMgr()->GetFriendListSnapshot();
+                             },
+                             [this]()
+                             {
                                  return _gateway.userMgr()->GetConListPerPage();
                              },
                              [this]()

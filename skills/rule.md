@@ -9,7 +9,8 @@
 ## 项目规则
 - 不向后兼容：3.0 不兼容 2.0，开发阶段一律按最新协议/数据格式实现，旧客户端靠强制更新机制拦截升级，不靠代码兼容。改字段直接换新 key，不写"读新回退旧"的双读、不留旧字段别名、不写历史数据迁移读路径。删这类旧兼容前先按 `skills/no-backward-compat.md` 分类，避免误删平台/库适配、错误兜底、强制更新机制本身。
 - 保持实现简洁，优先复用现有模式和 helper；不要为任务范围外的抽象、兼容层或顺手重构显著增加代码量。
-- 代码风格语法尽可能现代，前面严格加上std::,不要使用using namespace std。
+- C++ 标准按目标分开：服务端 C++ 目标遵循 `MEMOCHAT_CXX_STANDARD`，当前为 C++26；Qt/QML 客户端和 MemoOps 目标遵循 `MEMOCHAT_QT_CXX_STANDARD`，当前为 C++23，Qt 版本以当前 CMake preset/cache 的 6.8.x kit 为准。
+- 写 C++ 时尽量靠近该目标当前工具链能稳定支持的最高标准，优先使用 modern C++ 和标准库特性；不要把服务端 C++26 / `-freflection` 假设带进 Qt 客户端目标。前缀严格写 `std::`，不要使用 `using namespace std`。
 - 所有基础设施容器都在 Docker 中。
 - Docker 容器必须保持稳定的发布端口。
 - 项目工作必须使用 Docker 容器作为数据库、队列、对象存储、可观测性以及 AI/RAG 依赖。

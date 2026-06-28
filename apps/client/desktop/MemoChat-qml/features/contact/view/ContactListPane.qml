@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -123,6 +125,26 @@ Item {
                 anchors.fill: parent
                 clip: true
                 model: root.contactModel
+                section.property: "sectionKey"
+                section.criteria: ViewSection.FullString
+                section.delegate: Rectangle {
+                    id: sectionHeader
+                    required property string section
+
+                    width: ListView.view ? ListView.view.width : 0
+                    height: 24
+                    color: Qt.rgba(1, 1, 1, 0.10)
+
+                    Label {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: sectionHeader.section
+                        color: "#687991"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                }
                 ScrollBar.vertical: GlassScrollBar { }
                 onContentYChanged: {
                     if (!root.canLoadMore || root.loadingMore) {
@@ -150,9 +172,13 @@ Item {
 
                 delegate: Rectangle {
                     id: contactDelegate
-                    readonly property string contactIdentityText: userId && userId.length > 0
-                                                          ? ("ID: " + userId)
-                                                          : "ID: 未分配"
+                    required property int index
+                    required property string icon
+                    required property string name
+                    required property string userId
+                    readonly property string contactIdentityText: contactDelegate.userId && contactDelegate.userId.length > 0
+                                                                  ? ("ID: " + contactDelegate.userId)
+                                                                  : "ID: 未分配"
                     width: ListView.view.width
                     height: 58
                     color: {
@@ -200,7 +226,9 @@ Item {
                                 anchors.fill: parent
                                 fillMode: Image.PreserveAspectCrop
                                 property string fallbackSource: "qrc:/res/head_1.jpg"
-                                property string baseSource: (icon && icon.length > 0) ? icon : fallbackSource
+                                property string baseSource: (contactDelegate.icon && contactDelegate.icon.length > 0)
+                                                            ? contactDelegate.icon
+                                                            : fallbackSource
                                 property bool loadFailed: false
                                 source: loadFailed ? fallbackSource : baseSource
                                 cache: true
@@ -216,7 +244,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: 2
                             Label {
-                                text: name
+                                text: contactDelegate.name
                                 color: "#2c3a4f"
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -236,8 +264,8 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            contactList.currentIndex = index
-                            root.contactIndexSelected(index)
+                            contactList.currentIndex = contactDelegate.index
+                            root.contactIndexSelected(contactDelegate.index)
                         }
                     }
 
@@ -249,7 +277,7 @@ Item {
                         anchors.rightMargin: 10
                         height: 1
                         color: Qt.rgba(1, 1, 1, 0.26)
-                        visible: index < (contactList.count - 1)
+                        visible: contactDelegate.index < (contactList.count - 1)
                     }
                 }
             }

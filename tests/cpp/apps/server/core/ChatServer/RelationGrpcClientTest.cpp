@@ -79,6 +79,24 @@ public:
     RelationCommandRequest last_request;
 };
 
+class FailingRelationInternalService final : public chatinternal::ChatRelationInternalService::Service
+{
+public:
+    grpc::Status AppendRelationBootstrap(grpc::ServerContext*,
+                                         const chatinternal::BootstrapRequest*,
+                                         chatinternal::BootstrapResponse*) override
+    {
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "relation service unavailable");
+    }
+
+    grpc::Status BuildDialogList(grpc::ServerContext*,
+                                 const chatinternal::BootstrapRequest*,
+                                 chatinternal::BootstrapResponse*) override
+    {
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "relation service unavailable");
+    }
+};
+
 struct RunningGrpcServer
 {
     int port = 0;
@@ -199,6 +217,26 @@ TEST(RelationGrpcClientTest, QueryMethodsMergeRemotePayload)
     EXPECT_EQ(out["uid"].asInt(), 7);
     EXPECT_EQ(out["bootstrap_uid"].asInt(), 7);
     EXPECT_FALSE(out.isMember("relation_remote_error"));
+    running.server->Shutdown();
+}
+
+TEST(RelationGrpcClientTest, QueryRemoteFailureMarksBusinessError)
+{
+    FailingRelationInternalService service;
+    auto running = StartServer(&service);
+    ASSERT_NE(running.server, nullptr);
+    ASSERT_GT(running.port, 0);
+
+    RelationGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    memochat::json::JsonValue out(memochat::json::object_t{});
+    out["error"] = ErrorCodes::Success;
+
+    client.AppendRelationBootstrapJson(7, out);
+
+    EXPECT_EQ(out["error"].asInt(), ErrorCodes::RPCFailed);
+    EXPECT_EQ(out["relation_remote_method"].asString(), "AppendRelationBootstrap");
+    EXPECT_EQ(out["relation_remote_status_code"].asInt(), static_cast<int>(grpc::StatusCode::UNAVAILABLE));
+    EXPECT_NE(out["relation_remote_error"].asString().find("unavailable"), std::string::npos);
     running.server->Shutdown();
 }
 

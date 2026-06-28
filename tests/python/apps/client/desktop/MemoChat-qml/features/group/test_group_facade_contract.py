@@ -281,6 +281,12 @@ class GroupFacadeContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, qml)
 
+        group_panel_start = qml.index("GroupManagementPanel {")
+        group_panel_end = qml.index("friendModel: contact.contactListModel", group_panel_start)
+        group_panel_bindings = qml[group_panel_start:group_panel_end]
+        self.assertIn("currentGroupRole: group.currentGroupRole", group_panel_bindings)
+        self.assertNotIn("currentGroupRole: chat.currentGroupRole", group_panel_bindings)
+
     def test_migrated_group_qml_avoids_old_controller_group_surface(self):
         qml_sources = {
             "ChatNormalFace.qml": read(CHAT_VIEW / "ChatNormalFace.qml"),

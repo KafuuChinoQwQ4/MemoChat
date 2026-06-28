@@ -87,6 +87,8 @@ SessionAuthPort AppPortRegistry::makeSessionAuthPort()
         [this]()
         {
             _session_coordinator->resetLoginAttemptState(QDateTime::currentMSecsSinceEpoch());
+            _shell_state.bootstrapState().postLoginBootstrapStarted = false;
+            _shell_state.bootstrapState().chatLoginCompleted = false;
             _chat_login_timeout_timer.stop();
             _gateway.chatTransport()->CloseConnection();
         },

@@ -51,6 +51,5 @@ void AppController::refreshChatLoadMoreState()
 
 void AppController::refreshContactLoadMoreState()
 {
-    const bool canLoad = !_gateway.userMgr()->IsLoadConFin();
-    _features.contactController.setCanLoadMoreContacts(canLoad);
+    _features.contactController.refreshContactLoadMoreState();
 }

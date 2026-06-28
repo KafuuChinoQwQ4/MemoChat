@@ -2,16 +2,22 @@
 知识库检索工具 — 查询用户私有知识库
 """
 
+from collections.abc import Awaitable, Callable
+
 import structlog
-from config import settings
 from langchain_core.tools import tool
-from rag import EmbeddingManager, RAGChain
 
 logger = structlog.get_logger()
 
 
+KnowledgeSearchProvider = Callable[..., Awaitable[list[dict]]]
+
+
 class KnowledgeBaseTool:
     """知识库检索工具 — 从 Qdrant 中检索用户上传的文档片段"""
+
+    def __init__(self, search_provider: KnowledgeSearchProvider):
+        self._search_provider = search_provider
 
     async def _search(self, query: str, uid: int = 0, top_k: int = 5) -> str:
         """
@@ -19,9 +25,7 @@ class KnowledgeBaseTool:
         输入搜索问题，返回相关文档片段和来源。
         """
         try:
-            rag = RAGChain()
-            embed_mgr = EmbeddingManager(settings.embedding)
-            results = await rag.retrieve(uid=uid, query=query, top_k=top_k, embedder=embed_mgr)
+            results = await self._search_provider(uid=uid, query=query, top_k=top_k)
 
             if not results:
                 return "知识库中没有找到相关内容。"

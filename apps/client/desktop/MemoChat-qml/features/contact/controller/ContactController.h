@@ -33,6 +33,7 @@ struct ContactCommandPort
 struct ContactBootstrapPort
 {
     std::function<void()> ensureChatListInitialized;
+    std::function<std::vector<std::shared_ptr<FriendInfo>>()> friendSnapshot;
     std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextPage;
     std::function<void()> markPageLoaded;
     std::function<bool()> loadFinished;
@@ -158,6 +159,7 @@ public:
     void setCanLoadMoreContacts(bool canLoad);
     void setContactsReady(bool ready);
     void setApplyReady(bool ready);
+    void refreshContactLoadMoreState();
 
     void syncModels(FriendListModel* contactListModel,
                     SearchResultModel* searchResultModel,
@@ -224,7 +226,6 @@ private:
     QSet<int> _profile_lookup_pending_uids;
 
     void setHasPendingApply(bool hasPending);
-    void refreshContactLoadMoreState();
     void refreshCurrentContactFromStore();
     void requestPublicProfileByUid(int uid);
 };

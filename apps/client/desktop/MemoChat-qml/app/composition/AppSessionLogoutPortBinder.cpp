@@ -27,6 +27,7 @@ SessionLogoutPort AppPortRegistry::makeSessionLogoutPort()
     port.resetConnectionRuntime = [this]()
     {
         _shell_state.bootstrapState().postLoginBootstrapStarted = false;
+        _shell_state.bootstrapState().chatLoginCompleted = false;
         _chat_connection_coordinator->resetReconnectState();
         _chat_connection_coordinator->resetHeartbeatTracking();
     };

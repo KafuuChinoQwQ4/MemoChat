@@ -28,7 +28,7 @@
 | `qml-platform-compat.md` | QML 跨平台兼容工作流 |
 | `qml-ui.md` | QML UI 开发工作流 |
 | `reflect.md` | 复盘/反思工作流 |
-| `release.md` | 发布流程工作流 |
+| `release.md` | Git 提交格式、提交范围检查与发布流程工作流 |
 | `review.md` | 代码评审工作流 |
 | `rule.md` | 规则/约定说明 |
 | `runtime-smoke.md` | 运行时冒烟测试工作流 |

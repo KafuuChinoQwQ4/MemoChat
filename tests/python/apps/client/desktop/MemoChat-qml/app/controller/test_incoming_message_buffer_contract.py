@@ -313,6 +313,7 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
 
         for field in (
             "bootstrapDialogs",
+            "ensureContactsInitialized",
             "ensureApplyInitialized",
             "requestRelationBootstrap",
             "startHeartbeatTimer",
@@ -325,6 +326,7 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
 
         for call in (
             "_port.bootstrapDialogs();",
+            "_port.ensureContactsInitialized();",
             "_port.ensureApplyInitialized();",
             "_port.requestRelationBootstrap();",
             "_port.startHeartbeatTimer",
@@ -333,16 +335,17 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
         ):
             with self.subTest(run_bootstrap=call):
                 self.assertIn(call, run_bootstrap)
+        self.assertLess(
+            run_bootstrap.index("_port.ensureContactsInitialized();"),
+            run_bootstrap.index("_port.requestRelationBootstrap();"),
+        )
 
         for field in (
             "ensureChatListInitialized",
             "friendListSnapshot",
             "upsertChatListFriend",
-            "nextContactPage",
-            "setContacts",
-            "upsertContact",
+            "setContactsFromSnapshot",
             "refreshContactProfiles",
-            "markContactPageLoaded",
             "refreshContactLoadMoreState",
             "setContactsReady",
             "refreshApplySnapshot",
@@ -357,7 +360,10 @@ class IncomingMessageBufferContractTests(unittest.TestCase):
 
         self.assertIn("_port.ensureChatListInitialized();", relation_updated)
         self.assertIn("_port.refreshContactProfiles();", relation_updated)
-        self.assertIn("const auto contactList = _port.nextContactPage();", relation_updated)
+        self.assertIn("const auto friendSnapshot = _port.friendListSnapshot();", relation_updated)
+        self.assertIn("_port.setContactsFromSnapshot(friendSnapshot);", relation_updated)
+        self.assertNotIn("_port.nextContactPage();", relation_updated)
+        self.assertNotIn("_port.markContactPageLoaded();", relation_updated)
         self.assertLess(
             relation_updated.index("_port.refreshContactProfiles();"),
             relation_updated.index("if (snapshot.isChatPage)"),

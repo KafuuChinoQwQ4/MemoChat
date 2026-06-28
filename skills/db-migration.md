@@ -26,7 +26,7 @@ description: Use when changing MemoChat Postgres, Redis, MongoDB, MinIO metadata
 - 通过 Docker 或 MCP 查询数据库。
 - 不要使用本地主机安装的数据库。
 - Postgres 主机访问保持在 `127.0.0.1:15432`；容器内 Postgres 使用 `5432`。
-- 保持变更具备向后意识：配置、初始化脚本、迁移、运行时代码和测试必须一致。
+- 按最新 schema/数据格式实现：配置、初始化脚本、迁移、运行时代码和测试必须一致；不要为旧客户端或旧字段写双读兼容。
 - 除非用户明确批准具体 volume 或主机数据路径，否则绝不重置 Docker volumes。当前 `archlinux` 绑定数据位于 `/data/docker-data/memochat`；旧 Docker Desktop 数据位于 `D:\docker-data\memochat`，仅作为旧版备份/源数据。
 
 ## 发现
@@ -56,13 +56,13 @@ docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase ad
 - 受影响的 table/collection/key/queue/object bucket
 - 要更新的迁移或初始化文件
 - 读取/写入它的运行时代码路径
-- 回滚、兼容性和幂等性顾虑
+- 回滚、强制更新影响和幂等性顾虑
 - 验证查询
 
-兼容性检查必须回答：
+一致性检查必须回答：
 
-- 旧服务读取新 schema 是否会失败。
-- 新服务读取旧数据是否有默认值或迁移路径。
+- 新旧服务混跑是否需要先强制更新或停机切换。
+- 新服务读取已有数据是否需要一次性迁移、默认值或前向修复。
 - 迁移重复执行是否安全。
 - 初始化脚本和已有持久化数据是否都会得到同一最终结构。
 - 回滚时是可逆 SQL、前向修复，还是需要明确用户批准的数据操作。

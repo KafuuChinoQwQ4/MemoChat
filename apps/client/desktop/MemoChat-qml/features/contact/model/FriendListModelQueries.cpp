@@ -24,7 +24,8 @@ QVariantMap FriendListModel::get(int indexValue) const
             {"draftText", entry.draftText},
             {"lastMsgTs", entry.lastMsgTs},
             {"muteState", entry.muteState},
-            {"mentionCount", entry.mentionCount}};
+            {"mentionCount", entry.mentionCount},
+            {"sectionKey", entry.sectionKey}};
 }
 
 int FriendListModel::indexOfUid(int uid) const

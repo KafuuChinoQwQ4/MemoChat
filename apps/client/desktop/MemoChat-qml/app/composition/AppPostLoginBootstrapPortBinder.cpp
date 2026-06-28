@@ -19,6 +19,7 @@ PostLoginBootstrapPort AppPortRegistry::makePostLoginBootstrapPort()
         snapshot.isChatPage = page() == _constants.chatPage;
         snapshot.postLoginBootstrapStarted = _shell_state.bootstrapState().postLoginBootstrapStarted;
         snapshot.chatTransportReady = isChatTransportReady();
+        snapshot.chatLoginCompleted = _shell_state.bootstrapState().chatLoginCompleted;
         snapshot.dialogsReady = _shell_state.bootstrapState().dialogsReady;
         snapshot.pendingUid = pending.uid;
         snapshot.pendingToken = pending.token;
@@ -68,6 +69,7 @@ PostLoginBootstrapPort AppPortRegistry::makePostLoginBootstrapPort()
         _shell_state.loadingState().groupHistoryLoading = false;
         _shell_state.bootstrapState().dialogBootstrapLoading = false;
         _shell_state.bootstrapState().chatListInitialized = false;
+        _shell_state.bootstrapState().chatLoginCompleted = false;
         setDialogsReady(false);
         setContactsReady(false);
         setGroupsReady(false);
@@ -110,6 +112,10 @@ PostLoginBootstrapPort AppPortRegistry::makePostLoginBootstrapPort()
     {
         _shell_state.bootstrapState().postLoginBootstrapStarted = started;
     };
+    port.setChatLoginCompleted = [this](bool completed)
+    {
+        _shell_state.bootstrapState().chatLoginCompleted = completed;
+    };
     port.runDelayed = [this](int delayMs, std::function<void()> callback)
     {
         QTimer::singleShot(delayMs, &_async_receiver, std::move(callback));
@@ -122,6 +128,10 @@ PostLoginBootstrapPort AppPortRegistry::makePostLoginBootstrapPort()
     port.bootstrapDialogs = [this]()
     {
         bootstrapDialogs();
+    };
+    port.ensureContactsInitialized = [this]()
+    {
+        _features.contactController.ensureContactsInitialized();
     };
     port.ensureApplyInitialized = [this]()
     {

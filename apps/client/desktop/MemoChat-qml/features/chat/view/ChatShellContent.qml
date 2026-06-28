@@ -44,7 +44,7 @@ Item {
                 peerAvatar: chat.currentChatPeerIcon
                 hasCurrentChat: chat.hasCurrentChat
                 isGroupChat: chat.hasCurrentGroup
-                currentGroupRole: chat.currentGroupRole
+                currentGroupRole: group.currentGroupRole
                 messageModel: chat.messageModel
                 agentController: agent
                 imeBridgeController: pet
@@ -221,7 +221,7 @@ Item {
                 groupName: group.currentGroupName
                 groupCode: group.currentGroupCode
                 groupIcon: chat.currentChatPeerIcon
-                currentGroupRole: chat.currentGroupRole
+                currentGroupRole: group.currentGroupRole
                 currentDialogPinned: chat.currentDialogPinned
                 currentDialogMuted: chat.currentDialogMuted
                 canUpdateIcon: group.currentGroupCanChangeInfo

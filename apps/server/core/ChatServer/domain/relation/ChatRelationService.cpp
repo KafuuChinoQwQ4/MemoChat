@@ -132,8 +132,8 @@ void ChatRelationService::AppendRelationBootstrapJson(int uid, Json::Value& out)
     }
 
     Json::Value bootstrap_payload = ChatOutput::ToJsonValue(bootstrap);
-    out["apply_list"] = bootstrap_payload["apply_list"];
-    out["friend_list"] = bootstrap_payload["friend_list"];
+    out["apply_list"] = bootstrap_payload["apply_list"].get<Json::Value>();
+    out["friend_list"] = bootstrap_payload["friend_list"].get<Json::Value>();
     if (_relation_bootstrap_cache)
     {
         _relation_bootstrap_cache->Store(uid, bootstrap_payload);

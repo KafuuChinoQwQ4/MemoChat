@@ -101,7 +101,7 @@ class PlanningPolicy:
             "graph": skill.allow_graph or action_counts["graph_recall"] > 0 or self._content_needs_graph(content),
         }
         statuses = {
-            "web": self._observation_status(self._observations_named(observations, "duckduckgo_search"), "web"),
+            "web": self._observation_status(self._observations_named(observations, "web_search"), "web"),
             "knowledge": self._observation_status(
                 self._observations_named(observations, "knowledge_search"), "knowledge"
             ),
@@ -243,7 +243,7 @@ class PlanningPolicy:
     ) -> bool:
         if not skill.allow_web and not any(step.action == "web_search" for step in plan_steps):
             return False
-        web_observations = [obs for obs in observations if obs.name == "duckduckgo_search"]
+        web_observations = [obs for obs in observations if obs.name == "web_search"]
         if not web_observations:
             return any(step.action == "web_search" for step in plan_steps)
         weak_markers = ("未找到", "搜索失败", "工具执行失败", "没有找到")

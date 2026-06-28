@@ -35,9 +35,7 @@ rg -n "qml.qrc|resources|icons|assets" apps/client infra/Memo_ops/client
 - 除非项目已有全局样式系统，否则不要新增。
 - 对有状态控件，适用时处理 normal、hover、pressed、disabled、loading 和 error 状态。
 - 配置已提供服务 URL 时，不要硬编码服务 URL。
-- 跨平台 UI 变更优先兼容性。修复 Linux/WSLg、macOS、Windows、Wayland/X11、DPI、字体、compositor 或 graphics-backend 差异时，保留已经正常工作的现有平台行为，并通过平台专用 QML 文件夹、平台保护的 C++/QML 分支、资源 alias 或窄兼容组件添加修复。除非证明 bug 在这些平台共享路径上，否则不要重写共享组件或替换正常工作的视觉路径。
-- 如果平台修复必须触及共享 QML 组件，保持其 public API 和默认渲染与当前正常工作平台兼容，然后为新行为添加 opt-in properties 或平台专用 wrapper。在计划/复审中记录平台边界，并至少验证被修改平台，以及任何共享路径被触及的平台。
-- 优先使用增量平台结构：`qml/linux`、`qml/windows`、`qml/macos`、`Qt.platform.os` 检查，或 `#ifdef Q_OS_*` C++ glue。在 `qml.qrc` 中明确注册平台资源，添加新兼容路径时避免删除或替换旧平台文件。
+- 跨平台 UI 兼容规则统一见 `skills/rule.md`；平台专用修复再读 `skills/qml-platform-compat.md`。
 
 ## 实现
 
@@ -72,6 +70,6 @@ cmake --build --preset linux-full-gcc16 --parallel 12
 - 没有缺失资源路径
 - 没有破坏的 import
 - 没有硬编码本地专用路径，除非它是已记录的开发配置
-- 客户端/服务端契约保持兼容
+- 客户端/服务端契约保持一致
 - 相关位置处理 error/loading/empty 状态
 - 视觉证据已写入验证日志，或明确记录无法截图/启动的原因

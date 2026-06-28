@@ -161,7 +161,7 @@ TEST(RelationQueryGrpcClientTest, BuildDialogListMergesRemotePayload)
     running.server->Shutdown();
 }
 
-TEST(RelationQueryGrpcClientTest, RemoteFailureDoesNotOverwriteBusinessError)
+TEST(RelationQueryGrpcClientTest, RemoteFailureMarksBusinessError)
 {
     FailingRelationInternalGrpcService service;
     auto running = StartServer(&service);
@@ -174,7 +174,7 @@ TEST(RelationQueryGrpcClientTest, RemoteFailureDoesNotOverwriteBusinessError)
 
     client.AppendRelationBootstrapJson(42, out);
 
-    EXPECT_EQ(out["error"].asInt(), ErrorCodes::Success);
+    EXPECT_EQ(out["error"].asInt(), ErrorCodes::RPCFailed);
     EXPECT_EQ(out["relation_query_remote_method"].asString(), "AppendRelationBootstrap");
     EXPECT_EQ(out["relation_query_remote_status_code"].asInt(), static_cast<int>(grpc::StatusCode::UNAVAILABLE));
     EXPECT_NE(out["relation_query_remote_error"].asString().find("unavailable"), std::string::npos);

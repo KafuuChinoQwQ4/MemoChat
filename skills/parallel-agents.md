@@ -5,13 +5,13 @@ description: Use when planning or executing MemoChat implementation tasks that m
 
 # MemoChat 并行代理
 
-这个 skill 只定义 MemoChat 的 Controller/worker 决策、所有权和验收契约。主 agent 默认是 Controller：负责分发和总控，不默认承担产品代码实现。通用并发技巧可参考 `skills/superpowers/dispatching-parallel-agents/SKILL.md` 和 `skills/superpowers/subagent-driven-development/SKILL.md`，但本文件优先。
+这个 skill 只定义 MemoChat 的 Controller/worker 决策、所有权和验收契约。通用并发技巧可参考 `skills/superpowers/dispatching-parallel-agents/SKILL.md` 和 `skills/superpowers/subagent-driven-development/SKILL.md`，但本文件优先。
 
 ## 决策规则
 
-- 每个非平凡实现任务都先考虑 Controller 主导并行；当工作能安全拆分且并行收益大于协调成本时，默认把代码实现、测试实现、运行时检查下发给 worker/subagent。
+- 非平凡实现任务先评估是否适合 Controller 主导并行；只有工作能安全拆分且并行收益大于协调成本时，才下发 worker/subagent。
 - 真正派发 worker 必须同时满足：当前工具策略允许、用户授权允许、工作线安全、写入范围互不重叠、Controller 已冻结第一版共享契约。
-- 只有极小修复、需求无法冻结契约、工作天然顺序、worker 协调成本高于收益、多个 worker 必须改同一文件、或没有有意义测试/复审/运行时工作线时，Controller 才可以本地单人写代码。
+- 小改动、顺序工作、共享写入过多、用户未授权子代理、契约未冻结或协调成本高于收益时，本地单人执行。
 - 本地单人必须在 `plan.md` 记录：
 
 ```text
@@ -34,17 +34,11 @@ Controller 必须负责：
 - Docker/MCP 假设、稳定端口、测试范围和验证命令。
 - 检查 worker 结果、实际 diff、契约一致性和最终验收。
 
-Controller 不默认写产品代码。它应先把目标、非目标、契约、文件所有权、验证命令和结果文件路径写入 `.ai`，再把代码任务派给 worker/subagent。Controller 只能在以下情况直接改产品代码：
-
-- 派发被当前工具策略或用户授权阻塞，并已在 `plan.md` 记录。
-- 改动小到没有可分离 worker 工作线，并已在 `plan.md` 记录。
-- 集成 worker 结果时需要少量胶水、冲突修复或契约对齐。
-
-即使 Controller 本地执行，也要按 worker 边界描述自己的代码所有权和验证证据；worker 运行期间不要沉入大范围产品实现。
+使用 worker 时，Controller 负责目标、契约、所有权、集成和验收；本地单人执行时，也要在 `plan.md` 记录原因和验证证据。
 
 ## 默认工作线
 
-常用上限：1 个 Controller + 最多 5 条 worker。安全时最低形态是 Controller + Tests Worker + 至少一条实现/调查工作线。
+常用上限：1 个 Controller + 最多 5 条 worker。小任务保持本地单人即可。
 
 | 工作线 | 典型负责 | 常见写入范围 |
 | --- | --- | --- |
@@ -54,7 +48,7 @@ Controller 不默认写产品代码。它应先把目标、非目标、契约、
 | Tests | 单元、回归、边界、smoke、负载、验证产物 | `tests/**`、`tools/scripts/**`、`tools/loadtest/**` |
 | Integration | 编译修复、跨线连接、运行时 smoke、文档 | Controller 批准的窄范围 |
 
-按任务自然切片命名工作线，例如 `Schema Worker`、`QML Layout Worker`、`Gateway Proxy Worker`。产品代码任务优先交给实现 worker，测试和验证任务优先交给 Tests/Integration worker。任何有可验证行为变化的非平凡实现默认包含 Tests Worker；跳过时必须说明为什么没有测试面、工具被阻塞或协调成本不合理。
+按任务自然切片命名工作线，例如 `Schema Worker`、`QML Layout Worker`、`Gateway Proxy Worker`。有可验证行为变化且适合并行时，优先分出 Tests/Integration 工作线；跳过时记录原因。
 
 ## Worker 提示词必须包含
 

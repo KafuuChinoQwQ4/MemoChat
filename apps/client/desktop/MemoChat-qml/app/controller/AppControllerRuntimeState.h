@@ -18,6 +18,7 @@ struct AppLazyBootstrapState
     bool groupsReady = false;
     bool chatListInitialized = false;
     bool postLoginBootstrapStarted = false;
+    bool chatLoginCompleted = false;
 };
 
 struct AppMediaUploadRuntimeState
