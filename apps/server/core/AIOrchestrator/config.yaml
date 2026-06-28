@@ -83,7 +83,7 @@ rag:
 
 tools:
   enabled:
-    - "duckduckgo_search"
+    - "web_search"
     - "knowledge_base"
     - "calculator"
     - "translator"
@@ -100,7 +100,7 @@ agent:
   system_prompt: |
     你是一个专业的 AI 助手，可以帮助用户回答问题、搜索信息、管理知识库。
     如果用户的问题涉及上传的文档，优先使用知识库检索。
-    如果需要最新信息，使用 DuckDuckGo 搜索。
+    如果需要最新信息，使用网络搜索。
     如果需要计算，使用计算器工具。
     如果涉及用户关系、群组分析或推荐，请使用图数据库查询。
     如果操作可能影响用户隐私或财产安全（如发送消息给陌生人），请先询问用户确认。

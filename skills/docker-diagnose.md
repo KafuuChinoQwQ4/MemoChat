@@ -45,12 +45,6 @@ docker compose -f apps/server/core/AIOrchestrator/docker-compose.yml ps
 - MinIO `9000/9001`
 - Redpanda `19092/18082`
 - RabbitMQ `5672/15672`
-- AI Orchestrator `8096`
-- Ollama `11434`，仅当本地启用 Ollama 时要求存在
-- Neo4j `7474/7687`
-- Qdrant `6333`
-
-> AI Orchestrator、Neo4j、Qdrant、Ollama 属独立 compose 项目 `memochat-ai`（`apps/server/core/AIOrchestrator/docker-compose.yml`），由该目录下 `docker compose up -d` 单独启动，不会出现在本地 infra compose 的 `ps` 里——诊断 AI 依赖时查这个 compose 文件。
 - Grafana `3000`
 - Prometheus `9090`
 - Alertmanager `9093`
@@ -78,7 +72,7 @@ docker compose -f apps/server/core/AIOrchestrator/docker-compose.yml ps
 - `memochat-influxdb`
 - `memochat-cadvisor`
 
-> AI stack 容器(`memochat-ai-orchestrator`、`memochat-neo4j`、`memochat-qdrant`、可选 `memochat-ollama`)在独立 compose 项目 `memochat-ai` 中,不属于上面这份本地 infra 基线;用 `apps/server/core/AIOrchestrator/docker-compose.yml` 单独检查。
+AI stack 是独立 compose 项目 `memochat-ai`，按需检查 `apps/server/core/AIOrchestrator/docker-compose.yml`；端口包括 AI Orchestrator `8096`、Qdrant `6333`、Neo4j `7474/7687`、可选 Ollama `11434`。
 
 ## 健康检查
 

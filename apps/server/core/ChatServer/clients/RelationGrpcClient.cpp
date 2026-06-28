@@ -45,6 +45,7 @@ const char* CommandMethodName(RelationGrpcClient::CommandRpc rpc)
 
 void MarkRemoteError(memochat::json::JsonValue& out, const char* method_name, const std::string& error, int status_code)
 {
+    out["error"] = ErrorCodes::RPCFailed;
     out["relation_remote_method"] = method_name;
     out["relation_remote_error"] = error;
     out["relation_remote_status_code"] = status_code;

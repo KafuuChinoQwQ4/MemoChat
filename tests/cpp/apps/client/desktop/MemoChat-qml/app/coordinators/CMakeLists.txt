@@ -129,3 +129,34 @@ target_include_directories(session_relation_bootstrap_gtest PRIVATE
 
 add_dependencies(gtest_tests session_relation_bootstrap_gtest)
 gtest_discover_tests(session_relation_bootstrap_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(session_chat_entry_coordinator_gtest
+    SessionChatEntryCoordinatorTest.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/session/SessionChatEntryCoordinator.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators/AppCoordinators.h
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/userdata.cpp
+)
+set_target_properties(session_chat_entry_coordinator_gtest PROPERTIES AUTOMOC ON)
+set_target_properties(session_chat_entry_coordinator_gtest PROPERTIES
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+target_link_libraries(session_chat_entry_coordinator_gtest PRIVATE
+    GTest_TestLib
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Widgets
+)
+
+target_include_directories(session_chat_entry_coordinator_gtest PRIVATE
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/connection
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/app/coordinators
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/common
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session
+)
+
+add_dependencies(gtest_tests session_chat_entry_coordinator_gtest)
+gtest_discover_tests(session_chat_entry_coordinator_gtest TEST_DISCOVERY_MODE POST_BUILD)

@@ -66,9 +66,12 @@ class FriendApplyAvatarContractTests(unittest.TestCase):
         source = CHAT_RELATION_SERVICE.read_text(encoding="utf-8")
         bootstrap = extract_function(source, "void ChatRelationService::AppendRelationBootstrapJson")
 
-        self.assertIn('obj["icon"] = apply->_icon;', bootstrap)
+        self.assertIn("ChatOutput::ChatRelationApplyRowDto row;", bootstrap)
+        self.assertIn("row.user_id = apply->_user_id;", bootstrap)
+        self.assertIn("row.icon = apply->_icon;", bootstrap)
+        self.assertIn("bootstrap.apply_list.push_back(row);", bootstrap)
         self.assertLess(
-            bootstrap.index('obj["icon"] = apply->_icon;'), bootstrap.index('out["apply_list"].append(obj);')
+            bootstrap.index("row.icon = apply->_icon;"), bootstrap.index("bootstrap.apply_list.push_back(row);")
         )
 
 

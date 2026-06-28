@@ -30,7 +30,8 @@ public:
         DraftTextRole,
         LastMsgTsRole,
         MuteStateRole,
-        MentionCountRole
+        MentionCountRole,
+        SectionKeyRole
     };
 
     explicit FriendListModel(QObject* parent = nullptr);
@@ -44,6 +45,7 @@ public:
     void clear();
     void setFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends);
     void appendFriends(const std::vector<std::shared_ptr<FriendInfo>>& friends);
+    void setContactSectionOrderingEnabled(bool enabled);
     void upsertFriend(const std::shared_ptr<FriendInfo>& friendInfo);
     void upsertFriend(const std::shared_ptr<AuthInfo>& authInfo);
     void upsertFriend(const std::shared_ptr<AuthRsp>& authRsp);
@@ -88,15 +90,22 @@ private:
         qint64 lastMsgTs = 0;
         int muteState = 0;
         int mentionCount = 0;
+        QString sectionKey;
     };
 
     static QString normalizeIcon(QString icon);
+    static QString displayNameForSection(const FriendEntry& entry);
+    static QString sectionKeyForEntry(const FriendEntry& entry);
+    static bool contactSectionLessThan(const FriendEntry& lhs, const FriendEntry& rhs);
+    static void refreshDerivedFields(FriendEntry& entry);
+    static void sortForContactSections(std::vector<FriendEntry>& items);
     FriendEntry toEntry(const std::shared_ptr<FriendInfo>& friendInfo) const;
     FriendEntry mergeWithCurrentEntry(const FriendEntry& entry) const;
     static FriendEntry mergeSparseEntry(const FriendEntry& entry, const FriendEntry& existing);
     void upsert(const FriendEntry& entry);
 
     std::vector<FriendEntry> _items;
+    bool _contact_section_ordering_enabled = false;
 };
 
 #endif // FRIENDLISTMODEL_H

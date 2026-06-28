@@ -16,17 +16,15 @@
 
 namespace
 {
-std::shared_ptr<FriendInfo> makeFriend(int uid, const QString& name)
+std::shared_ptr<FriendInfo>
+makeFriend(int uid, const QString& name, const QString& userId = QStringLiteral("u123456789"))
 {
     const QString nick = name + QStringLiteral("Nick");
     const QString desc = QStringLiteral("desc ") + name;
     const QString remark = QStringLiteral("remark ") + name;
     const QString lastMessage = QStringLiteral("last ") + name;
-    auto friendInfo = std::make_shared<FriendInfo>(
-        uid,
-        name,
-        nick,
-        QStringLiteral("head.png"), 1, desc, remark, lastMessage, QStringLiteral("u123456789"));
+    auto friendInfo =
+        std::make_shared<FriendInfo>(uid, name, nick, QStringLiteral("head.png"), 1, desc, remark, lastMessage, userId);
     friendInfo->_dialog_type = QStringLiteral("private");
     return friendInfo;
 }
@@ -119,6 +117,44 @@ TEST(ContactControllerTest, UpdatesContactListModelWithSetAppendUpsertAndRemove)
     controller.removeContactByUid(101);
     ASSERT_EQ(controller.contactListModel()->rowCount(), 2);
     EXPECT_EQ(controller.contactListModel()->indexOfUid(101), -1);
+}
+
+TEST(ContactControllerTest, ContactListModelSortsBySectionKeyAndGroupsNonLettersUnderHash)
+{
+    ContactController controller(nullptr);
+
+    std::vector<std::shared_ptr<FriendInfo>> contacts;
+    contacts.push_back(makeFriend(301, QStringLiteral("_zed")));
+    contacts.push_back(makeFriend(302, QStringLiteral("bob")));
+    contacts.push_back(makeFriend(303, QStringLiteral("Alice")));
+    contacts.push_back(makeFriend(304, QStringLiteral("3rd")));
+    contacts.push_back(makeFriend(305, QStringLiteral("carol")));
+    controller.setContacts(contacts);
+
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 5);
+    EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("name")).toString(), QStringLiteral("Alice"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 0).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("A"));
+    EXPECT_EQ(row(controller.contactListModel(), 1).value(QStringLiteral("name")).toString(), QStringLiteral("bob"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 1).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("B"));
+    EXPECT_EQ(row(controller.contactListModel(), 2).value(QStringLiteral("name")).toString(), QStringLiteral("carol"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 2).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("C"));
+    EXPECT_EQ(row(controller.contactListModel(), 3).value(QStringLiteral("name")).toString(), QStringLiteral("3rd"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 3).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("#"));
+    EXPECT_EQ(row(controller.contactListModel(), 4).value(QStringLiteral("name")).toString(), QStringLiteral("_zed"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 4).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("#"));
+
+    controller.upsertContact(makeFriend(306, QStringLiteral("Aaron")));
+
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 6);
+    EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("name")).toString(), QStringLiteral("Aaron"));
+    EXPECT_EQ(row(controller.contactListModel(), 1).value(QStringLiteral("name")).toString(), QStringLiteral("Alice"));
+    EXPECT_EQ(
+        row(controller.contactListModel(), 5).value(QStringLiteral("sectionKey")).toString(), QStringLiteral("#"));
 }
 
 TEST(ContactControllerTest, SelectContactIndexUpdatesCurrentContactAndPane)
@@ -332,6 +368,7 @@ TEST(ContactControllerTest, EnsureContactsInitializedOwnsInitialPageAndLoadMoreP
     ContactController controller(nullptr);
 
     int ensureChatListCalls = 0;
+    int friendSnapshotCalls = 0;
     int nextPageCalls = 0;
     int markPageLoadedCalls = 0;
     int loadFinishedCalls = 0;
@@ -340,6 +377,11 @@ TEST(ContactControllerTest, EnsureContactsInitializedOwnsInitialPageAndLoadMoreP
     port.ensureChatListInitialized = [&ensureChatListCalls]()
     {
         ++ensureChatListCalls;
+    };
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{};
     };
     port.nextPage = [&nextPageCalls]()
     {
@@ -361,6 +403,7 @@ TEST(ContactControllerTest, EnsureContactsInitializedOwnsInitialPageAndLoadMoreP
     controller.ensureContactsInitialized();
 
     EXPECT_EQ(ensureChatListCalls, 1);
+    EXPECT_EQ(friendSnapshotCalls, 1);
     EXPECT_EQ(nextPageCalls, 1);
     EXPECT_EQ(markPageLoadedCalls, 1);
     EXPECT_EQ(loadFinishedCalls, 1);
@@ -369,6 +412,57 @@ TEST(ContactControllerTest, EnsureContactsInitializedOwnsInitialPageAndLoadMoreP
     ASSERT_EQ(controller.contactListModel()->rowCount(), 2);
     EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("uid")).toInt(), 501);
     EXPECT_EQ(row(controller.contactListModel(), 1).value(QStringLiteral("uid")).toInt(), 502);
+}
+
+TEST(ContactControllerTest, EnsureContactsInitializedUsesLoginFriendSnapshotBeforeRelationBootstrap)
+{
+    ContactController controller(nullptr);
+
+    int ensureChatListCalls = 0;
+    int friendSnapshotCalls = 0;
+    int nextPageCalls = 0;
+    int markPageLoadedCalls = 0;
+    int loadFinishedCalls = 0;
+
+    ContactBootstrapPort port;
+    port.ensureChatListInitialized = [&ensureChatListCalls]()
+    {
+        ++ensureChatListCalls;
+    };
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(521, QStringLiteral("Nina")),
+                                                                   makeFriend(522, QStringLiteral("Omar"))};
+    };
+    port.nextPage = [&nextPageCalls]()
+    {
+        ++nextPageCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(523, QStringLiteral("Paged"))};
+    };
+    port.markPageLoaded = [&markPageLoadedCalls]()
+    {
+        ++markPageLoadedCalls;
+    };
+    port.loadFinished = [&loadFinishedCalls]()
+    {
+        ++loadFinishedCalls;
+        return false;
+    };
+    controller.setBootstrapPort(std::move(port));
+
+    controller.ensureContactsInitialized();
+
+    EXPECT_EQ(ensureChatListCalls, 1);
+    EXPECT_EQ(friendSnapshotCalls, 1);
+    EXPECT_EQ(nextPageCalls, 0);
+    EXPECT_EQ(markPageLoadedCalls, 0);
+    EXPECT_EQ(loadFinishedCalls, 0);
+    EXPECT_TRUE(controller.contactsReady());
+    EXPECT_FALSE(controller.canLoadMoreContacts());
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 2);
+    EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("uid")).toInt(), 521);
+    EXPECT_EQ(row(controller.contactListModel(), 1).value(QStringLiteral("uid")).toInt(), 522);
 }
 
 TEST(ContactControllerTest, EnsureContactsInitializedSkipsWhenAlreadyReady)
@@ -397,6 +491,173 @@ TEST(ContactControllerTest, EnsureContactsInitializedSkipsWhenAlreadyReady)
     EXPECT_EQ(nextPageCalls, 0);
     ASSERT_EQ(controller.contactListModel()->rowCount(), 1);
     EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("uid")).toInt(), 601);
+}
+
+TEST(ContactControllerTest, EnsureContactsInitializedRepairsReadyRowsMissingPublicUserIdFromSnapshot)
+{
+    ContactController controller(nullptr);
+    controller.setContacts({makeFriend(641, QStringLiteral("Sid"), QString())});
+    controller.setContactsReady(true);
+
+    int friendSnapshotCalls = 0;
+    int nextPageCalls = 0;
+    ContactBootstrapPort port;
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{
+            makeFriend(641, QStringLiteral("Sid"), QStringLiteral("u641641641"))};
+    };
+    port.nextPage = [&nextPageCalls]()
+    {
+        ++nextPageCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(642, QStringLiteral("Paged"))};
+    };
+    controller.setBootstrapPort(std::move(port));
+
+    controller.ensureContactsInitialized();
+
+    EXPECT_EQ(friendSnapshotCalls, 1);
+    EXPECT_EQ(nextPageCalls, 0);
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 1);
+    EXPECT_EQ(
+        row(controller.contactListModel(), 0).value(QStringLiteral("userId")).toString(), QStringLiteral("u641641641"));
+    EXPECT_TRUE(controller.contactsReady());
+}
+
+TEST(ContactControllerTest, EnsureContactsInitializedRepairsEmptyReadyModelFromSnapshot)
+{
+    ContactController controller(nullptr);
+    controller.setContactsReady(true);
+
+    int ensureChatListCalls = 0;
+    int friendSnapshotCalls = 0;
+    int nextPageCalls = 0;
+    ContactBootstrapPort port;
+    port.ensureChatListInitialized = [&ensureChatListCalls]()
+    {
+        ++ensureChatListCalls;
+    };
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(621, QStringLiteral("Pia"))};
+    };
+    port.nextPage = [&nextPageCalls]()
+    {
+        ++nextPageCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(622, QStringLiteral("Quin"))};
+    };
+    controller.setBootstrapPort(std::move(port));
+
+    controller.ensureContactsInitialized();
+
+    EXPECT_EQ(ensureChatListCalls, 0);
+    EXPECT_EQ(friendSnapshotCalls, 1);
+    EXPECT_EQ(nextPageCalls, 0);
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 1);
+    EXPECT_EQ(row(controller.contactListModel(), 0).value(QStringLiteral("uid")).toInt(), 621);
+    EXPECT_TRUE(controller.contactsReady());
+}
+
+TEST(ContactControllerTest, EnsureContactsInitializedKeepsReadyEmptySnapshotWithoutPaging)
+{
+    ContactController controller(nullptr);
+    controller.setContactsReady(true);
+
+    int ensureChatListCalls = 0;
+    int friendSnapshotCalls = 0;
+    int nextPageCalls = 0;
+    ContactBootstrapPort port;
+    port.ensureChatListInitialized = [&ensureChatListCalls]()
+    {
+        ++ensureChatListCalls;
+    };
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{};
+    };
+    port.nextPage = [&nextPageCalls]()
+    {
+        ++nextPageCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{makeFriend(631, QStringLiteral("Rui"))};
+    };
+    controller.setBootstrapPort(std::move(port));
+
+    controller.ensureContactsInitialized();
+
+    EXPECT_EQ(ensureChatListCalls, 0);
+    EXPECT_EQ(friendSnapshotCalls, 1);
+    EXPECT_EQ(nextPageCalls, 0);
+    EXPECT_TRUE(controller.contactsReady());
+    EXPECT_EQ(controller.contactListModel()->rowCount(), 0);
+}
+
+TEST(ContactControllerTest, EnsureContactsInitializedDoesNotMarkReadyWhenInitialStoreIsEmpty)
+{
+    ContactController controller(nullptr);
+
+    int friendSnapshotCalls = 0;
+    int nextPageCalls = 0;
+    int markPageLoadedCalls = 0;
+    int relationBootstrapCalls = 0;
+    ContactBootstrapPort port;
+    port.friendSnapshot = [&friendSnapshotCalls]()
+    {
+        ++friendSnapshotCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{};
+    };
+    port.nextPage = [&nextPageCalls]()
+    {
+        ++nextPageCalls;
+        return std::vector<std::shared_ptr<FriendInfo>>{};
+    };
+    port.markPageLoaded = [&markPageLoadedCalls]()
+    {
+        ++markPageLoadedCalls;
+    };
+    port.loadFinished = []()
+    {
+        return true;
+    };
+    controller.setBootstrapPort(std::move(port));
+    ContactCommandPort commandPort;
+    commandPort.requestRelationBootstrap = [&relationBootstrapCalls]()
+    {
+        ++relationBootstrapCalls;
+    };
+    controller.setCommandPort(std::move(commandPort));
+
+    controller.ensureContactsInitialized();
+
+    EXPECT_EQ(friendSnapshotCalls, 1);
+    EXPECT_EQ(nextPageCalls, 1);
+    EXPECT_EQ(markPageLoadedCalls, 1);
+    EXPECT_EQ(relationBootstrapCalls, 1);
+    EXPECT_FALSE(controller.contactsReady());
+    EXPECT_EQ(controller.contactListModel()->rowCount(), 0);
+}
+
+TEST(ContactControllerTest, FullSnapshotContactsDisableLoadMoreAndAvoidDuplicateAppend)
+{
+    ClientGateway gateway;
+    ContactController controller(&gateway);
+    gateway.userMgr()->ResetSession();
+    QJsonArray friends;
+    friends.push_back(friendJson(611, QStringLiteral("Mia"), QStringLiteral("u611611611")));
+    friends.push_back(friendJson(612, QStringLiteral("Noah"), QStringLiteral("u612612612")));
+    gateway.userMgr()->AppendFriendList(friends);
+    const auto fullSnapshot = gateway.userMgr()->GetFriendListSnapshot();
+    controller.setContacts(fullSnapshot);
+    controller.setCanLoadMoreContacts(true);
+
+    controller.loadMoreContacts();
+
+    ASSERT_EQ(controller.contactListModel()->rowCount(), 2);
+    EXPECT_EQ(controller.contactListModel()->indexOfUid(611), 0);
+    EXPECT_EQ(controller.contactListModel()->indexOfUid(612), 1);
+    EXPECT_FALSE(controller.canLoadMoreContacts());
 }
 
 TEST(ContactControllerTest, EnsureApplyInitializedOwnsSnapshotAndReadyProjection)

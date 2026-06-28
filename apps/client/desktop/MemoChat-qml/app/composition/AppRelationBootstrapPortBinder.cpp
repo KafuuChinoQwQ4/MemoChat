@@ -41,25 +41,13 @@ RelationBootstrapPort AppPortRegistry::makeRelationBootstrapPort()
         {
             _features.chatFeatureController.upsertContactFriendInfo(friendInfo);
         },
-        [this]()
-        {
-            return _gateway.userMgr()->GetConListPerPage();
-        },
         [this](const std::vector<std::shared_ptr<FriendInfo>>& contacts)
         {
             _features.contactController.setContacts(contacts);
         },
-        [this](const std::shared_ptr<FriendInfo>& friendInfo)
-        {
-            _features.contactController.upsertContact(friendInfo);
-        },
         [this]()
         {
             _features.contactController.refreshContactProfiles();
-        },
-        [this]()
-        {
-            _gateway.userMgr()->UpdateContactLoadedCount();
         },
         [this]()
         {

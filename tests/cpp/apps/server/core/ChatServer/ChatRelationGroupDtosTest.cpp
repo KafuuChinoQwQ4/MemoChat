@@ -155,6 +155,7 @@ TEST(ChatRelationGroupDtosTest, WritesRelationBootstrapRowsWithLabelsArrays)
 
     const memochat::json::JsonValue friend_json = memochat::chat::output::ToJsonValue(friend_row);
     ASSERT_TRUE(friend_json.isObject()) << friend_json.toStyledString();
+    EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(friend_json, "user_id", ""), "bob-id");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(friend_json, "back", ""), "memo");
     ASSERT_TRUE(friend_json["labels"].isArray()) << friend_json.toStyledString();
     EXPECT_EQ(friend_json["labels"].size(), 0U);
@@ -185,6 +186,8 @@ TEST(ChatRelationGroupDtosTest, WritesRelationBootstrapRootWithStableArrays)
     ASSERT_EQ(json["apply_list"].size(), 1U);
     ASSERT_EQ(json["friend_list"].size(), 1U);
     EXPECT_EQ(json["apply_list"][0]["name"].asString(), "Alice");
+    EXPECT_EQ(json["apply_list"][0]["user_id"].asString(), "alice-id");
+    EXPECT_EQ(json["friend_list"][0]["user_id"].asString(), "bob-id");
     EXPECT_EQ(json["friend_list"][0]["back"].asString(), "");
     const std::string body = memochat::json::glaze_stringify(json);
     EXPECT_NE(body.find(R"("labels":["school"])"), std::string::npos) << body;
@@ -196,6 +199,28 @@ TEST(ChatRelationGroupDtosTest, WritesRelationBootstrapRootWithStableArrays)
     ASSERT_TRUE(empty_json["friend_list"].isArray()) << empty_json.toStyledString();
     EXPECT_EQ(empty_json["apply_list"].size(), 0U);
     EXPECT_EQ(empty_json["friend_list"].size(), 0U);
+}
+
+TEST(ChatRelationGroupDtosTest, CopiesRelationBootstrapArraysIntoResponseObject)
+{
+    memochat::chat::output::ChatRelationFriendRowDto friend_row;
+    friend_row.name = "Bob";
+    friend_row.uid = 20;
+    friend_row.user_id = "bob-id";
+
+    memochat::chat::output::ChatRelationBootstrapDto bootstrap;
+    bootstrap.friend_list.push_back(friend_row);
+    memochat::json::JsonValue payload = memochat::chat::output::ToJsonValue(bootstrap);
+
+    memochat::json::JsonValue response(memochat::json::object_t{});
+    response["apply_list"] = payload["apply_list"].get<memochat::json::JsonValue>();
+    response["friend_list"] = payload["friend_list"].get<memochat::json::JsonValue>();
+
+    const memochat::json::JsonValue copied_friends = response["friend_list"].get<memochat::json::JsonValue>();
+    ASSERT_TRUE(copied_friends.isArray()) << response.toStyledString();
+    ASSERT_EQ(copied_friends.size(), 1U);
+    EXPECT_EQ(copied_friends[0]["user_id"].asString(), "bob-id");
+    EXPECT_NE(memochat::json::glaze_stringify(response).find(R"("friend_list":[{)"), std::string::npos);
 }
 
 TEST(ChatRelationGroupDtosTest, WritesPrivateAndGroupDialogRowsWithExclusiveIds)

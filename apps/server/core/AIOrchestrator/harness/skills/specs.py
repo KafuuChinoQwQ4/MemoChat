@@ -39,7 +39,7 @@ class AgentSpecRegistry:
             description=spec.description,
             system_prompt=spec.system_prompt,
             default_actions=default_actions,
-            allow_web="duckduckgo_search" in allowed or "web_search" in default_actions,
+            allow_web="web_search" in allowed or "web_search" in default_actions,
             allow_knowledge=bool(knowledge_policy.get("enabled")) or "knowledge_base_search" in allowed,
             allow_graph=bool(memory_policy.get("include_graph")) or "graph_recall" in default_actions,
             allow_mcp=bool(tool_policy.get("allow_mcp", False)),
@@ -57,7 +57,7 @@ class AgentSpecRegistry:
         actions: list[str] = []
         if "knowledge_base_search" in tools:
             actions.append("knowledge_search")
-        if "duckduckgo_search" in tools:
+        if "web_search" in tools:
             actions.append("web_search")
         if "calculator" in tools:
             actions.append("calculate")
@@ -79,12 +79,12 @@ class AgentSpecRegistry:
                 model_policy=_policy(
                     ModelPolicy(provider="ollama", model="qwen3:4b", max_tokens=8192, temperature=0.35)
                 ),
-                default_tools=["duckduckgo_search", "knowledge_base_search"],
-                allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
+                default_tools=["web_search", "knowledge_base_search"],
+                allowed_tools=["web_search", "knowledge_base_search", "calculator"],
                 tool_policy=_policy(
                     ToolPolicy(
-                        default_tools=["duckduckgo_search", "knowledge_base_search"],
-                        allowed_tools=["duckduckgo_search", "knowledge_base_search", "calculator"],
+                        default_tools=["web_search", "knowledge_base_search"],
+                        allowed_tools=["web_search", "knowledge_base_search", "calculator"],
                         default_actions=["web_search", "knowledge_search"],
                     )
                 ),

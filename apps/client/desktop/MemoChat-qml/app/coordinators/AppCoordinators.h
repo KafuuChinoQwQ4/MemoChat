@@ -55,6 +55,7 @@ struct PostLoginBootstrapSnapshot
     bool isChatPage = false;
     bool postLoginBootstrapStarted = false;
     bool chatTransportReady = false;
+    bool chatLoginCompleted = false;
     bool dialogsReady = false;
     int pendingUid = 0;
     QString pendingToken;
@@ -79,9 +80,11 @@ struct PostLoginBootstrapPort
     std::function<void(const std::shared_ptr<UserInfo>&, const QString&)> applyLoggedInUserSession;
     std::function<void()> clearMissingUserDialogState;
     std::function<void(bool)> setPostLoginBootstrapStarted;
+    std::function<void(bool)> setChatLoginCompleted;
     std::function<void(int, std::function<void()>)> runDelayed;
     std::function<void(int)> openCachesAndDraftsForUser;
     std::function<void()> bootstrapDialogs;
+    std::function<void()> ensureContactsInitialized;
     std::function<void()> ensureApplyInitialized;
     std::function<void()> requestRelationBootstrap;
     std::function<void(int)> startHeartbeatTimer;
@@ -124,11 +127,8 @@ struct RelationBootstrapPort
     std::function<void()> ensureChatListInitialized;
     std::function<std::vector<std::shared_ptr<FriendInfo>>()> friendListSnapshot;
     std::function<void(const std::shared_ptr<FriendInfo>&)> upsertChatListFriend;
-    std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextContactPage;
-    std::function<void(const std::vector<std::shared_ptr<FriendInfo>>&)> setContacts;
-    std::function<void(const std::shared_ptr<FriendInfo>&)> upsertContact;
+    std::function<void(const std::vector<std::shared_ptr<FriendInfo>>&)> setContactsFromSnapshot;
     std::function<void()> refreshContactProfiles;
-    std::function<void()> markContactPageLoaded;
     std::function<void()> refreshContactLoadMoreState;
     std::function<void(bool)> setContactsReady;
     std::function<void()> refreshApplySnapshot;

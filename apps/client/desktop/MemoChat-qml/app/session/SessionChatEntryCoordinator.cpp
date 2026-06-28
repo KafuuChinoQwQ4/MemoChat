@@ -41,6 +41,10 @@ void SessionChatEntryCoordinator::onSwitchToChat()
     _port.setLastHeartbeatAckMs(QDateTime::currentMSecsSinceEpoch());
     _port.switchToChatPage();
     _port.resetChatEntryRuntime();
+    if (_port.setChatLoginCompleted)
+    {
+        _port.setChatLoginCompleted(true);
+    }
     _port.setPostLoginBootstrapStarted(false);
 
     auto userInfo = _port.currentUserInfo();
@@ -59,7 +63,12 @@ void SessionChatEntryCoordinator::onSwitchToChat()
 void SessionChatEntryCoordinator::beginPostLoginBootstrap()
 {
     const PostLoginBootstrapSnapshot snapshot = _port.snapshot();
-    if (!snapshot.isChatPage || snapshot.postLoginBootstrapStarted || !snapshot.chatTransportReady)
+    if (!snapshot.isChatPage || snapshot.postLoginBootstrapStarted)
+    {
+        return;
+    }
+
+    if (!snapshot.chatTransportReady || !snapshot.chatLoginCompleted)
     {
         return;
     }
@@ -88,6 +97,7 @@ void SessionChatEntryCoordinator::runPostLoginBootstrap()
                          qInfo() << "[PERF] Stage-0: Bootstrap all data in parallel, ts:"
                                  << QDateTime::currentMSecsSinceEpoch();
                          _port.bootstrapDialogs();
+                         _port.ensureContactsInitialized();
                          _port.ensureApplyInitialized();
                          _port.requestRelationBootstrap();
                          _port.startHeartbeatTimer(kHeartbeatIntervalMs);

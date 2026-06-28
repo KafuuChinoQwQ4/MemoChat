@@ -504,7 +504,22 @@ void GroupController::kickGroupMember(const QString& userId)
 
 void GroupController::quitCurrentGroup()
 {
-    sendGroupIdCommand(ReqId::ID_QUIT_GROUP_REQ, QString());
+    const GroupCommandSnapshot snapshot = commandSnapshot();
+    if (!requireUser(snapshot) || !requireCurrentGroup(snapshot))
+    {
+        return;
+    }
+    if (snapshot.currentGroupRole >= 3)
+    {
+        dissolveCurrentGroup();
+        return;
+    }
+
+    const QJsonObject payload = memochat::group_payload::buildGroupIdPayload(snapshot.selfUid, snapshot.currentGroupId);
+    if (_command_port.send)
+    {
+        _command_port.send(ReqId::ID_QUIT_GROUP_REQ, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    }
 }
 
 void GroupController::dissolveCurrentGroup()

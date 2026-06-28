@@ -83,6 +83,26 @@ void mergeCachedPublicFields(QVariantMap& profile, const QVariantMap& cached)
         profile.insert(QStringLiteral("sex"), cached.value(QStringLiteral("sex")));
     }
 }
+
+std::vector<int> visibleContactUidsMissingPublicId(FriendListModel* model)
+{
+    std::vector<int> uids;
+    if (!model)
+    {
+        return uids;
+    }
+
+    for (int i = 0; i < model->rowCount(); ++i)
+    {
+        const QVariantMap row = model->get(i);
+        const int uid = row.value(QStringLiteral("uid")).toInt();
+        if (uid > 0 && row.value(QStringLiteral("userId")).toString().trimmed().isEmpty())
+        {
+            uids.push_back(uid);
+        }
+    }
+    return uids;
+}
 } // namespace
 
 ContactController::ContactController(ClientGateway* gateway, QObject* parent)
@@ -92,6 +112,7 @@ ContactController::ContactController(ClientGateway* gateway, QObject* parent)
     , _search_result_model(new SearchResultModel(this))
     , _apply_request_model(new ApplyRequestModel(this))
 {
+    _contact_list_model->setContactSectionOrderingEnabled(true);
     connect(_apply_request_model,
             &ApplyRequestModel::unapprovedCountChanged,
             this,
@@ -213,27 +234,79 @@ bool ContactController::applyReady() const
 
 void ContactController::ensureContactsInitialized()
 {
-    if (_contacts_ready)
+    const bool modelHasContacts = _contact_list_model && _contact_list_model->rowCount() > 0;
+    const bool modelMissingPublicIds = !visibleContactUidsMissingPublicId(_contact_list_model).empty();
+    if (_contacts_ready && modelHasContacts && !modelMissingPublicIds)
     {
         return;
     }
 
+    const std::vector<std::shared_ptr<FriendInfo>> snapshotContacts =
+        _bootstrap_port.friendSnapshot ? _bootstrap_port.friendSnapshot() : std::vector<std::shared_ptr<FriendInfo>>{};
+    if (_contacts_ready)
+    {
+        if (!snapshotContacts.empty())
+        {
+            if (modelHasContacts)
+            {
+                bool updatedVisibleContacts = false;
+                for (const auto& friendInfo : snapshotContacts)
+                {
+                    if (friendInfo && _contact_list_model->indexOfUid(friendInfo->_uid) >= 0)
+                    {
+                        _contact_list_model->upsertFriend(friendInfo);
+                        updatedVisibleContacts = true;
+                    }
+                }
+                if (updatedVisibleContacts)
+                {
+                    refreshCurrentContactFromStore();
+                    emit contactProfilesChanged();
+                }
+            }
+            else
+            {
+                setContacts(snapshotContacts);
+            }
+            refreshContactLoadMoreState();
+        }
+        for (const int uid : visibleContactUidsMissingPublicId(_contact_list_model))
+        {
+            requestPublicProfileByUid(uid);
+        }
+        return;
+    }
+
+    bool loadedAnyContacts = !snapshotContacts.empty();
     if (_bootstrap_port.ensureChatListInitialized)
     {
         _bootstrap_port.ensureChatListInitialized();
     }
-    const std::vector<std::shared_ptr<FriendInfo>> contacts =
-        _bootstrap_port.nextPage ? _bootstrap_port.nextPage() : std::vector<std::shared_ptr<FriendInfo>>{};
-    setContacts(contacts);
-    if (_bootstrap_port.markPageLoaded)
+    if (!snapshotContacts.empty())
     {
-        _bootstrap_port.markPageLoaded();
+        setContacts(snapshotContacts);
+        refreshContactLoadMoreState();
     }
-    if (_bootstrap_port.loadFinished)
+    else
     {
-        setCanLoadMoreContacts(!_bootstrap_port.loadFinished());
+        const std::vector<std::shared_ptr<FriendInfo>> contacts =
+            _bootstrap_port.nextPage ? _bootstrap_port.nextPage() : std::vector<std::shared_ptr<FriendInfo>>{};
+        setContacts(contacts);
+        loadedAnyContacts = !contacts.empty();
+        if (_bootstrap_port.markPageLoaded)
+        {
+            _bootstrap_port.markPageLoaded();
+        }
+        if (_bootstrap_port.loadFinished)
+        {
+            setCanLoadMoreContacts(!_bootstrap_port.loadFinished());
+        }
     }
-    setContactsReady(true);
+    if (!loadedAnyContacts && _command_port.requestRelationBootstrap)
+    {
+        _command_port.requestRelationBootstrap();
+    }
+    setContactsReady(loadedAnyContacts);
 }
 
 void ContactController::ensureApplyInitialized()
@@ -467,6 +540,12 @@ void ContactController::loadMoreContacts()
     if (!_gateway || !_gateway->userMgr())
     {
         setAuthStatus("用户状态异常，请重新登录", true);
+        return;
+    }
+
+    refreshContactLoadMoreState();
+    if (!_can_load_more_contacts)
+    {
         return;
     }
 
@@ -946,7 +1025,9 @@ void ContactController::refreshContactLoadMoreState()
         setCanLoadMoreContacts(false);
         return;
     }
-    setCanLoadMoreContacts(!_gateway->userMgr()->IsLoadConFin());
+    const int visibleContacts = _contact_list_model ? _contact_list_model->rowCount() : 0;
+    const int totalContacts = static_cast<int>(_gateway->userMgr()->GetFriendListSnapshot().size());
+    setCanLoadMoreContacts(visibleContacts < totalContacts && !_gateway->userMgr()->IsLoadConFin());
 }
 
 void ContactController::refreshCurrentContactFromStore()

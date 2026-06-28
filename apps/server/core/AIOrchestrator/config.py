@@ -120,7 +120,7 @@ class RAGConfig(BaseModel):
 
 
 class ToolsConfig(BaseModel):
-    enabled: list[str] = ["duckduckgo_search", "knowledge_base", "calculator", "translator"]
+    enabled: list[str] = ["web_search", "knowledge_base", "calculator", "translator"]
     rate_limit_per_minute: int = 10
 
 

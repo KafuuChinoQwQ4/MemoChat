@@ -2,22 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import re
+from typing import TYPE_CHECKING
 
 import structlog
 from graph.recommendation import RecommendationEngine
 from harness.contracts import PlanStep, ToolObservation, ToolSpec
-from harness.knowledge.service import KnowledgeService
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
+from tools.knowledge_base_tool import KnowledgeBaseTool
 from tools.registry import ToolRegistry
+
+if TYPE_CHECKING:
+    from harness.knowledge.service import KnowledgeService
 
 logger = structlog.get_logger()
 
 
 class ToolExecutor:
-    def __init__(self, knowledge_service: KnowledgeService, graph_memory_service=None):
+    def __init__(self, knowledge_service: KnowledgeService | None, graph_memory_service=None):
         self._knowledge_service = knowledge_service
         self._graph_memory_service = graph_memory_service
         self._tool_registry = ToolRegistry.get_instance()
+        self._register_knowledge_tool()
         self._recommendation = RecommendationEngine()
 
     def list_tools(self) -> list[dict]:
@@ -42,29 +47,18 @@ class ToolExecutor:
         for step in plan_steps:
             try:
                 if step.action == "knowledge_search":
-                    with trace_context(
-                        "tool_knowledge_search",
-                        run_type="retriever",
-                        inputs={"uid": uid, "content": content, "top_k": step.parameters.get("top_k")},
-                        metadata={"tool": "knowledge_search", "source": "knowledge_base"},
-                        tags=["tool", "rag"],
-                    ) as run:
-                        try:
-                            hits = await self._knowledge_service.search(
-                                uid, content, top_k=step.parameters.get("top_k")
-                            )
-                            set_run_output(
-                                run, {"hit_count": len(hits), "scores": [hit.get("score", 0.0) for hit in hits]}
-                            )
-                        except Exception as exc:
-                            set_run_error(run, exc)
-                            raise
+                    payload = self._knowledge_payload(uid, content, step.parameters)
+                    result = await self._invoke_tool("knowledge_base_search", payload)
                     observations.append(
                         ToolObservation(
                             name="knowledge_search",
-                            source="knowledge_base",
-                            output=self._format_knowledge_hits(hits),
-                            metadata={"hit_count": len(hits)},
+                            source="builtin",
+                            output=result,
+                            metadata={
+                                "tool": "knowledge_base_search",
+                                "hit_count": self._knowledge_hit_count(result),
+                                "strategy": step.parameters.get("strategy", ""),
+                            },
                         )
                     )
                 elif step.action == "web_search":
@@ -73,7 +67,7 @@ class ToolExecutor:
                     result = await self._run_web_searches(queries, max_results=max_results)
                     observations.append(
                         ToolObservation(
-                            name="duckduckgo_search",
+                            name="web_search",
                             source="builtin",
                             output=result,
                             metadata={
@@ -115,6 +109,14 @@ class ToolExecutor:
                 )
 
         return observations
+
+    def _register_knowledge_tool(self) -> None:
+        if self._knowledge_service is None:
+            return
+        tool = KnowledgeBaseTool(search_provider=self._knowledge_service.search).get_tool()
+        replace = getattr(self._tool_registry, "register_or_replace_tool", None)
+        if callable(replace):
+            replace(tool)
 
     async def _invoke_tool(self, tool_name: str, payload: dict) -> str:
         for tool in self._tool_registry.get_tools():
@@ -167,9 +169,9 @@ class ToolExecutor:
 
     def _builtin_tool_specs(self) -> dict[str, ToolSpec]:
         return {
-            "duckduckgo_search": ToolSpec(
-                name="duckduckgo_search",
-                display_name="DuckDuckGo Search",
+            "web_search": ToolSpec(
+                name="web_search",
+                display_name="Web Search",
                 description="Search the public web and return summarized results.",
                 source="builtin",
                 category="search",
@@ -304,15 +306,17 @@ class ToolExecutor:
             return
         raise PermissionError(f"Tool {spec.name} requires confirmation before execution")
 
-    def _format_knowledge_hits(self, hits: list[dict]) -> str:
-        if not hits:
-            return "知识库中没有找到相关内容。"
-        formatted = []
-        for index, hit in enumerate(hits, start=1):
-            formatted.append(
-                f"[{index}] 来源: {hit.get('source', '')} 相关度: {hit.get('score', 0.0):.2f}\n{hit.get('content', '')[:320]}"
-            )
-        return "\n\n".join(formatted)
+    def _knowledge_payload(self, uid: int, content: str, parameters: dict) -> dict:
+        payload = {"query": content, "uid": uid}
+        top_k = parameters.get("top_k") if isinstance(parameters, dict) else None
+        if top_k is not None:
+            payload["top_k"] = self._coerce_int(top_k, default=5, minimum=1, maximum=12)
+        return payload
+
+    def _knowledge_hit_count(self, output: str) -> int:
+        if not output or "知识库中没有找到" in output or "知识库检索失败" in output:
+            return 0
+        return len(re.findall(r"(?m)^\[\d+\]\s+来源:", output))
 
     def _extract_expression(self, text: str) -> str:
         matches = re.findall(r"[\d\.\+\-\*\/\(\)\%\^\s]+", text)
@@ -324,7 +328,7 @@ class ToolExecutor:
         outputs: list[str] = []
         per_query = max(1, min(max_results, 5))
         for query in queries:
-            result = await self._invoke_tool("duckduckgo_search", {"query": query, "max_results": per_query})
+            result = await self._invoke_tool("web_search", {"query": query, "max_results": per_query})
             outputs.append(f"### 查询: {query}\n{result}")
         return "\n\n".join(outputs)
 

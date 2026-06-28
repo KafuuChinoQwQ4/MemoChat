@@ -44,6 +44,7 @@ from harness.evals.service import AgentEvalCase, AgentEvalService
 from harness.execution.tool_executor import ToolExecutor
 from harness.feedback.trace_store import AgentTraceStore
 from harness.guardrails.service import GuardrailService
+from harness.handoffs.flow_graph import HandoffFlowGraph
 from harness.handoffs.service import AgentHandoffService
 from harness.interop.service import AgentInteropService
 from harness.layers import list_harness_layers
@@ -56,6 +57,7 @@ from harness.runtime.task_service import AgentTaskService
 from harness.skills.registry import SkillRegistry
 from harness.skills.specs import AgentSpecRegistry
 from llm.base import LLMResponse, LLMStreamChunk, LLMUsage
+from tools.registry import ToolRegistry
 
 
 class FakePlanner:
@@ -262,7 +264,7 @@ class ReactToolExecutor:
     ):
         self.calls.append(plan_steps)
         if plan_steps and plan_steps[0].action == "web_search":
-            return [ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")]
+            return [ToolObservation(name="web_search", source="builtin", output="未找到相关结果。")]
         return [ToolObservation(name="knowledge_search", source="builtin", output="补充知识证据")]
 
 
@@ -291,7 +293,7 @@ class MultiRoundReactToolExecutor:
         for step in plan_steps:
             if step.action == "web_search":
                 observations.append(
-                    ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")
+                    ToolObservation(name="web_search", source="builtin", output="未找到相关结果。")
                 )
             elif step.action == "knowledge_search":
                 self.knowledge_calls += 1
@@ -337,11 +339,14 @@ class RecordingLLM:
 
 
 class FakeFlowAgentService:
-    def __init__(self):
+    def __init__(self, fail_on_skill: str = ""):
         self.calls: list[SimpleNamespace] = []
+        self.fail_on_skill = fail_on_skill
 
     async def run_turn(self, request):
         self.calls.append(request)
+        if request.skill_name == self.fail_on_skill:
+            raise RuntimeError(f"{request.skill_name} failed")
         index = len(self.calls)
         return SimpleNamespace(
             session_id=request.session_id or f"session-{index}",
@@ -507,7 +512,7 @@ class HarnessStructureTests(unittest.TestCase):
             description="Research assistant",
             system_prompt="Use cited evidence.",
             default_tools=["knowledge_base_search"],
-            allowed_tools=["knowledge_base_search", "duckduckgo_search"],
+            allowed_tools=["knowledge_base_search", "web_search"],
             memory_policy={"include_graph": True},
         )
         tool = ToolSpec(
@@ -654,6 +659,19 @@ class HarnessStructureTests(unittest.TestCase):
             executor._validate_tool_payload(spec, {"path": "a.txt", "confirmed": True}),
             {"path": "a.txt"},
         )
+
+    def test_knowledge_tool_is_registered_by_executor_service_injection(self):
+        previous = ToolRegistry._instance
+        try:
+            ToolRegistry._instance = None
+            registry = ToolRegistry.get_instance()
+            self.assertNotIn("knowledge_base_search", registry.get_tool_names())
+
+            ToolExecutor(FakeKnowledgeService(chunks=[{"source": "doc.md", "content": "chunk", "score": 0.9}]))
+
+            self.assertIn("knowledge_base_search", registry.get_tool_names())
+        finally:
+            ToolRegistry._instance = previous
 
     def test_guardrail_blocks_unconfirmed_write_tool(self):
         service = GuardrailService()
@@ -850,6 +868,11 @@ class HarnessStructureTests(unittest.TestCase):
     def test_skill_registry_resolves_core_agent_intents(self):
         registry = SkillRegistry()
 
+        general_chat = registry.resolve("", "今天聊点工程设计", "")
+        self.assertEqual(general_chat.name, "general_chat")
+        self.assertTrue(general_chat.allow_web)
+        self.assertTrue(general_chat.allow_knowledge)
+        self.assertEqual(general_chat.default_actions, ["web_search", "knowledge_search"])
         self.assertEqual(
             registry.resolve("", "根据知识库文档回答", "").name,
             "knowledge_copilot",
@@ -912,6 +935,22 @@ class HarnessStructureTests(unittest.TestCase):
         self.assertEqual(web_step.parameters["max_results"], 5)
         self.assertGreaterEqual(len(web_step.parameters["queries"]), 2)
 
+    def test_default_private_chat_uses_web_and_knowledge_tools(self):
+        registry = SkillRegistry()
+        planner = PlanningPolicy(registry)
+        request = SimpleNamespace(
+            skill_name="",
+            content="帮我判断这个设计方案是否合理",
+            requested_tools=[],
+        )
+        skill = planner.resolve_skill(request)
+        steps = planner.build_plan(request, skill)
+
+        self.assertEqual(skill.name, "general_chat")
+        self.assertEqual([step.action for step in steps], ["web_search", "knowledge_search"])
+        self.assertEqual(steps[0].parameters["strategy"], "plan_execute")
+        self.assertEqual(steps[1].parameters["strategy"], "plan_execute")
+
     def test_planner_adds_react_followup_for_weak_search(self):
         registry = SkillRegistry()
         planner = PlanningPolicy(registry)
@@ -925,7 +964,7 @@ class HarnessStructureTests(unittest.TestCase):
             request,
             skill,
             [PlanStep(action="web_search", reason="initial")],
-            [ToolObservation(name="duckduckgo_search", source="builtin", output="未找到相关结果。")],
+            [ToolObservation(name="web_search", source="builtin", output="未找到相关结果。")],
         )
 
         self.assertEqual(len(followups), 1)
@@ -1549,6 +1588,9 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         agent_service = FakeFlowAgentService()
         service = AgentHandoffService(agent_service=agent_service)
 
+        self.assertIsInstance(service._flow_graph, HandoffFlowGraph)
+        self.assertEqual(service.orchestration_backend, "langgraph")
+
         result = await service.run_flow(
             flow_name="research_write_review",
             uid=1,
@@ -1564,6 +1606,28 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result["graph"].nodes), 3)
         self.assertEqual(len(result["graph"].edges), 2)
         self.assertEqual(result["graph"].edges[0].relation, "handoff")
+        self.assertEqual(result["graph"].metadata["graph"]["backend"], "langgraph")
+        self.assertEqual(result["graph"].metadata["graph"]["nodes"], ["run_step", "run_step", "run_step"])
+        self.assertEqual(result["graph"].nodes[0].metadata["graph_backend"], "langgraph")
+
+    async def test_handoff_flow_graph_stops_after_failed_step(self):
+        agent_service = FakeFlowAgentService(fail_on_skill="writer")
+        service = AgentHandoffService(agent_service=agent_service)
+
+        result = await service.run_flow(
+            flow_name="research_write_review",
+            uid=1,
+            content="调研并写一份说明",
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual([call.skill_name for call in agent_service.calls], ["researcher", "writer"])
+        self.assertEqual([node.status for node in result["graph"].nodes], ["ok", "failed"])
+        self.assertEqual(len(result["graph"].edges), 1)
+        self.assertEqual(result["messages"][-1].role, "handoff")
+        self.assertIn("RuntimeError", result["messages"][-1].content)
+        self.assertEqual(result["graph"].metadata["graph"]["backend"], "langgraph")
+        self.assertEqual(result["graph"].metadata["graph"]["nodes"], ["run_step", "run_step"])
 
     async def test_handoff_service_reports_missing_flow(self):
         service = AgentHandoffService(agent_service=FakeFlowAgentService())
@@ -1937,9 +2001,43 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ToolExecutorSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_knowledge_search_invokes_knowledge_base_tool(self):
+        class FakeKnowledgeTool:
+            name = "knowledge_base_search"
+            description = "knowledge"
+
+            def __init__(self):
+                self.calls: list[dict] = []
+
+            async def ainvoke(self, payload):
+                self.calls.append(dict(payload))
+                return "[1] 来源: architecture.md (相关度: 0.92)\nchunk\n\n[2] 来源: plan.md (相关度: 0.81)\nchunk"
+
+        knowledge_tool = FakeKnowledgeTool()
+        executor = ToolExecutor.__new__(ToolExecutor)
+        executor._tool_registry = SimpleNamespace(get_tools=lambda: [knowledge_tool])
+
+        observations = await executor.execute(
+            uid=9,
+            content="帮我判断这个设计方案",
+            plan_steps=[
+                PlanStep(
+                    action="knowledge_search",
+                    reason="test",
+                    parameters={"top_k": 7, "strategy": "plan_execute"},
+                )
+            ],
+        )
+
+        self.assertEqual(knowledge_tool.calls, [{"query": "帮我判断这个设计方案", "uid": 9, "top_k": 7}])
+        self.assertEqual(observations[0].name, "knowledge_search")
+        self.assertEqual(observations[0].source, "builtin")
+        self.assertEqual(observations[0].metadata["tool"], "knowledge_base_search")
+        self.assertEqual(observations[0].metadata["hit_count"], 2)
+
     async def test_web_search_runs_deduped_multi_query_plan(self):
         class FakeSearchTool:
-            name = "duckduckgo_search"
+            name = "web_search"
             description = "search"
 
             def __init__(self):

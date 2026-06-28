@@ -152,7 +152,7 @@ class ContactFacadeContractTests(unittest.TestCase):
             friend_model,
             "FriendListModel::FriendEntry FriendListModel::mergeSparseEntry(const FriendEntry& entry, const FriendEntry& existing)",
         )
-        self.assertIn("stored = mergeSparseEntry(entry, stored);", upsert_body)
+        self.assertIn("stored = mergeSparseEntry(nextEntry, stored);", upsert_body)
         self.assertIn("merged.userId = nonEmptyOrExisting(entry.userId, existing.userId);", merge_body)
         self.assertIn("merged.name = nonEmptyOrExisting(entry.name, existing.name);", merge_body)
         self.assertNotIn("stored = entry;", upsert_body)
@@ -250,11 +250,31 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("struct ContactBootstrapPort", contact_header)
         self.assertIn("void setBootstrapPort(ContactBootstrapPort port);", contact_header)
         self.assertIn("_bootstrap_port.ensureChatListInitialized", contact_ensure_body)
+        self.assertIn("std::function<std::vector<std::shared_ptr<FriendInfo>>()> friendSnapshot;", contact_header)
+        self.assertIn("_bootstrap_port.friendSnapshot", contact_ensure_body)
+        self.assertIn("visibleContactUidsMissingPublicId", contact_source)
+        self.assertIn("const bool modelMissingPublicIds", contact_ensure_body)
+        self.assertIn("if (_contacts_ready && modelHasContacts && !modelMissingPublicIds)", contact_ensure_body)
+        self.assertIn("const std::vector<std::shared_ptr<FriendInfo>> snapshotContacts", contact_ensure_body)
+        self.assertIn("if (_contacts_ready)", contact_ensure_body)
+        self.assertIn("if (!snapshotContacts.empty())", contact_ensure_body)
+        self.assertIn("setContacts(snapshotContacts);", contact_ensure_body)
+        self.assertIn("_contact_list_model->upsertFriend(friendInfo);", contact_ensure_body)
+        self.assertIn("requestPublicProfileByUid(uid);", contact_ensure_body)
+        self.assertLess(
+            contact_ensure_body.index("if (_contacts_ready)"),
+            contact_ensure_body.index("if (_bootstrap_port.ensureChatListInitialized)"),
+        )
         self.assertIn("_bootstrap_port.nextPage", contact_ensure_body)
         self.assertIn("setContacts(contacts);", contact_ensure_body)
         self.assertIn("_bootstrap_port.markPageLoaded", contact_ensure_body)
         self.assertIn("setCanLoadMoreContacts(!_bootstrap_port.loadFinished());", contact_ensure_body)
-        self.assertIn("setContactsReady(true);", contact_ensure_body)
+        self.assertIn("bool loadedAnyContacts = !snapshotContacts.empty();", contact_ensure_body)
+        self.assertIn("loadedAnyContacts = !contacts.empty();", contact_ensure_body)
+        self.assertIn("if (!loadedAnyContacts && _command_port.requestRelationBootstrap)", contact_ensure_body)
+        self.assertIn("_command_port.requestRelationBootstrap();", contact_ensure_body)
+        self.assertIn("setContactsReady(loadedAnyContacts);", contact_ensure_body)
+        self.assertIn("return _gateway.userMgr()->GetFriendListSnapshot();", port_binder)
         self.assertIn("refreshCurrentContactFromStore();", contact_set_body)
         self.assertIn("refreshCurrentContactFromStore();", contact_upsert_body)
         self.assertIn("void refreshCurrentContactFromStore();", contact_header)
@@ -321,11 +341,19 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("std::function<void()> refreshApplySnapshot;", relation_port)
         self.assertIn("std::function<void()> refreshContactProfiles;", relation_port)
         self.assertIn("std::function<std::vector<std::shared_ptr<FriendInfo>>()> friendListSnapshot;", relation_port)
-        self.assertIn("std::function<std::vector<std::shared_ptr<FriendInfo>>()> nextContactPage;", relation_port)
+        self.assertIn(
+            "std::function<void(const std::vector<std::shared_ptr<FriendInfo>>&)> setContactsFromSnapshot;",
+            relation_port,
+        )
+        self.assertNotIn("nextContactPage", relation_port)
+        self.assertNotIn("markContactPageLoaded", relation_port)
         self.assertNotIn("refreshApplyModel", relation_port)
         self.assertNotIn("setApplyReady", relation_port)
         self.assertIn("_port.refreshContactProfiles();", relation_updated)
-        self.assertIn("const auto contactList = _port.nextContactPage();", relation_updated)
+        self.assertIn("const auto friendSnapshot = _port.friendListSnapshot();", relation_updated)
+        self.assertIn("_port.setContactsFromSnapshot(friendSnapshot);", relation_updated)
+        self.assertNotIn("_port.nextContactPage();", relation_updated)
+        self.assertNotIn("_port.markContactPageLoaded();", relation_updated)
         self.assertIn("_port.refreshApplySnapshot();", relation_updated)
         self.assertNotIn("_port.refreshApplyModel();", relation_updated)
         self.assertNotIn("_port.setApplyReady(true);", relation_updated)
@@ -333,6 +361,7 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("void refreshContactProfiles();", contact_header)
         self.assertIn("void handleContactHttpFinished(ReqId id, const QString& res, ErrorCodes err);", contact_header)
         self.assertIn("_features.contactController.refreshContactProfiles();", port_binder)
+        self.assertIn("_features.contactController.setContacts(contacts);", port_binder)
         self.assertIn("const auto friends = _gateway->userMgr()->GetFriendListSnapshot();", refresh_profiles_body)
         self.assertIn("_contact_list_model->indexOfUid(friendInfo->_uid) >= 0", refresh_profiles_body)
         self.assertIn("_contact_list_model->upsertFriend(friendInfo);", refresh_profiles_body)
@@ -342,6 +371,64 @@ class ContactFacadeContractTests(unittest.TestCase):
         self.assertIn("_features.contactController.refreshApplySnapshot();", port_binder)
         self.assertNotIn("_features.contactController.refreshApplySnapshot();", app_controller)
         self.assertNotIn("refreshApplyModel();\n                                },", app_controller + port_binder)
+
+    def test_contact_load_more_projection_uses_visible_model_after_full_snapshot(self):
+        app_loading = read(APP / "controller/AppControllerLoadingState.cpp")
+        contact_source = read(CONTACT / "controller/ContactController.cpp")
+
+        app_refresh = extract_function(app_loading, "void AppController::refreshContactLoadMoreState")
+        contact_refresh = extract_function(contact_source, "void ContactController::refreshContactLoadMoreState")
+        load_more = extract_function(contact_source, "void ContactController::loadMoreContacts")
+
+        self.assertIn("_features.contactController.refreshContactLoadMoreState();", app_refresh)
+        self.assertNotIn("_gateway.userMgr()->IsLoadConFin()", app_refresh)
+        self.assertIn("void refreshContactLoadMoreState();", read(CONTACT / "controller/ContactController.h"))
+        self.assertIn(
+            "const int visibleContacts = _contact_list_model ? _contact_list_model->rowCount() : 0;", contact_refresh
+        )
+        self.assertIn(
+            "const int totalContacts = static_cast<int>(_gateway->userMgr()->GetFriendListSnapshot().size());",
+            contact_refresh,
+        )
+        self.assertIn("visibleContacts < totalContacts && !_gateway->userMgr()->IsLoadConFin()", contact_refresh)
+        self.assertIn("refreshContactLoadMoreState();", load_more)
+        self.assertIn("if (!_can_load_more_contacts)", load_more)
+        self.assertLess(load_more.index("if (!_can_load_more_contacts)"), load_more.index("GetConListPerPage"))
+
+    def test_contact_list_supports_section_grouping(self):
+        contact_header = read(CONTACT / "model/FriendListModel.h")
+        contact_model = read(CONTACT / "model/FriendListModel.cpp")
+        contact_mutations = read(CONTACT / "model/FriendListModelMutations.cpp")
+        contact_controller = read(CONTACT / "controller/ContactController.cpp")
+        contact_list = read(CONTACT / "view/ContactListPane.qml")
+
+        for token in (
+            "SectionKeyRole",
+            "QString sectionKey;",
+            "void setContactSectionOrderingEnabled(bool enabled);",
+            "static QString sectionKeyForEntry(const FriendEntry& entry);",
+            "static bool contactSectionLessThan(const FriendEntry& lhs, const FriendEntry& rhs);",
+        ):
+            with self.subTest(header_token=token):
+                self.assertIn(token, contact_header)
+
+        for token in (
+            '{SectionKeyRole, "sectionKey"}',
+            "case SectionKeyRole:",
+            "return entry.sectionKey;",
+            "std::stable_sort(items.begin(), items.end(), contactSectionLessThan);",
+            'return QStringLiteral("#");',
+        ):
+            with self.subTest(model_token=token):
+                self.assertIn(token, contact_model)
+
+        self.assertIn("_contact_list_model->setContactSectionOrderingEnabled(true);", contact_controller)
+        self.assertIn("sortForContactSections(nextItems);", contact_mutations)
+        self.assertIn('{"sectionKey", entry.sectionKey}', read(CONTACT / "model/FriendListModelQueries.cpp"))
+        self.assertIn('section.property: "sectionKey"', contact_list)
+        self.assertIn("section.criteria: ViewSection.FullString", contact_list)
+        self.assertIn("section.delegate: Rectangle", contact_list)
+        self.assertIn("required property string section", contact_list)
 
     def test_contact_commands_are_feature_owned_not_appcontroller_forwarded(self):
         header = read(APP / "controller/AppController.h")
@@ -744,7 +831,7 @@ class ContactFacadeContractTests(unittest.TestCase):
         shell_content = read(CHAT_VIEW / "ChatShellContent.qml")
 
         self.assertIn("readonly property string contactIdentityText", contact_list)
-        self.assertIn('? ("ID: " + userId)', contact_list)
+        self.assertIn('? ("ID: " + contactDelegate.userId)', contact_list)
         self.assertIn(': "ID: 未分配"', contact_list)
         self.assertNotIn('"UID: " + uid', contact_list)
         self.assertIn("text: contactDelegate.contactIdentityText", contact_list)

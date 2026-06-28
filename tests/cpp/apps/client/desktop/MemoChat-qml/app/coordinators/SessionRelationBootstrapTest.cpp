@@ -24,10 +24,7 @@ class RelationBootstrapHarness
 public:
     RelationBootstrapSnapshot snapshot;
     int refreshContactProfilesCalls = 0;
-    int nextContactPageCalls = 0;
-    int setContactsCalls = 0;
-    int upsertContactCalls = 0;
-    int markContactPageLoadedCalls = 0;
+    int setContactsFromSnapshotCalls = 0;
     int refreshContactLoadMoreStateCalls = 0;
     int setContactsReadyCalls = 0;
     int refreshApplySnapshotCalls = 0;
@@ -37,8 +34,8 @@ public:
     int upsertChatListFriendCalls = 0;
     int refreshDialogModelIncrementalCalls = 0;
     int flushIncomingMessageRouterCalls = 0;
-    std::vector<std::shared_ptr<FriendInfo>> nextContactPageResult;
     std::vector<std::shared_ptr<FriendInfo>> friendSnapshotResult;
+    int lastSetContactsFromSnapshotSize = 0;
 
     RelationBootstrapPort port()
     {
@@ -65,26 +62,14 @@ public:
         {
             ++upsertChatListFriendCalls;
         };
-        p.nextContactPage = [this]()
+        p.setContactsFromSnapshot = [this](const std::vector<std::shared_ptr<FriendInfo>>& contacts)
         {
-            ++nextContactPageCalls;
-            return nextContactPageResult;
-        };
-        p.setContacts = [this](const std::vector<std::shared_ptr<FriendInfo>>&)
-        {
-            ++setContactsCalls;
-        };
-        p.upsertContact = [this](const std::shared_ptr<FriendInfo>&)
-        {
-            ++upsertContactCalls;
+            ++setContactsFromSnapshotCalls;
+            lastSetContactsFromSnapshotSize = static_cast<int>(contacts.size());
         };
         p.refreshContactProfiles = [this]()
         {
             ++refreshContactProfilesCalls;
-        };
-        p.markContactPageLoaded = [this]()
-        {
-            ++markContactPageLoadedCalls;
         };
         p.refreshContactLoadMoreState = [this]()
         {
@@ -122,16 +107,13 @@ TEST(SessionRelationBootstrapTest, NonChatPageRefreshesContactProfilesBeforeRetu
     RelationBootstrapHarness harness;
     harness.snapshot.isChatPage = false;
     harness.snapshot.contactsReady = true;
-    harness.nextContactPageResult = {};
 
     SessionRelationBootstrap bootstrap(harness.port());
     bootstrap.onRelationBootstrapUpdated();
 
     EXPECT_EQ(harness.refreshContactProfilesCalls, 1);
-    EXPECT_EQ(harness.nextContactPageCalls, 1);
-    EXPECT_EQ(harness.setContactsCalls, 0);
-    EXPECT_EQ(harness.upsertContactCalls, 0);
-    EXPECT_EQ(harness.markContactPageLoadedCalls, 1);
+    EXPECT_EQ(harness.friendListSnapshotCalls, 1);
+    EXPECT_EQ(harness.setContactsFromSnapshotCalls, 1);
     EXPECT_EQ(harness.refreshContactLoadMoreStateCalls, 1);
     EXPECT_EQ(harness.setContactsReadyCalls, 1);
     EXPECT_EQ(harness.refreshApplySnapshotCalls, 1);
@@ -147,7 +129,6 @@ TEST(SessionRelationBootstrapTest, ChatPageStillRefreshesChatAndContactModels)
     harness.snapshot.isChatPage = true;
     harness.snapshot.contactsReady = true;
     harness.friendSnapshotResult = {makeFriend(301), makeFriend(302)};
-    harness.nextContactPageResult = {makeFriend(303)};
 
     SessionRelationBootstrap bootstrap(harness.port());
     bootstrap.onRelationBootstrapUpdated();
@@ -157,9 +138,24 @@ TEST(SessionRelationBootstrapTest, ChatPageStillRefreshesChatAndContactModels)
     EXPECT_EQ(harness.ensureChatListInitializedCalls, 1);
     EXPECT_EQ(harness.friendListSnapshotCalls, 1);
     EXPECT_EQ(harness.upsertChatListFriendCalls, 2);
-    EXPECT_EQ(harness.nextContactPageCalls, 1);
-    EXPECT_EQ(harness.upsertContactCalls, 1);
-    EXPECT_EQ(harness.setContactsCalls, 0);
+    EXPECT_EQ(harness.setContactsFromSnapshotCalls, 1);
+    EXPECT_EQ(harness.lastSetContactsFromSnapshotSize, 2);
     EXPECT_EQ(harness.refreshDialogModelIncrementalCalls, 1);
     EXPECT_EQ(harness.flushIncomingMessageRouterCalls, 1);
+}
+
+TEST(SessionRelationBootstrapTest, ContactModelUsesFullFriendSnapshotInsteadOfNextPage)
+{
+    RelationBootstrapHarness harness;
+    harness.snapshot.isChatPage = false;
+    harness.snapshot.contactsReady = true;
+    harness.friendSnapshotResult = {makeFriend(401), makeFriend(402), makeFriend(403)};
+
+    SessionRelationBootstrap bootstrap(harness.port());
+    bootstrap.onRelationBootstrapUpdated();
+
+    EXPECT_EQ(harness.friendListSnapshotCalls, 1);
+    EXPECT_EQ(harness.setContactsFromSnapshotCalls, 1);
+    EXPECT_EQ(harness.lastSetContactsFromSnapshotSize, 3);
+    EXPECT_EQ(harness.setContactsReadyCalls, 1);
 }

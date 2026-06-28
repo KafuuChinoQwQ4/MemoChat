@@ -36,13 +36,13 @@ void SessionRelationBootstrap::onRelationBootstrapUpdated()
 {
     const RelationBootstrapSnapshot snapshot = _port.snapshot();
     _port.refreshContactProfiles();
+    const auto friendSnapshot = _port.friendListSnapshot();
 
     if (snapshot.isChatPage)
     {
         _port.setChatListInitialized(false);
         _port.ensureChatListInitialized();
 
-        const auto friendSnapshot = _port.friendListSnapshot();
         for (const auto& friendInfo : friendSnapshot)
         {
             if (friendInfo)
@@ -52,22 +52,7 @@ void SessionRelationBootstrap::onRelationBootstrapUpdated()
         }
     }
 
-    const auto contactList = _port.nextContactPage();
-    if (!snapshot.contactsReady)
-    {
-        _port.setContacts(contactList);
-    }
-    else
-    {
-        for (const auto& contact : contactList)
-        {
-            if (contact)
-            {
-                _port.upsertContact(contact);
-            }
-        }
-    }
-    _port.markContactPageLoaded();
+    _port.setContactsFromSnapshot(friendSnapshot);
     _port.refreshContactLoadMoreState();
     _port.setContactsReady(true);
 

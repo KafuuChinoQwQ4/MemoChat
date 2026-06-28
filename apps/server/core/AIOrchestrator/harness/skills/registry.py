@@ -14,7 +14,14 @@ class SkillRegistry:
                     name="general_chat",
                     display_name="General Chat",
                     description="通用对话和问题回答。",
-                    system_prompt="以工业级 AI Agent 的方式回答问题：结论优先、信息可追溯、不臆造事实。",
+                    system_prompt=(
+                        "以工业级 AI Agent 的方式回答问题：结论优先、信息可追溯、不臆造事实。"
+                        "优先结合公开网络搜索观察和用户私有知识库观察；"
+                        "如果两类来源都不足，明确说明证据缺口和不确定性。"
+                    ),
+                    default_actions=["web_search", "knowledge_search"],
+                    allow_web=True,
+                    allow_knowledge=True,
                 ),
                 AgentSkill(
                     name="knowledge_copilot",

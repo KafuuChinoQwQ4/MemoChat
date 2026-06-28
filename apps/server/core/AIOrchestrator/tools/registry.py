@@ -9,10 +9,9 @@ import structlog
 from langchain_core.tools import BaseTool
 
 from .calculator_tool import CalculatorTool
-from .duckduckgo_tool import DuckDuckGoSearchTool
-from .knowledge_base_tool import KnowledgeBaseTool
 from .mcp_bridge import MCPBridge
 from .translator_tool import TranslatorTool
+from .web_search_tool import WebSearchTool
 
 logger = structlog.get_logger()
 
@@ -44,8 +43,7 @@ class ToolRegistry:
             return
 
         tool_instances = [
-            DuckDuckGoSearchTool(),
-            KnowledgeBaseTool(),
+            WebSearchTool(),
             CalculatorTool(),
             TranslatorTool(),
         ]
@@ -100,6 +98,16 @@ class ToolRegistry:
     def get_tools(self) -> list[BaseTool]:
         """返回所有已注册工具"""
         return self._tools
+
+    def register_or_replace_tool(self, tool: BaseTool) -> None:
+        """按名称注册或替换工具，用于把运行时服务适配成工具边界。"""
+        for index, registered in enumerate(self._tools):
+            if registered.name == tool.name:
+                self._tools[index] = tool
+                logger.info("tool.registered", name=tool.name, replace=True)
+                return
+        self._tools.append(tool)
+        logger.info("tool.registered", name=tool.name, replace=False)
 
     def get_tool_names(self) -> list[str]:
         """返回所有工具名称"""

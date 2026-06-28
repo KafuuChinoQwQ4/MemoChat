@@ -9,6 +9,7 @@ namespace
 {
 void MarkRemoteError(memochat::json::JsonValue& out, const char* method_name, const std::string& error, int status_code)
 {
+    out["error"] = ErrorCodes::RPCFailed;
     out["relation_query_remote_method"] = method_name;
     out["relation_query_remote_error"] = error;
     out["relation_query_remote_status_code"] = status_code;

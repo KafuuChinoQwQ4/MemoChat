@@ -33,5 +33,5 @@ description: Use when removing backward-compatibility code (old client/data/prot
 
 ## 验证闭环
 
-- 全量构建 + ctest：见 `skills/memochat-build-verify-workflow`（`cmake --preset linux-full-gcc16` → build → `ctest --preset linux-full-gcc16`）。
+- 按改动风险运行最窄有效验证；触及服务端/客户端可部署产物时使用 `linux-full-gcc16` configure/build，必要时再跑相关 CTest。
 - 若契约测试本就有 pre-existing 失败：用 `git stash` 跑 baseline 对比，确认失败集改动前后一致（零新增回归），而非看绝对失败数。

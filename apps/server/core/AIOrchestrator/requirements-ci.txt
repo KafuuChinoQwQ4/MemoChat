@@ -1,8 +1,11 @@
 asyncpg==0.30.0
 fastapi==0.115.6
 httpx==0.28.1
+langchain-core==0.3.29
+langgraph==0.2.62
 pydantic==2.10.5
 pydantic-settings==2.7.1
+pytest==9.1.1
 pyyaml==6.0.2
 structlog==24.4.0
 # Optional runtime dependencies are lazy-imported by the pet capture endpoint.

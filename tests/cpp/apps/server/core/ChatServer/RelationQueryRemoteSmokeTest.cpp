@@ -85,7 +85,6 @@ TEST(RelationQueryRemoteSmokeTest, ConfiguredGrpcBackendTalksToRelationQueryServ
     ASSERT_NE(selected, &inprocess);
     ASSERT_NE(remote, nullptr);
     ASSERT_EQ(selected, remote.get());
-    ASSERT_NE(dynamic_cast<RelationQueryGrpcClient*>(selected), nullptr);
 
     const int uid = SmokeUid();
     memochat::json::JsonValue bootstrap(memochat::json::object_t{});

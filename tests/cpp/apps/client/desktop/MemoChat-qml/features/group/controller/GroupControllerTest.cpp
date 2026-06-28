@@ -289,6 +289,70 @@ TEST(GroupControllerTest, InviteGroupMemberRejectsUnknownFriendUserIdFromSnapsho
     EXPECT_TRUE(controller.groupStatusError());
 }
 
+TEST(GroupControllerTest, MemberQuitCurrentGroupSendsQuitRequest)
+{
+    GroupController controller(nullptr);
+    int sendCalls = 0;
+    ReqId sentReqId = ID_GET_VARIFY_CODE;
+    QByteArray sentPayload;
+
+    GroupCommandPort port;
+    port.snapshot = []()
+    {
+        GroupCommandSnapshot snapshot = groupSnapshot();
+        snapshot.currentGroupRole = 1;
+        return snapshot;
+    };
+    port.send = [&sendCalls, &sentReqId, &sentPayload](ReqId reqId, const QByteArray& payload)
+    {
+        ++sendCalls;
+        sentReqId = reqId;
+        sentPayload = payload;
+    };
+    controller.setCommandPort(std::move(port));
+
+    controller.quitCurrentGroup();
+
+    EXPECT_EQ(sendCalls, 1);
+    EXPECT_EQ(sentReqId, ReqId::ID_QUIT_GROUP_REQ);
+    const QJsonObject payload = QJsonDocument::fromJson(sentPayload).object();
+    EXPECT_EQ(payload.value(QStringLiteral("fromuid")).toInt(), 1001);
+    EXPECT_EQ(payload.value(QStringLiteral("groupid")).toVariant().toLongLong(), 42);
+}
+
+TEST(GroupControllerTest, OwnerQuitCurrentGroupSendsDissolveRequest)
+{
+    GroupController controller(nullptr);
+    int sendCalls = 0;
+    ReqId sentReqId = ID_GET_VARIFY_CODE;
+    QByteArray sentPayload;
+
+    GroupCommandPort port;
+    port.snapshot = []()
+    {
+        GroupCommandSnapshot snapshot = groupSnapshot();
+        snapshot.currentGroupRole = 3;
+        return snapshot;
+    };
+    port.send = [&sendCalls, &sentReqId, &sentPayload](ReqId reqId, const QByteArray& payload)
+    {
+        ++sendCalls;
+        sentReqId = reqId;
+        sentPayload = payload;
+    };
+    controller.setCommandPort(std::move(port));
+
+    controller.quitCurrentGroup();
+
+    EXPECT_EQ(sendCalls, 1);
+    EXPECT_EQ(sentReqId, ReqId::ID_DISSOLVE_GROUP_REQ);
+    const QJsonObject payload = QJsonDocument::fromJson(sentPayload).object();
+    EXPECT_EQ(payload.value(QStringLiteral("fromuid")).toInt(), 1001);
+    EXPECT_EQ(payload.value(QStringLiteral("groupid")).toVariant().toLongLong(), 42);
+    EXPECT_EQ(controller.groupStatusText(), QStringLiteral("正在解散群聊..."));
+    EXPECT_FALSE(controller.groupStatusError());
+}
+
 TEST(GroupControllerTest, AppliesGroupManagementEventEffectsThroughControllerDefaults)
 {
     GroupController controller(nullptr);
