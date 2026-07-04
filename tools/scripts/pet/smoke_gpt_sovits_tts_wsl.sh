@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 API_URL="${GPT_SOVITS_API_URL:-http://127.0.0.1:9880}"
-START_SCRIPT="${GPT_SOVITS_START_SCRIPT:-/root/code/MemoChat-Qml-Drogon-linux/tools/scripts/pet/start_gpt_sovits_api_wsl.sh}"
-VOICE_DIR="${GPT_SOVITS_VOICE_DIR:-/root/code/MemoChat-Qml-Drogon-linux/apps/client/desktop/MemoChat-qml/src/KafuuChino/香风智乃voice}"
+START_SCRIPT="${GPT_SOVITS_START_SCRIPT:-/root/code/MemoChat/tools/scripts/pet/start_gpt_sovits_api_wsl.sh}"
+VOICE_DIR="${GPT_SOVITS_VOICE_DIR:-/root/code/MemoChat/apps/client/desktop/MemoChat-qml/src/KafuuChino/香风智乃voice}"
 REF_AUDIO="${GPT_SOVITS_REF_AUDIO:-}"
 PROMPT_TEXT="${GPT_SOVITS_PROMPT_TEXT:-}"
 PROMPT_TEXT_FILE="${GPT_SOVITS_PROMPT_TEXT_FILE:-/data/gpt-sovits/refs/kafuu-chino-ref.ja.txt}"

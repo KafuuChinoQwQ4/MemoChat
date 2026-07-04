@@ -1,9 +1,12 @@
-#include "PostgresDao.h"
-#include "ConfigMgr.h"
-#include "db/PqxxCompat.h"
-#include <algorithm>
+#include "PostgresDao.hpp"
+#include "ConfigMgr.hpp"
+#include "db/PqxxCompat.hpp"
 #include <cstdlib>
 #include <unordered_map>
+
+import memochat.gate.postgres_dao_algorithms;
+
+namespace postgres_dao_modules = memochat::gate::postgres_dao::modules;
 
 namespace
 {
@@ -13,7 +16,7 @@ std::unordered_map<int, std::pair<std::string, std::string>> FetchUserProfiles(c
                                                                                const std::vector<int>& uids)
 {
     std::unordered_map<int, std::pair<std::string, std::string>> result;
-    if (conn_str.empty() || uids.empty())
+    if (!postgres_dao_modules::ShouldFetchUserProfiles(conn_str.empty(), uids.empty()))
         return result;
     std::string uid_list;
     for (size_t i = 0; i < uids.size(); ++i)
@@ -49,7 +52,8 @@ std::string BuildConnectionString()
     const auto user = cfg["Postgres"]["User"];
     const auto sslmode = cfg["Postgres"]["SslMode"];
     std::string conn = "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
-                       " sslmode=" + (sslmode.empty() ? "disable" : sslmode) + " connect_timeout=3";
+                       " sslmode=" + (sslmode.empty() ? postgres_dao_modules::DefaultSslMode() : sslmode) +
+                       " connect_timeout=" + std::to_string(postgres_dao_modules::ConnectTimeoutSeconds());
     return conn;
 }
 
@@ -61,7 +65,7 @@ std::string BuildConnectionString()
 std::string BuildAccountConnectionString()
 {
     auto& cfg = ConfigMgr::Inst();
-    if (cfg["AccountPostgres"]["Host"].empty())
+    if (!postgres_dao_modules::ShouldUseAccountPostgresSection(cfg["AccountPostgres"]["Host"].empty()))
     {
         return "";
     }
@@ -73,9 +77,10 @@ std::string BuildAccountConnectionString()
     const auto user = cfg["AccountPostgres"]["User"];
     const auto sslmode = cfg["AccountPostgres"]["SslMode"];
     std::string conn = "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
-                       " sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
-                       " options=-csearch_path=" + (schema.empty() ? "public" : schema) + ",public" +
-                       " connect_timeout=3";
+                       " sslmode=" + (sslmode.empty() ? postgres_dao_modules::DefaultSslMode() : sslmode) +
+                       " options=-csearch_path=" + (schema.empty() ? postgres_dao_modules::DefaultSchema() : schema) +
+                       "," + postgres_dao_modules::DefaultSchema() +
+                       " connect_timeout=" + std::to_string(postgres_dao_modules::ConnectTimeoutSeconds());
     return conn;
 }
 
@@ -83,18 +88,14 @@ std::string PostgresSchemaName()
 {
     auto& cfg = ConfigMgr::Inst();
     const auto schema = cfg["Postgres"]["Schema"];
-    return schema.empty() ? "public" : schema;
+    return schema.empty() ? postgres_dao_modules::DefaultSchema() : schema;
 }
 
 int PostgresPoolSize()
 {
     auto& cfg = ConfigMgr::Inst();
     const auto configured = cfg["Postgres"]["PoolSize"];
-    if (configured.empty())
-    {
-        return 12;
-    }
-    return std::clamp(std::atoi(configured.c_str()), 1, 64);
+    return postgres_dao_modules::NormalizePoolSize(configured.empty(), std::atoi(configured.c_str()));
 }
 } // namespace
 
@@ -455,6 +456,202 @@ bool PostgresDao::GetMediaAssetByKey(const std::string& media_key, MediaAssetInf
     }
 }
 
+bool PostgresDao::GrantMediaAccess(int64_t media_id, int grantee_uid, const std::string& scope, int64_t created_at_ms)
+{
+    if (media_id <= 0 || grantee_uid < 0 || scope.empty())
+    {
+        return false;
+    }
+    if (grantee_uid == 0 && scope != "public" && scope != "friends")
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        const auto rows = txn.exec_params(
+            "INSERT INTO chat_media_access_grant(media_id, grantee_uid, grant_scope, created_at_ms) "
+            "SELECT $1, $2, $3, $4 WHERE EXISTS ("
+            "    SELECT 1 FROM chat_media_asset WHERE media_id = $1 AND status = 1 AND deleted_at_ms = 0"
+            ") "
+            "ON CONFLICT (media_id, grantee_uid, grant_scope) DO UPDATE "
+            "SET revoked_at_ms = 0, created_at_ms = EXCLUDED.created_at_ms",
+            media_id,
+            grantee_uid,
+            scope,
+            created_at_ms);
+        txn.commit();
+        return rows.affected_rows() > 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "GrantMediaAccess PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool PostgresDao::GrantMediaGroupAccess(int64_t media_id,
+                                        int64_t group_id,
+                                        int owner_uid,
+                                        const std::string& scope,
+                                        int64_t created_at_ms)
+{
+    if (media_id <= 0 || group_id <= 0 || owner_uid <= 0 || scope.empty())
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        const std::string group_scope = scope + ":" + std::to_string(group_id);
+        const auto rows =
+            txn.exec_params("INSERT INTO chat_media_access_grant(media_id, grantee_uid, grant_scope, created_at_ms) "
+                            "SELECT $1, 0, $3, $4 WHERE EXISTS ("
+                            "    SELECT 1 FROM chat_media_asset "
+                            "    WHERE media_id = $1 AND owner_uid = $2 AND status = 1 AND deleted_at_ms = 0"
+                            ") "
+                            "ON CONFLICT (media_id, grantee_uid, grant_scope) DO UPDATE "
+                            "SET revoked_at_ms = 0, created_at_ms = EXCLUDED.created_at_ms",
+                            media_id,
+                            owner_uid,
+                            group_scope,
+                            created_at_ms);
+        txn.commit();
+        return rows.affected_rows() > 0;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "GrantMediaGroupAccess PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool PostgresDao::HasMediaAccess(int64_t media_id, int uid)
+{
+    if (media_id <= 0 || uid <= 0)
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::read_transaction txn(*con->_con);
+        const auto avatar_rows = txn.exec_params("SELECT 1 FROM chat_media_asset "
+                                                 "WHERE media_id = $1 AND media_type = 'avatar' "
+                                                 "  AND status = 1 AND deleted_at_ms = 0 "
+                                                 "LIMIT 1",
+                                                 media_id);
+        if (!avatar_rows.empty())
+        {
+            return true;
+        }
+
+        const auto direct_rows =
+            txn.exec_params("SELECT 1 FROM chat_media_access_grant "
+                            "WHERE media_id = $1 AND revoked_at_ms = 0 "
+                            "  AND (grantee_uid = $2 OR (grantee_uid = 0 AND grant_scope = 'public')) "
+                            "LIMIT 1",
+                            media_id,
+                            uid);
+        if (!direct_rows.empty())
+        {
+            return true;
+        }
+
+        const auto group_table_rows = txn.exec("SELECT to_regclass('chat_group_member') IS NOT NULL");
+        if (!group_table_rows.empty() && !group_table_rows[0][0].is_null() && group_table_rows[0][0].as<bool>())
+        {
+            const auto group_rows = txn.exec_params("SELECT 1 "
+                                                    "FROM chat_media_access_grant grant_row "
+                                                    "JOIN chat_group_member member "
+                                                    "  ON grant_row.grant_scope = ('group:' || member.group_id::text) "
+                                                    "WHERE grant_row.media_id = $1 AND grant_row.grantee_uid = 0 "
+                                                    "  AND grant_row.revoked_at_ms = 0 "
+                                                    "  AND member.uid = $2 AND member.status = 1 "
+                                                    "LIMIT 1",
+                                                    media_id,
+                                                    uid);
+            if (!group_rows.empty())
+            {
+                return true;
+            }
+        }
+
+        const auto friends_grant_rows =
+            txn.exec_params("SELECT 1 FROM chat_media_access_grant "
+                            "WHERE media_id = $1 AND grantee_uid = 0 AND grant_scope = 'friends' "
+                            "  AND revoked_at_ms = 0 LIMIT 1",
+                            media_id);
+        if (friends_grant_rows.empty())
+        {
+            return false;
+        }
+
+        const auto friend_table_rows = txn.exec("SELECT to_regclass('friend') IS NOT NULL");
+        if (friend_table_rows.empty() || friend_table_rows[0][0].is_null() || !friend_table_rows[0][0].as<bool>())
+        {
+            return false;
+        }
+
+        const auto friends_rows =
+            txn.exec_params("SELECT 1 "
+                            "FROM chat_media_asset asset "
+                            "WHERE asset.media_id = $1 AND asset.status = 1 AND asset.deleted_at_ms = 0 "
+                            "  AND EXISTS ("
+                            "      SELECT 1 FROM friend f "
+                            "      WHERE ((f.self_id = asset.owner_uid AND f.friend_id = $2) "
+                            "          OR (f.self_id = $2 AND f.friend_id = asset.owner_uid))"
+                            "  ) "
+                            "LIMIT 1",
+                            media_id,
+                            uid);
+        return !friends_rows.empty();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "HasMediaAccess PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 bool PostgresDao::AddMoment(const MomentInfo& moment, int64_t* moment_id)
 {
     auto con = pool_->getConnection();
@@ -810,7 +1007,7 @@ bool PostgresDao::GetMomentById(int64_t moment_id, MomentInfo& moment)
         pqxx::read_transaction txn(*con->_con);
         const auto rows = txn.exec_params(
             "SELECT moment_id, uid, visibility, location, created_at, deleted_at, like_count, comment_count "
-            "FROM moments WHERE moment_id = $1 LIMIT 1",
+            "FROM moments WHERE moment_id = $1 AND deleted_at = 0 LIMIT 1",
             moment_id);
         if (rows.empty())
         {
@@ -886,7 +1083,10 @@ bool PostgresDao::AddMomentLike(int64_t moment_id, int uid)
     {
         pqxx::work txn(*con->_con);
         const auto inserted =
-            txn.exec_params("INSERT INTO moments_like(moment_id, uid, created_at) VALUES ($1, $2, $3) "
+            txn.exec_params("INSERT INTO moments_like(moment_id, uid, created_at) "
+                            "SELECT $1, $2, $3 WHERE EXISTS ("
+                            "    SELECT 1 FROM moments WHERE moment_id = $1 AND deleted_at = 0"
+                            ") "
                             "ON CONFLICT (moment_id, uid) DO NOTHING",
                             moment_id,
                             uid,
@@ -895,7 +1095,8 @@ bool PostgresDao::AddMomentLike(int64_t moment_id, int uid)
                                                      .count()));
         if (inserted.affected_rows() > 0)
         {
-            txn.exec_params("UPDATE moments SET like_count = like_count + 1 WHERE moment_id = $1", moment_id);
+            txn.exec_params("UPDATE moments SET like_count = like_count + 1 WHERE moment_id = $1 AND deleted_at = 0",
+                            moment_id);
         }
         txn.commit();
         return true;
@@ -924,11 +1125,15 @@ bool PostgresDao::RemoveMomentLike(int64_t moment_id, int uid)
     try
     {
         pqxx::work txn(*con->_con);
-        const auto deleted =
-            txn.exec_params("DELETE FROM moments_like WHERE moment_id = $1 AND uid = $2", moment_id, uid);
+        const auto deleted = txn.exec_params("DELETE FROM moments_like ml USING moments m "
+                                             "WHERE ml.moment_id = $1 AND ml.uid = $2 "
+                                             "AND m.moment_id = ml.moment_id AND m.deleted_at = 0",
+                                             moment_id,
+                                             uid);
         if (deleted.affected_rows() > 0)
         {
-            txn.exec_params("UPDATE moments SET like_count = GREATEST(like_count - 1, 0) WHERE moment_id = $1",
+            txn.exec_params("UPDATE moments SET like_count = GREATEST(like_count - 1, 0) "
+                            "WHERE moment_id = $1 AND deleted_at = 0",
                             moment_id);
         }
         txn.commit();
@@ -958,8 +1163,11 @@ bool PostgresDao::HasLikedMoment(int64_t moment_id, int uid)
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        const auto rows =
-            txn.exec_params("SELECT 1 FROM moments_like WHERE moment_id = $1 AND uid = $2 LIMIT 1", moment_id, uid);
+        const auto rows = txn.exec_params("SELECT 1 FROM moments_like ml "
+                                          "JOIN moments m ON m.moment_id = ml.moment_id "
+                                          "WHERE ml.moment_id = $1 AND ml.uid = $2 AND m.deleted_at = 0 LIMIT 1",
+                                          moment_id,
+                                          uid);
         return !rows.empty();
     }
     catch (const std::exception& e)
@@ -995,7 +1203,9 @@ bool PostgresDao::GetMomentLikes(int64_t moment_id, int limit, std::vector<Momen
         pqxx::read_transaction txn(*con->_con);
         const auto rows = txn.exec_params("SELECT ml.id, ml.moment_id, ml.uid, ml.created_at "
                                           "FROM moments_like ml "
-                                          "WHERE ml.moment_id = $1 ORDER BY ml.created_at DESC LIMIT $2",
+                                          "JOIN moments m ON m.moment_id = ml.moment_id "
+                                          "WHERE ml.moment_id = $1 AND m.deleted_at = 0 "
+                                          "ORDER BY ml.created_at DESC LIMIT $2",
                                           moment_id,
                                           limit + 1);
 
@@ -1055,14 +1265,23 @@ bool PostgresDao::AddMomentComment(const MomentCommentInfo& comment)
     try
     {
         pqxx::work txn(*con->_con);
-        txn.exec_params("INSERT INTO moments_comment(moment_id, uid, content, reply_uid, created_at) "
-                        "VALUES ($1, $2, $3, $4, $5)",
-                        comment.moment_id,
-                        comment.uid,
-                        comment.content,
-                        comment.reply_uid,
-                        comment.created_at);
-        txn.exec_params("UPDATE moments SET comment_count = comment_count + 1 WHERE moment_id = $1", comment.moment_id);
+        const auto inserted =
+            txn.exec_params("INSERT INTO moments_comment(moment_id, uid, content, reply_uid, created_at) "
+                            "SELECT $1, $2, $3, $4, $5 WHERE EXISTS ("
+                            "    SELECT 1 FROM moments WHERE moment_id = $1 AND deleted_at = 0"
+                            ")",
+                            comment.moment_id,
+                            comment.uid,
+                            comment.content,
+                            comment.reply_uid,
+                            comment.created_at);
+        if (inserted.affected_rows() <= 0)
+        {
+            txn.commit();
+            return false;
+        }
+        txn.exec_params("UPDATE moments SET comment_count = comment_count + 1 WHERE moment_id = $1 AND deleted_at = 0",
+                        comment.moment_id);
         txn.commit();
         return true;
     }
@@ -1118,6 +1337,53 @@ bool PostgresDao::DeleteMomentComment(int64_t comment_id, int uid)
     }
 }
 
+bool PostgresDao::GetMomentCommentById(int64_t comment_id, MomentCommentInfo& comment)
+{
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::read_transaction txn(*con->_con);
+        const auto rows = txn.exec_params(
+            "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at "
+            "FROM moments_comment mc "
+            "JOIN moments m ON m.moment_id = mc.moment_id "
+            "WHERE mc.id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) "
+            "AND m.deleted_at = 0 LIMIT 1",
+            comment_id);
+        if (rows.empty())
+        {
+            return false;
+        }
+
+        const auto& row = rows[0];
+        comment = MomentCommentInfo{};
+        comment.id = row["id"].as<int64_t>();
+        comment.moment_id = row["moment_id"].as<int64_t>();
+        comment.uid = row["uid"].as<int>();
+        comment.content = row["content"].is_null() ? "" : row["content"].c_str();
+        comment.reply_uid = row["reply_uid"].as<int>();
+        comment.created_at = row["created_at"].as<int64_t>();
+        comment.deleted_at = row["deleted_at"].is_null() ? 0 : row["deleted_at"].as<int64_t>();
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "GetMomentCommentById PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 bool PostgresDao::GetMomentComments(int64_t moment_id,
                                     int64_t last_comment_id,
                                     int limit,
@@ -1152,7 +1418,9 @@ bool PostgresDao::GetMomentComments(int64_t moment_id,
             rows = txn.exec_params(
                 "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at "
                 "FROM moments_comment mc "
+                "JOIN moments m ON m.moment_id = mc.moment_id "
                 "WHERE mc.moment_id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) "
+                "AND m.deleted_at = 0 "
                 "ORDER BY mc.created_at ASC LIMIT $2",
                 moment_id,
                 limit + 1);
@@ -1162,7 +1430,9 @@ bool PostgresDao::GetMomentComments(int64_t moment_id,
             rows = txn.exec_params(
                 "SELECT mc.id, mc.moment_id, mc.uid, mc.content, mc.reply_uid, mc.created_at, mc.deleted_at "
                 "FROM moments_comment mc "
-                "WHERE mc.moment_id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) AND mc.id > $2 "
+                "JOIN moments m ON m.moment_id = mc.moment_id "
+                "WHERE mc.moment_id = $1 AND (mc.deleted_at = 0 OR mc.deleted_at IS NULL) "
+                "AND m.deleted_at = 0 AND mc.id > $2 "
                 "ORDER BY mc.created_at ASC LIMIT $3",
                 moment_id,
                 last_comment_id,
@@ -1240,7 +1510,11 @@ bool PostgresDao::AddMomentCommentLike(int64_t comment_id, int uid)
         pqxx::work txn(*con->_con);
         txn.exec_params("INSERT INTO moments_comment_like(comment_id, uid, created_at) "
                         "SELECT $1, $2, $3 "
-                        "WHERE EXISTS (SELECT 1 FROM moments_comment WHERE id = $1 AND deleted_at = 0) "
+                        "WHERE EXISTS ("
+                        "    SELECT 1 FROM moments_comment mc "
+                        "    JOIN moments m ON m.moment_id = mc.moment_id "
+                        "    WHERE mc.id = $1 AND mc.deleted_at = 0 AND m.deleted_at = 0"
+                        ") "
                         "ON CONFLICT (comment_id, uid) DO NOTHING",
                         comment_id,
                         uid,
@@ -1274,7 +1548,12 @@ bool PostgresDao::RemoveMomentCommentLike(int64_t comment_id, int uid)
     try
     {
         pqxx::work txn(*con->_con);
-        txn.exec_params("DELETE FROM moments_comment_like WHERE comment_id = $1 AND uid = $2", comment_id, uid);
+        txn.exec_params("DELETE FROM moments_comment_like mcl USING moments_comment mc, moments m "
+                        "WHERE mcl.comment_id = $1 AND mcl.uid = $2 "
+                        "AND mc.id = mcl.comment_id AND mc.deleted_at = 0 "
+                        "AND m.moment_id = mc.moment_id AND m.deleted_at = 0",
+                        comment_id,
+                        uid);
         txn.commit();
         return true;
     }
@@ -1302,10 +1581,13 @@ bool PostgresDao::HasLikedMomentComment(int64_t comment_id, int uid)
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        const auto rows =
-            txn.exec_params("SELECT 1 FROM moments_comment_like WHERE comment_id = $1 AND uid = $2 LIMIT 1",
-                            comment_id,
-                            uid);
+        const auto rows = txn.exec_params("SELECT 1 FROM moments_comment_like mcl "
+                                          "JOIN moments_comment mc ON mc.id = mcl.comment_id "
+                                          "JOIN moments m ON m.moment_id = mc.moment_id "
+                                          "WHERE mcl.comment_id = $1 AND mcl.uid = $2 "
+                                          "AND mc.deleted_at = 0 AND m.deleted_at = 0 LIMIT 1",
+                                          comment_id,
+                                          uid);
         return !rows.empty();
     }
     catch (const std::exception& e)
@@ -1344,7 +1626,11 @@ bool PostgresDao::GetMomentCommentLikes(int64_t comment_id,
         pqxx::read_transaction txn(*con->_con);
         const auto rows = txn.exec_params("SELECT mcl.id, mcl.comment_id, mcl.uid, mcl.created_at "
                                           "FROM moments_comment_like mcl "
-                                          "WHERE mcl.comment_id = $1 ORDER BY mcl.created_at DESC LIMIT $2",
+                                          "JOIN moments_comment mc ON mc.id = mcl.comment_id "
+                                          "JOIN moments m ON m.moment_id = mc.moment_id "
+                                          "WHERE mcl.comment_id = $1 "
+                                          "AND mc.deleted_at = 0 AND m.deleted_at = 0 "
+                                          "ORDER BY mcl.created_at DESC LIMIT $2",
                                           comment_id,
                                           limit + 1);
 

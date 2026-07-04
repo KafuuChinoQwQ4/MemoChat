@@ -2,6 +2,12 @@
 
 > ChatServer 持久化层：Postgres（消息/对话/群/用户分文件 DAO + 连接池）、Mongo、Redis（在线路由/关系引导缓存/分布式锁）以及消息/关系/会话仓储与 Outbox 服务。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | ChatServer 持久化层 C++ module interface 分组。 |
+
 ## 文件
 
 | 文件 | 作用概括 |
@@ -18,8 +24,10 @@
 | `DistLock.h` | 分布式锁声明 |
 | `MongoDao.cpp` | MongoDB 数据访问实现 |
 | `MongoDao.h` | MongoDB DAO 声明 |
-| `MongoMgr.cpp` | MongoDB 连接管理实现 |
+| `MongoMgr.cpp` | MongoDB 管理器和 DAO 转发实现 |
 | `MongoMgr.h` | MongoDB 管理声明 |
+| `OnlineRouteSessionSupport.cpp` | 在线路由存储隔离 CSession 会话 ID 读取的非 module helper |
+| `OnlineRouteSessionSupport.h` | 在线路由会话 ID 读取 helper 声明 |
 | `PostgresDao.cpp` | Postgres DAO 主实现 |
 | `PostgresDaoDialogs.cpp` | Postgres 对话表 DAO 实现 |
 | `PostgresDaoGroupMessages.cpp` | Postgres 群消息表 DAO 实现 |

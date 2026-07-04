@@ -1,6 +1,7 @@
-#include "AIServiceJsonMapper.h"
+#include "AIServiceJsonMapper.hpp"
 
-#include "AIServiceJsonDtos.h"
+#include "AIServiceAlgorithms.hpp"
+#include "AIServiceJsonDtos.hpp"
 
 namespace ai_service_json_mapper
 {
@@ -9,7 +10,7 @@ bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AILi
 {
     const AIModelListJsonDto dto = AIModelListFromJsonValue(result);
     PopulateModelListReply(dto, reply);
-    return result.isObject() && dto.code == 0;
+    return ai_service_algorithms::IsSuccessfulModelListPayload(result.isObject(), dto.code);
 }
 
 void PopulateRegisterApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIRegisterApiProviderRsp* reply)

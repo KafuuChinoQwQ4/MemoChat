@@ -1,6 +1,6 @@
-#include "GateDomainServer.h"
-#include "GateAsyncSideEffects.h"
-#include "GateRouteProfileRegistrar.h"
+#include "GateDomainServer.hpp"
+#include "GateAsyncSideEffects.hpp"
+#include "GateRouteProfileRegistrar.hpp"
 
 // LoginServer — authentication, peeled off GateServer (gateserver split
 // Phase 5). Serves /healthz, /readyz, /user_login. Reaches account data only via

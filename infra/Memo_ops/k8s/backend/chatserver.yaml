@@ -36,7 +36,7 @@ metadata:
     app.kubernetes.io/component: chatserver
 spec:
   serviceName: memochat-chatserver
-  replicas: 4
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: memochat

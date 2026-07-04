@@ -1,5 +1,6 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
 #include "ClientGateway.h"
 #include "global.h"
 #include "httpmgr.h"
@@ -57,13 +58,14 @@ void AgentController::listAgentTasks()
     clearErrorState();
     clearAgentTaskError();
     setAgentTaskBusy(true, "正在加载后台任务...");
-    QUrl url(gate_url_prefix + "/ai/tasks");
+    QUrl url = agentApiUrl(QStringLiteral("/ai/tasks"));
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("limit", "50");
+    addAuthToQuery(query);
     url.setQuery(query);
 
-    ReqId reqId = ID_AI_TASK_LIST;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskList, QString(), uid);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -94,14 +96,12 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
         payload["skill_name"] = skillName;
     }
     payload["metadata"] = buildChatMetadata();
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_TASK_CREATE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskCreate, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/tasks")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::cancelAgentTask(const QString& taskId)
@@ -118,14 +118,12 @@ void AgentController::cancelAgentTask(const QString& taskId)
 
     QJsonObject payload;
     payload["task_id"] = trimmed;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_TASK_CANCEL;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskCancel, QString(), scopedUid());
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/cancel"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/tasks/cancel")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::resumeAgentTask(const QString& taskId)
@@ -142,14 +140,12 @@ void AgentController::resumeAgentTask(const QString& taskId)
 
     QJsonObject payload;
     payload["task_id"] = trimmed;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_TASK_RESUME;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskResume, QString(), scopedUid());
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/tasks/resume"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/tasks/resume")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::handleAgentTaskRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)

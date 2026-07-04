@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Seed 600 fresh load-test accounts directly into PostgreSQL.
-Works for the Python load test tool and the MemoChat XOR-encoded login flow.
+Works for the Python and k6 load test tools.
 
-Passwords are stored as-is in the DB (the GateServer /user_login reads pwd from the DB and
-compares with the XOR-encoded value the client sends — no double encoding).
+Passwords are stored as-is in the DB and the current /user_login contract
+compares the supplied password string directly.
 """
 
 import random
@@ -21,12 +21,6 @@ DB = dict(
     password="123456",
     database="memo_pg",
 )
-
-
-def xor_encode(raw: str) -> str:
-    """Mirror the GateServer DecodeLegacyXorPwd inverse: encode for DB storage."""
-    x = len(raw) % 255
-    return "".join(chr((ord(ch) ^ x) & 0xFF) for ch in raw)
 
 
 def random_pwd(length=12):
@@ -61,7 +55,7 @@ def main():
         cur.execute("INSERT INTO memo.user_id(id) VALUES (%s) ON CONFLICT DO NOTHING", (next_id,))
         next_id += 1
 
-    # Batch-insert users with XOR-encoded passwords
+    # Batch-insert users with current password strings.
     ts = 1800000000
     rows = []
     csv_lines = ["email,password,user,uid,user_id,last_password,tags"]
@@ -71,10 +65,9 @@ def main():
         name = f"perf_test_{ts}"
         email = f"{name}@loadtest.local"
         raw_pwd = random_pwd()
-        xor_pwd = xor_encode(raw_pwd)
         uid = start_uid + i
         user_id = random_user_id()
-        rows.append((uid, name, email, xor_pwd, name, ":/res/head_1.jpg", user_id))
+        rows.append((uid, name, email, raw_pwd, name, ":/res/head_1.jpg", user_id))
         csv_lines.append(f"{email},{raw_pwd},{name},{uid},{user_id},,")
 
     # Bulk insert via executemany
@@ -98,10 +91,9 @@ def main():
 
     # Quick verification: try 3 random accounts
     sample = random.sample(rows, min(3, len(rows)))
-    print("[seed] Sample verification (decoding stored pwd back):")
-    for uid, name, email, xor_pwd, *_ in sample:
-        decoded = xor_encode(xor_pwd)  # double-xor = original
-        print(f"  uid={uid} email={email} stored_len={len(xor_pwd)} decoded={decoded}")
+    print("[seed] Sample verification:")
+    for uid, name, email, stored_pwd, *_ in sample:
+        print(f"  uid={uid} email={email} stored_len={len(stored_pwd)} password={stored_pwd}")
 
     cur.close()
     conn.close()

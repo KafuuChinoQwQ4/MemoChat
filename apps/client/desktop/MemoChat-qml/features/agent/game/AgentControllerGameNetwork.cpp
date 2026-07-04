@@ -6,6 +6,7 @@
 
 #include <QJsonObject>
 #include <QUrl>
+#include <QUrlQuery>
 
 int AgentController::currentUid() const
 {
@@ -46,9 +47,13 @@ void AgentController::clearGameError()
 void AgentController::sendGameGet(const QUrl& url, const QString& op, const QString& statusText)
 {
     const int uid = scopedUid();
+    QUrl authedUrl = url;
+    QUrlQuery query(authedUrl);
+    addAuthToQuery(query);
+    authedUrl.setQuery(query);
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->get(url, op, statusText, uid);
+    _gameClient->get(authedUrl, op, statusText, uid);
 }
 
 void AgentController::sendGamePost(const QUrl& url,
@@ -57,17 +62,23 @@ void AgentController::sendGamePost(const QUrl& url,
                                    const QString& statusText)
 {
     const int uid = scopedUid();
+    QJsonObject authedPayload = payload;
+    addAuthToPayload(authedPayload);
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->post(url, payload, op, statusText, uid);
+    _gameClient->post(url, authedPayload, op, statusText, uid);
 }
 
 void AgentController::sendGameDelete(const QUrl& url, const QString& op, const QString& statusText)
 {
     const int uid = scopedUid();
+    QUrl authedUrl = url;
+    QUrlQuery query(authedUrl);
+    addAuthToQuery(query);
+    authedUrl.setQuery(query);
     clearGameError();
     setGameBusy(true, statusText);
-    _gameClient->deleteResource(url, op, statusText, uid);
+    _gameClient->deleteResource(authedUrl, op, statusText, uid);
 }
 
 void AgentController::handleGameNetworkError(const QString& op, const QString& errorText, int uid)

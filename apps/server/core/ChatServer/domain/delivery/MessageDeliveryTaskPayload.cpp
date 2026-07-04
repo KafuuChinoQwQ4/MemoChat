@@ -1,6 +1,8 @@
-#include "MessageDeliveryTaskPayload.h"
+#include "MessageDeliveryTaskPayload.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.chat.delivery_task_payload_algorithms;
 
 #include <glaze/glaze.hpp>
 
@@ -80,7 +82,7 @@ memochat::json::JsonValue BuildDeliveryTaskPayloadJson(int recipient_uid,
 {
     MessageDeliveryTaskPayload task;
     task.recipient_uid = recipient_uid;
-    task.msgid = static_cast<int>(msgid);
+    task.msgid = task_payload::modules::NormalizeTaskMessageId(msgid);
     task.exclude_uid = exclude_uid;
     task.reason = reason;
     task.payload = payload;
@@ -105,7 +107,8 @@ memochat::json::JsonValue BuildDeliveryTaskPayloadJson(int recipient_uid,
 
 bool ParseDeliveryTaskPayload(const memochat::json::JsonValue& root, MessageDeliveryTaskPayload* out)
 {
-    if (out == nullptr || !root.isObject() || !root.isMember("payload"))
+    const bool root_is_object = root.isObject();
+    if (out == nullptr || !task_payload::modules::HasRequiredTaskPayloadShape(root_is_object, root.isMember("payload")))
     {
         return false;
     }
@@ -118,7 +121,7 @@ bool ParseDeliveryTaskPayload(const memochat::json::JsonValue& root, MessageDeli
     }
 
     FromWireDto(dto, *out);
-    return out->recipient_uid > 0 && out->msgid > 0 && out->payload.isObject();
+    return task_payload::modules::IsValidParsedDeliveryTask(out->recipient_uid, out->msgid, out->payload.isObject());
 }
 
 } // namespace memochat::chat::delivery

@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QVector>
 
 class AgentStreamClient : public QObject
 {
@@ -27,13 +28,17 @@ signals:
     void finished(int networkError, const QString& errorString);
 
 private:
+    void startRequest(const QUrl& url);
     void onReadyRead();
     void onFinished();
     void consumeLine(const QString& line);
 
     QNetworkAccessManager* _network = nullptr;
     QNetworkReply* _reply = nullptr;
+    QByteArray _payload;
+    QVector<QUrl> _fallbackUrls;
     QString _buffer;
+    bool _receivedAnyChunk = false;
 };
 
 #endif // AGENTSTREAMCLIENT_H

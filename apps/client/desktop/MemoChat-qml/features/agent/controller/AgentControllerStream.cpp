@@ -1,8 +1,8 @@
 #include "AgentController.h"
 #include "AgentMessageModel.h"
+#include "AgentNetworkRequestUtils.h"
 #include "AgentStreamClient.h"
 #include "ClientGateway.h"
-#include "global.h"
 #include "usermgr.h"
 
 #include <QDebug>
@@ -60,8 +60,9 @@ void AgentController::sendStreamMessage(const QString& content)
     {
         payload["requested_tools"] = requestedTools;
     }
+    addAuthToPayload(payload);
 
-    _streamClient->start(QUrl(gate_url_prefix + "/ai/chat/stream"), payload);
+    _streamClient->start(agentApiUrl(QStringLiteral("/ai/chat/stream")), payload);
 }
 
 void AgentController::cancelStream()

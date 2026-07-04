@@ -1,5 +1,7 @@
 add_executable(AIServer
     AIServer.cpp
+    AIServiceAlgorithms.cpp
+    AIServiceAlgorithms.hpp
     AIServiceImpl.cpp
     AIServiceCore.cpp
     AIServiceClient.cpp
@@ -29,4 +31,26 @@ if(WIN32)
     target_link_options(AIServer PRIVATE
         "/LIBPATH:${_WINSDK_LIB_UM}"
         "/LIBPATH:${_WINSDK_LIB_UCRT}")
+endif()
+
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(AIServer
+        MODULES
+            memochat.ai.client_algorithms=cxx_modules/AIServiceClient.cppm
+            memochat.ai.core_algorithms=cxx_modules/AIServiceCore.cppm
+            memochat.ai.conversation_context_algorithms=cxx_modules/ConversationContext.cppm
+            memochat.ai.impl_algorithms=cxx_modules/AIServiceImpl.cppm
+            memochat.ai.json_dto_algorithms=cxx_modules/AIServiceJsonDto.cppm
+            memochat.ai.repository_algorithms=cxx_modules/AIServerRepository.cppm
+            memochat.ai.service_algorithms=cxx_modules/AIService.cppm
+        CONSUMER_SOURCES
+            AIServiceClient.cpp
+            AIServiceCore.cpp
+            AIServiceImpl.cpp
+            AIServiceAlgorithms.cpp
+            AIServiceJsonDtos.cpp
+            ConversationContext.cpp
+            db/AISessionRepo.cpp
+            db/AISmartLogRepo.cpp
+    )
 endif()

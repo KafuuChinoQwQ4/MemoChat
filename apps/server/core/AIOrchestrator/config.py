@@ -3,6 +3,7 @@
 使用 pydantic-settings 做类型验证
 """
 
+import ipaddress
 import os
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ServiceConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8096
+
+
+class SecurityConfig(BaseModel):
+    enforce_internal_auth: bool = True
+    internal_auth_header: str = "X-MemoChat-AI-Internal-Key"
+    internal_api_key: str = ""
+    internal_api_key_env: str = "MEMOCHAT_AI_INTERNAL_API_KEY"
+    provider_admin_auth_header: str = "X-MemoChat-AI-Provider-Admin-Key"
+    provider_admin_key: str = ""
+    provider_admin_key_env: str = "MEMOCHAT_AI_PROVIDER_ADMIN_KEY"
+    trusted_client_hosts: list[str] = []
+    unauthenticated_paths: list[str] = ["/health", "/ready", "/metrics"]
+    cors_allow_origins: list[str] = ["http://127.0.0.1", "http://localhost"]
+    cors_allow_origin_regex: str = r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$"
 
 
 class OllamaModelConfig(BaseModel):
@@ -139,7 +154,7 @@ class Neo4jConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 7687
     username: str = "neo4j"
-    password: str = "password"
+    password: str = ""
     database: str = "neo4j"
     vector_dimension: int = 384
     enabled: bool = False
@@ -188,7 +203,7 @@ class RabbitMQQueueConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 5672
     username: str = "memochat"
-    password: str = "123456"
+    password: str = ""
     vhost: str = "/"
     exchange: str = "memochat.direct"
     dlx_exchange: str = "memochat.dlx"
@@ -212,7 +227,7 @@ class SemanticCacheRedisConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 6379
     username: str = ""
-    password: str = "123456"
+    password: str = ""
     db: int = 0
     ssl: bool = False
     socket_timeout_sec: float = 2.0
@@ -254,6 +269,7 @@ class MCPServerConfig(BaseModel):
     command: list[str]
     args: list[str] = []
     env: dict[str, str] = {}
+    allowed_tools: list[str] = []
     enabled: bool = True
 
 
@@ -323,7 +339,7 @@ class PostgresRuntimeConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 15432
     user: str = "memochat"
-    password: str = "123456"
+    password: str = ""
     database: str = "memo_pg"
     min_pool_size: int = 2
     max_pool_size: int = 10
@@ -364,6 +380,7 @@ class Settings(BaseSettings):
     )
 
     service: ServiceConfig = ServiceConfig()
+    security: SecurityConfig = SecurityConfig()
     llm: LLMConfig = LLMConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()
     rag: RAGConfig = RAGConfig()
@@ -384,6 +401,65 @@ class Settings(BaseSettings):
         with open(path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         return cls(**_merge_env_overrides(raw or {}))
+
+
+def resolve_internal_api_key(security: SecurityConfig) -> str:
+    env_name = (security.internal_api_key_env or "").strip()
+    if env_name:
+        env_value = os.getenv(env_name, "").strip()
+        if env_value:
+            return env_value
+    return (security.internal_api_key or "").strip()
+
+
+def resolve_provider_admin_key(security: SecurityConfig) -> str:
+    env_name = (security.provider_admin_key_env or "").strip()
+    if env_name:
+        env_value = os.getenv(env_name, "").strip()
+        if env_value:
+            return env_value
+    return (security.provider_admin_key or "").strip()
+
+
+def is_unauthenticated_path(path: str, allowed_paths: list[str]) -> bool:
+    normalized = (path or "/").rstrip("/") or "/"
+    for allowed in allowed_paths:
+        candidate = (allowed or "").rstrip("/") or "/"
+        if normalized == candidate:
+            return True
+    return False
+
+
+def is_trusted_client_host(client_host: str, trusted_entries: list[str]) -> bool:
+    candidate = (client_host or "").strip()
+    if not candidate:
+        return False
+    if "%" in candidate:
+        candidate = candidate.split("%", 1)[0]
+
+    try:
+        candidate_ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        candidate_ip = None
+
+    for raw_entry in trusted_entries:
+        entry = (raw_entry or "").strip()
+        if not entry:
+            continue
+        if candidate_ip is None:
+            if candidate.lower() == entry.lower():
+                return True
+            continue
+        try:
+            if "/" in entry:
+                if candidate_ip in ipaddress.ip_network(entry, strict=False):
+                    return True
+            elif candidate_ip == ipaddress.ip_address(entry):
+                return True
+        except ValueError:
+            if candidate.lower() == entry.lower():
+                return True
+    return False
 
 
 def _parse_env_value(value: str) -> Any:

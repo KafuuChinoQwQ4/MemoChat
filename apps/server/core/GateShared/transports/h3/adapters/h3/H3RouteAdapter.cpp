@@ -1,7 +1,7 @@
-#include "adapters/h3/H3RouteAdapter.h"
+#include "adapters/h3/H3RouteAdapter.hpp"
 
-#include "GateHttp3Connection.h"
-#include "logging/TraceContext.h"
+#include "GateHttp3Connection.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <fstream>
 #include <optional>
@@ -9,10 +9,13 @@
 #include <string>
 #include <unordered_map>
 
+import memochat.gate.h3_route_adapter_algorithms;
+
 namespace memochat::gate::adapters::h3
 {
 namespace
 {
+namespace adapter_modules = memochat::gate::adapters::h3::modules;
 
 std::unordered_map<std::string, std::string> ParseQueryString(const std::string& query)
 {
@@ -61,7 +64,7 @@ memochat::gate::routing::GateRequest
 H3RouteAdapter::BuildGateRequest(const std::shared_ptr<GateHttp3Connection>& connection)
 {
     memochat::gate::routing::GateRequest request;
-    if (!connection)
+    if (!adapter_modules::ShouldProcessConnection(static_cast<bool>(connection)))
     {
         return request;
     }
@@ -69,7 +72,8 @@ H3RouteAdapter::BuildGateRequest(const std::shared_ptr<GateHttp3Connection>& con
     const std::string query = connection->GetQueryString();
     request.method = connection->GetRequestMethod();
     request.path = connection->GetRequestPath();
-    request.target = query.empty() ? request.path : request.path + "?" + query;
+    request.target =
+        adapter_modules::ShouldAppendQueryToTarget(query.empty()) ? request.path + "?" + query : request.path;
     request.query = ParseQueryString(query);
     request.headers = connection->GetRequestHeaders();
     request.body = connection->GetRequestBody();
@@ -81,7 +85,7 @@ H3RouteAdapter::BuildGateRequest(const std::shared_ptr<GateHttp3Connection>& con
 void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateResponse& route_response,
                                        const std::shared_ptr<GateHttp3Connection>& connection)
 {
-    if (!connection)
+    if (!adapter_modules::ShouldProcessConnection(static_cast<bool>(connection)))
     {
         return;
     }
@@ -91,14 +95,15 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
         const std::optional<std::string> file_body = ReadFileBody(route_response.file_path);
         if (!file_body)
         {
-            connection->SendResponse(404,
-                                     R"({"error":404,"message":"file response body not found"})",
-                                     "application/json");
+            connection->SendResponse(adapter_modules::FileBodyNotFoundStatus(),
+                                     adapter_modules::FileBodyNotFoundBody(),
+                                     adapter_modules::FileBodyNotFoundContentType());
             return;
         }
 
-        const std::string content_type =
-            route_response.content_type.empty() ? "application/octet-stream" : route_response.content_type;
+        const std::string content_type = adapter_modules::ResolveContentType(route_response.content_type.empty(),
+                                                                             adapter_modules::DefaultFileContentType(),
+                                                                             route_response.content_type.c_str());
         connection->SendResponse(route_response.status, *file_body, content_type, route_response.headers);
         return;
     }
@@ -106,7 +111,9 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
     if (route_response.body_kind == memochat::gate::routing::GateResponseBodyKind::Inline)
     {
         const std::string content_type =
-            route_response.content_type.empty() ? "application/json" : route_response.content_type;
+            adapter_modules::ResolveContentType(route_response.content_type.empty(),
+                                                adapter_modules::DefaultInlineContentType(),
+                                                route_response.content_type.c_str());
         connection->SendResponse(route_response.status, route_response.body, content_type, route_response.headers);
     }
 }
@@ -114,7 +121,7 @@ void H3RouteAdapter::ApplyGateResponse(const memochat::gate::routing::GateRespon
 bool H3RouteAdapter::Dispatch(const std::shared_ptr<GateHttp3Connection>& connection,
                               const memochat::gate::routing::RouteRegistry& registry)
 {
-    if (!connection)
+    if (!adapter_modules::ShouldProcessConnection(static_cast<bool>(connection)))
     {
         return false;
     }

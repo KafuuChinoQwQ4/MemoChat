@@ -1,4 +1,4 @@
-#include "runtime/EtcdConfig.h"
+#include "runtime/EtcdConfig.hpp"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -7,6 +7,8 @@
 #include <iostream>
 #include <sstream>
 #include <chrono>
+
+import memochat.runtime.etcd_config_algorithms;
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -67,13 +69,15 @@ bool EtcdClient::DoConnect()
         tcp::resolver resolver(ioc);
 
         size_t comma_pos = _endpoints.find(',');
-        std::string endpoint = comma_pos != std::string::npos ? _endpoints.substr(0, comma_pos) : _endpoints;
+        std::string endpoint = modules::HasMultipleEndpoints(comma_pos != std::string::npos)
+                                   ? _endpoints.substr(0, comma_pos)
+                                   : _endpoints;
 
         std::string host, port;
         size_t colon_pos = endpoint.find("://");
-        if (colon_pos != std::string::npos)
+        if (modules::HasSchemeDelimiter(colon_pos != std::string::npos))
         {
-            host = endpoint.substr(colon_pos + 3);
+            host = endpoint.substr(colon_pos + modules::SchemeDelimiterSize());
         }
         else
         {
@@ -81,14 +85,14 @@ bool EtcdClient::DoConnect()
         }
 
         size_t port_colon = host.find(':');
-        if (port_colon != std::string::npos)
+        if (modules::HasExplicitPort(port_colon != std::string::npos))
         {
             port = host.substr(port_colon + 1);
             host = host.substr(0, port_colon);
         }
         else
         {
-            port = "2379";
+            port = modules::DefaultEtcdPort();
         }
 
         auto results = resolver.resolve(host, port);
@@ -118,13 +122,15 @@ bool EtcdClient::Get(const std::string& key, std::string& value)
         tcp::resolver resolver(ioc);
 
         size_t comma_pos = _endpoints.find(',');
-        std::string endpoint = comma_pos != std::string::npos ? _endpoints.substr(0, comma_pos) : _endpoints;
+        std::string endpoint = modules::HasMultipleEndpoints(comma_pos != std::string::npos)
+                                   ? _endpoints.substr(0, comma_pos)
+                                   : _endpoints;
 
         std::string host, port;
         size_t colon_pos = endpoint.find("://");
-        if (colon_pos != std::string::npos)
+        if (modules::HasSchemeDelimiter(colon_pos != std::string::npos))
         {
-            host = endpoint.substr(colon_pos + 3);
+            host = endpoint.substr(colon_pos + modules::SchemeDelimiterSize());
         }
         else
         {
@@ -132,14 +138,14 @@ bool EtcdClient::Get(const std::string& key, std::string& value)
         }
 
         size_t port_colon = host.find(':');
-        if (port_colon != std::string::npos)
+        if (modules::HasExplicitPort(port_colon != std::string::npos))
         {
             port = host.substr(port_colon + 1);
             host = host.substr(0, port_colon);
         }
         else
         {
-            port = "2379";
+            port = modules::DefaultEtcdPort();
         }
 
         auto results = resolver.resolve(host, port);
@@ -163,7 +169,7 @@ bool EtcdClient::Get(const std::string& key, std::string& value)
         http::read(socket, buffer, res);
 
         std::string response = beast::buffers_to_string(res.body().data());
-        if (response.find("\"kvs\"") != std::string::npos)
+        if (modules::IsResponseWithKvs(response.find("\"kvs\"") != std::string::npos))
         {
             size_t value_start = response.find("\"value\":\"");
             if (value_start != std::string::npos)
@@ -196,13 +202,15 @@ bool EtcdClient::Set(const std::string& key, const std::string& value, int64_t t
         tcp::resolver resolver(ioc);
 
         size_t comma_pos = _endpoints.find(',');
-        std::string endpoint = comma_pos != std::string::npos ? _endpoints.substr(0, comma_pos) : _endpoints;
+        std::string endpoint = modules::HasMultipleEndpoints(comma_pos != std::string::npos)
+                                   ? _endpoints.substr(0, comma_pos)
+                                   : _endpoints;
 
         std::string host, port;
         size_t colon_pos = endpoint.find("://");
-        if (colon_pos != std::string::npos)
+        if (modules::HasSchemeDelimiter(colon_pos != std::string::npos))
         {
-            host = endpoint.substr(colon_pos + 3);
+            host = endpoint.substr(colon_pos + modules::SchemeDelimiterSize());
         }
         else
         {
@@ -210,14 +218,14 @@ bool EtcdClient::Set(const std::string& key, const std::string& value, int64_t t
         }
 
         size_t port_colon = host.find(':');
-        if (port_colon != std::string::npos)
+        if (modules::HasExplicitPort(port_colon != std::string::npos))
         {
             port = host.substr(port_colon + 1);
             host = host.substr(0, port_colon);
         }
         else
         {
-            port = "2379";
+            port = modules::DefaultEtcdPort();
         }
 
         auto results = resolver.resolve(host, port);
@@ -226,7 +234,7 @@ bool EtcdClient::Set(const std::string& key, const std::string& value, int64_t t
 
         std::ostringstream oss;
         oss << R"({"key":")" << key << R"(","value":")" << value << R"(")";
-        if (ttl > 0)
+        if (modules::ShouldAttachLease(ttl > 0))
         {
             oss << R"(,"lease":")" << ttl << R"(")";
         }
@@ -246,7 +254,7 @@ bool EtcdClient::Set(const std::string& key, const std::string& value, int64_t t
         http::read(socket, buffer, res);
 
         std::string response = beast::buffers_to_string(res.body().data());
-        return response.find("\"header\"") != std::string::npos;
+        return modules::IsResponseWithHeader(response.find("\"header\"") != std::string::npos);
     }
     catch (const std::exception& e)
     {
@@ -268,13 +276,15 @@ bool EtcdClient::Delete(const std::string& key)
         tcp::resolver resolver(ioc);
 
         size_t comma_pos = _endpoints.find(',');
-        std::string endpoint = comma_pos != std::string::npos ? _endpoints.substr(0, comma_pos) : _endpoints;
+        std::string endpoint = modules::HasMultipleEndpoints(comma_pos != std::string::npos)
+                                   ? _endpoints.substr(0, comma_pos)
+                                   : _endpoints;
 
         std::string host, port;
         size_t colon_pos = endpoint.find("://");
-        if (colon_pos != std::string::npos)
+        if (modules::HasSchemeDelimiter(colon_pos != std::string::npos))
         {
-            host = endpoint.substr(colon_pos + 3);
+            host = endpoint.substr(colon_pos + modules::SchemeDelimiterSize());
         }
         else
         {
@@ -282,14 +292,14 @@ bool EtcdClient::Delete(const std::string& key)
         }
 
         size_t port_colon = host.find(':');
-        if (port_colon != std::string::npos)
+        if (modules::HasExplicitPort(port_colon != std::string::npos))
         {
             port = host.substr(port_colon + 1);
             host = host.substr(0, port_colon);
         }
         else
         {
-            port = "2379";
+            port = modules::DefaultEtcdPort();
         }
 
         auto results = resolver.resolve(host, port);
@@ -313,7 +323,7 @@ bool EtcdClient::Delete(const std::string& key)
         http::read(socket, buffer, res);
 
         std::string response = beast::buffers_to_string(res.body().data());
-        return response.find("\"header\"") != std::string::npos;
+        return modules::IsResponseWithHeader(response.find("\"header\"") != std::string::npos);
     }
     catch (const std::exception& e)
     {
@@ -327,7 +337,7 @@ bool EtcdClient::Watch(const std::string& prefix, WatchCallback callback)
     std::lock_guard<std::mutex> lock(_watch_mutex);
     _watch_callbacks.push_back(callback);
 
-    if (!_watch_thread.joinable())
+    if (modules::ShouldStartWatchThread(_watch_thread.joinable()))
     {
         _watch_thread = std::thread(&EtcdClient::WatchLoop, this);
     }
@@ -361,13 +371,15 @@ std::vector<std::pair<std::string, std::string>> EtcdClient::GetAll(const std::s
         tcp::resolver resolver(ioc);
 
         size_t comma_pos = _endpoints.find(',');
-        std::string endpoint = comma_pos != std::string::npos ? _endpoints.substr(0, comma_pos) : _endpoints;
+        std::string endpoint = modules::HasMultipleEndpoints(comma_pos != std::string::npos)
+                                   ? _endpoints.substr(0, comma_pos)
+                                   : _endpoints;
 
         std::string host, port;
         size_t colon_pos = endpoint.find("://");
-        if (colon_pos != std::string::npos)
+        if (modules::HasSchemeDelimiter(colon_pos != std::string::npos))
         {
-            host = endpoint.substr(colon_pos + 3);
+            host = endpoint.substr(colon_pos + modules::SchemeDelimiterSize());
         }
         else
         {
@@ -375,14 +387,14 @@ std::vector<std::pair<std::string, std::string>> EtcdClient::GetAll(const std::s
         }
 
         size_t port_colon = host.find(':');
-        if (port_colon != std::string::npos)
+        if (modules::HasExplicitPort(port_colon != std::string::npos))
         {
             port = host.substr(port_colon + 1);
             host = host.substr(0, port_colon);
         }
         else
         {
-            port = "2379";
+            port = modules::DefaultEtcdPort();
         }
 
         auto resolved = resolver.resolve(host, port);
@@ -408,7 +420,7 @@ std::vector<std::pair<std::string, std::string>> EtcdClient::GetAll(const std::s
         std::string response = beast::buffers_to_string(res.body().data());
 
         size_t kvs_pos = response.find("\"kvs\":[");
-        if (kvs_pos != std::string::npos)
+        if (modules::IsResponseWithKvs(kvs_pos != std::string::npos))
         {
             std::string kvs_json = response.substr(kvs_pos + 7);
             size_t pos = 0;
@@ -491,7 +503,7 @@ void EtcdConfig::SetChangeCallback(ChangeCallback callback)
 
 void EtcdConfig::StartWatch()
 {
-    if (_watching.load())
+    if (modules::ShouldSkipConfigWatchStart(_watching.load()))
     {
         return;
     }
@@ -517,7 +529,7 @@ void EtcdConfig::Stop()
 void EtcdConfig::OnConfigChange(const std::string& key, const std::string& value)
 {
     auto [section, config_key] = ParseKey(key);
-    if (section.empty() || config_key.empty())
+    if (!modules::ShouldAcceptConfigChangeKey(section.empty(), config_key.empty()))
     {
         return;
     }
@@ -537,14 +549,14 @@ std::pair<std::string, std::string> EtcdConfig::ParseKey(const std::string& key)
 {
     std::pair<std::string, std::string> result;
 
-    if (key.find(_config_prefix) != 0)
+    if (!modules::HasConfigPrefix(key.find(_config_prefix) == 0))
     {
         return result;
     }
 
     std::string remaining = key.substr(_config_prefix.size());
     size_t first_slash = remaining.find('/');
-    if (first_slash == std::string::npos)
+    if (!modules::HasConfigSectionSeparator(first_slash != std::string::npos))
     {
         return result;
     }
@@ -557,7 +569,7 @@ std::pair<std::string, std::string> EtcdConfig::ParseKey(const std::string& key)
 
 std::shared_ptr<EtcdConfig> EtcdConfigLoader::TryCreate(const std::string& endpoints, const std::string& service_name)
 {
-    if (endpoints.empty())
+    if (!modules::ShouldCreateEtcdConfig(endpoints.empty()))
     {
         std::cout << "[EtcdConfigLoader] No etcd endpoints configured" << std::endl;
         return nullptr;

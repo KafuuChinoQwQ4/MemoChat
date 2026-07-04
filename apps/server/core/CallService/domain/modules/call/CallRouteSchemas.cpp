@@ -1,6 +1,8 @@
-#include "modules/call/CallRouteModule.h"
+#include "modules/call/CallRouteModule.hpp"
 
-#include "CallPublicDtos.h"
+#include "CallPublicDtos.hpp"
+
+import memochat.call.route_schema_algorithms;
 
 namespace memochat::gate::modules::call
 {
@@ -8,44 +10,45 @@ namespace memochat::gate::modules::call
 std::vector<memochat::gate::routing::RouteSchemaDescriptor> CallRouteModule::RouteSchemas()
 {
     using memochat::gate::routing::MakeRouteSchema;
+    namespace modules = memochat::call::route_schema::modules;
 
     return {
         MakeRouteSchema<memochat::call::CallStartRequestDto, memochat::call::CallStartResponseDto>(
-            "POST",
-            "/api/call/start",
-            "call.start",
-            "CallStartRequestDto",
-            "CallStartResponseDto"),
+            modules::PostMethod(),
+            modules::StartPath(),
+            modules::StartRouteName(),
+            modules::StartRequestTypeName(),
+            modules::StartResponseTypeName()),
         MakeRouteSchema<memochat::call::CallAuthRequestDto, memochat::call::CallEventResponseDto>(
-            "POST",
-            "/api/call/accept",
-            "call.accept",
-            "CallAuthRequestDto",
-            "CallEventResponseDto"),
+            modules::PostMethod(),
+            modules::AcceptPath(),
+            modules::AcceptRouteName(),
+            modules::AuthRequestTypeName(),
+            modules::EventResponseTypeName()),
         MakeRouteSchema<memochat::call::CallAuthRequestDto, memochat::call::CallEventResponseDto>(
-            "POST",
-            "/api/call/reject",
-            "call.reject",
-            "CallAuthRequestDto",
-            "CallEventResponseDto"),
+            modules::PostMethod(),
+            modules::RejectPath(),
+            modules::RejectRouteName(),
+            modules::AuthRequestTypeName(),
+            modules::EventResponseTypeName()),
         MakeRouteSchema<memochat::call::CallAuthRequestDto, memochat::call::CallEventResponseDto>(
-            "POST",
-            "/api/call/cancel",
-            "call.cancel",
-            "CallAuthRequestDto",
-            "CallEventResponseDto"),
+            modules::PostMethod(),
+            modules::CancelPath(),
+            modules::CancelRouteName(),
+            modules::AuthRequestTypeName(),
+            modules::EventResponseTypeName()),
         MakeRouteSchema<memochat::call::CallAuthRequestDto, memochat::call::CallEventResponseDto>(
-            "POST",
-            "/api/call/hangup",
-            "call.hangup",
-            "CallAuthRequestDto",
-            "CallEventResponseDto"),
+            modules::PostMethod(),
+            modules::HangupPath(),
+            modules::HangupRouteName(),
+            modules::AuthRequestTypeName(),
+            modules::EventResponseTypeName()),
         MakeRouteSchema<memochat::call::CallTokenRequestDto, memochat::call::CallTokenResponseDto>(
-            "POST",
-            "/api/call/token",
-            "call.token.post",
-            "CallTokenRequestDto",
-            "CallTokenResponseDto"),
+            modules::PostMethod(),
+            modules::TokenPath(),
+            modules::TokenPostRouteName(),
+            modules::TokenRequestTypeName(),
+            modules::TokenResponseTypeName()),
     };
 }
 

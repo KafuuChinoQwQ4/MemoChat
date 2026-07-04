@@ -1,4 +1,4 @@
-#include "r18/R18AdapterUtils.h"
+#include "r18/R18AdapterUtils.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -19,6 +19,8 @@
 #include <stdexcept>
 #include <vector>
 
+import memochat.r18.adapter_utils_algorithms;
+
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
@@ -32,14 +34,17 @@ ParsedUrl ParseUrl(const std::string& url)
 {
     const auto scheme_end = url.find("://");
     if (scheme_end == std::string::npos)
-        throw std::runtime_error("URL missing scheme");
+        throw std::runtime_error(adapter_utils::modules::MissingSchemeMessage());
     ParsedUrl parsed;
     parsed.scheme = url.substr(0, scheme_end);
     const auto authority_begin = scheme_end + 3;
     const auto path_begin = url.find('/', authority_begin);
     std::string authority = path_begin == std::string::npos ? url.substr(authority_begin)
                                                             : url.substr(authority_begin, path_begin - authority_begin);
-    parsed.target = path_begin == std::string::npos ? "/" : url.substr(path_begin);
+    if (adapter_utils::modules::ShouldUseDefaultTarget(path_begin == std::string::npos))
+        parsed.target = adapter_utils::modules::DefaultTarget();
+    else
+        parsed.target = url.substr(path_begin);
     const auto port_pos = authority.rfind(':');
     if (port_pos != std::string::npos && authority.find(']') == std::string::npos)
     {
@@ -49,16 +54,12 @@ ParsedUrl ParseUrl(const std::string& url)
     else
     {
         parsed.host = authority;
-        parsed.port = parsed.scheme == "https" ? "443" : "80";
+        parsed.port = adapter_utils::modules::SelectDefaultPort(parsed.scheme == "https");
     }
-    if (parsed.host.empty())
-        throw std::runtime_error("URL missing host");
+    if (adapter_utils::modules::ShouldThrowMissingHost(parsed.host.empty()))
+        throw std::runtime_error(adapter_utils::modules::MissingHostMessage());
     return parsed;
 }
-
-static constexpr const char* kDefaultUserAgent =
-    "Mozilla/5.0 (Linux; Android 10; K; wv) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36";
 
 HttpResult
 HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::string>>& headers, int timeout_seconds)
@@ -69,14 +70,14 @@ HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::st
 
     http::request<http::empty_body> req{http::verb::get, parsed.target, 11};
     req.set(http::field::host, parsed.host);
-    req.set(http::field::user_agent, kDefaultUserAgent);
+    req.set(http::field::user_agent, adapter_utils::modules::DefaultUserAgent());
     req.set(http::field::accept_encoding, "identity");
     for (const auto& [key, value] : headers)
         req.set(key, value);
 
     beast::flat_buffer buffer;
     http::response<http::string_body> res;
-    if (parsed.scheme == "https")
+    if (adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https"))
     {
         ssl::context ctx(ssl::context::tls_client);
         ctx.set_verify_mode(ssl::verify_none);
@@ -92,7 +93,7 @@ HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::st
         beast::error_code ec;
         stream.shutdown(ec);
     }
-    else if (parsed.scheme == "http")
+    else if (adapter_utils::modules::IsHttpScheme(parsed.scheme == "http"))
     {
         beast::tcp_stream stream(ioc);
         stream.expires_after(std::chrono::seconds(timeout_seconds));
@@ -105,7 +106,7 @@ HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::st
     }
     else
     {
-        throw std::runtime_error("unsupported URL scheme");
+        throw std::runtime_error(adapter_utils::modules::UnsupportedSchemeMessage());
     }
 
     HttpResult result;
@@ -169,7 +170,7 @@ std::string UrlEncode(const std::string& input)
     out << std::hex << std::uppercase;
     for (unsigned char c : input)
     {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+        if (adapter_utils::modules::IsUrlEncodeUnreserved(c))
             out << static_cast<char>(c);
         else
             out << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
@@ -183,27 +184,10 @@ std::string EscapeXml(std::string value)
     escaped.reserve(value.size());
     for (char ch : value)
     {
-        switch (ch)
-        {
-            case '&':
-                escaped += "&amp;";
-                break;
-            case '<':
-                escaped += "&lt;";
-                break;
-            case '>':
-                escaped += "&gt;";
-                break;
-            case '"':
-                escaped += "&quot;";
-                break;
-            case '\'':
-                escaped += "&apos;";
-                break;
-            default:
-                escaped.push_back(ch);
-                break;
-        }
+        if (const char* escaped_text = adapter_utils::modules::XmlEscapeText(ch); escaped_text != nullptr)
+            escaped += escaped_text;
+        else
+            escaped.push_back(ch);
     }
     return escaped;
 }
@@ -252,7 +236,7 @@ json::JsonValue MakeTags(const std::vector<std::string>& tags)
 {
     json::JsonValue arr{json::array_t{}};
     for (const auto& tag : tags)
-        if (!tag.empty())
+        if (!adapter_utils::modules::ShouldSkipEmptyTag(tag.empty()))
             json::glaze_append(arr, tag);
     return arr;
 }
@@ -282,7 +266,7 @@ R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& li
             << safe_line2 << "</text>";
     svg << "</svg>";
     R18ImagePayload payload;
-    payload.content_type = "image/svg+xml";
+    payload.content_type = adapter_utils::modules::PlaceholderContentType();
     payload.body = svg.str();
     return payload;
 }
@@ -292,16 +276,16 @@ bool ReadCachedImage(const std::filesystem::path& cache_root, const std::string&
     const auto body_path = cache_root / (cache_key + ".bin");
     const auto meta_path = cache_root / (cache_key + ".meta");
     std::ifstream body_in(body_path, std::ios::binary);
-    if (!body_in.is_open())
+    if (!adapter_utils::modules::ShouldReadCachedImageBody(body_in.is_open()))
         return false;
     payload->body.assign(std::istreambuf_iterator<char>(body_in), std::istreambuf_iterator<char>());
-    if (payload->body.empty())
+    if (!adapter_utils::modules::HasCachedImageBody(payload->body.empty()))
         return false;
     std::ifstream meta_in(meta_path, std::ios::binary);
     if (meta_in.is_open())
         std::getline(meta_in, payload->content_type);
-    if (payload->content_type.empty())
-        payload->content_type = "image/jpeg";
+    if (adapter_utils::modules::ShouldUseDefaultCachedImageContentType(payload->content_type.empty()))
+        payload->content_type = adapter_utils::modules::DefaultCachedImageContentType();
     return true;
 }
 
@@ -330,9 +314,9 @@ namespace memochat::r18
 
 bool DecodeBase64(const std::string& input, std::string& out)
 {
-    static constexpr unsigned char kInvalid = 255;
+    const unsigned char invalid = memochat::r18::adapter_utils::modules::Base64InvalidMarker();
     unsigned char table[256];
-    std::fill(std::begin(table), std::end(table), kInvalid);
+    std::fill(std::begin(table), std::end(table), invalid);
     for (int i = 0; i < 26; ++i)
     {
         table[static_cast<unsigned char>('A' + i)] = static_cast<unsigned char>(i);
@@ -348,11 +332,11 @@ bool DecodeBase64(const std::string& input, std::string& out)
     int bits = -8;
     for (unsigned char c : input)
     {
-        if (std::isspace(c))
+        if (memochat::r18::adapter_utils::modules::ShouldSkipBase64Whitespace(c))
             continue;
-        if (c == '=')
+        if (memochat::r18::adapter_utils::modules::IsBase64Padding(c))
             break;
-        if (table[c] == kInvalid)
+        if (memochat::r18::adapter_utils::modules::HasInvalidBase64Value(table[c], invalid))
             return false;
         val = (val << 6) + table[c];
         bits += 6;

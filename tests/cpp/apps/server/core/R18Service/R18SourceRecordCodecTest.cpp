@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "r18/R18SourceRecordCodec.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "r18/R18SourceRecordCodec.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>

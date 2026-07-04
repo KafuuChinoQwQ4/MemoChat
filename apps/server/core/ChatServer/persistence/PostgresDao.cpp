@@ -1,8 +1,8 @@
-#include "PostgresDao.h"
-#include "ConfigMgr.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
-#include "SnowflakeUtil.h"
+#include "PostgresDao.hpp"
+#include "ConfigMgr.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
+#include "SnowflakeUtil.hpp"
 #include <pqxx/pqxx>
 #include <set>
 #include <algorithm>
@@ -15,18 +15,22 @@
 #include <limits>
 #include <sstream>
 
+import memochat.chat.postgres_dao_algorithms;
+
+namespace postgres_dao_modules = memochat::chat::persistence::postgres_dao::modules;
+
 namespace
 {
 std::string BuildPostgresConnectionStringFor(const std::string& section, const std::string& fallback_section)
 {
     auto& cfg = ConfigMgr::Inst();
     std::string sec = section;
-    if (cfg[section]["Host"].empty() && !fallback_section.empty())
+    if (postgres_dao_modules::ShouldUseFallbackSection(cfg[section]["Host"].empty(), fallback_section.empty()))
     {
         sec = fallback_section; // section absent -> reuse fallback (behavior preserved)
     }
     const auto host = cfg[sec]["Host"];
-    if (host.empty())
+    if (!postgres_dao_modules::HasPostgresHost(host.empty()))
     {
         return "";
     }
@@ -36,9 +40,10 @@ std::string BuildPostgresConnectionStringFor(const std::string& section, const s
     const auto schema = cfg[sec]["Schema"];
     const auto user = cfg[sec]["User"];
     const auto sslmode = cfg[sec]["SslMode"];
+    const auto* selected_sslmode = postgres_dao_modules::SelectSslMode(sslmode.empty(), sslmode.c_str());
+    const auto* selected_schema = postgres_dao_modules::SelectSchema(schema.empty(), schema.c_str());
     return "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
-           " sslmode=" + (sslmode.empty() ? "disable" : sslmode) +
-           " options=-csearch_path=" + (schema.empty() ? "public" : schema) + ",public";
+           " sslmode=" + selected_sslmode + " options=-csearch_path=" + selected_schema + ",public";
 }
 
 std::string BuildPostgresConnectionString()
@@ -55,12 +60,12 @@ PostgresDao::PostgresDao()
     // only the user/user_id queries follow this string; chat tables stay on
     // [Postgres]. This is the DB-per-service seam for the account aggregate.
     account_connection_string_ = BuildPostgresConnectionStringFor("AccountPostgres", "Postgres");
-    use_postgres_ = !postgres_connection_string_.empty();
+    use_postgres_ = postgres_dao_modules::ShouldEnablePostgres(postgres_connection_string_.empty());
     if (!use_postgres_)
     {
         throw std::runtime_error("missing [Postgres] configuration for ChatServer");
     }
-    auto* raw_pool = new PostgresPool(postgres_connection_string_, "", "", "", 16);
+    auto* raw_pool = new PostgresPool(postgres_connection_string_, "", "", "", postgres_dao_modules::StartupPoolSize());
     pool_.reset(raw_pool);
     EnsureChatMessageIdempotencySchema();
     EnsureChatEventOutboxSchema();
@@ -77,7 +82,7 @@ PostgresDao::~PostgresDao()
 
 void PostgresDao::WarmupRelationBootstrapQueries()
 {
-    if (use_postgres_)
+    if (postgres_dao_modules::ShouldUsePostgresWarmupPath(use_postgres_))
     {
         try
         {

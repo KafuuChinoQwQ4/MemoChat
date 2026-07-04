@@ -1,6 +1,8 @@
-#include "AIServiceJsonDtos.h"
+#include "AIServiceJsonDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.ai.json_dto_algorithms;
 
 #include <exception>
 #include <utility>
@@ -67,14 +69,16 @@ AIModelListJsonDto AIModelListFromJsonValue(const memochat::json::JsonValue& res
     AIModelListJsonDto dto;
     dto.code = memochat::json::glaze_safe_get<int>(result["code"], 0);
 
-    if (!result.isObject())
+    if (!memochat::ai::json_dto::modules::ShouldInspectObjectMembers(result.isObject()))
     {
         return dto;
     }
 
     const auto& object = result.impl().get<memochat::json::object_t>();
     auto models_it = object.find("models");
-    if (models_it != object.end() && models_it->second.holds<memochat::json::array_t>())
+    const bool has_models = models_it != object.end();
+    const bool models_is_array = has_models && models_it->second.holds<memochat::json::array_t>();
+    if (memochat::ai::json_dto::modules::ShouldReadArrayMember(has_models, models_is_array))
     {
         const auto& models = models_it->second.get<memochat::json::array_t>();
         dto.models.reserve(models.size());
@@ -85,12 +89,15 @@ AIModelListJsonDto AIModelListFromJsonValue(const memochat::json::JsonValue& res
     }
 
     auto default_model_it = object.find("default_model");
-    if (default_model_it != object.end() && default_model_it->second.holds<memochat::json::object_t>())
+    const bool has_default_model = default_model_it != object.end();
+    const bool default_model_is_object =
+        has_default_model && default_model_it->second.holds<memochat::json::object_t>();
+    if (memochat::ai::json_dto::modules::ShouldReadObjectMember(has_default_model, default_model_is_object))
     {
         dto.default_model = AIModelInfoFromJsonValue(memochat::json::JsonValue(default_model_it->second));
         dto.has_default_model = true;
     }
-    else if (!dto.models.empty())
+    else if (memochat::ai::json_dto::modules::ShouldFallbackToFirstModel(dto.has_default_model, dto.models.empty()))
     {
         dto.default_model = dto.models.front();
         dto.has_default_model = true;
@@ -106,14 +113,16 @@ AIRegisterApiProviderJsonDto AIRegisterApiProviderFromJsonValue(const memochat::
     dto.message = memochat::json::glaze_safe_get<std::string>(result["message"], "ok");
     dto.provider_id = memochat::json::glaze_safe_get<std::string>(result["provider_id"], "");
 
-    if (!result.isObject())
+    if (!memochat::ai::json_dto::modules::ShouldInspectObjectMembers(result.isObject()))
     {
         return dto;
     }
 
     const auto& object = result.impl().get<memochat::json::object_t>();
     auto models_it = object.find("models");
-    if (models_it == object.end() || !models_it->second.holds<memochat::json::array_t>())
+    const bool has_models = models_it != object.end();
+    const bool models_is_array = has_models && models_it->second.holds<memochat::json::array_t>();
+    if (!memochat::ai::json_dto::modules::ShouldReadArrayMember(has_models, models_is_array))
     {
         return dto;
     }
@@ -143,14 +152,17 @@ AIKnowledgeBaseListJsonDto AIKnowledgeBaseListFromJsonValue(const memochat::json
     AIKnowledgeBaseListJsonDto dto;
     dto.code = memochat::json::glaze_safe_get<int>(result["code"], 0);
 
-    if (!result.isObject())
+    if (!memochat::ai::json_dto::modules::ShouldInspectObjectMembers(result.isObject()))
     {
         return dto;
     }
 
     const auto& object = result.impl().get<memochat::json::object_t>();
     auto knowledge_bases_it = object.find("knowledge_bases");
-    if (knowledge_bases_it == object.end() || !knowledge_bases_it->second.holds<memochat::json::array_t>())
+    const bool has_knowledge_bases = knowledge_bases_it != object.end();
+    const bool knowledge_bases_is_array =
+        has_knowledge_bases && knowledge_bases_it->second.holds<memochat::json::array_t>();
+    if (!memochat::ai::json_dto::modules::ShouldReadArrayMember(has_knowledge_bases, knowledge_bases_is_array))
     {
         return dto;
     }
@@ -337,11 +349,13 @@ bool DecodeConversationContextJson(std::string_view body, ConversationContextJso
     dto.created_at = memochat::json::glaze_safe_get<int64_t>(root, "created_at", 0);
     dto.last_active_at = memochat::json::glaze_safe_get<int64_t>(root, "last_active_at", 0);
 
-    if (root.holds_object())
+    if (memochat::ai::json_dto::modules::ShouldInspectObjectMembers(root.holds_object()))
     {
         const auto& obj = root.impl().get<memochat::json::object_t>();
         auto it = obj.find("messages");
-        if (it != obj.end() && it->second.holds<memochat::json::array_t>())
+        const bool has_messages = it != obj.end();
+        const bool messages_is_array = has_messages && it->second.holds<memochat::json::array_t>();
+        if (memochat::ai::json_dto::modules::ShouldReadArrayMember(has_messages, messages_is_array))
         {
             const auto& messages = it->second.get<memochat::json::array_t>();
             dto.messages.reserve(messages.size());

@@ -1,8 +1,10 @@
-#include "ChatRuntime.h"
+#include "ChatRuntime.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
 #include <algorithm>
+
+import memochat.chat.runtime_algorithms;
 
 namespace
 {
@@ -13,23 +15,14 @@ std::string NormalizeLower(std::string value)
                    value.begin(),
                    [](unsigned char ch)
                    {
-                       if (ch >= 'A' && ch <= 'Z')
-                       {
-                           return static_cast<char>(ch - 'A' + 'a');
-                       }
-                       return static_cast<char>(ch);
+                       return memochat::chat::runtime::modules::ToLowerAscii(ch);
                    });
     return value;
 }
 
 bool ParseBoolFlag(const std::string& raw, bool default_value = false)
 {
-    if (raw.empty())
-    {
-        return default_value;
-    }
-    const auto value = NormalizeLower(raw);
-    return value == "1" || value == "true" || value == "yes" || value == "on";
+    return memochat::chat::runtime::modules::ParseBoolFlagOr(raw.data(), raw.size(), default_value);
 }
 } // namespace
 
@@ -170,7 +163,7 @@ int TaskRetryDelayMs()
     }
     try
     {
-        return std::max(100, std::stoi(raw));
+        return memochat::chat::runtime::modules::AtLeast(std::stoi(raw), 100);
     }
     catch (...)
     {
@@ -187,7 +180,7 @@ int TaskMaxRetries()
     }
     try
     {
-        return std::max(1, std::stoi(raw));
+        return memochat::chat::runtime::modules::AtLeast(std::stoi(raw), 1);
     }
     catch (...)
     {

@@ -1,5 +1,6 @@
 #include "AgentStreamClient.h"
 #include "AgentNetworkRequestUtils.h"
+#include "HttpMgrRequestUtils.h"
 
 #include <QJsonDocument>
 #include <QNetworkRequest>
@@ -18,7 +19,21 @@ AgentStreamClient::~AgentStreamClient()
 void AgentStreamClient::start(const QUrl& url, const QJsonObject& payload)
 {
     cancel();
+    _payload = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    _fallbackUrls = gateProtocolFallbackUrls(url);
+    if (_fallbackUrls.isEmpty())
+    {
+        _fallbackUrls.push_back(url);
+    }
 
+    const QUrl first = _fallbackUrls.takeFirst();
+    startRequest(first);
+}
+
+void AgentStreamClient::startRequest(const QUrl& url)
+{
+    _buffer.clear();
+    _receivedAnyChunk = false;
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Accept", "text/event-stream");
@@ -26,7 +41,13 @@ void AgentStreamClient::start(const QUrl& url, const QJsonObject& payload)
     request.setRawHeader("Connection", "keep-alive");
     configureAgentLocalGateRequest(request);
 
-    _reply = _network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    _reply = _network->post(request, _payload);
+    // Same as HttpMgr: VerifyNone alone is insufficient — the manager-level
+    // SSL error handling also needs to be bypassed for self-signed certs.
+    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
+    {
+        _reply->ignoreSslErrors();
+    }
     connect(_reply, &QNetworkReply::readyRead, this, &AgentStreamClient::onReadyRead);
     connect(_reply, &QNetworkReply::finished, this, &AgentStreamClient::onFinished);
 }
@@ -36,6 +57,9 @@ void AgentStreamClient::cancel()
     QNetworkReply* reply = _reply;
     _reply = nullptr;
     _buffer.clear();
+    _fallbackUrls.clear();
+    _payload.clear();
+    _receivedAnyChunk = false;
     if (!reply)
     {
         return;
@@ -91,7 +115,28 @@ void AgentStreamClient::onFinished()
     _reply = nullptr;
     const int networkError = static_cast<int>(reply->error());
     const QString errorString = reply->errorString();
+    const bool receivedAnyChunk = _receivedAnyChunk;
+    const QUrl replyUrl = reply->url();
     _buffer.clear();
+
+    if (networkError != static_cast<int>(QNetworkReply::NoError) &&
+        networkError != static_cast<int>(QNetworkReply::OperationCanceledError) && !receivedAnyChunk &&
+        !_fallbackUrls.isEmpty())
+    {
+        const QUrl fallback = _fallbackUrls.takeFirst();
+        reply->deleteLater();
+        startRequest(fallback);
+        return;
+    }
+
+    if (networkError == static_cast<int>(QNetworkReply::NoError))
+    {
+        updateGatePrefixesFromReplyUrl(replyUrl);
+    }
+
+    _payload.clear();
+    _fallbackUrls.clear();
+    _receivedAnyChunk = false;
     reply->deleteLater();
 
     if (networkError != static_cast<int>(QNetworkReply::NoError) &&
@@ -122,6 +167,7 @@ void AgentStreamClient::consumeLine(const QString& line)
     }
 
     const QJsonObject chunk = doc.object();
+    _receivedAnyChunk = true;
     emit chunkReceived(chunk);
     if (chunk.value(QStringLiteral("is_final")).toBool())
     {

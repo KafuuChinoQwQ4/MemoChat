@@ -24,6 +24,8 @@ spec:
           image: "{{ .Values.images.aiServer.repository }}:{{ .Values.images.aiServer.tag }}"
           imagePullPolicy: {{ .Values.images.aiServer.pullPolicy }}
           env:
+            - name: MEMOCHAT_ENV
+              value: production
             - name: TARGET_BIN
               value: /app/AIServer
             - name: RUN_WITH_CONFIG_ARG
@@ -97,10 +99,16 @@ spec:
           image: "{{ .Values.images.aiOrchestrator.repository }}:{{ .Values.images.aiOrchestrator.tag }}"
           imagePullPolicy: {{ .Values.images.aiOrchestrator.pullPolicy }}
           env:
-            - name: MEMOCHAT_REDIS_PASSWD
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_AI_POSTGRES__PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+            - name: MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
-            - name: MEMOCHAT_RABBITMQ_PASSWORD
+            - name: MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_AI_NEO4J__PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: neo4j-password } }
             {{- with .Values.aiOrchestrator.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

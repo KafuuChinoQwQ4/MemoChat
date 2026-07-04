@@ -13,6 +13,7 @@
 #include <QSysInfo>
 #include <QThread>
 #include <QTimer>
+#include <QUrlQuery>
 #include <QUuid>
 #include <utility>
 
@@ -53,6 +54,37 @@ QNetworkAccessManager* telemetryManager()
 {
     static QNetworkAccessManager* manager = new QNetworkAccessManager(qApp);
     return manager;
+}
+
+bool isSensitiveQueryKey(QString key)
+{
+    key = key.trimmed().toLower();
+    const QString compact = key;
+    key.remove(QLatin1Char('_'));
+    key.remove(QLatin1Char('-'));
+    key.remove(QLatin1Char('.'));
+
+    if (compact == QStringLiteral("token") ||
+                                  compact == QStringLiteral("login_ticket") ||
+                                                            compact == QStringLiteral("media_key") ||
+                                                                                      compact ==
+                                                                                          QStringLiteral("varifycode"))
+    {
+        return true;
+    }
+    if (compact.contains(
+            QStringLiteral("token")) ||
+            compact.contains(
+                QStringLiteral("ticket")) ||
+                compact.contains(QStringLiteral("secret")) ||
+                                 compact.contains(QStringLiteral("password")) ||
+                                                  compact.contains(QStringLiteral("passwd")) ||
+                                                                   compact.contains(QStringLiteral("signature")))
+    {
+        return true;
+    }
+    return key.contains(QStringLiteral("apikey")) || key.endsWith(QStringLiteral("key")) ||
+                                                                  key.endsWith(QStringLiteral("code"));
 }
 
 void postTelemetrySpan(QNetworkRequest request, QByteArray payload)
@@ -143,6 +175,29 @@ void applyTraceHeaders(QNetworkRequest& request, QString* traceId, QString* requ
     {
         *spanId = localSpanId;
     }
+}
+
+QString redactedUrlForTelemetry(const QUrl& rawUrl)
+{
+    QUrl url(rawUrl);
+    url.setFragment(QString());
+
+    QUrlQuery query(url);
+    if (!query.isEmpty())
+    {
+        QUrlQuery redactedQuery;
+        const auto items = query.queryItems(QUrl::FullyDecoded);
+        for (const auto& item : items)
+        {
+            redactedQuery.addQueryItem(item.first,
+                                       isSensitiveQueryKey(item.first)
+                                       ? QStringLiteral("[REDACTED]")
+                                       : item.second);
+        }
+        url.setQuery(redactedQuery);
+    }
+
+    return url.toString(QUrl::RemovePassword);
 }
 
 void exportZipkinSpan(const QString& name,

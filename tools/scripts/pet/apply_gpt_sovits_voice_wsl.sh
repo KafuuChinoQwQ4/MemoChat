@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_ROOT="${MEMOCHAT_PROJECT_ROOT:-/root/code/MemoChat-Qml-Drogon-linux}"
+PROJECT_ROOT="${MEMOCHAT_PROJECT_ROOT:-/root/code/MemoChat}"
 AI_COMPOSE="${MEMOCHAT_AI_COMPOSE_FILE:-$PROJECT_ROOT/apps/server/core/AIOrchestrator/docker-compose.yml}"
 SMOKE_SCRIPT="${GPT_SOVITS_SMOKE_SCRIPT:-$PROJECT_ROOT/tools/scripts/pet/smoke_gpt_sovits_tts_wsl.sh}"
 HOST_DATA_DIR="${MEMOCHAT_PET_SOVITS_HOST_DATA_DIR:-/data/gpt-sovits}"

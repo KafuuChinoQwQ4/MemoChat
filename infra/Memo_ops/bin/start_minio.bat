@@ -4,9 +4,8 @@ REM 启动 MinIO 对象存储服务
 REM
 REM 方式: 通过 Arch Linux native Docker 容器方式运行 memochat-minio
 REM
-REM MinIO 凭证 (与 docker-compose.yml 保持一致):
-REM   MINIO_ROOT_USER=memochat_admin
-REM   MINIO_ROOT_PASSWORD=MinioPass2026!
+REM MinIO 凭证由 docker-compose.yml 的 MEMOCHAT_MINIO_ROOT_USER /
+REM MEMOCHAT_MINIO_ROOT_PASSWORD 环境变量注入。
 REM
 REM API:      http://127.0.0.1:9000
 REM Console:  http://127.0.0.1:9001
@@ -78,8 +77,7 @@ set "COUNT=0"
 echo.
 echo [INFO] MinIO API:      http://127.0.0.1:9000
 echo [INFO] MinIO Console: http://127.0.0.1:9001
-echo [INFO] Console 用户: memochat_admin
-echo [INFO] Console 密码: MinioPass2026!
+echo [INFO] Console 用户/密码来自 MEMOCHAT_MINIO_ROOT_USER 和 MEMOCHAT_MINIO_ROOT_PASSWORD
 echo.
 echo 启动完成
 endlocal

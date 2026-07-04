@@ -52,6 +52,7 @@ set(CHATSERVER_MESSAGING_SOURCES
     messaging/RabbitMqConfig.cpp
     messaging/RabbitMqTaskBus.cpp
     messaging/RedisAsyncEventBus.cpp
+    messaging/SessionSendSupport.cpp
 )
 
 set(CHATSERVER_PERSISTENCE_SOURCES
@@ -70,6 +71,7 @@ set(CHATSERVER_PERSISTENCE_SOURCES
     persistence/PostgresDaoUsers.cpp
     persistence/PostgresMgr.cpp
     persistence/PostgresPool.cpp
+    persistence/OnlineRouteSessionSupport.cpp
     persistence/RedisRelationBootstrapCache.cpp
     persistence/RedisOnlineRouteStore.cpp
     persistence/RedisMgr.cpp
@@ -148,11 +150,30 @@ add_library(ChatConfigCore STATIC
     ${CHATSERVER_CONFIG_SOURCES}
 )
 chatserver_core_target(ChatConfigCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatConfigCore
+        MODULES
+            memochat.chat.config_algorithms=config/cxx_modules/ChatConfig.cppm
+        CONSUMER_SOURCES
+            config/ChatSessionConfig.cpp
+            config/MessageServiceConfig.cpp
+            config/RelationQueryServiceConfig.cpp
+            config/RelationServiceConfig.cpp
+    )
+endif()
 
 add_library(ChatAppCore STATIC
     ${CHATSERVER_APP_SOURCES}
 )
 chatserver_core_target(ChatAppCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatAppCore
+        MODULES
+            memochat.chat.runtime_algorithms=app/cxx_modules/ChatRuntime.cppm
+        CONSUMER_SOURCES
+            app/ChatRuntime.cpp
+    )
+endif()
 target_link_libraries(ChatAppCore PUBLIC
     ChatConfigCore
 )
@@ -161,6 +182,24 @@ add_library(ChatClientCore STATIC
     ${CHATSERVER_CLIENT_SOURCES}
 )
 chatserver_core_target(ChatClientCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatClientCore
+        MODULES
+            memochat.chat.chat_grpc_client_algorithms=clients/cxx_modules/ChatGrpcClient.cppm
+            memochat.chat.message_grpc_client_algorithms=clients/cxx_modules/MessageGrpcClient.cppm
+            memochat.chat.relation_grpc_client_algorithms=clients/cxx_modules/RelationGrpcClient.cppm
+            memochat.chat.relation_grpc_service_adapter_algorithms=clients/cxx_modules/RelationGrpcServiceAdapter.cppm
+            memochat.chat.relation_query_grpc_client_algorithms=clients/cxx_modules/RelationQueryGrpcClient.cppm
+            memochat.chat.service_factory_algorithms=domain/cxx_modules/ServiceFactory.cppm
+        CONSUMER_SOURCES
+            clients/ChatGrpcClient.cpp
+            clients/MessageGrpcClient.cpp
+            clients/RelationGrpcClient.cpp
+            clients/RelationGrpcServiceAdapter.cpp
+            clients/RelationQueryGrpcClient.cpp
+            clients/RelationQueryServiceFactory.cpp
+    )
+endif()
 target_link_libraries(ChatClientCore PUBLIC
     ChatConfigCore
 )
@@ -169,11 +208,61 @@ add_library(ChatInfrastructureCore STATIC
     ${CHATSERVER_INFRASTRUCTURE_SOURCES}
 )
 chatserver_core_target(ChatInfrastructureCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatInfrastructureCore
+        MODULES
+            memochat.runtime.io_context_pool_algorithms=../common/runtime/cxx_modules/IoContextPool.cppm
+        CONSUMER_SOURCES
+            infrastructure/AsioIOServicePool.cpp
+    )
+endif()
 
 add_library(ChatPersistenceCore STATIC
     ${CHATSERVER_PERSISTENCE_SOURCES}
 )
 chatserver_core_target(ChatPersistenceCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatPersistenceCore
+        MODULES
+            memochat.chat.session_repository_algorithms=persistence/cxx_modules/ChatSessionRepository.cppm
+            memochat.chat.message_repository_algorithms=persistence/cxx_modules/MessageRepository.cppm
+            memochat.chat.mongo_dao_algorithms=persistence/cxx_modules/MongoDao.cppm
+            memochat.chat.mongo_mgr_algorithms=persistence/cxx_modules/MongoMgr.cppm
+            memochat.chat.postgres_mgr_algorithms=persistence/cxx_modules/PostgresMgr.cppm
+            memochat.chat.postgres_dao_algorithms=persistence/cxx_modules/PostgresDao.cppm
+            memochat.chat.postgres_dao_users_algorithms=persistence/cxx_modules/PostgresDaoUsers.cppm
+            memochat.chat.postgres_dao_private_messages_algorithms=persistence/cxx_modules/PostgresDaoPrivateMessages.cppm
+            memochat.chat.postgres_dao_group_messages_algorithms=persistence/cxx_modules/PostgresDaoGroupMessages.cppm
+            memochat.chat.postgres_dao_dialogs_algorithms=persistence/cxx_modules/PostgresDaoDialogs.cppm
+            memochat.chat.postgres_dao_groups_algorithms=persistence/cxx_modules/PostgresDaoGroups.cppm
+            memochat.chat.dist_lock_algorithms=persistence/cxx_modules/DistLock.cppm
+            memochat.chat.redis_mgr_algorithms=persistence/cxx_modules/RedisMgr.cppm
+            memochat.chat.postgres_pool_algorithms=persistence/cxx_modules/PostgresPool.cppm
+            memochat.chat.outbox_algorithms=persistence/cxx_modules/Outbox.cppm
+            memochat.chat.relation_bootstrap_cache_algorithms=persistence/cxx_modules/RelationBootstrapCache.cppm
+            memochat.chat.online_route_store_algorithms=persistence/cxx_modules/OnlineRouteStore.cppm
+            memochat.chat.relation_repository_algorithms=persistence/cxx_modules/RelationRepository.cppm
+        CONSUMER_SOURCES
+            persistence/ChatSessionRepository.cpp
+            persistence/ChatRelationRepository.cpp
+            persistence/ChatMessageRepository.cpp
+            persistence/MongoDao.cpp
+            persistence/MongoMgr.cpp
+            persistence/PostgresMgr.cpp
+            persistence/PostgresDao.cpp
+            persistence/PostgresDaoUsers.cpp
+            persistence/PostgresDaoPrivateMessages.cpp
+            persistence/PostgresDaoGroupMessages.cpp
+            persistence/PostgresDaoDialogs.cpp
+            persistence/PostgresDaoGroups.cpp
+            persistence/DistLock.cpp
+            persistence/RedisMgr.cpp
+            persistence/PostgresPool.cpp
+            persistence/ChatOutboxService.cpp
+            persistence/RedisRelationBootstrapCache.cpp
+            persistence/RedisOnlineRouteStore.cpp
+    )
+endif()
 target_link_libraries(ChatPersistenceCore PRIVATE
     ChatConfigCore
     ${MEMOCHAT_MONGOCXX_TARGET}
@@ -186,6 +275,28 @@ add_library(ChatMessagingCore STATIC
     ${CHATSERVER_MESSAGING_SOURCES}
 )
 chatserver_core_target(ChatMessagingCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatMessagingCore
+        MODULES
+            memochat.chat.async_event_dispatcher_algorithms=messaging/cxx_modules/AsyncEventDispatcher.cppm
+            memochat.chat.kafka_async_event_bus_algorithms=messaging/cxx_modules/KafkaAsyncEventBus.cppm
+            memochat.chat.messaging_envelope_algorithms=messaging/cxx_modules/MessagingEnvelope.cppm
+            memochat.chat.messaging_config_algorithms=messaging/cxx_modules/MessagingConfig.cppm
+            memochat.chat.inline_task_bus_algorithms=messaging/cxx_modules/InlineTaskBus.cppm
+            memochat.chat.rabbitmq_task_bus_algorithms=messaging/cxx_modules/RabbitMqTaskBus.cppm
+            memochat.chat.redis_async_event_bus_algorithms=messaging/cxx_modules/RedisAsyncEventBus.cppm
+        CONSUMER_SOURCES
+            messaging/AsyncEventDispatcher.cpp
+            messaging/ChatAsyncEvent.cpp
+            messaging/ChatTaskEnvelope.cpp
+            messaging/InlineTaskBus.cpp
+            messaging/KafkaAsyncEventBus.cpp
+            messaging/KafkaConfig.cpp
+            messaging/RabbitMqConfig.cpp
+            messaging/RabbitMqTaskBus.cpp
+            messaging/RedisAsyncEventBus.cpp
+    )
+endif()
 target_link_libraries(ChatMessagingCore PUBLIC
     ChatAppCore
     ChatConfigCore
@@ -199,6 +310,14 @@ add_library(ChatTransportCore STATIC
     ${CHATSERVER_TRANSPORT_SOURCES}
 )
 chatserver_core_target(ChatTransportCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatTransportCore
+        MODULES
+            memochat.chat.msg_node_algorithms=transport/cxx_modules/MsgNode.cppm
+        CONSUMER_SOURCES
+            transport/MsgNode.cpp
+    )
+endif()
 target_link_libraries(ChatTransportCore PUBLIC
     ChatAppCore
     ChatConfigCore
@@ -209,11 +328,31 @@ add_library(ChatOrchestrationCore STATIC
     ${CHATSERVER_ORCHESTRATION_SOURCES}
 )
 chatserver_core_target(ChatOrchestrationCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatOrchestrationCore
+        MODULES
+            memochat.chat.handler_registrar_algorithms=domain/orchestration/cxx_modules/ChatHandlerRegistrar.cppm
+            memochat.chat.runtime_composition_algorithms=domain/orchestration/cxx_modules/ChatRuntimeComposition.cppm
+        CONSUMER_SOURCES
+            domain/orchestration/ChatHandlerRegistrars.cpp
+            domain/orchestration/ChatRuntimeComposition.cpp
+    )
+endif()
 
 add_library(ChatUserSupportCore STATIC
     ${CHATSERVER_USER_SUPPORT_SOURCES}
 )
 chatserver_core_target(ChatUserSupportCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatUserSupportCore
+        MODULES
+            memochat.chat.user_profile_algorithms=domain/users/cxx_modules/UserProfile.cppm
+            memochat.chat.user_support_algorithms=domain/users/cxx_modules/UserSupport.cppm
+        CONSUMER_SOURCES
+            domain/users/ChatUserProfileDto.cpp
+            domain/users/ChatUserSupport.cpp
+    )
+endif()
 target_link_libraries(ChatUserSupportCore PUBLIC
     ChatPersistenceCore
 )
@@ -235,11 +374,31 @@ add_library(ChatDeliveryPayloadCore STATIC
     ${CHATSERVER_DELIVERY_PAYLOAD_SOURCES}
 )
 chatserver_core_target(ChatDeliveryPayloadCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatDeliveryPayloadCore
+        MODULES
+            memochat.chat.delivery_task_payload_algorithms=domain/delivery/cxx_modules/DeliveryTaskPayload.cppm
+        CONSUMER_SOURCES
+            domain/delivery/MessageDeliveryTaskPayload.cpp
+    )
+endif()
 
 add_library(ChatRelationCore STATIC
     ${CHATSERVER_RELATION_SOURCES}
 )
 chatserver_core_target(ChatRelationCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatRelationCore
+        MODULES
+            memochat.chat.relation_internal_grpc_service_algorithms=domain/relation/cxx_modules/ChatRelationInternalGrpcService.cppm
+            memochat.chat.relation_service_algorithms=domain/relation/cxx_modules/ChatRelationService.cppm
+            memochat.chat.service_factory_algorithms=domain/cxx_modules/ServiceFactory.cppm
+        CONSUMER_SOURCES
+            domain/relation/ChatRelationInternalGrpcService.cpp
+            domain/relation/ChatRelationService.cpp
+            domain/relation/RelationServiceFactory.cpp
+    )
+endif()
 target_link_libraries(ChatRelationCore PUBLIC
     ChatAppCore
     ChatDeliveryPayloadCore
@@ -260,6 +419,20 @@ add_library(ChatMessageCore STATIC
     ${CHATSERVER_MESSAGE_SOURCES}
 )
 chatserver_core_target(ChatMessageCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatMessageCore
+        MODULES
+            memochat.chat.message_internal_grpc_service_algorithms=domain/message/cxx_modules/ChatMessageInternalGrpcService.cppm
+            memochat.chat.group_response_algorithms=domain/message/cxx_modules/GroupResponse.cppm
+            memochat.chat.message_delivery_algorithms=domain/message/cxx_modules/MessageDelivery.cppm
+            memochat.chat.service_factory_algorithms=domain/cxx_modules/ServiceFactory.cppm
+        CONSUMER_SOURCES
+            domain/message/ChatMessageInternalGrpcService.cpp
+            domain/message/GroupResponseFormatter.cpp
+            domain/message/MessageDeliveryPayload.cpp
+            domain/message/MessageServiceFactory.cpp
+    )
+endif()
 target_link_libraries(ChatMessageCore PUBLIC
     ChatAppCore
     ChatClientCore
@@ -275,6 +448,16 @@ add_library(ChatDeliveryCore STATIC
     ${CHATSERVER_DELIVERY_SOURCES}
 )
 chatserver_core_target(ChatDeliveryCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatDeliveryCore
+        MODULES
+            memochat.chat.delivery_runtime_algorithms=domain/delivery/cxx_modules/DeliveryRuntime.cppm
+            memochat.chat.task_dispatcher_algorithms=domain/delivery/cxx_modules/TaskDispatcher.cppm
+        CONSUMER_SOURCES
+            domain/delivery/ChatDeliveryRuntime.cpp
+            domain/delivery/TaskDispatcher.cpp
+    )
+endif()
 target_link_libraries(ChatDeliveryCore PUBLIC
     ChatAppCore
     ChatDeliveryPayloadCore
@@ -362,6 +545,14 @@ target_include_directories(ChatDeliveryWorker PRIVATE
 
 set_target_properties(ChatDeliveryWorker PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatDeliveryWorker)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatDeliveryWorker
+        MODULES
+            memochat.chat.delivery_worker_runtime_algorithms=app/cxx_modules/ChatDeliveryWorkerRuntime.cppm
+        CONSUMER_SOURCES
+            app/ChatDeliveryWorker.cpp
+    )
+endif()
 chatserver_link_microservice_cores(ChatDeliveryWorker
     ChatAppCore
     ChatClientCore
@@ -393,6 +584,14 @@ target_include_directories(ChatRelationQueryService PRIVATE
 
 set_target_properties(ChatRelationQueryService PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatRelationQueryService)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatRelationQueryService
+        MODULES
+            memochat.chat.relation_query_service_runtime_algorithms=app/cxx_modules/ChatRelationQueryServiceRuntime.cppm
+        CONSUMER_SOURCES
+            app/ChatRelationQueryService.cpp
+    )
+endif()
 chatserver_link_microservice_cores(ChatRelationQueryService
     ChatAppCore
     ChatClientCore
@@ -418,6 +617,14 @@ target_include_directories(ChatRelationServiceWorker PRIVATE
 
 set_target_properties(ChatRelationServiceWorker PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatRelationServiceWorker)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatRelationServiceWorker
+        MODULES
+            memochat.chat.relation_service_worker_runtime_algorithms=app/cxx_modules/ChatRelationServiceWorkerRuntime.cppm
+        CONSUMER_SOURCES
+            app/ChatRelationServiceWorker.cpp
+    )
+endif()
 chatserver_link_microservice_cores(ChatRelationServiceWorker
     ChatAppCore
     ChatClientCore
@@ -444,6 +651,14 @@ target_include_directories(ChatMessageService PRIVATE
 
 set_target_properties(ChatMessageService PROPERTIES FOLDER "Server")
 memochat_configure_server_target(ChatMessageService)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(ChatMessageService
+        MODULES
+            memochat.chat.message_service_runtime_algorithms=app/cxx_modules/ChatMessageServiceRuntime.cppm
+        CONSUMER_SOURCES
+            app/ChatMessageService.cpp
+    )
+endif()
 chatserver_link_microservice_cores(ChatMessageService
     ChatAppCore
     ChatClientCore
@@ -464,3 +679,25 @@ chatserver_link_microservice_cores(ChatMessageService
 if(MSVC)
     target_compile_options(ChatMessageService PRIVATE /bigobj /Zm200)
 endif()
+
+# ── Embed Lua scripts for Redis operations ───────────────────────────────────
+include(EmbedLuaScripts)
+memochat_embed_lua_scripts(
+    SCRIPTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/persistence/lua/dist_lock_release.lua"
+        "${CMAKE_CURRENT_SOURCE_DIR}/persistence/lua/hash_decrement_floor.lua"
+        "${CMAKE_CURRENT_SOURCE_DIR}/persistence/lua/repair_online_route.lua"
+    OUTPUT_DIR  "${CMAKE_BINARY_DIR}/generated/lua/chat"
+    HEADER_NAME "chat_lua_scripts.hpp"
+    NAMESPACE   "memochat::chat::lua_scripts"
+)
+# Make the generated header visible to all ChatServer sources
+get_directory_property(_chat_targets BUILDSYSTEM_TARGETS)
+foreach(_t ${_chat_targets})
+    if(_t MATCHES "^Chat")
+        get_target_property(_chat_target_type ${_t} TYPE)
+        if(_chat_target_type MATCHES "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$")
+            target_include_directories(${_t} PRIVATE "${CMAKE_BINARY_DIR}/generated/lua/chat")
+        endif()
+    endif()
+endforeach()

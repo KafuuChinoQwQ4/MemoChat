@@ -43,7 +43,6 @@ echo.
 
 REM ---- 检查 / 自动部署 C++ 服务 ----
 if not exist "%RUNTIME_DIR%\VarifyServer1\VarifyServer.exe" goto deploy_missing
-if not exist "%RUNTIME_DIR%\VarifyServer2\VarifyServer.exe" goto deploy_missing
 if not exist "%RUNTIME_DIR%\GateServer1\GateServer.exe" goto deploy_missing
 if not exist "%RUNTIME_DIR%\AIServer\AIServer.exe" goto deploy_missing
 goto deploy_done
@@ -65,9 +64,7 @@ exit /b !ERRORLEVEL!
 REM ---- C++ 服务 ----
 echo [STEP] Start C++ backend services
 call :launch_svc "%RUNTIME_DIR%\VarifyServer1"   "VarifyServer.exe" "VarifyServer-1"  "config.ini"  "50051"
-call :launch_svc "%RUNTIME_DIR%\VarifyServer2"   "VarifyServer.exe" "VarifyServer-2"  "config.ini"  "48083"
 call :launch_svc "%RUNTIME_DIR%\chatserver1"      "ChatServer.exe"   "ChatServer-1"     "config.ini"  "8090"
-call :launch_svc "%RUNTIME_DIR%\chatserver2"      "ChatServer.exe"   "ChatServer-2"     "config.ini"  "8091"
 call :launch_svc "%RUNTIME_DIR%\AIServer"         "AIServer.exe"     "AIServer"         "config.ini"  "8095"
 call :launch_svc "%RUNTIME_DIR%\GateServer1"      "GateServer.exe"   "GateServer-1"     "config.ini"  "8080"
 call :launch_svc "%RUNTIME_DIR%\GateServer2"      "GateServer.exe"   "GateServer-2"     "config.ini"  "8084"

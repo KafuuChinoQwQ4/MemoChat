@@ -33,10 +33,9 @@ scrape_configs:
     static_configs:
       - targets: ["memochat-otel-collector:9464"]
 
-  - job_name: envoy_gateway
-    metrics_path: /stats/prometheus
-    static_configs:
-      - targets: ["memochat-envoy-gateway:9901"]
+  # Envoy admin binds to 127.0.0.1 inside its own container. Do not scrape it
+  # from the shared Docker network by default; use an authenticated sidecar or
+  # local exec probe when Envoy admin metrics are required.
 
   # Optional local exporters. Enable these only when the matching process or
   # profile is running, otherwise Prometheus target health becomes noisy.

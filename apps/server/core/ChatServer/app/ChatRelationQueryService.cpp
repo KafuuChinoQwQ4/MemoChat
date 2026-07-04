@@ -1,15 +1,15 @@
-#include "ChatRelationInternalGrpcService.h"
-#include "ChatRelationRepository.h"
-#include "ChatRelationService.h"
-#include "ConfigMgr.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "RedisRelationBootstrapCache.h"
-#include "SnowflakeUtil.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "ChatRelationInternalGrpcService.hpp"
+#include "ChatRelationRepository.hpp"
+#include "ChatRelationService.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "RedisRelationBootstrapCache.hpp"
+#include "SnowflakeUtil.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -23,6 +23,10 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+
+import memochat.chat.relation_query_service_runtime_algorithms;
+
+namespace relation_query_service_modules = memochat::chat::relation_query_service::modules;
 
 namespace
 {
@@ -54,15 +58,15 @@ std::string ParseConfigPath(int argc, char** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
-        if (arg == "--config")
+        if (relation_query_service_modules::IsConfigFlag(arg.data(), arg.size()))
         {
-            if (i + 1 >= argc)
+            if (relation_query_service_modules::ShouldRejectMissingConfigValue(i + 1 < argc))
             {
-                throw std::runtime_error("missing value for --config");
+                throw std::runtime_error(relation_query_service_modules::MissingConfigValueMessage());
             }
             return argv[++i];
         }
-        throw std::runtime_error("unknown argument: " + arg);
+        throw std::runtime_error(std::string(relation_query_service_modules::UnknownArgumentPrefix()) + arg);
     }
     return "";
 }
@@ -73,12 +77,12 @@ std::string ConfigValueOrDefault(ConfigMgr& cfg,
                                  const std::string& default_value)
 {
     const auto value = cfg.GetValue(section, key);
-    return value.empty() ? default_value : value;
+    return relation_query_service_modules::ShouldUseDefaultConfigValue(value.empty()) ? default_value : value;
 }
 
 void SetInstanceNameEnv(const std::string& instance_name)
 {
-    if (instance_name.empty())
+    if (!relation_query_service_modules::ShouldSetInstanceName(instance_name.empty()))
     {
         return;
     }
@@ -93,15 +97,20 @@ void InitSnowflake(ConfigMgr& cfg)
 {
     const auto datacenter_id_str = cfg.GetValue("Snowflake", "DatacenterId");
     const auto worker_id_str = cfg.GetValue("Snowflake", "WorkerId");
-    const int64_t datacenter_id = datacenter_id_str.empty() ? 1 : std::stoll(datacenter_id_str);
-    const int64_t worker_id = worker_id_str.empty() ? 8 : std::stoll(worker_id_str);
+    const int64_t datacenter_id = datacenter_id_str.empty()
+                                      ? relation_query_service_modules::DefaultSnowflakeDatacenterId()
+                                      : std::stoll(datacenter_id_str);
+    const int64_t worker_id =
+        worker_id_str.empty() ? relation_query_service_modules::DefaultSnowflakeWorkerId() : std::stoll(worker_id_str);
     SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
 }
 
 std::string RelationQueryRpcAddress(ConfigMgr& cfg)
 {
-    const auto host = ConfigValueOrDefault(cfg, "RelationQueryRpc", "Host", "127.0.0.1");
-    const auto port = ConfigValueOrDefault(cfg, "RelationQueryRpc", "Port", "50090");
+    const auto host =
+        ConfigValueOrDefault(cfg, "RelationQueryRpc", "Host", relation_query_service_modules::DefaultRpcHost());
+    const auto port =
+        ConfigValueOrDefault(cfg, "RelationQueryRpc", "Port", relation_query_service_modules::DefaultRpcPort());
     return host + ":" + port;
 }
 } // namespace
@@ -113,7 +122,8 @@ int main(int argc, char** argv)
         ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv));
         auto& cfg = ConfigMgr::Inst();
 
-        const auto service_name = ConfigValueOrDefault(cfg, "SelfServer", "Name", "chatrelationquery1");
+        const auto service_name =
+            ConfigValueOrDefault(cfg, "SelfServer", "Name", relation_query_service_modules::DefaultServiceName());
         SetInstanceNameEnv(service_name);
         InitSnowflake(cfg);
 
@@ -127,8 +137,8 @@ int main(int argc, char** argv)
             {
                 return cfg.GetValue(section, key);
             });
-        memolog::Logger::Init("ChatRelationQueryService", log_cfg);
-        memolog::Telemetry::Init("ChatRelationQueryService", telemetry_cfg);
+        memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg);
+        memolog::Telemetry::Init(relation_query_service_modules::LoggerName(), telemetry_cfg);
 
         ScopeExit cleanup(
             [service_name]()

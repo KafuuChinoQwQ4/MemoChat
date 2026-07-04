@@ -16,7 +16,7 @@
 | `MediaUploadService.cpp` | 媒体上传服务的实现 |
 | `MediaUploadService.h` | 媒体上传服务的接口定义 |
 | `MediaUploadServiceHelpers.cpp` | 媒体上传服务的辅助函数实现 |
-| `MediaUploadServiceNetwork.cpp` | 媒体上传的网络请求实现 |
+| `MediaUploadServiceNetwork.cpp` | 媒体上传的网络请求实现，导出遥测前脱敏 URL |
 | `MediaUploadServicePrivate.h` | 媒体上传服务的内部私有声明 |
 | `MediaUploadServiceUploads.cpp` | 媒体上传任务调度与执行实现 |
 

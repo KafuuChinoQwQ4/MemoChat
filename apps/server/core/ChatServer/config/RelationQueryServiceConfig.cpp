@@ -1,9 +1,8 @@
-#include "RelationQueryServiceConfig.h"
+#include "RelationQueryServiceConfig.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
-#include <cctype>
+import memochat.chat.config_algorithms;
 
 std::string RelationQueryServiceConfig::RelationQueryServiceBackend() const
 {
@@ -12,13 +11,7 @@ std::string RelationQueryServiceConfig::RelationQueryServiceBackend() const
     {
         return "inprocess";
     }
-    std::transform(backend.begin(),
-                   backend.end(),
-                   backend.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
+    memochat::chat::config::modules::LowerAsciiInPlace(backend.data(), backend.size());
     return backend;
 }
 

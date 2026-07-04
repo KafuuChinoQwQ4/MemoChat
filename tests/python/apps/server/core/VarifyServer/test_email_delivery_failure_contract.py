@@ -6,10 +6,10 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 VARIFY_DIR = REPO_ROOT / "apps/server/core/VarifyServer"
-# VarifyServer is a self-contained microservice with its own error-code const.h (it no longer
+# VarifyServer is a self-contained microservice with its own error-code const.hpp (it no longer
 # pulls the retired GateServer monolith's gate-core const.h; the shared value also lives in
 # GateShared/core/config/const.h). The VarifyServer-local copy is this service's contract.
-VARIFY_CONST = REPO_ROOT / "apps/server/core/VarifyServer/const.h"
+VARIFY_CONST = REPO_ROOT / "apps/server/core/VarifyServer/const.hpp"
 CLIENT_AUTH_RESPONSES = (
     REPO_ROOT / "apps/client/desktop/MemoChat-qml/app/session/SessionAuthCoordinatorAuthResponses.cpp"
 )
@@ -35,11 +35,31 @@ class EmailDeliveryFailureContractTests(unittest.TestCase):
             "EmailSender::Send must return false after any failed SMTP transaction step",
         )
 
+    def test_email_sender_fails_fast_without_committed_smtp_credentials(self):
+        source = read(VARIFY_DIR / "EmailSender.cpp")
+        config = read(VARIFY_DIR / "config.ini")
+        varify2 = read(VARIFY_DIR / "varify2.ini")
+
+        for text in (config, varify2):
+            with self.subTest(config_hash=hash(text)):
+                self.assertNotIn("kafu_chino", text)
+                self.assertNotIn("hrkhkvgptixfdfja", text)
+                self.assertIn("MEMOCHAT_EMAIL_SMTPPASS", text)
+                self.assertRegex(text, r"(?m)^SMTPUser=$")
+                self.assertRegex(text, r"(?m)^SMTPPass=$")
+
+        self.assertIn("varify.email.config_missing", source)
+        self.assertIn("SMTP config missing required fields", source)
+        self.assertIn("missing_fields", source)
+        self.assertLess(source.index("varify.email.config_missing"), source.index("varify.email.send_start"))
+        self.assertNotIn("SMTPPass", source[source.index("varify.email.send_start") :])
+
     def test_email_sender_consumes_multiline_smtp_replies(self):
         source = read(VARIFY_DIR / "EmailSender.cpp")
 
         self.assertIn("parse_smtp_status_line", source)
-        self.assertIn("line[3] == '-'", source)
+        self.assertIn("IsMultilineReply", source)
+        self.assertIn("line.size() > 3 ? line[3]", source)
         self.assertGreaterEqual(source.count("while (more_lines);"), 2)
         self.assertNotRegex(
             source,

@@ -42,6 +42,10 @@ spec:
           image: "{{ .Values.images.chat.repository }}:{{ .Values.images.chat.tag }}"
           imagePullPolicy: {{ .Values.images.chat.pullPolicy }}
           env:
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_REQUIRE_PROD_SECRETS
+              value: "1"
             - name: MEMOCHAT_POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - name: MEMOCHAT_INSTANCE_NAME

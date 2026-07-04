@@ -53,11 +53,11 @@ description: Use when a non-trivial MemoChat task needs project-specific skill r
 
 ## 不可变项目约束
 
-- 默认工作目录是 `/root/code/MemoChat-Qml-Drogon-linux`，默认 Linux 运行时是 WSL 发行版 `archlinux`。
+- 默认工作目录是 `/root/code/MemoChat`，默认 Linux 运行时是 WSL 发行版 `archlinux`。
 - 从 Windows 调 Linux 命令时使用：
 
 ```powershell
-wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat && source /root/.memochat-linux-env && <command>'
 ```
 
 - 不要使用 `wsl -d Arch`。Windows/PowerShell 只用于旧版 Windows 客户端检查、Docker Desktop 迁移/备份，或用户明确要求的 Windows 侧工作。

@@ -105,10 +105,8 @@ Write-Step "启动后端服务..."
 
 $services = @(
     @{ Name = "VarifyServer-1";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer1\config.ini" },
-    @{ Name = "VarifyServer-2";   Exe = "VarifyServer.exe"; Config = "$ServicesDir\VarifyServer2\config.ini" },
     @{ Name = "GateServer";       Exe = "GateServer.exe";   Config = "$ServicesDir\GateServer\config.ini" },
-    @{ Name = "ChatServer-1";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver1\config.ini" },
-    @{ Name = "ChatServer-2";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver2\config.ini" }
+    @{ Name = "ChatServer-1";      Exe = "ChatServer.exe";   Config = "$ServicesDir\chatserver1\config.ini" }
 )
 
 foreach ($svc in $services) {

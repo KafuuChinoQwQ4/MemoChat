@@ -136,6 +136,28 @@ is_truthy() {
     esac
 }
 
+ensure_ai_internal_api_key() {
+    if [[ -n "${MEMOCHAT_AI_INTERNAL_API_KEY:-}" ]]; then
+        export MEMOCHAT_AI_INTERNAL_API_KEY
+        return 0
+    fi
+
+    local generated=""
+    if command -v openssl >/dev/null 2>&1; then
+        generated="$(openssl rand -hex 32)"
+    elif [[ -r /proc/sys/kernel/random/uuid ]]; then
+        generated="$(tr -d '-' </proc/sys/kernel/random/uuid)$(tr -d '-' </proc/sys/kernel/random/uuid)"
+    fi
+
+    if [[ -z "$generated" ]]; then
+        echo "[FAIL] MEMOCHAT_AI_INTERNAL_API_KEY is empty and no local random source is available" >&2
+        return 1
+    fi
+
+    export MEMOCHAT_AI_INTERNAL_API_KEY="$generated"
+    echo "  [INFO] Generated local MEMOCHAT_AI_INTERNAL_API_KEY for this full-stack launch"
+}
+
 ai_voice_ready() {
     local response_file="$1"
     local url="${AI_BASE_URL%/}/pet/diagnostics/voice?probe_endpoint=true"
@@ -217,6 +239,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 AI_BASE_URL="${MEMOCHAT_AI_BASE_URL:-$AI_BASE_URL}"
 AI_VOICE_WAIT_SECONDS="${MEMOCHAT_AI_VOICE_WAIT_SECONDS:-$AI_VOICE_WAIT_SECONDS}"
+ensure_ai_internal_api_key
 
 cd -- "$PROJECT_ROOT"
 CLIENT_EXE="$(project_path "$CLIENT_EXE")"

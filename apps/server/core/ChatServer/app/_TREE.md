@@ -2,6 +2,12 @@
 
 > ChatServer 集群各微服务进程的 main 入口与运行时装配：接入、消息、关系、关系查询、投递 worker，以及共享的 ChatRuntime 启动骨架。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 共享运行时使用的项目自有 C++ module 接口 |
+
 ## 文件
 
 | 文件 | 作用概括 |

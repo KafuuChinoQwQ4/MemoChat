@@ -23,6 +23,10 @@ spec:
           image: "{{ .Values.images.gate.repository }}:{{ .Values.images.gate.tag }}"
           imagePullPolicy: {{ .Values.images.gate.pullPolicy }}
           env:
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_REQUIRE_PROD_SECRETS
+              value: "1"
             - name: MEMOCHAT_POSTGRES_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
             - name: MEMOCHAT_REDIS_PASSWD

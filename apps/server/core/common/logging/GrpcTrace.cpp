@@ -1,6 +1,8 @@
-#include "logging/GrpcTrace.h"
+#include "logging/GrpcTrace.hpp"
 
-#include "logging/TraceContext.h"
+#include "logging/TraceContext.hpp"
+
+import memochat.logging.grpc_trace_algorithms;
 
 namespace memolog
 {
@@ -26,19 +28,19 @@ std::string ReadMetadata(grpc::ServerContext* context, const char* key)
 void InjectGrpcTraceMetadata(grpc::ClientContext& context)
 {
     const std::string trace_id = TraceContext::EnsureTraceId();
-    if (!trace_id.empty())
+    if (memochat::logging::grpc_trace_modules::ShouldInjectTraceId(trace_id.empty()))
     {
         context.AddMetadata("x-trace-id", trace_id);
     }
     std::string request_id = TraceContext::GetRequestId();
-    if (request_id.empty())
+    if (memochat::logging::grpc_trace_modules::ShouldGenerateRequestId(request_id.empty()))
     {
         request_id = TraceContext::NewId();
         TraceContext::SetRequestId(request_id);
     }
     context.AddMetadata("x-request-id", request_id);
     const std::string span_id = TraceContext::GetSpanId();
-    if (!span_id.empty())
+    if (memochat::logging::grpc_trace_modules::ShouldInjectSpanId(span_id.empty()))
     {
         context.AddMetadata("x-span-id", span_id);
     }
@@ -47,12 +49,12 @@ void InjectGrpcTraceMetadata(grpc::ClientContext& context)
 void BindGrpcTraceContext(grpc::ServerContext* context)
 {
     std::string trace_id = ReadMetadata(context, "x-trace-id");
-    if (trace_id.empty())
+    if (memochat::logging::grpc_trace_modules::ShouldGenerateBoundTraceId(trace_id.empty()))
     {
         trace_id = TraceContext::NewId();
     }
     std::string request_id = ReadMetadata(context, "x-request-id");
-    if (request_id.empty())
+    if (memochat::logging::grpc_trace_modules::ShouldGenerateBoundRequestId(request_id.empty()))
     {
         request_id = TraceContext::NewId();
     }

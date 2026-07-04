@@ -88,7 +88,7 @@ void AuthController::sendLogin(const QString& email, const QString& password) co
 {
     QJsonObject payload;
     payload["email"] = email.trimmed();
-    payload["passwd"] = xorString(password);
+    payload["passwd"] = password;
     payload["client_ver"] = QStringLiteral(MEMOCHAT_CLIENT_VERSION);
     _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/user_login"),
                                      payload,
@@ -117,8 +117,8 @@ void AuthController::sendRegister(const QString& user,
     QJsonObject payload;
     payload["user"] = user.trimmed();
     payload["email"] = email.trimmed();
-    payload["passwd"] = xorString(password);
-    payload["confirm"] = xorString(confirm);
+    payload["passwd"] = password;
+    payload["confirm"] = confirm;
     payload["varifycode"] = verifyCode.trimmed();
     payload["sex"] = 0;
     payload["icon"] = ":/res/head_1.png";
@@ -139,7 +139,7 @@ void AuthController::sendResetPassword(const QString& user,
     QJsonObject payload;
     payload["user"] = user.trimmed();
     payload["email"] = email.trimmed();
-    payload["passwd"] = xorString(password);
+    payload["passwd"] = password;
     payload["varifycode"] = verifyCode.trimmed();
 
     _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/reset_pwd"),

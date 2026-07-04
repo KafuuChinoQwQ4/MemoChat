@@ -1,17 +1,19 @@
-#include "services/r18/R18Service.h"
+#include "services/r18/R18Service.hpp"
 
-#include "RedisMgr.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "r18/R18PublicDtos.h"
-#include "r18/R18SourceRecordCodec.h"
-#include "r18/R18SourceService.h"
-#include "support/UserTokenValidator.h"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "r18/R18PublicDtos.hpp"
+#include "r18/R18SourceRecordCodec.hpp"
+#include "r18/R18SourceService.hpp"
+#include "support/UserTokenValidator.hpp"
 
 #include <cstdlib>
 #include <exception>
 #include <functional>
 #include <string>
+
+import memochat.r18.service_algorithms;
 
 namespace memochat::gate::services::r18
 {
@@ -19,8 +21,6 @@ namespace
 {
 
 using memochat::json::JsonValue;
-
-constexpr const char* kDefaultR18SourceId = "";
 
 bool ValidateUserToken(int uid, const std::string& token)
 {
@@ -40,7 +40,7 @@ template <typename AuthRequest> bool RequireAuth(const AuthRequest& request, Jso
     if (!ValidateUserToken(request.uid, request.token))
     {
         root["error"] = ErrorCodes::TokenInvalid;
-        root["message"] = "token invalid";
+        root["message"] = memochat::r18::service::modules::TokenInvalidMessage();
         return false;
     }
     return true;
@@ -55,19 +55,19 @@ void WriteOk(JsonValue& root, const JsonValue& data)
 
 void WriteJson(memochat::gate::routing::GateResponse& response, const JsonValue& root, const char* content_type)
 {
-    response.status = 200;
+    response.status = memochat::r18::service::modules::SuccessHttpStatus();
     response.content_type = content_type;
     response.body = memochat::json::glaze_stringify(root);
 }
 
 void WriteGetJson(memochat::gate::routing::GateResponse& response, const JsonValue& root)
 {
-    WriteJson(response, root, "text/json");
+    WriteJson(response, root, memochat::r18::service::modules::GetJsonContentType());
 }
 
 void WritePostJson(memochat::gate::routing::GateResponse& response, const JsonValue& root)
 {
-    WriteJson(response, root, "application/json");
+    WriteJson(response, root, memochat::r18::service::modules::PostJsonContentType());
 }
 
 bool HandleJsonRequest(const memochat::gate::routing::GateRequest& request,
@@ -107,7 +107,7 @@ bool R18Service::HandleListSources(const memochat::gate::routing::GateRequest& r
     if (!ValidateUserToken(uid, token))
     {
         root["error"] = ErrorCodes::TokenInvalid;
-        root["message"] = "token invalid";
+        root["message"] = memochat::r18::service::modules::TokenInvalidMessage();
     }
     else
     {
@@ -133,14 +133,24 @@ bool R18Service::HandleImportSource(const memochat::gate::routing::GateRequest& 
                 return true;
             }
 
-            const std::string file_name = memochat::json::glaze_safe_get<std::string>(src, "file_name", "source.zip");
-            const std::string encoded = memochat::json::glaze_safe_get<std::string>(src, "data_base64", "");
-            const std::string manifest_json = memochat::json::glaze_safe_get<std::string>(src, "manifest_json", "");
+            const std::string file_name =
+                memochat::json::glaze_safe_get<std::string>(src,
+                                                            memochat::r18::service::modules::ImportFileNameField(),
+                                                            memochat::r18::service::modules::DefaultImportFileName());
+            const std::string encoded =
+                memochat::json::glaze_safe_get<std::string>(src,
+                                                            memochat::r18::service::modules::ImportDataBase64Field(),
+                                                            memochat::r18::service::modules::EmptyFieldDefault());
+            const std::string manifest_json =
+                memochat::json::glaze_safe_get<std::string>(src,
+                                                            memochat::r18::service::modules::ImportManifestJsonField(),
+                                                            memochat::r18::service::modules::EmptyFieldDefault());
             std::string binary;
-            if (encoded.empty() || !memochat::r18::DecodeBase64(encoded, binary))
+            const bool decode_ok = !encoded.empty() && memochat::r18::DecodeBase64(encoded, binary);
+            if (memochat::r18::service::modules::ShouldRejectImportPayload(encoded.empty(), decode_ok))
             {
                 root["error"] = ErrorCodes::Error_Json;
-                root["message"] = "invalid plugin package payload";
+                root["message"] = memochat::r18::service::modules::InvalidPluginPackagePayloadMessage();
                 return true;
             }
 
@@ -347,7 +357,7 @@ bool R18Service::HandleHistory(const memochat::gate::routing::GateRequest& reque
     if (!ValidateUserToken(uid, token))
     {
         root["error"] = ErrorCodes::TokenInvalid;
-        root["message"] = "token invalid";
+        root["message"] = memochat::r18::service::modules::TokenInvalidMessage();
     }
     else
     {
@@ -366,25 +376,25 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
     const std::string token = QueryParam(request, "token");
     if (!ValidateUserToken(uid, token))
     {
-        response.status = 401;
-        response.content_type = "text/plain";
-        response.body = "token invalid";
+        response.status = memochat::r18::service::modules::UnauthorizedHttpStatus();
+        response.content_type = memochat::r18::service::modules::PlainTextContentType();
+        response.body = memochat::r18::service::modules::TokenInvalidMessage();
         return true;
     }
-    const std::string source_id = QueryParam(request, "source_id", kDefaultR18SourceId);
+    const std::string source_id = QueryParam(request, "source_id", memochat::r18::service::modules::DefaultSourceId());
     const std::string image_url = QueryParam(request, "image_url");
     try
     {
         auto payload = memochat::r18::R18SourceService::Instance().FetchImage(source_id, image_url);
-        response.status = 200;
+        response.status = memochat::r18::service::modules::SuccessHttpStatus();
         response.content_type = payload.content_type;
         response.body = std::move(payload.body);
     }
     catch (const std::exception& exc)
     {
-        response.status = 502;
-        response.content_type = "text/plain";
-        response.body = std::string("image fetch failed: ") + exc.what();
+        response.status = memochat::r18::service::modules::BadGatewayHttpStatus();
+        response.content_type = memochat::r18::service::modules::PlainTextContentType();
+        response.body = std::string(memochat::r18::service::modules::ImageFetchFailedPrefix()) + exc.what();
     }
     return true;
 }

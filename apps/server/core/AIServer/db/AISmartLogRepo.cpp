@@ -1,19 +1,24 @@
-#include "db/AISmartLogRepo.h"
-#include "ConfigMgr.h"
-#include "db/PqxxCompat.h"
-#include "logging/Logger.h"
+#include "db/AISmartLogRepo.hpp"
+#include "ConfigMgr.hpp"
+#include "db/PqxxCompat.hpp"
+#include "logging/Logger.hpp"
 #include <pqxx/pqxx>
 #include <pqxx/transaction.hxx>
 #include <chrono>
 #include <sstream>
 
+import memochat.ai.repository_algorithms;
+
 namespace
 {
+namespace repository_modules = memochat::ai::repository::modules;
 
 pqxx::connection* GetPgConn()
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto schema = cfg["Postgres"]["Schema"].empty() ? "public" : cfg["Postgres"]["Schema"];
+    const auto schema = repository_modules::ShouldUseDefaultSchema(cfg["Postgres"]["Schema"].empty())
+                            ? repository_modules::DefaultPostgresSchema()
+                            : cfg["Postgres"]["Schema"];
     std::ostringstream conn_str;
     conn_str << "host=" << cfg["Postgres"]["Host"] << " port=" << cfg["Postgres"]["Port"]
              << " user=" << cfg["Postgres"]["User"] << " password=" << cfg["Postgres"]["Passwd"]

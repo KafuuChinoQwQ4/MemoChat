@@ -158,6 +158,8 @@ async def create_voice_training_job(req: PetVoiceTrainingReq):
 
 @router.get("/voice-training/jobs")
 async def list_voice_training_jobs(uid: int = 0):
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="uid is required")
     return {
         "code": 0,
         "message": "ok",
@@ -166,9 +168,11 @@ async def list_voice_training_jobs(uid: int = 0):
 
 
 @router.get("/voice-training/jobs/{job_id}")
-async def get_voice_training_job(job_id: str):
+async def get_voice_training_job(job_id: str, uid: int = 0):
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="uid is required")
     try:
-        job = _runtime.get_voice_training_job(job_id)
+        job = _runtime.get_voice_training_job(job_id, uid)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"code": 0, "message": "ok", "job": job.to_dict()}

@@ -112,7 +112,7 @@ struct RelationBootstrapSnapshot
     bool isChatPage = false;
     bool chatTransportConnected = false;
     bool contactsReady = false;
-    int protocolVersion = 2;
+    int protocolVersion = 3;
     int pendingUid = 0;
     QString traceId;
     int currentChatPeerUid = 0;

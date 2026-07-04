@@ -336,11 +336,17 @@ Rectangle {
                 model: root.skillModes
 
                 delegate: MenuItem {
-                    text: modelData.label
+                    id: skillModeMenuItem
+
+                    required property var modelData
+
+                    readonly property string modeKey: modelData && modelData.key ? modelData.key : ""
+
+                    text: modelData && modelData.label ? modelData.label : ""
                     enabled: !root.loading && !root.streaming
                     onTriggered: {
-                        if (root.agentController) {
-                            root.agentController.switchAgentSkillMode(modelData.key)
+                        if (root.agentController && modeKey.length > 0) {
+                            root.agentController.switchAgentSkillMode(modeKey)
                         }
                     }
                 }

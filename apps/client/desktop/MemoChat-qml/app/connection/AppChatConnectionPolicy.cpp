@@ -15,10 +15,9 @@ bool findEndpoint(const QVector<ChatEndpoint>& endpoints, ChatTransportKind kind
     return false;
 }
 
-bool missingCredential(const AppChatConnectionPolicy::AppChatConnectionSnapshot& snapshot)
+bool invalidChatTicket(const AppChatConnectionPolicy::AppChatConnectionSnapshot& snapshot)
 {
-    return snapshot.protocolVersion >= 3 ? snapshot.loginTicket.trimmed().isEmpty()
-                                         : snapshot.token.trimmed().isEmpty();
+    return snapshot.protocolVersion != 3 || snapshot.loginTicket.trimmed().isEmpty();
 }
 
 ServerInfo buildServerInfo(const AppChatConnectionPolicy::AppChatConnectionSnapshot& snapshot,
@@ -55,7 +54,7 @@ AppChatConnectionPolicy::evaluateLoginTcpFallback(const AppChatConnectionSnapsho
 {
     AppChatConnectionDecision decision;
     if (snapshot.loginTcpFallbackAttempted || !snapshot.isLoginPage || !snapshot.busy || snapshot.uid <= 0 ||
-        missingCredential(snapshot))
+        invalidChatTicket(snapshot))
     {
         return decision;
     }
@@ -76,7 +75,7 @@ AppChatConnectionPolicy::AppChatConnectionDecision
 AppChatConnectionPolicy::evaluateReconnect(const AppChatConnectionSnapshot& snapshot)
 {
     AppChatConnectionDecision decision;
-    if (!snapshot.isChatPage || snapshot.uid <= 0 || missingCredential(snapshot) || snapshot.endpoints.isEmpty() ||
+    if (!snapshot.isChatPage || snapshot.uid <= 0 || invalidChatTicket(snapshot) || snapshot.endpoints.isEmpty() ||
         snapshot.reconnectAttempts >= kChatReconnectMaxAttempts)
     {
         return decision;

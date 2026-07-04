@@ -4,6 +4,7 @@ FastAPI + Uvicorn，提供 /chat、/smart、/kb、/models 路由
 """
 
 import asyncio
+import hmac
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -17,10 +18,10 @@ from api.model_router import router as model_router
 from api.pet_router import router as pet_router
 from api.recommend_router import router as recommend_router
 from api.smart_router import router as smart_router
-from config import settings
-from fastapi import FastAPI
+from config import is_trusted_client_host, is_unauthenticated_path, resolve_internal_api_key, settings
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from harness import HarnessContainer
 from observability.langsmith_instrument import init_langsmith
 from observability.metrics import ai_metrics
@@ -91,11 +92,42 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.security.cors_allow_origins,
+        allow_origin_regex=settings.security.cors_allow_origin_regex or None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def enforce_internal_auth(request: Request, call_next):
+        security = settings.security
+        if (
+            request.method.upper() == "OPTIONS"
+            or not security.enforce_internal_auth
+            or is_unauthenticated_path(request.url.path, security.unauthenticated_paths)
+        ):
+            return await call_next(request)
+
+        client_host = request.client.host if request.client is not None else ""
+        if is_trusted_client_host(client_host, security.trusted_client_hosts):
+            return await call_next(request)
+
+        expected = resolve_internal_api_key(security)
+        if not expected:
+            return JSONResponse(
+                status_code=503,
+                content={"code": 503, "message": "AIOrchestrator internal auth is not configured"},
+            )
+
+        supplied = request.headers.get(security.internal_auth_header, "")
+        if not hmac.compare_digest(supplied, expected):
+            return JSONResponse(
+                status_code=401,
+                content={"code": 401, "message": "AIOrchestrator internal auth required"},
+            )
+
+        return await call_next(request)
 
     app.include_router(chat_router, prefix="/chat", tags=["chat"])
     app.include_router(smart_router, prefix="/smart", tags=["smart"])

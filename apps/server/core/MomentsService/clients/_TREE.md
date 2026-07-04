@@ -7,6 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `MomentsRelationClient.cpp` | 朋友圈访问关系服务的客户端实现 |
-| `MomentsRelationClient.h` | 朋友圈关系服务客户端声明 |
+| `MomentsRelationClient.hpp` | 朋友圈关系服务客户端声明 |
+| `modules/` | 关系客户端的项目自有 C++ module interface 子目录 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

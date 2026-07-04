@@ -1,11 +1,11 @@
-﻿#include "GateAsyncSideEffects.h"
-#include "GateAsyncSideEffectDtos.h"
-#include "json/GlazeCompat.h"
+﻿#include "GateAsyncSideEffects.hpp"
+#include "GateAsyncSideEffectDtos.hpp"
+#include "json/GlazeCompat.hpp"
 
-#include "AuthLoginSupport.h"
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "AuthLoginSupport.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -27,17 +27,21 @@
 #include <memory>
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include "WinsockCompat.h"
+#include "WinsockCompat.hpp"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
 #endif
 
+import memochat.account.async_side_effect_algorithms;
+
+namespace async_algo = memochat::account::async_side_effect::modules;
+
 namespace
 {
 int ParseIntOrGate(const std::string& raw, int fallback)
 {
-    if (raw.empty())
+    if (async_algo::ShouldUseIntFallback(raw.empty()))
     {
         return fallback;
     }
@@ -72,7 +76,7 @@ bool GateRpcReplyOk(amqp_rpc_reply_t reply, std::string* error)
     }
     if (error)
     {
-        *error = "amqp_rpc_reply_failed";
+        *error = async_algo::RabbitRpcReplyFailedError();
     }
     return false;
 }
@@ -96,17 +100,17 @@ GateAsyncSideEffects::GateAsyncSideEffects()
     _rabbit_password = cfg.GetValue("RabbitMQ", "Password");
     _rabbit_prefetch_count = ParseIntOrGate(cfg.GetValue("RabbitMQ", "PrefetchCount"), _rabbit_prefetch_count);
     const auto vhost = cfg.GetValue("RabbitMQ", "VHost");
-    if (!vhost.empty())
+    if (async_algo::ShouldApplyConfigOverride(vhost.empty()))
     {
         _rabbit_vhost = vhost;
     }
     const auto exchange_direct = cfg.GetValue("RabbitMQ", "ExchangeDirect");
-    if (!exchange_direct.empty())
+    if (async_algo::ShouldApplyConfigOverride(exchange_direct.empty()))
     {
         _rabbit_exchange_direct = exchange_direct;
     }
     const auto exchange_dlx = cfg.GetValue("RabbitMQ", "ExchangeDlx");
-    if (!exchange_dlx.empty())
+    if (async_algo::ShouldApplyConfigOverride(exchange_dlx.empty()))
     {
         _rabbit_exchange_dlx = exchange_dlx;
     }
@@ -153,7 +157,11 @@ void GateAsyncSideEffects::PublishUserProfileChanged(int uid,
     const auto payload =
         gateasync::ToJsonValue(gateasync::BuildUserProfileChangedPayload(uid, user_id, email, name, nick, icon, sex));
     std::string error;
-    if (!PublishKafka("user.profile.changed.v1", std::to_string(uid), "user_profile_changed", payload, &error))
+    if (!PublishKafka(async_algo::UserProfileChangedTopic(),
+                      std::to_string(uid),
+                      async_algo::UserProfileChangedEventType(),
+                      payload,
+                      &error))
     {
         memolog::LogWarn("gate.side_effect.profile_publish_failed",
                          "failed to publish user profile change",
@@ -172,7 +180,11 @@ void GateAsyncSideEffects::PublishAuditLogin(int uid,
     const auto payload = gateasync::ToJsonValue(
         gateasync::BuildLoginAuditPayload(uid, user_id, email, chat_server, chat_host, chat_port, login_cache_hit));
     std::string error;
-    if (!PublishKafka("audit.login.v1", std::to_string(uid), "gate_login_succeeded", payload, &error))
+    if (!PublishKafka(async_algo::AuditLoginTopic(),
+                      std::to_string(uid),
+                      async_algo::AuditLoginEventType(),
+                      payload,
+                      &error))
     {
         memolog::LogWarn("gate.side_effect.audit_publish_failed",
                          "failed to publish login audit event",
@@ -186,7 +198,7 @@ void GateAsyncSideEffects::PublishCacheInvalidate(const std::string& email,
 {
     const auto payload = gateasync::ToJsonValue(gateasync::BuildCacheInvalidatePayload(email, user_name, reason));
     std::string error;
-    if (!PublishRabbit("gate.cache.invalidate", "gate_cache_invalidate", payload, &error))
+    if (!PublishRabbit(async_algo::CacheInvalidateRoutingKey(), async_algo::CacheInvalidateTaskType(), payload, &error))
     {
         memolog::LogWarn("gate.side_effect.cache_invalidate_publish_failed",
                          "failed to publish cache invalidate task",
@@ -209,7 +221,7 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
     {
         if (error)
         {
-            *error = "kafka_not_configured";
+            *error = async_algo::KafkaNotConfiguredError();
         }
         return false;
     }
@@ -236,7 +248,7 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
         {
             cppkafka::Configuration config = {
                 {"metadata.broker.list", _kafka_brokers},
-                {"client.id", _kafka_client_id.empty() ? "memochat-gate" : _kafka_client_id},
+                {"client.id", _kafka_client_id.empty() ? async_algo::DefaultKafkaClientId() : _kafka_client_id},
                 {"socket.timeout.ms", "3000"},
                 {"message.timeout.ms", "5000"},
                 {"queue.buffering.max.ms", "10"}};
@@ -264,7 +276,7 @@ bool GateAsyncSideEffects::PublishKafka(const std::string& topic,
     (void) payload;
     if (error)
     {
-        *error = "kafka_build_disabled";
+        *error = async_algo::KafkaBuildDisabledError();
     }
     return false;
 #endif
@@ -313,7 +325,7 @@ bool GateAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     {
         if (error)
         {
-            *error = "rabbitmq_publish_failed";
+            *error = async_algo::RabbitPublishFailedError();
         }
         return false;
     }
@@ -324,7 +336,7 @@ bool GateAsyncSideEffects::PublishRabbit(const std::string& routing_key,
     (void) payload;
     if (error)
     {
-        *error = "rabbitmq_build_disabled";
+        *error = async_algo::RabbitBuildDisabledError();
     }
     return false;
 #endif
@@ -344,7 +356,7 @@ void GateAsyncSideEffects::ConsumeCacheInvalidateLoop()
         }
         if (!connected)
         {
-            if (error == "rabbitmq_not_configured")
+            if (error == async_algo::RabbitNotConfiguredError())
             {
                 memolog::LogInfo("gate.cache_invalidate_worker",
                                  "RabbitMQ not configured, cache invalidate worker disabled");
@@ -366,7 +378,7 @@ void GateAsyncSideEffects::ConsumeCacheInvalidateLoop()
         {
             amqp_basic_consume(static_cast<amqp_connection_state_t>(_rabbit_connection),
                                1,
-                               amqp_cstring_bytes("gate.cache.invalidate.q"),
+                               amqp_cstring_bytes(async_algo::CacheInvalidateQueue()),
                                amqp_empty_bytes,
                                0,
                                0,
@@ -411,7 +423,7 @@ bool GateAsyncSideEffects::EnsureRabbitConnected(std::string* error)
     {
         if (error)
         {
-            *error = "rabbitmq_not_configured";
+            *error = async_algo::RabbitNotConfiguredError();
         }
         return false;
     }
@@ -421,7 +433,7 @@ bool GateAsyncSideEffects::EnsureRabbitConnected(std::string* error)
     {
         if (error)
         {
-            *error = "rabbitmq_socket_create_failed";
+            *error = async_algo::RabbitSocketCreateFailedError();
         }
         amqp_destroy_connection(connection);
         return false;
@@ -430,7 +442,7 @@ bool GateAsyncSideEffects::EnsureRabbitConnected(std::string* error)
     {
         if (error)
         {
-            *error = "rabbitmq_socket_open_failed";
+            *error = async_algo::RabbitSocketOpenFailedError();
         }
         amqp_destroy_connection(connection);
         return false;
@@ -495,16 +507,23 @@ bool GateAsyncSideEffects::EnsureRabbitTopology(std::string* error)
     {
         return false;
     }
-    amqp_queue_declare(connection, 1, amqp_cstring_bytes("gate.cache.invalidate.q"), 0, 1, 0, 0, amqp_empty_table);
+    amqp_queue_declare(connection,
+                       1,
+                       amqp_cstring_bytes(async_algo::CacheInvalidateQueue()),
+                       0,
+                       1,
+                       0,
+                       0,
+                       amqp_empty_table);
     if (!GateRpcReplyOk(amqp_get_rpc_reply(connection), error))
     {
         return false;
     }
     amqp_queue_bind(connection,
                     1,
-                    amqp_cstring_bytes("gate.cache.invalidate.q"),
+                    amqp_cstring_bytes(async_algo::CacheInvalidateQueue()),
                     amqp_cstring_bytes(_rabbit_exchange_direct.c_str()),
-                    amqp_cstring_bytes("gate.cache.invalidate"),
+                    amqp_cstring_bytes(async_algo::CacheInvalidateRoutingKey()),
                     amqp_empty_table);
     if (!GateRpcReplyOk(amqp_get_rpc_reply(connection), error))
     {

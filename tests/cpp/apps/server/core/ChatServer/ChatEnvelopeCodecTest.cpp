@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "ChatAsyncEvent.h"
-#include "ChatRuntime.h"
-#include "ChatTaskEnvelope.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "ChatAsyncEvent.hpp"
+#include "ChatRuntime.hpp"
+#include "ChatTaskEnvelope.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <cstdint>
@@ -143,6 +143,29 @@ TEST(ChatEnvelopeCodecTest, BuildAsyncEventEnvelopeDerivesPrivatePartitionKey)
     EXPECT_EQ(envelope.topic, memochat::chatruntime::TopicPrivate());
     EXPECT_EQ(envelope.partition_key, "10:20");
     EXPECT_EQ(envelope.payload["content"].asString(), "hello");
+}
+
+TEST(ChatEnvelopeCodecTest, BuildAsyncEventEnvelopeOrdersPrivatePartitionKey)
+{
+    memochat::json::JsonValue payload(memochat::json::object_t{});
+    payload["fromuid"] = 99;
+    payload["touid"] = 12;
+
+    const AsyncEventEnvelope envelope = BuildAsyncEventEnvelope(memochat::chatruntime::TopicPrivate(), payload);
+
+    EXPECT_EQ(envelope.partition_key, "12:99");
+}
+
+TEST(ChatEnvelopeCodecTest, BuildTaskEnvelopeClampsNegativeRetryTiming)
+{
+    memochat::json::JsonValue payload(memochat::json::object_t{});
+    payload["task_id"] = "task-stable";
+
+    const TaskEnvelope envelope = BuildTaskEnvelope("delivery.retry", "delivery", payload, -250, -3);
+
+    EXPECT_EQ(envelope.task_id, "task-stable");
+    EXPECT_EQ(envelope.available_at_ms, envelope.created_at_ms);
+    EXPECT_EQ(envelope.max_retries, 0);
 }
 
 TEST(ChatEnvelopeCodecTest, AsyncEventEnvelopeMissingFieldsKeepDefaults)

@@ -1,9 +1,9 @@
-#include "KafkaAsyncEventBus.h"
+#include "KafkaAsyncEventBus.hpp"
 
-#include "ChatAsyncEvent.h"
-#include "ChatRuntime.h"
-#include "PostgresMgr.h"
-#include "logging/Logger.h"
+#include "ChatAsyncEvent.hpp"
+#include "ChatRuntime.hpp"
+#include "PostgresMgr.hpp"
+#include "logging/Logger.hpp"
 
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -31,7 +31,11 @@
 #ifdef byte
 #undef byte
 #endif
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
+
+import memochat.chat.kafka_async_event_bus_algorithms;
+
+namespace kafka_event_modules = memochat::chat::messaging::kafka_event_bus::modules;
 
 namespace
 {
@@ -57,7 +61,7 @@ KafkaAsyncEventBus::KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_
     , _publish_outbox_repair_task(std::move(publish_outbox_repair_task))
 {
 #if MEMOCHAT_ENABLE_KAFKA
-    if (_config.valid())
+    if (kafka_event_modules::ShouldStartFromValidConfig(_config.valid()))
     {
         cppkafka::Configuration producer_config = {
             {"metadata.broker.list", _config.brokers},
@@ -85,7 +89,7 @@ KafkaAsyncEventBus::KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_
             },
             [this](int64_t outbox_id, int delay_ms, int max_retries, const std::string&)
             {
-                if (!_publish_outbox_repair_task)
+                if (kafka_event_modules::ShouldSkipOutboxRepairPublish(!_publish_outbox_repair_task))
                 {
                     return;
                 }
@@ -123,17 +127,17 @@ KafkaAsyncEventBus::~KafkaAsyncEventBus()
 bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
 #if MEMOCHAT_ENABLE_KAFKA
-    if (!_producer || !_config.valid())
+    if (kafka_event_modules::ShouldRejectPublish(!_producer, !_config.valid()))
     {
         if (error)
         {
-            *error = "kafka_not_configured";
+            *error = kafka_event_modules::KafkaNotConfiguredError();
         }
         return false;
     }
 
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
-    if (envelope.event_id.empty())
+    if (kafka_event_modules::ShouldAssignGeneratedEventId(envelope.event_id.empty()))
     {
         envelope.event_id = boost::uuids::to_string(boost::uuids::random_generator()());
         auto payload_copy = envelope.payload;
@@ -141,11 +145,11 @@ bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json:
         envelope.payload = payload_copy;
     }
     const auto serialized = SerializeAsyncEventEnvelope(envelope);
-    if (serialized.empty())
+    if (kafka_event_modules::ShouldRejectSerializedPayload(serialized.empty()))
     {
         if (error)
         {
-            *error = "serialize_failed";
+            *error = kafka_event_modules::SerializeFailedError();
         }
         return false;
     }
@@ -155,15 +159,15 @@ bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json:
     record.topic = envelope.topic;
     record.partition_key = envelope.partition_key;
     record.payload_json = serialized;
-    record.status = 0;
-    record.retry_count = 0;
+    record.status = kafka_event_modules::InitialOutboxStatus();
+    record.retry_count = kafka_event_modules::InitialRetryCount();
     record.next_retry_at = NowMsKafkaBus();
     record.created_at = NowMsKafkaBus();
     if (!PostgresMgr::GetInstance()->EnqueueChatOutboxEvent(record))
     {
         if (error)
         {
-            *error = "outbox_enqueue_failed";
+            *error = kafka_event_modules::OutboxEnqueueFailedError();
         }
         return false;
     }
@@ -173,7 +177,7 @@ bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json:
     (void) payload;
     if (error)
     {
-        *error = "kafka_build_disabled";
+        *error = kafka_event_modules::KafkaBuildDisabledError();
     }
     return false;
 #endif
@@ -205,9 +209,9 @@ bool KafkaAsyncEventBus::ConsumeOnce(const std::vector<std::string>&, AsyncConsu
     event = AsyncConsumedEvent();
     event.serialized = message.get_payload();
     event.parsed = ParseAsyncEventEnvelope(event.serialized, event.envelope);
-    if (!event.parsed && error)
+    if (kafka_event_modules::ShouldSetParseError(event.parsed, error != nullptr))
     {
-        *error = "parse_failed";
+        *error = kafka_event_modules::ParseFailedError();
     }
     _last_message = std::make_shared<cppkafka::Message>(std::move(message));
     _last_consumed = event;
@@ -216,7 +220,7 @@ bool KafkaAsyncEventBus::ConsumeOnce(const std::vector<std::string>&, AsyncConsu
     (void) event;
     if (error)
     {
-        *error = "kafka_build_disabled";
+        *error = kafka_event_modules::KafkaBuildDisabledError();
     }
     return false;
 #endif
@@ -226,7 +230,7 @@ void KafkaAsyncEventBus::AckLastConsumed()
 {
 #if MEMOCHAT_ENABLE_KAFKA
     std::lock_guard<std::mutex> guard(_consumer_mutex);
-    if (_consumer && _last_message)
+    if (kafka_event_modules::ShouldCommitLastConsumed(_consumer != nullptr, _last_message != nullptr))
     {
         _consumer->commit(*_last_message);
     }
@@ -238,7 +242,7 @@ void KafkaAsyncEventBus::NackLastConsumed(const std::string& error)
 {
 #if MEMOCHAT_ENABLE_KAFKA
     std::lock_guard<std::mutex> guard(_consumer_mutex);
-    if (!_consumer || !_last_message)
+    if (!kafka_event_modules::ShouldNackLastConsumed(_consumer != nullptr, _last_message != nullptr))
     {
         return;
     }
@@ -247,7 +251,7 @@ void KafkaAsyncEventBus::NackLastConsumed(const std::string& error)
     envelope.retry_count += 1;
     const auto serialized = SerializeAsyncEventEnvelope(envelope);
     std::string publish_error;
-    if (envelope.retry_count >= _config.consume_retry_max)
+    if (kafka_event_modules::ShouldRouteToDlq(envelope.retry_count, _config.consume_retry_max))
     {
         ProduceSerialized(DlqTopicForLastConsumed(), envelope.partition_key, serialized, &publish_error);
     }
@@ -281,7 +285,7 @@ bool KafkaAsyncEventBus::ProduceSerialized(const std::string& topic,
     {
         if (error)
         {
-            *error = "producer_unavailable";
+            *error = kafka_event_modules::ProducerUnavailableError();
         }
         return false;
     }
@@ -309,7 +313,7 @@ bool KafkaAsyncEventBus::ProduceSerialized(const std::string& topic,
     (void) payload_json;
     if (error)
     {
-        *error = "kafka_build_disabled";
+        *error = kafka_event_modules::KafkaBuildDisabledError();
     }
     return false;
 #endif

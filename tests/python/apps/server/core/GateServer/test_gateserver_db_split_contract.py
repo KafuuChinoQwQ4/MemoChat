@@ -42,7 +42,7 @@ def service_config(name: str) -> Path:
 
 # domain -> (config file, expected database, expected role, expected tables)
 SPLIT = {
-    "media": ("mediagateway.ini", "memo_media", "memo_media_app", ["chat_media_asset"]),
+    "media": ("mediagateway.ini", "memo_media", "memo_media_app", ["chat_media_asset", "chat_media_access_grant"]),
     "moments": (
         "momentsgateway.ini",
         "memo_moments",

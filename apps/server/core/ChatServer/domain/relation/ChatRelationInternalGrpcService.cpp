@@ -1,6 +1,10 @@
-#include "ChatRelationInternalGrpcService.h"
+#include "ChatRelationInternalGrpcService.hpp"
 
-#include "const.h"
+#include "const.hpp"
+
+import memochat.chat.relation_internal_grpc_service_algorithms;
+
+namespace relation_internal_grpc_modules = memochat::chat::relation_internal_grpc_service::modules;
 
 namespace
 {
@@ -14,7 +18,7 @@ std::string CompactJson(const memochat::json::JsonValue& value)
 RelationCommandRequest BuildCommandRequest(const chatinternal::JsonPayloadRequest& request)
 {
     RelationCommandRequest command_request;
-    command_request.request_msg_id = static_cast<short>(request.tcp_msg_id());
+    command_request.request_msg_id = relation_internal_grpc_modules::TcpMessageId(request.tcp_msg_id());
     command_request.payload_json = request.payload_json();
     command_request.session_uid = request.session().uid();
     command_request.session_id = request.session().session_id();
@@ -104,20 +108,23 @@ grpc::Status ChatRelationInternalGrpcService::BuildBootstrapResponse(
     chatinternal::BootstrapResponse* response,
     void (IRelationQueryService::*builder)(int, memochat::json::JsonValue&))
 {
-    if (!request || !response)
+    if (relation_internal_grpc_modules::ShouldReportMissingRequestOrResponse(request != nullptr, response != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "missing bootstrap request or response");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            relation_internal_grpc_modules::MissingBootstrapRequestMessage());
     }
-    if (!_relation_service)
+    if (relation_internal_grpc_modules::ShouldReportMissingRelationService(_relation_service != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "relation service is not configured");
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            relation_internal_grpc_modules::RelationServiceNotConfiguredMessage());
     }
     const auto uid = request->uid();
-    if (uid <= 0)
+    if (relation_internal_grpc_modules::ShouldReportInvalidUid(uid))
     {
         response->set_error(ErrorCodes::UidInvalid);
-        response->set_payload_json("{}");
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "uid must be positive");
+        response->set_payload_json(relation_internal_grpc_modules::DefaultPayloadJson());
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            relation_internal_grpc_modules::UidMustBePositiveMessage());
     }
 
     memochat::json::JsonValue payload(memochat::json::object_t{});
@@ -135,18 +142,20 @@ grpc::Status ChatRelationInternalGrpcService::BuildCommandResponse(
     chatinternal::JsonPayloadResponse* response,
     RelationCommandResult (IRelationCommandService::*handler)(const RelationCommandRequest&))
 {
-    if (!request || !response)
+    if (relation_internal_grpc_modules::ShouldReportMissingRequestOrResponse(request != nullptr, response != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "missing relation command request or response");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            relation_internal_grpc_modules::MissingRelationCommandRequestMessage());
     }
-    if (!_relation_service)
+    if (relation_internal_grpc_modules::ShouldReportMissingRelationService(_relation_service != nullptr))
     {
         if (response)
         {
             response->set_error(ErrorCodes::RPCFailed);
-            response->set_payload_json("{}");
+            response->set_payload_json(relation_internal_grpc_modules::DefaultPayloadJson());
         }
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "relation service is not configured");
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            relation_internal_grpc_modules::RelationServiceNotConfiguredMessage());
     }
 
     const auto result = (_relation_service->*handler)(BuildCommandRequest(*request));

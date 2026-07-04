@@ -8,8 +8,9 @@
 | --- | --- |
 | `ApplyRequestModel.cpp` | 好友申请列表模型实现 |
 | `ApplyRequestModel.h` | 好友申请列表模型声明 |
-| `FriendListModel.cpp` | 好友列表模型主实现 |
+| `FriendListModel.cpp` | 好友列表模型主实现（Qt model 基础接口） |
 | `FriendListModel.h` | 好友列表模型声明 |
+| `FriendListModelOrdering.cpp` | 好友列表条目合并、分组排序与派生字段逻辑 |
 | `FriendListModelMutations.cpp` | 好友列表的增删改变更逻辑 |
 | `FriendListModelQueries.cpp` | 好友列表的查询/检索逻辑 |
 | `FriendListModelState.cpp` | 好友列表内部状态管理 |

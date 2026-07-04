@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
 
 #include <string>
 

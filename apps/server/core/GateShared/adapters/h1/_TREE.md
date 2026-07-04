@@ -2,6 +2,12 @@
 
 > 将 HTTP/1 请求适配到 GateShared 统一路由注册表的适配器。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | HTTP/1 路由适配器的 C++ modules 接口。 |
+
 ## 文件
 
 | 文件 | 作用概括 |

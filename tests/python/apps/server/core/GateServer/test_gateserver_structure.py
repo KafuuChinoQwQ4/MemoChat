@@ -178,6 +178,13 @@ def extract_function_body(source: str, signature_pattern: str) -> str:
     raise AssertionError(f"unterminated function body for {signature_pattern}")
 
 
+def extract_struct_body(source: str, struct_name: str) -> str:
+    match = re.search(rf"\bstruct\s+{re.escape(struct_name)}\s*\{{(?P<body>.*?)\}};", source, re.S)
+    if match is None:
+        raise AssertionError(f"missing struct {struct_name}")
+    return match.group("body")
+
+
 def assert_contains_any(testcase: unittest.TestCase, source: str, label: str, tokens: tuple[str, ...]) -> None:
     testcase.assertTrue(
         any(token in source for token in tokens),
@@ -307,6 +314,7 @@ R18_ROUTES = (
     ("POST", "/api/r18/source/import", "HandleImportSource"),
     ("POST", "/api/r18/source/enable", "HandleEnableSource"),
     ("POST", "/api/r18/source/disable", "HandleDisableSource"),
+    ("POST", "/api/r18/source/delete", "HandleDeleteSource"),
     ("POST", "/api/r18/search", "HandleSearch"),
     ("POST", "/api/r18/comic/detail", "HandleComicDetail"),
     ("POST", "/api/r18/chapter/pages", "HandleChapterPages"),
@@ -990,14 +998,14 @@ class GateServerStructureTests(unittest.TestCase):
         expected_behavior_tokens = (
             "ValidateAuth",
             "NowMs",
-            "NormalizeMomentItem",
-            "BuildMomentJson",
-            "BuildCommentList",
+            "BuildUserProfile",
+            "ToMomentOutputDto",
+            "ToMomentCommentOutputDtos",
             "FillCommentLikes",
             "PostgresMgr::GetInstance()->AddMoment",
             "MongoMgr::GetInstance()->InsertMomentContent",
-            "GetMomentsFeed",
-            "CanViewMoment",
+            "GetMomentsFeedCandidates",
+            "CanViewMomentRemote",
             "DeleteMoment",
             "AddMomentLike",
             "RemoveMomentLike",
@@ -1440,11 +1448,22 @@ class GateServerStructureTests(unittest.TestCase):
                 compact = normalize_space(body)
                 self.assertIn(handler_map, body)
                 self.assertIn(prefix_map, body)
-                self.assertIn("H1RouteAdapter::BuildGateRequest", compact)
-                self.assertIn("H1RouteAdapter::ApplyGateResponse", compact)
-                self.assertIn("_route_registry.Dispatch(request, response)", compact)
-                self.assertLess(compact.index(handler_map), compact.index("_route_registry.Dispatch"))
-                self.assertLess(compact.index(prefix_map), compact.index("_route_registry.Dispatch"))
+                self.assertIn("DispatchH1", compact)
+                self.assertRegex(compact, rf"DispatchH1\s*\([^;]*{handler_map}[^;]*{prefix_map}")
+
+        dispatch_body = extract_function_body(
+            source,
+            r"bool\s+LogicSystem::DispatchH1\s*\(",
+        )
+        compact_dispatch = normalize_space(dispatch_body)
+        self.assertIn("H1RouteAdapter::BuildGateRequest", compact_dispatch)
+        self.assertIn("H1RouteAdapter::ApplyGateResponse", compact_dispatch)
+        self.assertIn("_route_registry.Dispatch(request, response)", compact_dispatch)
+        self.assertLess(compact_dispatch.index("exact.find(path)"), compact_dispatch.index("_route_registry.Dispatch"))
+        self.assertLess(
+            compact_dispatch.index("for (const auto& [pfx, handler]"),
+            compact_dispatch.index("_route_registry.Dispatch"),
+        )
 
     def test_h3_route_adapter_files_exist_and_declare_contract(self):
         adapter_dir = GATE_H3 / "adapters" / "h3"
@@ -1818,9 +1837,9 @@ class GateServerStructureTests(unittest.TestCase):
     def test_auth_service_facade_files_exist_and_are_built_into_gate_server(self):
         auth_service_dir = ACCOUNT_DOMAIN / "services" / "auth"
         account_service_dir = ACCOUNT_DOMAIN / "services" / "account"
-        self.assertTrue((auth_service_dir / "AuthService.h").exists())
+        self.assertTrue((auth_service_dir / "AuthService.hpp").exists())
         self.assertTrue((auth_service_dir / "AuthService.cpp").exists())
-        self.assertTrue((account_service_dir / "AccountPersistence.h").exists())
+        self.assertTrue((account_service_dir / "AccountPersistence.hpp").exists())
         self.assertTrue((account_service_dir / "AccountPersistence.cpp").exists())
 
         cmake_source = read(ACCOUNT_SHARED / "CMakeLists.txt")
@@ -1828,7 +1847,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("domain/services/account/AccountPersistence.cpp", cmake_source)
 
     def test_auth_cache_facade_files_exist_and_gate_core_builds_source(self):
-        self.assertTrue((ACCOUNT_CORE_CACHE / "AuthCache.h").exists(), "AccountShared AuthCache header should exist")
+        self.assertTrue((ACCOUNT_CORE_CACHE / "AuthCache.hpp").exists(), "AccountShared AuthCache header should exist")
         self.assertTrue((ACCOUNT_CORE_CACHE / "AuthCache.cpp").exists(), "AccountShared AuthCache source should exist")
 
         # GateAccountCore moved with the account aggregate into AccountShared.
@@ -1846,7 +1865,7 @@ class GateServerStructureTests(unittest.TestCase):
                 self.assertRegex(compact_source, pattern)
 
     def test_auth_cache_public_header_stays_storage_only_and_dependency_light(self):
-        header = strip_comments(read(ACCOUNT_CORE_CACHE / "AuthCache.h"))
+        header = strip_comments(read(ACCOUNT_CORE_CACHE / "AuthCache.hpp"))
 
         self.assertIn("class AuthCache", header)
         self.assertIn("static AuthCache& Instance()", header)
@@ -1856,7 +1875,7 @@ class GateServerStructureTests(unittest.TestCase):
 
     def test_auth_verify_client_facade_files_exist_and_gate_core_builds_source(self):
         self.assertTrue(
-            (GATE_CORE_CLIENTS / "AuthVerifyClient.h").exists(), "GateServerCore AuthVerifyClient header should exist"
+            (GATE_CORE_CLIENTS / "AuthVerifyClient.hpp").exists(), "GateServerCore AuthVerifyClient header should exist"
         )
         self.assertTrue(
             (GATE_CORE_CLIENTS / "AuthVerifyClient.cpp").exists(), "GateServerCore AuthVerifyClient source should exist"
@@ -1868,7 +1887,7 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("clients/AuthVerifyClient.cpp", target_match.group("body"))
 
     def test_auth_verify_client_public_header_is_narrow_verify_request_contract(self):
-        header = strip_comments(read(GATE_CORE_CLIENTS / "AuthVerifyClient.h"))
+        header = strip_comments(read(GATE_CORE_CLIENTS / "AuthVerifyClient.hpp"))
 
         self.assertIn("class AuthVerifyClient", header)
         self.assertIn("static AuthVerifyClient& Instance()", header)
@@ -1885,8 +1904,8 @@ class GateServerStructureTests(unittest.TestCase):
         source = strip_comments(read(GATE_CORE_CLIENTS / "AuthVerifyClient.cpp"))
         compact_source = normalize_space(source)
 
-        self.assertIn('#include "AuthVerifyClient.h"', source)
-        self.assertIn('#include "VerifyGrpcClient.h"', source)
+        self.assertIn('#include "AuthVerifyClient.hpp"', source)
+        self.assertIn('#include "VerifyGrpcClient.hpp"', source)
         self.assertIn("AuthVerifyClient::Instance()", source)
         self.assertRegex(source, r"\bAuthVerifyClient::RequestVerifyCode\s*\(")
         self.assertIn("VerifyGrpcClient::GetInstance()->GetVarifyCode(email)", compact_source)
@@ -1910,7 +1929,7 @@ class GateServerStructureTests(unittest.TestCase):
             source = strip_comments(read(path))
             compact_source = normalize_space(source)
             with self.subTest(path=path.relative_to(REPO_ROOT), expectation="uses facade"):
-                self.assertRegex(source, r'#include\s+"AuthVerifyClient\.h"')
+                self.assertRegex(source, r'#include\s+"AuthVerifyClient\.hpp"')
                 self.assertIn("AuthVerifyClient::Instance()", source)
                 self.assertRegex(compact_source, r"\.RequestVerifyCode\s*\(\s*email\s*\)")
             for token in forbidden_tokens:
@@ -1941,7 +1960,8 @@ class GateServerStructureTests(unittest.TestCase):
                         self.assertNotIn(token, source)
 
     def test_account_persistence_public_header_is_narrow_account_contract(self):
-        header = strip_comments(read(ACCOUNT_DOMAIN / "services" / "account" / "AccountPersistence.h"))
+        header = strip_comments(read(ACCOUNT_DOMAIN / "services" / "account" / "AccountPersistence.hpp"))
+        profile_body = extract_struct_body(header, "AccountProfile")
 
         self.assertIn("struct AccountProfile", header)
         self.assertIn("class AccountPersistence", header)
@@ -1954,7 +1974,6 @@ class GateServerStructureTests(unittest.TestCase):
 
         expected_profile_fields = (
             "name",
-            "password",
             "uid",
             "user_id",
             "email",
@@ -1965,7 +1984,10 @@ class GateServerStructureTests(unittest.TestCase):
         )
         for field in expected_profile_fields:
             with self.subTest(profile_field=field):
-                self.assertRegex(header, rf"\b{re.escape(field)}\b")
+                self.assertRegex(profile_body, rf"\b{re.escape(field)}\b")
+        for field in ("password", "pwd", "password_hash", "passwd"):
+            with self.subTest(forbidden_profile_field=field):
+                self.assertNotRegex(profile_body, rf"\b{re.escape(field)}\b")
 
         forbidden_header_tokens = (
             "PostgresMgr.h",
@@ -1996,8 +2018,8 @@ class GateServerStructureTests(unittest.TestCase):
         source = strip_comments(read(ACCOUNT_DOMAIN / "services" / "account" / "AccountPersistence.cpp"))
         compact_source = normalize_space(source)
 
-        self.assertIn('#include "services/account/AccountPersistence.h"', source)
-        self.assertIn('#include "PostgresMgr.h"', source)
+        self.assertIn('#include "services/account/AccountPersistence.hpp"', source)
+        self.assertIn('#include "PostgresMgr.hpp"', source)
         self.assertIn("AccountPersistence::Instance()", source)
         self.assertIn("static AccountPersistence instance", source)
         self.assertIn("AccountProfile ToAccountProfile(const ::UserInfo& userInfo)", source)
@@ -2015,7 +2037,6 @@ class GateServerStructureTests(unittest.TestCase):
 
         expected_profile_mappings = (
             "profile.name = userInfo.name",
-            "profile.password = userInfo.pwd",
             "profile.uid = userInfo.uid",
             "profile.user_id = userInfo.user_id",
             "profile.email = userInfo.email",
@@ -2027,10 +2048,13 @@ class GateServerStructureTests(unittest.TestCase):
         for mapping in expected_profile_mappings:
             with self.subTest(mapping=mapping):
                 self.assertIn(mapping, compact_source)
+        self.assertNotIn("profile.password", compact_source)
+        self.assertNotIn("profile.pwd", compact_source)
+        self.assertNotIn("profile.password_hash", compact_source)
 
     def test_auth_route_module_registers_migrated_auth_routes_through_service_facade(self):
         auth_dir = ACCOUNT_DOMAIN / "modules" / "auth"
-        header = read(auth_dir / "AuthRouteModule.h")
+        header = read(auth_dir / "AuthRouteModule.hpp")
         source = strip_comments(read(auth_dir / "AuthRouteModule.cpp"))
         compact_source = normalize_space(source)
         combined = strip_comments(header) + "\n" + source
@@ -2072,7 +2096,7 @@ class GateServerStructureTests(unittest.TestCase):
 
     def test_auth_service_facade_owns_h1_auth_behavior_and_infrastructure_tokens(self):
         service_source = strip_comments(read(ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp"))
-        service_header = read(ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.h")
+        service_header = read(ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.hpp")
 
         self.assertIn("class AuthService", service_header)
         self.assertIn("static AuthService& Instance()", service_header)
@@ -2082,9 +2106,9 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("HandleUserLogin", service_header)
 
         expected_behavior_categories = {
-            "verify request facade include": ('#include "AuthVerifyClient.h"',),
+            "verify request facade include": ('#include "AuthVerifyClient.hpp"',),
             "verify request facade call": ("AuthVerifyClient::Instance().RequestVerifyCode(email)",),
-            "account persistence facade include": ('#include "services/account/AccountPersistence.h"',),
+            "account persistence facade include": ('#include "services/account/AccountPersistence.hpp"',),
             "account persistence facade entry": (
                 "account::AccountPersistence::Instance()",
                 "AccountPersistence::Instance()",
@@ -2093,7 +2117,7 @@ class GateServerStructureTests(unittest.TestCase):
                 ".RegisterUser(name, email, pwd, icon)",
                 "RegisterUser(name, email, pwd, icon)",
             ),
-            "auth cache facade": ('#include "AuthCache.h"', "AuthCache::Instance()", "AuthCache"),
+            "auth cache facade": ('#include "AuthCache.hpp"', "AuthCache::Instance()", "AuthCache"),
             "verification code cache facade": ("GetVerificationCode", "LoadVerificationCode", "AuthCache::Instance()"),
             "reset email check facade": ("EmailMatchesUser(name, email)",),
             "reset password update facade": ("UpdatePassword(email, pwd)",),
@@ -2129,6 +2153,46 @@ class GateServerStructureTests(unittest.TestCase):
         for token in ("VerifyGrpcClient", "->GetVarifyCode(", "GetVarifyRsp"):
             with self.subTest(forbidden_direct_verify_token=token):
                 self.assertNotIn(token, service_source)
+
+    def test_login_profile_contract_excludes_password_fields(self):
+        account_header = strip_comments(read(ACCOUNT_DOMAIN / "services" / "account" / "AccountPersistence.hpp"))
+        cache_header = strip_comments(read(ACCOUNT_CORE_SUPPORT / "AuthLoginCacheProfileDto.hpp"))
+        public_dtos_header = strip_comments(read(ACCOUNT_CORE_SUPPORT / "AuthPublicDtos.hpp"))
+        auth_service = strip_comments(read(ACCOUNT_DOMAIN / "services" / "auth" / "AuthService.cpp"))
+
+        profile_structs = {
+            "AccountProfile": extract_struct_body(account_header, "AccountProfile"),
+            "AuthLoginCacheProfileDto": extract_struct_body(cache_header, "AuthLoginCacheProfileDto"),
+            "AuthLoginUserProfileDto": extract_struct_body(public_dtos_header, "AuthLoginUserProfileDto"),
+            "AuthRegisterResponseDto": extract_struct_body(public_dtos_header, "AuthRegisterResponseDto"),
+            "AuthResetPasswordResponseDto": extract_struct_body(public_dtos_header, "AuthResetPasswordResponseDto"),
+        }
+        for struct_name, body in profile_structs.items():
+            with self.subTest(struct_name=struct_name):
+                self.assertNotRegex(body, r"\b(passwd|pwd|password|password_hash|confirm)\b")
+
+        login_profile_block = auth_service[
+            auth_service.index("gateauthsupport::AuthLoginUserProfileDto user_profile_dto") : auth_service.index(
+                'root["chat_endpoints"]'
+            )
+        ]
+        register_response_block = auth_service[
+            auth_service.index("gateauthsupport::AuthRegisterResponseDto register_response") : auth_service.index(
+                "gateauthsupport::UserInfo cached_user"
+            )
+        ]
+        reset_response_block = auth_service[
+            auth_service.index("gateauthsupport::AuthResetPasswordResponseDto reset_response") : auth_service.index(
+                "WriteJson(response, root);", auth_service.index("gateauthsupport::AuthResetPasswordResponseDto")
+            )
+        ]
+        for label, block in (
+            ("login user_profile", login_profile_block),
+            ("register response", register_response_block),
+            ("reset response", reset_response_block),
+        ):
+            with self.subTest(block=label):
+                self.assertNotRegex(block, r"\b(passwd|pwd|password|password_hash|confirm)\b")
 
     def test_h3_auth_routes_dispatch_through_shared_registry_adapter(self):
         source = strip_comments(read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp"))
@@ -2187,8 +2251,9 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertIn("ApplyRouteTraceContext", source)
         self.assertIn("memolog::TraceContext::SetTraceId(request.trace_id)", source)
         self.assertIn("memolog::TraceContext::SetRequestId(request.request_id)", source)
-        self.assertIn('H1RouteAdapter::BuildGateRequest("GET", path, con)', source)
-        self.assertIn('H1RouteAdapter::BuildGateRequest("POST", path, con)', source)
+        self.assertIn("H1RouteAdapter::BuildGateRequest(std::string(method), path, con)", source)
+        self.assertIn('return DispatchH1(path, con, _get_handlers, _get_prefix_handlers, "GET"', source)
+        self.assertIn('"POST"', source)
         self.assertIn("_route_registry.Dispatch(request, response)", source)
         self.assertIn("H1RouteAdapter::ApplyGateResponse(response, con)", source)
 

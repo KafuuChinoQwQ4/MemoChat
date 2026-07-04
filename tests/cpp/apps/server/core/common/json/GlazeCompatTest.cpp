@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 
 TEST(GlazeCompatTest, JsonValueProxyIsMemberChecksRequestedKey)
 {

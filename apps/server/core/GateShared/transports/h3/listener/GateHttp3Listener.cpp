@@ -1,8 +1,8 @@
-#include "GateHttp3Listener.h"
-#include "CertUtil.h"
-#include "LogicSystem.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "GateHttp3Listener.hpp"
+#include "CertUtil.hpp"
+#include "LogicSystem.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <cctype>
 #include <fstream>
@@ -12,12 +12,22 @@
 
 #if MEMOCHAT_ENABLE_HTTP3
 
-#include "WinSdkCompat.h"
+#include "WinSdkCompat.hpp"
 
 #include <msquic.h>
 
 static const QUIC_API_TABLE* g_QuicApi = nullptr;
 static HQUIC g_Registration = nullptr;
+
+std::string RequestPathForLog(const std::string& path)
+{
+    const auto query_pos = path.find('?');
+    if (query_pos == std::string::npos)
+    {
+        return path;
+    }
+    return path.substr(0, query_pos);
+}
 
 struct StreamContext
 {
@@ -305,7 +315,7 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
 
                     std::map<std::string, std::string> fields;
                     fields["method"] = stream_ctx->Method;
-                    fields["path"] = stream_ctx->Path;
+                    fields["path"] = RequestPathForLog(stream_ctx->Path);
                     fields["content_length"] = std::to_string(stream_ctx->ContentLength);
                     fields["trace_id"] = stream_ctx->TraceId;
                     memolog::LogInfo("http3.stream.headers_done", "HTTP/3 headers parsed", fields);

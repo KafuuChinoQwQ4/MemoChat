@@ -19,5 +19,8 @@
 | `008_memo_media_schema.sql` | memo 聊天媒体资产 schema/表 |
 | `008_memo_moments_schema.sql` | memo 朋友圈相关 schema/表 |
 | `009_memo_account_schema.sql` | memo 账号（user/user_id）schema/表 |
+| `010_password_hash.sql` | 为账号表增加 `password_hash` 慢哈希密码列 |
+| `011_auth_refresh_tokens.sql` | 为账号库增加 refresh token 轮换/吊销表 |
+| `012_media_access_grants.sql` | 为媒体下载增加显式授权 grant 表 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

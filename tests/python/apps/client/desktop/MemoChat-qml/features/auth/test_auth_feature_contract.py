@@ -8,6 +8,10 @@ CLIENT = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 AUTH = CLIENT / "features/auth"
 AUTH_VIEW = AUTH / "view"
 LEGACY_AUTH = CLIENT / "qml/auth"
+GLOBAL_HEADER = CLIENT / "core/common/global.h"
+PENDING_LOGIN_STATE = CLIENT / "app/connection/AppControllerConnectionState.h"
+SESSION_LOGIN_RESPONSE = CLIENT / "app/session/SessionAuthCoordinatorLoginResponse.cpp"
+SESSION_CONNECTION_STATE = CLIENT / "app/session/AppSessionCoordinatorConnectionState.cpp"
 AUTH_QML_FILES = ("LoginPage.qml", "RegisterPage.qml", "ResetPage.qml")
 AUTH_SOURCE_SUFFIXES = {".cpp", ".h", ".qml", ".js"}
 
@@ -117,7 +121,8 @@ class AuthFeatureContractTests(unittest.TestCase):
                 self.assertIn(token, source)
 
         self.assertNotIn("saveLoginCredential;", header)
-        self.assertIn("_credentialStore.saveLoginCredential(email, password);", source)
+        self.assertIn("Q_UNUSED(password)", source)
+        self.assertIn("_credentialStore.saveLoginCredential(email, QString());", source)
         self.assertIn("syncLoginCredentialCacheJson(_credentialStore.credentialCacheJson());", source)
 
         for legacy_signal in (
@@ -139,6 +144,56 @@ class AuthFeatureContractTests(unittest.TestCase):
         store_implementation = store_header + "\n" + store_source
         self.assertIn("LoginCredentialCache", store_implementation)
         self.assertIn("kMaxLoginCredentialCache", store_implementation)
+        for token in (
+            'QStringLiteral("password")',
+            'obj.value(QStringLiteral("password"))',
+            "password.isEmpty()",
+            '{QStringLiteral("email"), normalizedEmail}, {QStringLiteral("password")',
+        ):
+            with self.subTest(forbidden_cache_password_token=token):
+                self.assertNotIn(token, store_implementation)
+        self.assertIn('sanitized.append(QJsonObject{{QStringLiteral("email"), itemEmail}})', store_implementation)
+        self.assertIn('next.append(QJsonObject{{QStringLiteral("email"), normalizedEmail}})', store_implementation)
+
+    def test_auth_credential_store_never_persists_tokens_or_passwords(self):
+        store = read(AUTH / "service/AuthCredentialStore.h")
+        forbidden_tokens = (
+            "refresh_token",
+            "RefreshToken",
+            "access_token",
+            "login_ticket",
+            "LoginTicket",
+            "token_hash",
+            "SetToken",
+            'QStringLiteral("password")',
+            'QStringLiteral("token")',
+        )
+        for token in forbidden_tokens:
+            with self.subTest(token=token):
+                self.assertNotIn(token, store)
+
+        self.assertIn('QJsonObject{{QStringLiteral("email"), itemEmail}}', store)
+        self.assertIn('QJsonObject{{QStringLiteral("email"), normalizedEmail}}', store)
+
+    def test_refresh_token_is_login_response_memory_only_state(self):
+        global_header = read(GLOBAL_HEADER)
+        pending_header = read(PENDING_LOGIN_STATE)
+        login_response = read(SESSION_LOGIN_RESPONSE)
+        connection_state = read(SESSION_CONNECTION_STATE)
+
+        self.assertIn("QString RefreshToken;", global_header)
+        self.assertIn("QString refreshToken;", pending_header)
+        self.assertIn('obj.value("refresh_token").toString()', login_response)
+        self.assertIn("server_info.RefreshToken.trimmed().isEmpty()", login_response)
+        self.assertIn("_pending_login_state.refreshToken = serverInfo.RefreshToken;", connection_state)
+        self.assertGreaterEqual(connection_state.count("_pending_login_state.refreshToken.clear();"), 2)
+
+        for source in (login_response, connection_state, pending_header):
+            with self.subTest(source_hash=hash(source)):
+                self.assertNotIn("QSettings", source)
+                self.assertNotIn("AuthCredentialStore", source)
+        self.assertNotIn('qWarning() << "Invalid chat server response:" << obj', login_response)
+        self.assertIn("hasRefreshToken", login_response)
 
 
 if __name__ == "__main__":

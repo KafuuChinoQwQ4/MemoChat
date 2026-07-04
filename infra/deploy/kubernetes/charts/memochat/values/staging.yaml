@@ -8,4 +8,4 @@ status:
   replicaCount: 2
 
 chat:
-  replicaCount: 4
+  replicaCount: 1

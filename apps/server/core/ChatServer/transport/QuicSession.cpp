@@ -1,7 +1,7 @@
-#include "QuicSession.h"
+#include "QuicSession.hpp"
 
-#include "LogicSystem.h"
-#include "MsgNode.h"
+#include "LogicSystem.hpp"
+#include "MsgNode.hpp"
 
 #include <cstring>
 #include <iostream>

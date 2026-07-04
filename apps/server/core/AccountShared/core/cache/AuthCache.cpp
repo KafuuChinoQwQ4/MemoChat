@@ -1,29 +1,32 @@
-#include "AuthCache.h"
+#include "AuthCache.hpp"
 
-#include "RedisMgr.h"
-#include "const.h"
+#include "RedisMgr.hpp"
+
+import memochat.account.auth_cache_algorithms;
+
+namespace auth_cache_modules = memochat::account::auth_cache::modules;
 
 namespace
 {
 
 std::string BuildVerificationCodeKey(const std::string& email)
 {
-    return CODEPREFIX + email;
+    return std::string(auth_cache_modules::VerificationCodePrefix()) + email;
 }
 
 std::string BuildHttpTokenKey(int uid)
 {
-    return USERTOKENPREFIX + std::to_string(uid);
+    return std::string(auth_cache_modules::HttpTokenPrefix()) + std::to_string(uid);
 }
 
 std::string BuildLoginProfileKey(const std::string& email)
 {
-    return "ulogin_profile_" + email;
+    return std::string(auth_cache_modules::LoginProfilePrefix()) + email;
 }
 
 std::string BuildLoginProfileUidKey(int uid)
 {
-    return "ulogin_profile_uid_" + std::to_string(uid);
+    return std::string(auth_cache_modules::LoginProfileUidPrefix()) + std::to_string(uid);
 }
 
 } // namespace
@@ -42,14 +45,19 @@ bool AuthCache::GetVerificationCode(const std::string& email, std::string& code)
     return RedisMgr::GetInstance()->Get(BuildVerificationCodeKey(email), code);
 }
 
+void AuthCache::DeleteVerificationCode(const std::string& email)
+{
+    RedisMgr::GetInstance()->Del(BuildVerificationCodeKey(email));
+}
+
 bool AuthCache::GetHttpToken(int uid, std::string& token)
 {
     return RedisMgr::GetInstance()->Get(BuildHttpTokenKey(uid), token);
 }
 
-void AuthCache::SetHttpToken(int uid, const std::string& token)
+bool AuthCache::SetHttpToken(int uid, const std::string& token, int ttl_seconds)
 {
-    RedisMgr::GetInstance()->Set(BuildHttpTokenKey(uid), token);
+    return RedisMgr::GetInstance()->SetEx(BuildHttpTokenKey(uid), token, ttl_seconds);
 }
 
 void AuthCache::DeleteHttpToken(int uid)

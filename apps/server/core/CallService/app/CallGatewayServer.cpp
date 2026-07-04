@@ -1,5 +1,5 @@
-#include "GateDomainServer.h"
-#include "GateRouteProfileRegistrar.h"
+#include "GateDomainServer.hpp"
+#include "GateRouteProfileRegistrar.hpp"
 
 // CallGatewayServer — call signaling domain peeled off GateServer (gateserver
 // split Phase 4). Serves /healthz, /readyz and /api/call/*. Owns memo call data

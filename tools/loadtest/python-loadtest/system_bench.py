@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import queue
 import random
 import socket
 import string
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,6 +41,54 @@ class BenchResult:
 
 def now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def env_required(name: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    raise RuntimeError(f"Missing required environment variable: {name}")
+
+
+def env_first(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def env_first_required(names: tuple[str, ...]) -> str:
+    value = env_first(names)
+    if value:
+        return value
+    raise RuntimeError("Missing required environment variable: one of " + ", ".join(names))
+
+
+def postgres_conn_kwargs() -> dict[str, Any]:
+    return {
+        "host": os.environ.get("MEMOCHAT_POSTGRES_HOST", "127.0.0.1"),
+        "port": int(os.environ.get("MEMOCHAT_POSTGRES_PORT", "15432")),
+        "dbname": os.environ.get("MEMOCHAT_POSTGRES_DB", "memo_pg"),
+        "user": os.environ.get("MEMOCHAT_POSTGRES_USER", "memochat"),
+        "password": env_required("MEMOCHAT_POSTGRES_PASSWORD"),
+    }
+
+
+def mongo_uri_from_env() -> str:
+    uri = env_first(("MEMOCHAT_MONGODB_URI", "MEMOCHAT_MONGO_URI"))
+    if uri:
+        return uri
+
+    user = env_first_required(("MEMOCHAT_MONGO_APP_USER", "MEMOCHAT_MONGODB_USER"))
+    password = env_first_required(("MEMOCHAT_MONGO_APP_PASSWORD", "MEMOCHAT_MONGODB_PASSWORD"))
+    host = os.environ.get("MEMOCHAT_MONGO_HOST", "127.0.0.1")
+    port = os.environ.get("MEMOCHAT_MONGO_PORT", "27017")
+    database = os.environ.get("MEMOCHAT_MONGO_DATABASE", "memochat")
+    user_part = urllib.parse.quote_plus(user)
+    password_part = urllib.parse.quote_plus(password)
+    db_part = urllib.parse.quote_plus(database)
+    return f"mongodb://{user_part}:{password_part}@{host}:{port}/{db_part}"
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -111,7 +161,11 @@ def run_parallel(
 def bench_redis(total: int, concurrency: int) -> list[dict[str, Any]]:
     value = "x" * 256
     pool = redis.ConnectionPool(
-        host="127.0.0.1", port=6379, password="123456", max_connections=max(8, concurrency * 2), decode_responses=False
+        host=os.environ.get("MEMOCHAT_REDIS_HOST", "127.0.0.1"),
+        port=int(os.environ.get("MEMOCHAT_REDIS_PORT", "6379")),
+        password=env_required("MEMOCHAT_REDIS_PASSWORD"),
+        max_connections=max(8, concurrency * 2),
+        decode_responses=False,
     )
 
     def write_one(i: int) -> tuple[bool, dict[str, Any]]:
@@ -145,14 +199,14 @@ def bench_redis(total: int, concurrency: int) -> list[dict[str, Any]]:
 
 
 def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
-    conninfo = "host=127.0.0.1 port=15432 dbname=memo_pg user=memochat password=123456"
-    with psycopg.connect(conninfo, autocommit=True) as conn:
+    conn_kwargs = postgres_conn_kwargs()
+    with psycopg.connect(**conn_kwargs, autocommit=True) as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS bench;")
         conn.execute(
             "CREATE TABLE IF NOT EXISTS bench.resume_kv (id text PRIMARY KEY, value text, updated_at timestamptz DEFAULT now());"
         )
     payload = "p" * 256
-    with psycopg.connect(conninfo, autocommit=True) as conn:
+    with psycopg.connect(**conn_kwargs, autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO bench.resume_kv(id,value) VALUES (%s,%s) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value;",
@@ -163,7 +217,7 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
         key = f"run_{uuid.uuid4().hex}"
         started = time.perf_counter()
         try:
-            with psycopg.connect(conninfo, autocommit=True) as conn:
+            with psycopg.connect(**conn_kwargs, autocommit=True) as conn:
                 conn.execute(
                     "INSERT INTO bench.resume_kv(id,value) VALUES (%s,%s) ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value, updated_at=now();",
                     (key, payload),
@@ -175,7 +229,7 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
     def read_one(i: int) -> tuple[bool, dict[str, Any]]:
         started = time.perf_counter()
         try:
-            with psycopg.connect(conninfo, autocommit=True) as conn:
+            with psycopg.connect(**conn_kwargs, autocommit=True) as conn:
                 raw = conn.execute(
                     "SELECT length(value) FROM bench.resume_kv WHERE id=%s;", (f"seed_{i % 200}",)
                 ).fetchone()
@@ -190,7 +244,7 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
 
     pool: queue.Queue[psycopg.Connection] = queue.Queue(maxsize=max(1, concurrency))
     for _ in range(max(1, concurrency)):
-        pool.put(psycopg.connect(conninfo, autocommit=True))
+        pool.put(psycopg.connect(**conn_kwargs, autocommit=True))
 
     def pooled_write_one(i: int) -> tuple[bool, dict[str, Any]]:
         key = f"pool_{uuid.uuid4().hex}"
@@ -235,9 +289,7 @@ def bench_postgres(total: int, concurrency: int) -> list[dict[str, Any]]:
 
 
 def bench_mongo(total: int, concurrency: int) -> list[dict[str, Any]]:
-    client = pymongo.MongoClient(
-        "mongodb://memochat_app:123456@127.0.0.1:27017/memochat", maxPoolSize=max(8, concurrency * 2)
-    )
+    client = pymongo.MongoClient(mongo_uri_from_env(), maxPoolSize=max(8, concurrency * 2))
     collection = client["memochat"]["resume_bench"]
     collection.create_index("_id")
     payload = "m" * 256

@@ -1,13 +1,18 @@
-#include "r18/R18PublicDtos.h"
+#include "r18/R18PublicDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
 
 #include <exception>
+
+import memochat.r18.public_dto_algorithms;
 
 namespace
 {
 
 constexpr const char* kDefaultR18SourceId = "";
+constexpr int kDefaultR18Page = 1;
+constexpr bool kDefaultR18Favorited = true;
+constexpr int64_t kDefaultR18PageIndex = 0;
 
 bool ParseJsonForR18Public(std::string_view body, memochat::json::JsonValue* out, std::string* error_out)
 {
@@ -115,9 +120,16 @@ R18SearchRequestDto R18SearchRequestFromJsonValue(const memochat::json::JsonValu
     const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
     request.uid = auth.uid;
     request.token = auth.token;
+    const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
+    if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
+    {
+        request.source_id = kDefaultR18SourceId;
+    }
     request.keyword = memochat::json::glaze_safe_get<std::string>(root, "keyword", "");
-    request.page = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(root, "page", 1LL));
+    const bool has_page = root.isMember("page");
+    const auto page = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(root, "page", kDefaultR18Page));
+    request.page = public_dto::modules::SelectPageOrDefault(has_page, page, kDefaultR18Page);
     return request;
 }
 
@@ -127,7 +139,12 @@ R18ComicDetailRequestDto R18ComicDetailRequestFromJsonValue(const memochat::json
     const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
     request.uid = auth.uid;
     request.token = auth.token;
+    const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
+    if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
+    {
+        request.source_id = kDefaultR18SourceId;
+    }
     request.comic_id = memochat::json::glaze_safe_get<std::string>(root, "comic_id", "");
     return request;
 }
@@ -138,7 +155,12 @@ R18ChapterPagesRequestDto R18ChapterPagesRequestFromJsonValue(const memochat::js
     const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
     request.uid = auth.uid;
     request.token = auth.token;
+    const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
+    if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
+    {
+        request.source_id = kDefaultR18SourceId;
+    }
     request.chapter_id = memochat::json::glaze_safe_get<std::string>(root, "chapter_id", "");
     return request;
 }
@@ -151,7 +173,10 @@ R18FavoriteToggleRequestDto R18FavoriteToggleRequestFromJsonValue(const memochat
     request.token = auth.token;
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
     request.comic_id = memochat::json::glaze_safe_get<std::string>(root, "comic_id", "");
-    request.favorited = memochat::json::glaze_safe_get<bool>(root, "favorited", true);
+    const bool has_favorited = root.isMember("favorited");
+    const bool favorited = memochat::json::glaze_safe_get<bool>(root, "favorited", kDefaultR18Favorited);
+    request.favorited =
+        public_dto::modules::SelectFavoriteStateOrDefault(has_favorited, favorited, kDefaultR18Favorited);
     return request;
 }
 
@@ -164,7 +189,10 @@ R18HistoryUpdateRequestDto R18HistoryUpdateRequestFromJsonValue(const memochat::
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
     request.comic_id = memochat::json::glaze_safe_get<std::string>(root, "comic_id", "");
     request.chapter_id = memochat::json::glaze_safe_get<std::string>(root, "chapter_id", "");
-    request.page_index = memochat::json::glaze_safe_get<int64_t>(root, "page_index", 0LL);
+    const bool has_page_index = root.isMember("page_index");
+    const auto page_index = memochat::json::glaze_safe_get<int64_t>(root, "page_index", kDefaultR18PageIndex);
+    request.page_index =
+        public_dto::modules::SelectPageIndexOrDefault(has_page_index, page_index, kDefaultR18PageIndex);
     return request;
 }
 

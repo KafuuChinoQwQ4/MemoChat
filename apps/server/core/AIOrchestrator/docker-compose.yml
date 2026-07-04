@@ -21,10 +21,11 @@ services:
     container_name: memochat-ai-orchestrator
     restart: unless-stopped
     ports:
-      - "8096:8096"
+      - "127.0.0.1:8096:8096"
     environment:
       - PYTHONUNBUFFERED=1
       - MEMOCHAT_AI_CONFIG_PATH=/app/runtime-config/config.yaml
+      - MEMOCHAT_AI_INTERNAL_API_KEY=${MEMOCHAT_AI_INTERNAL_API_KEY:-}
       - HF_HOME=/app/.cache/huggingface
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence_transformers
       - MEMOCHAT_AI_LLM__OLLAMA__ENABLED=false
@@ -32,10 +33,11 @@ services:
       - MEMOCHAT_AI_RAG__RETRIEVAL__RERANK_LOCAL_ONLY=${MEMOCHAT_AI_RAG__RETRIEVAL__RERANK_LOCAL_ONLY:-true}
       - MEMOCHAT_AI_RAG__QDRANT__HOST=memochat-qdrant
       - MEMOCHAT_AI_NEO4J__HOST=memochat-neo4j
+      - MEMOCHAT_AI_NEO4J__PASSWORD=${MEMOCHAT_AI_NEO4J__PASSWORD:-password}
       - MEMOCHAT_AI_POSTGRES__HOST=host.docker.internal
       - MEMOCHAT_AI_POSTGRES__PORT=15432
       - MEMOCHAT_AI_POSTGRES__USER=memochat
-      - MEMOCHAT_AI_POSTGRES__PASSWORD=123456
+      - MEMOCHAT_AI_POSTGRES__PASSWORD=${MEMOCHAT_AI_POSTGRES__PASSWORD:-123456}
       - MEMOCHAT_AI_POSTGRES__DATABASE=memo_pg
       - MEMOCHAT_AI_AGENT_QUEUE__ENABLED=${MEMOCHAT_AI_AGENT_QUEUE__ENABLED:-true}
       - MEMOCHAT_AI_AGENT_QUEUE__WORKER_CONCURRENCY=${MEMOCHAT_AI_AGENT_QUEUE__WORKER_CONCURRENCY:-4}
@@ -123,11 +125,11 @@ services:
     container_name: memochat-neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"   # HTTP — Neo4j Browser 管理界面
-      - "7687:7687"   # Bolt — 应用连接端口
+      - "127.0.0.1:7474:7474"   # HTTP — Neo4j Browser 管理界面
+      - "127.0.0.1:7687:7687"   # Bolt — 应用连接端口
     environment:
       # 认证 (用户名/密码)
-      - NEO4J_AUTH=neo4j/password
+      - NEO4J_AUTH=neo4j/${MEMOCHAT_AI_NEO4J__PASSWORD:-password}
       # 内存配置
       - NEO4J_server_memory_heap_initial__size=512m
       - NEO4J_server_memory_heap_max__size=2g
@@ -160,8 +162,8 @@ services:
         soft: 1048576
         hard: 1048576
     ports:
-      - "6333:6333"   # REST API
-      - "6334:6334"   # gRPC API（高性能向量检索）
+      - "127.0.0.1:6333:6333"   # REST API
+      - "127.0.0.1:6334:6334"   # gRPC API（高性能向量检索）
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__HTTP_PORT=6333

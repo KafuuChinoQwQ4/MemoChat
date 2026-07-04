@@ -1,22 +1,25 @@
-#include "ChatRelationService.h"
+#include "ChatRelationService.hpp"
 
-#include "ChatRuntime.h"
-#include "ChatRelationCommandDtos.h"
-#include "ChatRelationGroupDtos.h"
-#include "ChatUserSupport.h"
-#include "const.h"
-#include "delivery/MessageDeliveryTaskPayload.h"
-#include "logging/Logger.h"
+#include "ChatRuntime.hpp"
+#include "ChatRelationCommandDtos.hpp"
+#include "ChatRelationGroupDtos.hpp"
+#include "ChatUserSupport.hpp"
+#include "const.hpp"
+#include "delivery/MessageDeliveryTaskPayload.hpp"
+#include "logging/Logger.hpp"
 
 #include <chrono>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <unordered_map>
 #include <unordered_set>
+
+import memochat.chat.relation_service_algorithms;
 
 namespace
 {
 namespace ChatOutput = memochat::chat::output;
 namespace ChatRelationDtos = memochat::chat::relation;
+namespace relation_service_modules = memochat::chat::relation_service::modules;
 
 int64_t NowMsRelationLocal()
 {
@@ -160,12 +163,12 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
             {
                 continue;
             }
-            if (meta->dialog_type == "private" && meta->peer_uid > 0)
+            if (meta->dialog_type == relation_service_modules::PrivateDialogType() && meta->peer_uid > 0)
             {
                 private_meta[meta->peer_uid] = meta;
                 continue;
             }
-            if (meta->dialog_type == "group" && meta->group_id > 0)
+            if (meta->dialog_type == relation_service_modules::GroupDialogType() && meta->group_id > 0)
             {
                 group_meta[meta->group_id] = meta;
             }
@@ -186,7 +189,7 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
         const auto meta_it = private_meta.find(peer->uid);
         ChatOutput::ChatDialogRowDto row;
         row.dialog_id = std::string("u_") + std::to_string(peer->uid);
-        row.dialog_type = "private";
+        row.dialog_type = relation_service_modules::PrivateDialogType();
         row.peer_uid = peer->uid;
         row.title = peer->nick.empty() ? peer->name : peer->nick;
         row.avatar = peer->icon;
@@ -216,7 +219,7 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
         const auto meta_it = group_meta.find(group->group_id);
         ChatOutput::ChatDialogRowDto row;
         row.dialog_id = std::string("g_") + std::to_string(group->group_id);
-        row.dialog_type = "group";
+        row.dialog_type = relation_service_modules::GroupDialogType();
         row.group_id = group->group_id;
         row.title = group->name;
         row.avatar = group->icon;
@@ -241,13 +244,13 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
         {
             continue;
         }
-        if (meta->dialog_type == "private" && meta->peer_uid > 0 &&
+        if (meta->dialog_type == relation_service_modules::PrivateDialogType() && meta->peer_uid > 0 &&
             appended_private_uids.find(meta->peer_uid) == appended_private_uids.end())
         {
             auto peer = _relation_repository->GetUserByUid(meta->peer_uid);
             ChatOutput::ChatDialogRowDto row;
             row.dialog_id = std::string("u_") + std::to_string(meta->peer_uid);
-            row.dialog_type = "private";
+            row.dialog_type = relation_service_modules::PrivateDialogType();
             row.peer_uid = meta->peer_uid;
             if (peer)
             {
@@ -274,14 +277,14 @@ void ChatRelationService::BuildDialogListJson(int uid, Json::Value& out)
             appended_private_uids.insert(meta->peer_uid);
             continue;
         }
-        if (meta->dialog_type == "group" && meta->group_id > 0 &&
+        if (meta->dialog_type == relation_service_modules::GroupDialogType() && meta->group_id > 0 &&
             appended_group_ids.find(meta->group_id) == appended_group_ids.end())
         {
             std::shared_ptr<GroupInfo> group;
             _relation_repository->GetGroupById(meta->group_id, group);
             ChatOutput::ChatDialogRowDto row;
             row.dialog_id = std::string("g_") + std::to_string(meta->group_id);
-            row.dialog_type = "group";
+            row.dialog_type = relation_service_modules::GroupDialogType();
             row.group_id = meta->group_id;
             row.title = group ? group->name : (std::string("群聊") + std::to_string(meta->group_id));
             row.avatar = group ? group->icon : "";
@@ -310,13 +313,14 @@ RelationCommandResult ChatRelationService::SearchUser(const RelationCommandReque
     const ChatRelationDtos::ChatSearchUserRequestDto request_dto =
         ChatRelationDtos::ChatSearchUserRequestFromJsonValue(root);
     const std::string user_id = request_dto.user_id;
-    if (!root.isMember("user_id") || user_id.empty())
+    if (relation_service_modules::ShouldRejectSearchUserRequest(root.isMember("user_id"), user_id.empty()))
     {
         const ChatRelationDtos::ChatSearchUserResponseDto response{.error = ErrorCodes::Error_Json};
         return BuildRelationCommandResult(ID_SEARCH_USER_RSP, ChatRelationDtos::ToJsonValue(response));
     }
     int uid = 0;
-    if (!_relation_repository->GetUidByUserId(user_id, uid) || uid <= 0)
+    const bool found_user = _relation_repository->GetUidByUserId(user_id, uid);
+    if (relation_service_modules::ShouldRejectSearchUserResult(found_user, uid))
     {
         const ChatRelationDtos::ChatSearchUserResponseDto response{.error = ErrorCodes::UidInvalid};
         return BuildRelationCommandResult(ID_SEARCH_USER_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -337,7 +341,7 @@ RelationCommandResult ChatRelationService::FilterFriendUids(const RelationComman
         ChatRelationDtos::ChatFilterFriendUidsRequestFromJsonValue(root);
 
     ChatRelationDtos::ChatFilterFriendUidsResponseDto response{.error = ErrorCodes::Success};
-    if (request_dto.viewer_uid > 0 && !request_dto.author_uids.empty())
+    if (relation_service_modules::ShouldFilterFriendUids(request_dto.viewer_uid, !request_dto.author_uids.empty()))
     {
         for (int friend_uid : _relation_repository->FilterFriendUids(request_dto.viewer_uid, request_dto.author_uids))
         {
@@ -345,7 +349,8 @@ RelationCommandResult ChatRelationService::FilterFriendUids(const RelationComman
         }
     }
     // Internal read RPC: no client-facing TCP message id, so 0.
-    return BuildRelationCommandResult(0, ChatRelationDtos::ToJsonValue(response));
+    return BuildRelationCommandResult(relation_service_modules::InternalReadResponseMessageId(),
+                                      ChatRelationDtos::ToJsonValue(response));
 }
 
 RelationCommandResult ChatRelationService::AddFriendApply(const RelationCommandRequest& request)
@@ -389,7 +394,7 @@ RelationCommandResult ChatRelationService::AddFriendApply(const RelationCommandR
         _delivery_gateway && _delivery_gateway->TryPushPayload({touid}, ID_NOTIFY_ADD_FRIEND_REQ, notify, 0, false);
     const bool published =
         delivered ||
-        (_task_publisher && _task_publisher->PublishDeliveryTask("relation_notify",
+        (_task_publisher && _task_publisher->PublishDeliveryTask(relation_service_modules::RelationNotifyTaskName(),
                                                                  memochat::chatruntime::TaskRoutingRelationNotify(),
                                                                  task_payload,
                                                                  0,
@@ -401,7 +406,11 @@ RelationCommandResult ChatRelationService::AddFriendApply(const RelationCommandR
                          "failed to publish add friend notification",
                          {{"uid", std::to_string(uid)}, {"touid", std::to_string(touid)}, {"error", publish_error}});
     }
-    PublishRelationStateEventLocal(_event_publisher, "friend_apply_created", uid, touid, labels);
+    PublishRelationStateEventLocal(_event_publisher,
+                                   relation_service_modules::FriendApplyCreatedEvent(),
+                                   uid,
+                                   touid,
+                                   labels);
     return BuildRelationCommandResult(ID_ADD_FRIEND_RSP, ChatRelationDtos::ToJsonValue(response));
 }
 
@@ -469,7 +478,7 @@ RelationCommandResult ChatRelationService::AuthFriendApply(const RelationCommand
         _delivery_gateway && _delivery_gateway->TryPushPayload({touid}, ID_NOTIFY_AUTH_FRIEND_REQ, notify, 0, false);
     const bool published =
         delivered ||
-        (_task_publisher && _task_publisher->PublishDeliveryTask("relation_notify",
+        (_task_publisher && _task_publisher->PublishDeliveryTask(relation_service_modules::RelationNotifyTaskName(),
                                                                  memochat::chatruntime::TaskRoutingRelationNotify(),
                                                                  task_payload,
                                                                  0,
@@ -481,7 +490,11 @@ RelationCommandResult ChatRelationService::AuthFriendApply(const RelationCommand
                          "failed to publish auth friend notification",
                          {{"uid", std::to_string(uid)}, {"touid", std::to_string(touid)}, {"error", publish_error}});
     }
-    PublishRelationStateEventLocal(_event_publisher, "friend_apply_approved", uid, touid, labels);
+    PublishRelationStateEventLocal(_event_publisher,
+                                   relation_service_modules::FriendApplyApprovedEvent(),
+                                   uid,
+                                   touid,
+                                   labels);
     return BuildRelationCommandResult(ID_AUTH_FRIEND_RSP, ChatRelationDtos::ToJsonValue(response));
 }
 
@@ -499,7 +512,7 @@ RelationCommandResult ChatRelationService::DeleteFriend(const RelationCommandReq
                                                            .fromuid = uid,
                                                            .friend_uid = friendUid};
 
-    if (uid <= 0 || friendUid <= 0 || uid == friendUid)
+    if (relation_service_modules::ShouldRejectDeleteFriend(uid, friendUid))
     {
         response.error = ErrorCodes::Error_Json;
         return BuildRelationCommandResult(ID_DELETE_FRIEND_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -511,7 +524,11 @@ RelationCommandResult ChatRelationService::DeleteFriend(const RelationCommandReq
         return BuildRelationCommandResult(ID_DELETE_FRIEND_RSP, ChatRelationDtos::ToJsonValue(response));
     }
 
-    PublishRelationStateEventLocal(_event_publisher, "friend_deleted", uid, friendUid, {});
+    PublishRelationStateEventLocal(_event_publisher,
+                                   relation_service_modules::FriendDeletedEvent(),
+                                   uid,
+                                   friendUid,
+                                   {});
     return BuildRelationCommandResult(ID_DELETE_FRIEND_RSP, ChatRelationDtos::ToJsonValue(response));
 }
 
@@ -526,7 +543,7 @@ RelationCommandResult ChatRelationService::GetDialogList(const RelationCommandRe
 
     ChatRelationDtos::ChatDialogListResponseDto response{.error = ErrorCodes::Success, .uid = uid};
 
-    if (uid <= 0)
+    if (relation_service_modules::ShouldRejectPositiveUid(uid))
     {
         response.error = ErrorCodes::Error_Json;
         return BuildRelationCommandResult(ID_GET_DIALOG_LIST_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -559,10 +576,13 @@ RelationCommandResult ChatRelationService::SyncDraft(const RelationCommandReques
                                                         .draft_text = draft_text};
     if (has_mute_state)
     {
-        response.mute_state = mute_state > 0 ? 1 : 0;
+        response.mute_state = relation_service_modules::NormalizeMuteState(mute_state);
     }
 
-    if (uid <= 0 || (dialog_type != "private" && dialog_type != "group"))
+    const bool sync_is_private = dialog_type == relation_service_modules::PrivateDialogType();
+    const bool sync_is_group = dialog_type == relation_service_modules::GroupDialogType();
+    if (relation_service_modules::ShouldRejectPositiveUid(uid) ||
+        relation_service_modules::ShouldRejectDialogType(sync_is_private, sync_is_group))
     {
         response.error = ErrorCodes::Error_Json;
         return BuildRelationCommandResult(ID_SYNC_DRAFT_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -570,10 +590,12 @@ RelationCommandResult ChatRelationService::SyncDraft(const RelationCommandReques
 
     int normalized_peer_uid = 0;
     int64_t normalized_group_id = 0;
-    if (dialog_type == "private")
+    if (sync_is_private)
     {
         normalized_peer_uid = peer_uid;
-        if (normalized_peer_uid <= 0 || !_relation_repository->IsPrivateFriend(uid, normalized_peer_uid))
+        const bool is_private_friend =
+            normalized_peer_uid > 0 && _relation_repository->IsPrivateFriend(uid, normalized_peer_uid);
+        if (relation_service_modules::ShouldRejectPrivateDialogTarget(normalized_peer_uid, is_private_friend))
         {
             response.error = ErrorCodes::GroupPermissionDenied;
             return BuildRelationCommandResult(ID_SYNC_DRAFT_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -583,7 +605,9 @@ RelationCommandResult ChatRelationService::SyncDraft(const RelationCommandReques
     {
         normalized_group_id = request_dto.group_id;
         response.group_id = normalized_group_id;
-        if (normalized_group_id <= 0 || !_relation_repository->IsGroupMember(normalized_group_id, uid))
+        const bool is_group_member =
+            normalized_group_id > 0 && _relation_repository->IsGroupMember(normalized_group_id, uid);
+        if (relation_service_modules::ShouldRejectGroupDialogTarget(normalized_group_id, is_group_member))
         {
             response.error = ErrorCodes::GroupPermissionDenied;
             return BuildRelationCommandResult(ID_SYNC_DRAFT_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -625,7 +649,10 @@ RelationCommandResult ChatRelationService::PinDialog(const RelationCommandReques
                                                         .peer_uid = peer_uid,
                                                         .pinned_rank = pinned_rank};
 
-    if (uid <= 0 || (dialog_type != "private" && dialog_type != "group"))
+    const bool pin_is_private = dialog_type == relation_service_modules::PrivateDialogType();
+    const bool pin_is_group = dialog_type == relation_service_modules::GroupDialogType();
+    if (relation_service_modules::ShouldRejectPositiveUid(uid) ||
+        relation_service_modules::ShouldRejectDialogType(pin_is_private, pin_is_group))
     {
         response.error = ErrorCodes::Error_Json;
         return BuildRelationCommandResult(ID_PIN_DIALOG_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -633,10 +660,12 @@ RelationCommandResult ChatRelationService::PinDialog(const RelationCommandReques
 
     int normalized_peer_uid = 0;
     int64_t normalized_group_id = 0;
-    if (dialog_type == "private")
+    if (pin_is_private)
     {
         normalized_peer_uid = peer_uid;
-        if (normalized_peer_uid <= 0 || !_relation_repository->IsPrivateFriend(uid, normalized_peer_uid))
+        const bool is_private_friend =
+            normalized_peer_uid > 0 && _relation_repository->IsPrivateFriend(uid, normalized_peer_uid);
+        if (relation_service_modules::ShouldRejectPrivateDialogTarget(normalized_peer_uid, is_private_friend))
         {
             response.error = ErrorCodes::GroupPermissionDenied;
             return BuildRelationCommandResult(ID_PIN_DIALOG_RSP, ChatRelationDtos::ToJsonValue(response));
@@ -646,7 +675,9 @@ RelationCommandResult ChatRelationService::PinDialog(const RelationCommandReques
     {
         normalized_group_id = request_dto.group_id;
         response.group_id = normalized_group_id;
-        if (normalized_group_id <= 0 || !_relation_repository->IsGroupMember(normalized_group_id, uid))
+        const bool is_group_member =
+            normalized_group_id > 0 && _relation_repository->IsGroupMember(normalized_group_id, uid);
+        if (relation_service_modules::ShouldRejectGroupDialogTarget(normalized_group_id, is_group_member))
         {
             response.error = ErrorCodes::GroupPermissionDenied;
             return BuildRelationCommandResult(ID_PIN_DIALOG_RSP, ChatRelationDtos::ToJsonValue(response));

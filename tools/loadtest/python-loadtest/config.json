@@ -2,7 +2,6 @@
   "gate_url": "http://127.0.0.1:8080",
   "login_path": "/user_login",
   "client_ver": "3.0.0",
-  "use_xor_passwd": true,
   "use_k6_http": true,
   "sweep_concurrency": [1, 5, 10, 20, 50, 100],
   "sweep_iterations_per_vu": 10,
@@ -14,8 +13,7 @@
   "quic_alpn": "memochat-chat",
   "quic_endpoint_policy": "round_robin",
   "quic_force_endpoints": [
-    {"server_name": "chatserver1", "host": "127.0.0.1", "port": 8190},
-    {"server_name": "chatserver2", "host": "127.0.0.1", "port": 8191}
+    {"server_name": "chatserver1", "host": "127.0.0.1", "port": 8190}
   ],
   "ai_base_url": "http://127.0.0.1:8096",
   "ai_timeout_sec": 60.0,

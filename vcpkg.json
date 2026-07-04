@@ -43,6 +43,7 @@
           "features": []
         },
         "openssl",
+        "libsodium",
         {
           "name": "aws-sdk-cpp",
           "features": [

@@ -1,8 +1,8 @@
-#include "AIServiceJsonMapper.h"
+#include "AIServiceJsonMapper.hpp"
 
-#include "AIServiceJsonDtos.h"
-#include "ConversationContext.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "AIServiceJsonDtos.hpp"
+#include "ConversationContext.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <gtest/gtest.h>
 

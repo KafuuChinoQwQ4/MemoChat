@@ -13,7 +13,7 @@ SessionRelationBootstrap::SessionRelationBootstrap(RelationBootstrapPort port)
 void SessionRelationBootstrap::requestRelationBootstrap()
 {
     const RelationBootstrapSnapshot snapshot = _port.snapshot();
-    if (snapshot.protocolVersion < 3 || !snapshot.chatTransportConnected)
+    if (snapshot.protocolVersion != 3 || !snapshot.chatTransportConnected)
     {
         return;
     }

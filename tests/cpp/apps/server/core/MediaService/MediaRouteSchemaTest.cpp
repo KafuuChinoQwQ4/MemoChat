@@ -1,9 +1,29 @@
-#include "modules/media/MediaRouteModule.h"
+#include "modules/media/MediaRouteModule.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
+
+namespace memochat::tests::media::route_schema
+{
+const char* PostMethod();
+const char* UploadInitPath();
+const char* UploadInitRouteName();
+const char* UploadInitRequestTypeName();
+const char* UploadInitResponseTypeName();
+const char* UploadChunkJsonPath();
+const char* UploadChunkJsonRouteName();
+const char* UploadChunkJsonRequestTypeName();
+const char* UploadChunkJsonResponseTypeName();
+const char* UploadCompletePath();
+const char* UploadCompleteRouteName();
+const char* UploadCompleteRequestTypeName();
+const char* UploadAssetResponseTypeName();
+const char* UploadSimplePath();
+const char* UploadSimpleRouteName();
+const char* UploadSimpleRequestTypeName();
+} // namespace memochat::tests::media::route_schema
 
 namespace
 {
@@ -29,6 +49,10 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "  - file_name\n"
            "  - mime\n"
            "  - file_size\n"
+           "  - grant_uids\n"
+           "  - grant_group_id\n"
+           "  - grant_public\n"
+           "  - grant_friends\n"
            "response: MediaUploadInitResponseDto\n"
            "  - upload_id\n"
            "  - chunk_size\n"
@@ -74,6 +98,10 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "  - file_name\n"
            "  - mime\n"
            "  - data_base64\n"
+           "  - grant_uids\n"
+           "  - grant_group_id\n"
+           "  - grant_public\n"
+           "  - grant_friends\n"
            "response: MediaUploadAssetResponseDto\n"
            "  - media_key\n"
            "  - media_type\n"
@@ -91,29 +119,29 @@ TEST(MediaRouteSchemaTest, ListsOnlySchemaEligibleMediaJsonBodyRoutes)
     const auto schemas = memochat::gate::modules::media::MediaRouteModule::RouteSchemas();
 
     ASSERT_EQ(schemas.size(), 4U);
-    EXPECT_EQ(schemas[0].name, "media.upload.init");
-    EXPECT_EQ(schemas[0].method, "POST");
-    EXPECT_EQ(schemas[0].path, "/upload_media_init");
-    EXPECT_EQ(schemas[0].request.type_name, "MediaUploadInitRequestDto");
-    EXPECT_EQ(schemas[0].response.type_name, "MediaUploadInitResponseDto");
+    EXPECT_EQ(schemas[0].name, memochat::tests::media::route_schema::UploadInitRouteName());
+    EXPECT_EQ(schemas[0].method, memochat::tests::media::route_schema::PostMethod());
+    EXPECT_EQ(schemas[0].path, memochat::tests::media::route_schema::UploadInitPath());
+    EXPECT_EQ(schemas[0].request.type_name, memochat::tests::media::route_schema::UploadInitRequestTypeName());
+    EXPECT_EQ(schemas[0].response.type_name, memochat::tests::media::route_schema::UploadInitResponseTypeName());
 
-    EXPECT_EQ(schemas[1].name, "media.upload.chunk_json");
-    EXPECT_EQ(schemas[1].method, "POST");
-    EXPECT_EQ(schemas[1].path, "/upload_media_chunk");
-    EXPECT_EQ(schemas[1].request.type_name, "MediaUploadChunkJsonRequestDto");
-    EXPECT_EQ(schemas[1].response.type_name, "MediaUploadChunkResponseDto");
+    EXPECT_EQ(schemas[1].name, memochat::tests::media::route_schema::UploadChunkJsonRouteName());
+    EXPECT_EQ(schemas[1].method, memochat::tests::media::route_schema::PostMethod());
+    EXPECT_EQ(schemas[1].path, memochat::tests::media::route_schema::UploadChunkJsonPath());
+    EXPECT_EQ(schemas[1].request.type_name, memochat::tests::media::route_schema::UploadChunkJsonRequestTypeName());
+    EXPECT_EQ(schemas[1].response.type_name, memochat::tests::media::route_schema::UploadChunkJsonResponseTypeName());
 
-    EXPECT_EQ(schemas[2].name, "media.upload.complete");
-    EXPECT_EQ(schemas[2].method, "POST");
-    EXPECT_EQ(schemas[2].path, "/upload_media_complete");
-    EXPECT_EQ(schemas[2].request.type_name, "MediaUploadCompleteRequestDto");
-    EXPECT_EQ(schemas[2].response.type_name, "MediaUploadAssetResponseDto");
+    EXPECT_EQ(schemas[2].name, memochat::tests::media::route_schema::UploadCompleteRouteName());
+    EXPECT_EQ(schemas[2].method, memochat::tests::media::route_schema::PostMethod());
+    EXPECT_EQ(schemas[2].path, memochat::tests::media::route_schema::UploadCompletePath());
+    EXPECT_EQ(schemas[2].request.type_name, memochat::tests::media::route_schema::UploadCompleteRequestTypeName());
+    EXPECT_EQ(schemas[2].response.type_name, memochat::tests::media::route_schema::UploadAssetResponseTypeName());
 
-    EXPECT_EQ(schemas[3].name, "media.upload.simple");
-    EXPECT_EQ(schemas[3].method, "POST");
-    EXPECT_EQ(schemas[3].path, "/upload_media");
-    EXPECT_EQ(schemas[3].request.type_name, "MediaUploadSimpleRequestDto");
-    EXPECT_EQ(schemas[3].response.type_name, "MediaUploadAssetResponseDto");
+    EXPECT_EQ(schemas[3].name, memochat::tests::media::route_schema::UploadSimpleRouteName());
+    EXPECT_EQ(schemas[3].method, memochat::tests::media::route_schema::PostMethod());
+    EXPECT_EQ(schemas[3].path, memochat::tests::media::route_schema::UploadSimplePath());
+    EXPECT_EQ(schemas[3].request.type_name, memochat::tests::media::route_schema::UploadSimpleRequestTypeName());
+    EXPECT_EQ(schemas[3].response.type_name, memochat::tests::media::route_schema::UploadAssetResponseTypeName());
 }
 
 TEST(MediaRouteSchemaTest, BuildsFieldInventoriesFromMediaDtos)
@@ -121,7 +149,17 @@ TEST(MediaRouteSchemaTest, BuildsFieldInventoriesFromMediaDtos)
     const auto schemas = memochat::gate::modules::media::MediaRouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 4U);
 
-    ExpectFields(schemas[0].request, {"uid", "token", "media_type", "file_name", "mime", "file_size"});
+    ExpectFields(schemas[0].request,
+                 {"uid",
+                  "token",
+                  "media_type",
+                  "file_name",
+                  "mime",
+                  "file_size",
+                  "grant_uids",
+                  "grant_group_id",
+                  "grant_public",
+                  "grant_friends"});
     ExpectFields(schemas[0].response, {"upload_id", "chunk_size", "total_chunks", "uploaded_chunks"});
 
     ExpectFields(schemas[1].request, {"uid", "token", "upload_id", "index", "data_base64"});
@@ -130,7 +168,17 @@ TEST(MediaRouteSchemaTest, BuildsFieldInventoriesFromMediaDtos)
     ExpectFields(schemas[2].request, {"uid", "token", "upload_id"});
     ExpectFields(schemas[2].response, {"media_key", "media_type", "file_name", "mime", "size", "url"});
 
-    ExpectFields(schemas[3].request, {"uid", "token", "media_type", "file_name", "mime", "data_base64"});
+    ExpectFields(schemas[3].request,
+                 {"uid",
+                  "token",
+                  "media_type",
+                  "file_name",
+                  "mime",
+                  "data_base64",
+                  "grant_uids",
+                  "grant_group_id",
+                  "grant_public",
+                  "grant_friends"});
     ExpectFields(schemas[3].response, {"media_key", "media_type", "file_name", "mime", "size", "url"});
 }
 

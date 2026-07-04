@@ -83,9 +83,12 @@ TEST(ProfileControllerTest, SavePayloadTrimsEditableFieldsAndPreservesIdentityFi
 {
     const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(
         42,
-        QStringLiteral("memo_user"), QStringLiteral(" Nick "), QStringLiteral(" Desc "), QStringLiteral("avatar.png"));
+        QStringLiteral("access"),
+                       QStringLiteral("memo_user"),
+                                      QStringLiteral(" Nick "), QStringLiteral(" Desc "), QStringLiteral("avatar.png"));
 
     EXPECT_EQ(payload.value(QStringLiteral("uid")).toInt(), 42);
+    EXPECT_EQ(payload.value(QStringLiteral("token")).toString(), QStringLiteral("access"));
     EXPECT_EQ(payload.value(QStringLiteral("name")).toString(), QStringLiteral("memo_user"));
     EXPECT_EQ(payload.value(QStringLiteral("nick")).toString(), QStringLiteral("Nick"));
     EXPECT_EQ(payload.value(QStringLiteral("desc")).toString(), QStringLiteral("Desc"));
@@ -205,5 +208,6 @@ TEST(ProfileControllerTest, SendSaveProfileAllowsMissingGateway)
 
     EXPECT_NO_THROW(controller.sendSaveProfile(
         7,
-        QStringLiteral("name"), QStringLiteral("nick"), QStringLiteral("desc"), QStringLiteral("icon")));
+        QStringLiteral("access"),
+                       QStringLiteral("name"), QStringLiteral("nick"), QStringLiteral("desc"), QStringLiteral("icon")));
 }

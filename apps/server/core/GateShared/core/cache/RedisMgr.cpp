@@ -1,9 +1,13 @@
-#include "RedisMgr.h"
-#include "const.h"
-#include "ConfigMgr.h"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "ConfigMgr.hpp"
 #include <unordered_map>
 #include <vector>
 #include <cstring>
+
+import memochat.gate.redis_mgr_algorithms;
+
+namespace redis_mgr_modules = memochat::gate::redis_mgr::modules;
 
 RedisMgr::RedisMgr()
 {
@@ -12,9 +16,7 @@ RedisMgr::RedisMgr()
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
     auto pool_size_str = gCfgMgr["Redis"]["PoolSize"];
-    int pool_size = atoi(pool_size_str.c_str());
-    if (pool_size <= 0)
-        pool_size = 30;
+    int pool_size = redis_mgr_modules::NormalizePoolSize(atoi(pool_size_str.c_str()));
     _con_pool.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
 }
 
@@ -36,7 +38,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_STRING)
+    if (!redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_STRING))
     {
         freeReplyObject(reply);
         _con_pool->returnConnection(connect);
@@ -62,7 +64,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value)
         _con_pool->returnConnection(connect);
         return false;
     }
-    if (!(reply->type == REDIS_REPLY_STATUS && (strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0)))
+    if (!redis_mgr_modules::IsStatusOk(reply->type, REDIS_REPLY_STATUS, reply->str))
     {
         freeReplyObject(reply);
         _con_pool->returnConnection(connect);
@@ -87,8 +89,7 @@ bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expir
         _con_pool->returnConnection(connect);
         return false;
     }
-    const bool ok = reply->type == REDIS_REPLY_STATUS && reply->str != nullptr &&
-                    (std::strcmp(reply->str, "OK") == 0 || std::strcmp(reply->str, "ok") == 0);
+    const bool ok = redis_mgr_modules::IsStatusOk(reply->type, REDIS_REPLY_STATUS, reply->str);
     freeReplyObject(reply);
     _con_pool->returnConnection(connect);
     return ok;
@@ -110,7 +111,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, REDIS_REPLY_INTEGER, reply->integer))
     {
         std::cout << "Execut command [ LPUSH " << key << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -138,7 +139,7 @@ bool RedisMgr::LPop(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_NIL))
     {
         std::cout << "Execut command [ LPOP " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -168,7 +169,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, REDIS_REPLY_INTEGER, reply->integer))
     {
         std::cout << "Execut command [ RPUSH " << key << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -195,7 +196,7 @@ bool RedisMgr::RPop(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_NIL))
     {
         std::cout << "Execut command [ RPOP " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -223,7 +224,7 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ HSet " << key << "  " << hkey << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -262,7 +263,7 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ HSet " << key << "  " << hkey << "  " << hvalue << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -298,7 +299,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
         return "";
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_NIL))
     {
         freeReplyObject(reply);
         std::cout << "Execut command [ HGet " << key << " " << hkey << "  ] failure ! " << std::endl;
@@ -334,9 +335,9 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
     }
 
     bool success = false;
-    if (reply->type == REDIS_REPLY_INTEGER)
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
-        success = reply->integer > 0;
+        success = redis_mgr_modules::IsPositiveIntegerReply(reply->type, REDIS_REPLY_INTEGER, reply->integer);
     }
 
     freeReplyObject(reply);
@@ -358,7 +359,7 @@ bool RedisMgr::Del(const std::string& key)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ Del " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -387,7 +388,7 @@ bool RedisMgr::ExistsKey(const std::string& key)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer == 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, REDIS_REPLY_INTEGER, reply->integer))
     {
         std::cout << "Not Found [ Key " << key << " ]  ! " << std::endl;
         _con_pool->returnConnection(connect);
@@ -415,7 +416,7 @@ bool RedisMgr::SCard(const std::string& key, int& count)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         freeReplyObject(reply);
         _con_pool->returnConnection(connect);
@@ -436,7 +437,7 @@ std::unordered_map<std::string, std::string> RedisMgr::MGet(const std::vector<st
 {
     std::unordered_map<std::string, std::string> results;
 
-    if (keys.empty())
+    if (redis_mgr_modules::ShouldSkipBatch(keys.size()))
     {
         return results;
     }
@@ -475,12 +476,12 @@ std::unordered_map<std::string, std::string> RedisMgr::MGet(const std::vector<st
         return results;
     }
 
-    if (reply->type == REDIS_REPLY_ARRAY)
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_ARRAY))
     {
         for (size_t i = 0; i < reply->elements && i < keys.size(); ++i)
         {
             auto* elem = reply->element[i];
-            if (elem && elem->type == REDIS_REPLY_STRING && elem->str && elem->len > 0)
+            if (elem && redis_mgr_modules::IsNonEmptyStringReply(elem->type, REDIS_REPLY_STRING, elem->str, elem->len))
             {
                 results[keys[i]] = std::string(elem->str, elem->len);
             }
@@ -493,7 +494,7 @@ std::unordered_map<std::string, std::string> RedisMgr::MGet(const std::vector<st
 
 bool RedisMgr::MSet(const std::unordered_map<std::string, std::string>& kvs)
 {
-    if (kvs.empty())
+    if (redis_mgr_modules::ShouldSkipBatch(kvs.size()))
     {
         return true;
     }
@@ -534,7 +535,7 @@ bool RedisMgr::MSet(const std::unordered_map<std::string, std::string>& kvs)
         return false;
     }
 
-    bool ok = (reply->type == REDIS_REPLY_STATUS);
+    bool ok = redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_STATUS);
     freeReplyObject(reply);
     return ok;
 }
@@ -543,7 +544,7 @@ std::vector<redisReply*> RedisMgr::MPipeline(const std::vector<std::string>& com
 {
     std::vector<redisReply*> results;
 
-    if (commands.empty())
+    if (redis_mgr_modules::ShouldSkipBatch(commands.size()))
     {
         return results;
     }
@@ -557,7 +558,7 @@ std::vector<redisReply*> RedisMgr::MPipeline(const std::vector<std::string>& com
     // Append all commands using redisAppendCommand
     for (const auto& cmd : commands)
     {
-        if (redisAppendCommand(connect, cmd.c_str()) != REDIS_OK)
+        if (!redis_mgr_modules::IsRedisOk(redisAppendCommand(connect, cmd.c_str()), REDIS_OK))
         {
             // Connection error, return what we have
             break;
@@ -568,7 +569,9 @@ std::vector<redisReply*> RedisMgr::MPipeline(const std::vector<std::string>& com
     for (size_t i = 0; i < commands.size(); ++i)
     {
         redisReply* reply = nullptr;
-        if (redisGetReply(connect, (void**) &reply) == REDIS_OK && reply != nullptr)
+        if (redis_mgr_modules::ShouldCollectPipelineReply(redisGetReply(connect, (void**) &reply),
+                                                          REDIS_OK,
+                                                          reply != nullptr))
         {
             results.push_back(reply);
         }
@@ -581,4 +584,59 @@ std::vector<redisReply*> RedisMgr::MPipeline(const std::vector<std::string>& com
 
     _con_pool->returnConnection(connect);
     return results;
+}
+
+int64_t
+RedisMgr::Eval(const std::string& script, const std::vector<std::string>& keys, const std::vector<std::string>& args)
+{
+    auto connect = getRawConnection();
+    if (connect == nullptr)
+    {
+        return -1;
+    }
+
+    // EVAL script numkeys key1 key2 ... arg1 arg2 ...
+    std::vector<const char*> argv;
+    std::vector<size_t> argvlen;
+    argv.reserve(2 + keys.size() + args.size());
+    argvlen.reserve(2 + keys.size() + args.size());
+
+    argv.push_back("EVAL");
+    argvlen.push_back(4);
+
+    argv.push_back(script.c_str());
+    argvlen.push_back(script.size());
+
+    std::string numkeys_str = std::to_string(keys.size());
+    argv.push_back(numkeys_str.c_str());
+    argvlen.push_back(numkeys_str.size());
+
+    for (const auto& key : keys)
+    {
+        argv.push_back(key.c_str());
+        argvlen.push_back(key.size());
+    }
+
+    for (const auto& arg : args)
+    {
+        argv.push_back(arg.c_str());
+        argvlen.push_back(arg.size());
+    }
+
+    auto* reply = (redisReply*) redisCommandArgv(connect, (int) argv.size(), argv.data(), argvlen.data());
+    if (reply == nullptr)
+    {
+        returnConnection(connect);
+        return -1;
+    }
+
+    int64_t result = -1;
+    if (redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_INTEGER))
+    {
+        result = reply->integer;
+    }
+
+    freeReplyObject(reply);
+    returnConnection(connect);
+    return result;
 }

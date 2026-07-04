@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 $targets = @(
     @{ Env = 'GATE_EXE'; File = 'GateServer.exe'; SubDirs = @('GateServer', 'gate') },
-    @{ Env = 'CHAT_EXE'; File = 'ChatServer.exe'; SubDirs = @('chatserver1', 'chatserver2') }
+    @{ Env = 'CHAT_EXE'; File = 'ChatServer.exe'; SubDirs = @('chatserver1') }
 )
 
 function Find-Binary {

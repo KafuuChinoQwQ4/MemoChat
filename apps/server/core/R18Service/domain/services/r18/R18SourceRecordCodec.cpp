@@ -1,6 +1,8 @@
-#include "r18/R18SourceRecordCodec.h"
+#include "r18/R18SourceRecordCodec.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.r18.source_record_codec_algorithms;
 
 namespace memochat::r18
 {
@@ -9,7 +11,7 @@ namespace
 
 std::string DefaultString(std::string value, const std::string& fallback)
 {
-    return value.empty() ? fallback : value;
+    return source_record_codec::modules::ShouldUseFallbackString(value.empty()) ? fallback : value;
 }
 
 } // namespace
@@ -55,7 +57,7 @@ bool EncodeR18SourceRecord(const R18SourceRecord& record, std::string* out, std:
 
 bool DecodeR18SourceRecord(std::string_view body, R18SourceRecord* out, std::string* error_out)
 {
-    if (out == nullptr)
+    if (!source_record_codec::modules::HasDecodeOutput(out != nullptr))
     {
         if (error_out != nullptr)
         {
@@ -70,7 +72,7 @@ bool DecodeR18SourceRecord(std::string_view body, R18SourceRecord* out, std::str
         return false;
     }
     *out = ToR18SourceRecord(dto);
-    return !out->id.empty();
+    return source_record_codec::modules::HasRequiredSourceRecordIdentity(out->id.empty());
 }
 
 memochat::json::JsonValue R18SourceRecordToJsonValue(const R18SourceRecord& record)

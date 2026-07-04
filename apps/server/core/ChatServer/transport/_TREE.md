@@ -2,6 +2,12 @@
 
 > ChatServer 接入层：TCP（CServer/CSession）与 QUIC（QuicChatServer/QuicSession）双协议接入、消息节点编解码、接入协调器，以及对外的 ChatService gRPC 实现。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | transport 层轻量算法使用的项目自有 C++ module 接口 |
+
 ## 文件
 
 | 文件 | 作用概括 |

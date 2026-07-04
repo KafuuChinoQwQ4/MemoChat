@@ -6,7 +6,7 @@
 
 | 子目录 | 作用概括 |
 | --- | --- |
-| [`auth/`](auth/_TREE.md) | 认证密钥与跨服务登录票据定义 |
+| [`auth/`](auth/_TREE.md) | 认证密钥、密码哈希与跨服务登录票据定义 |
 | [`cluster/`](cluster/_TREE.md) | 集群节点发现（含 Etcd 实现） |
 | [`db/`](db/_TREE.md) | 数据库（pqxx）兼容垫片 |
 | [`json/`](json/_TREE.md) | Glaze JSON 序列化兼容层 |

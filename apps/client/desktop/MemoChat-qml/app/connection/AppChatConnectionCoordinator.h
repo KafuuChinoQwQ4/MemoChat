@@ -28,7 +28,7 @@ struct ChatConnectionSnapshot
     int connectTimeoutMs = 1200;
     int backupDialDelayMs = 250;
     int totalLoginTimeoutMs = 5000;
-    int protocolVersion = 2;
+    int protocolVersion = 3;
     qint64 connectStartedMs = 0;
     qint64 connectFinishedMs = 0;
 

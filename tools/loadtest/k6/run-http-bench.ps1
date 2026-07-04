@@ -121,7 +121,6 @@ if (-not (Test-Path -LiteralPath $scriptPath)) {
 $env:GATE_URLS = ($gateUrls -join ",")
 $env:LOGIN_PATH = if ($config.login_path) { [string]$config.login_path } else { "/user_login" }
 $env:CLIENT_VER = if ($config.client_ver) { [string]$config.client_ver } else { "3.0.0" }
-$env:USE_XOR_PASSWD = if ($null -ne $config.use_xor_passwd) { [string]$config.use_xor_passwd } else { "true" }
 $env:ACCOUNTS_CSV = $accountsCsv
 $env:TOTAL = [string]$Total
 $env:CONCURRENCY = [string]$Concurrency
@@ -135,7 +134,7 @@ if ($localK6 -and -not $UseDocker) {
     exit $LASTEXITCODE
 }
 
-$dockerRepoRoot = "/root/code/MemoChat-Qml-Drogon-linux"
+$dockerRepoRoot = "/root/code/MemoChat"
 $dockerSummary = Convert-ToWorkPath -Path $SummaryPath -Root $repoRoot
 $dockerAccounts = Convert-ToWorkPath -Path $accountsCsv -Root $repoRoot
 $dockerScript = "/work/tools/loadtest/k6/http-login.js"
@@ -146,7 +145,6 @@ $dockerGateUrls = ($gateUrls -join ",")
     -e "GATE_URLS=$dockerGateUrls" `
     -e "LOGIN_PATH=$env:LOGIN_PATH" `
     -e "CLIENT_VER=$env:CLIENT_VER" `
-    -e "USE_XOR_PASSWD=$env:USE_XOR_PASSWD" `
     -e "ACCOUNTS_CSV=$dockerAccounts" `
     -e "TOTAL=$Total" `
     -e "CONCURRENCY=$Concurrency" `

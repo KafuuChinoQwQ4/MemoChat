@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
-#include "json/GlazeCompat.h"
-#include "message/GroupMessageService.h"
-#include "message/PrivateMessageService.h"
-#include "ports/IDeliveryGateway.h"
-#include "ports/IEventPublisher.h"
-#include "ports/IMessageRepository.h"
-#include "ports/IRelationRepository.h"
+#include "json/GlazeCompat.hpp"
+#include "message/GroupMessageService.hpp"
+#include "message/PrivateMessageService.hpp"
+#include "ports/IDeliveryGateway.hpp"
+#include "ports/IEventPublisher.hpp"
+#include "ports/IMessageRepository.hpp"
+#include "ports/IRelationRepository.hpp"
 
 #include <memory>
 #include <string>

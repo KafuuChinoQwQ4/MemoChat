@@ -4,8 +4,8 @@
 
 ## 共享规则
 
-- 在 `/root/code/MemoChat-Qml-Drogon-linux` 中工作。
-- 默认 WSL 发行版名是 `archlinux`。从 Windows 调用 Linux 命令时使用 `wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'`。
+- 在 `/root/code/MemoChat` 中工作。
+- 默认 WSL 发行版名是 `archlinux`。从 Windows 调用 Linux 命令时使用 `wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat && source /root/.memochat-linux-env && <command>'`。
 - 基础设施依赖必须运行在 Docker 中。Envoy Gateway、Redis、Postgres、MongoDB、Neo4j、Qdrant、Redpanda、RabbitMQ、MinIO、AI Orchestrator、Prometheus、Alertmanager、Loki、Tempo、Grafana、InfluxDB、OTel Collector 和 cAdvisor 都通过 Docker 或 MCP 工具检查。
 - 除非任务明确要求，否则不要修改稳定的 Docker 端口。
 - Linux 下载、缓存、大型生成文件、vcpkg 产物和 Qt 产物优先使用 `/data`。
@@ -43,7 +43,7 @@ BLOCKER: <none or one short line>
 ## 阶段 1：上下文
 
 ```text
-你正在为 MemoChat-Qml-Drogon 收集上下文。
+你正在为 MemoChat 收集上下文。
 
 TASK:
 <TASK>

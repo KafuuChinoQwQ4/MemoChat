@@ -15,7 +15,7 @@ mysql:
   host: 127.0.0.1
   port: 3306
   user: root
-  password: "123456"
+  password: "${MEMOCHAT_OPS_MYSQL_PASSWORD:-123456}"
   schema: memo_ops
   charset: utf8mb4
 
@@ -23,7 +23,7 @@ postgresql:
   host: 127.0.0.1
   port: 15432
   user: memochat
-  password: "123456"
+  password: "${MEMOCHAT_OPS_POSTGRES_PASSWORD:-123456}"
   database: memo_pg
   schema: memo_ops
   sslmode: disable
@@ -31,7 +31,7 @@ postgresql:
 redis:
   host: 127.0.0.1
   port: 6379
-  password: "123456"
+  password: "${MEMOCHAT_OPS_REDIS_PASSWORD:-123456}"
   db: 0
   prefix: ops
 

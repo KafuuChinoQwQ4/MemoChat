@@ -1,9 +1,44 @@
-#include "modules/moments/MomentsRouteModule.h"
+#include "modules/moments/MomentsRouteModule.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
+
+namespace memochat::tests::moments::route_schema
+{
+const char* PostMethod();
+const char* PublishPath();
+const char* PublishRouteName();
+const char* PublishRequestTypeName();
+const char* MomentIdResponseTypeName();
+const char* ListPath();
+const char* ListRouteName();
+const char* ListRequestTypeName();
+const char* ListResponseTypeName();
+const char* DetailPath();
+const char* DetailRouteName();
+const char* MomentIdRequestTypeName();
+const char* DetailResponseTypeName();
+const char* DeletePath();
+const char* DeleteRouteName();
+const char* LikePath();
+const char* LikeRouteName();
+const char* LikeRequestTypeName();
+const char* LikeResponseTypeName();
+const char* CommentPath();
+const char* CommentRouteName();
+const char* CommentRequestTypeName();
+const char* CommentMutationResponseTypeName();
+const char* CommentListPath();
+const char* CommentListRouteName();
+const char* CommentListRequestTypeName();
+const char* CommentListResponseTypeName();
+const char* CommentLikePath();
+const char* CommentLikeRouteName();
+const char* CommentLikeRequestTypeName();
+const char* CommentLikeResponseTypeName();
+} // namespace memochat::tests::moments::route_schema
 
 namespace
 {
@@ -141,53 +176,53 @@ TEST(MomentsRouteSchemaTest, ListsStableMomentsRoutesWithWireNameOverrides)
     const auto schemas = memochat::gate::modules::moments::MomentsRouteModule::RouteSchemas();
 
     ASSERT_EQ(schemas.size(), 8U);
-    EXPECT_EQ(schemas[0].name, "moments.publish");
-    EXPECT_EQ(schemas[0].method, "POST");
-    EXPECT_EQ(schemas[0].path, "/api/moments/publish");
-    EXPECT_EQ(schemas[0].request.type_name, "MomentPublishRequestDto");
-    EXPECT_EQ(schemas[0].response.type_name, "MomentIdResponseDto");
+    EXPECT_EQ(schemas[0].name, memochat::tests::moments::route_schema::PublishRouteName());
+    EXPECT_EQ(schemas[0].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[0].path, memochat::tests::moments::route_schema::PublishPath());
+    EXPECT_EQ(schemas[0].request.type_name, memochat::tests::moments::route_schema::PublishRequestTypeName());
+    EXPECT_EQ(schemas[0].response.type_name, memochat::tests::moments::route_schema::MomentIdResponseTypeName());
 
-    EXPECT_EQ(schemas[1].name, "moments.list");
-    EXPECT_EQ(schemas[1].method, "POST");
-    EXPECT_EQ(schemas[1].path, "/api/moments/list");
-    EXPECT_EQ(schemas[1].request.type_name, "MomentListRequestDto");
-    EXPECT_EQ(schemas[1].response.type_name, "MomentListResponseDto");
+    EXPECT_EQ(schemas[1].name, memochat::tests::moments::route_schema::ListRouteName());
+    EXPECT_EQ(schemas[1].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[1].path, memochat::tests::moments::route_schema::ListPath());
+    EXPECT_EQ(schemas[1].request.type_name, memochat::tests::moments::route_schema::ListRequestTypeName());
+    EXPECT_EQ(schemas[1].response.type_name, memochat::tests::moments::route_schema::ListResponseTypeName());
 
-    EXPECT_EQ(schemas[2].name, "moments.detail");
-    EXPECT_EQ(schemas[2].method, "POST");
-    EXPECT_EQ(schemas[2].path, "/api/moments/detail");
-    EXPECT_EQ(schemas[2].request.type_name, "MomentIdRequestDto");
-    EXPECT_EQ(schemas[2].response.type_name, "MomentDetailResponseDto");
+    EXPECT_EQ(schemas[2].name, memochat::tests::moments::route_schema::DetailRouteName());
+    EXPECT_EQ(schemas[2].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[2].path, memochat::tests::moments::route_schema::DetailPath());
+    EXPECT_EQ(schemas[2].request.type_name, memochat::tests::moments::route_schema::MomentIdRequestTypeName());
+    EXPECT_EQ(schemas[2].response.type_name, memochat::tests::moments::route_schema::DetailResponseTypeName());
 
-    EXPECT_EQ(schemas[3].name, "moments.delete");
-    EXPECT_EQ(schemas[3].method, "POST");
-    EXPECT_EQ(schemas[3].path, "/api/moments/delete");
-    EXPECT_EQ(schemas[3].request.type_name, "MomentIdRequestDto");
-    EXPECT_EQ(schemas[3].response.type_name, "MomentIdResponseDto");
+    EXPECT_EQ(schemas[3].name, memochat::tests::moments::route_schema::DeleteRouteName());
+    EXPECT_EQ(schemas[3].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[3].path, memochat::tests::moments::route_schema::DeletePath());
+    EXPECT_EQ(schemas[3].request.type_name, memochat::tests::moments::route_schema::MomentIdRequestTypeName());
+    EXPECT_EQ(schemas[3].response.type_name, memochat::tests::moments::route_schema::MomentIdResponseTypeName());
 
-    EXPECT_EQ(schemas[4].name, "moments.like");
-    EXPECT_EQ(schemas[4].method, "POST");
-    EXPECT_EQ(schemas[4].path, "/api/moments/like");
-    EXPECT_EQ(schemas[4].request.type_name, "MomentLikeRequestDto");
-    EXPECT_EQ(schemas[4].response.type_name, "MomentLikeResponseDto");
+    EXPECT_EQ(schemas[4].name, memochat::tests::moments::route_schema::LikeRouteName());
+    EXPECT_EQ(schemas[4].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[4].path, memochat::tests::moments::route_schema::LikePath());
+    EXPECT_EQ(schemas[4].request.type_name, memochat::tests::moments::route_schema::LikeRequestTypeName());
+    EXPECT_EQ(schemas[4].response.type_name, memochat::tests::moments::route_schema::LikeResponseTypeName());
 
-    EXPECT_EQ(schemas[5].name, "moments.comment");
-    EXPECT_EQ(schemas[5].method, "POST");
-    EXPECT_EQ(schemas[5].path, "/api/moments/comment");
-    EXPECT_EQ(schemas[5].request.type_name, "MomentCommentRequestDto");
-    EXPECT_EQ(schemas[5].response.type_name, "MomentCommentMutationResponseDto");
+    EXPECT_EQ(schemas[5].name, memochat::tests::moments::route_schema::CommentRouteName());
+    EXPECT_EQ(schemas[5].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[5].path, memochat::tests::moments::route_schema::CommentPath());
+    EXPECT_EQ(schemas[5].request.type_name, memochat::tests::moments::route_schema::CommentRequestTypeName());
+    EXPECT_EQ(schemas[5].response.type_name, memochat::tests::moments::route_schema::CommentMutationResponseTypeName());
 
-    EXPECT_EQ(schemas[6].name, "moments.comment.list");
-    EXPECT_EQ(schemas[6].method, "POST");
-    EXPECT_EQ(schemas[6].path, "/api/moments/comment/list");
-    EXPECT_EQ(schemas[6].request.type_name, "MomentCommentListRequestDto");
-    EXPECT_EQ(schemas[6].response.type_name, "MomentCommentListResponseDto");
+    EXPECT_EQ(schemas[6].name, memochat::tests::moments::route_schema::CommentListRouteName());
+    EXPECT_EQ(schemas[6].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[6].path, memochat::tests::moments::route_schema::CommentListPath());
+    EXPECT_EQ(schemas[6].request.type_name, memochat::tests::moments::route_schema::CommentListRequestTypeName());
+    EXPECT_EQ(schemas[6].response.type_name, memochat::tests::moments::route_schema::CommentListResponseTypeName());
 
-    EXPECT_EQ(schemas[7].name, "moments.comment.like");
-    EXPECT_EQ(schemas[7].method, "POST");
-    EXPECT_EQ(schemas[7].path, "/api/moments/comment/like");
-    EXPECT_EQ(schemas[7].request.type_name, "MomentCommentLikeRequestDto");
-    EXPECT_EQ(schemas[7].response.type_name, "MomentCommentLikeResponseDto");
+    EXPECT_EQ(schemas[7].name, memochat::tests::moments::route_schema::CommentLikeRouteName());
+    EXPECT_EQ(schemas[7].method, memochat::tests::moments::route_schema::PostMethod());
+    EXPECT_EQ(schemas[7].path, memochat::tests::moments::route_schema::CommentLikePath());
+    EXPECT_EQ(schemas[7].request.type_name, memochat::tests::moments::route_schema::CommentLikeRequestTypeName());
+    EXPECT_EQ(schemas[7].response.type_name, memochat::tests::moments::route_schema::CommentLikeResponseTypeName());
 }
 
 TEST(MomentsRouteSchemaTest, BuildsFieldInventoriesFromMomentsDtos)

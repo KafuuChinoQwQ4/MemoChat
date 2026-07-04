@@ -1,6 +1,8 @@
-#include "EmailDeliveryTaskCodec.h"
+#include "EmailDeliveryTaskCodec.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.varify.email_delivery_task_algorithms;
 
 #include <utility>
 
@@ -14,7 +16,7 @@ std::string SerializeEmailTask(const EmailDeliveryTaskPayload& task)
 
 bool ParseEmailTask(const std::string& body, EmailDeliveryTaskPayload* out)
 {
-    if (!out)
+    if (!memochat::varify::email_delivery::modules::HasParseOutput(out != nullptr))
     {
         return false;
     }
@@ -25,7 +27,8 @@ bool ParseEmailTask(const std::string& body, EmailDeliveryTaskPayload* out)
         return false;
     }
 
-    if (parsed.email.empty() || parsed.code.empty())
+    if (!memochat::varify::email_delivery::modules::HasRequiredEmailTaskFields(parsed.email.empty(),
+                                                                               parsed.code.empty()))
     {
         return false;
     }

@@ -1,8 +1,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "logging/Logger.h"
-#include "logging/LogConfig.h"
+#include "logging/Logger.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Redaction.hpp"
 #include <spdlog/spdlog.h>
 
 #include <map>
@@ -13,6 +14,27 @@
 
 using namespace ::testing;
 using namespace memolog;
+
+namespace memochat::tests::logging
+{
+bool ShouldUseDefaultLogDir(bool dir_empty);
+bool IsLoggerTopLevelField(const char* key, unsigned long long size);
+int ClassifySensitiveKey(const char* key, unsigned long long size);
+bool ShouldCollapseTokenMask(unsigned long long size);
+unsigned long long VisibleEmailLocalPrefix(unsigned long long local_size);
+bool HasHttpSchemePrefix(const char* data, unsigned long long size);
+bool HasExplicitEndpointPort(bool colon_found, unsigned long long colon_pos, unsigned long long authority_size);
+bool IsParsedHttpEndpointOk(bool host_empty, bool target_empty);
+bool ShouldUseFallbackTelemetryText(bool text_empty);
+bool IsTelemetryEnabled(bool enabled, bool export_traces);
+bool ShouldDropExportJob(bool endpoint_empty, bool body_empty);
+bool ShouldKeepSpanAttribute(bool key_empty, bool value_empty);
+bool ShouldInjectGrpcTraceId(bool trace_id_empty);
+bool ShouldGenerateGrpcRequestId(bool request_id_empty);
+bool ShouldInjectGrpcSpanId(bool span_id_empty);
+bool ShouldGenerateBoundGrpcTraceId(bool metadata_trace_id_empty);
+bool ShouldGenerateBoundGrpcRequestId(bool metadata_request_id_empty);
+} // namespace memochat::tests::logging
 
 LogConfig make_test_config()
 {
@@ -111,6 +133,51 @@ TEST(JsonLoggerTest, Config_AfterInit)
     Logger::Shutdown();
 }
 
+TEST(JsonLoggerTest, LoggerAlgorithms_DefineDefaultDirAndTopLevelFields)
+{
+    EXPECT_TRUE(memochat::tests::logging::ShouldUseDefaultLogDir(true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldUseDefaultLogDir(false));
+    EXPECT_TRUE(memochat::tests::logging::IsLoggerTopLevelField("service_instance", 16));
+    EXPECT_TRUE(memochat::tests::logging::IsLoggerTopLevelField("duration_ms", 11));
+    EXPECT_TRUE(memochat::tests::logging::IsLoggerTopLevelField("session_id", 10));
+    EXPECT_FALSE(memochat::tests::logging::IsLoggerTopLevelField("display_name", 12));
+    EXPECT_FALSE(memochat::tests::logging::IsLoggerTopLevelField(nullptr, 0));
+}
+
+TEST(JsonLoggerTest, TelemetryAlgorithms_DefineEndpointAndExportGuards)
+{
+    EXPECT_TRUE(memochat::tests::logging::HasHttpSchemePrefix("http://zipkin:9411/api/v2/spans", 31));
+    EXPECT_FALSE(memochat::tests::logging::HasHttpSchemePrefix("https://zipkin:9411/api/v2/spans", 32));
+    EXPECT_TRUE(memochat::tests::logging::HasExplicitEndpointPort(true, 6, 11));
+    EXPECT_FALSE(memochat::tests::logging::HasExplicitEndpointPort(true, 10, 11));
+    EXPECT_TRUE(memochat::tests::logging::IsParsedHttpEndpointOk(false, false));
+    EXPECT_FALSE(memochat::tests::logging::IsParsedHttpEndpointOk(true, false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldUseFallbackTelemetryText(true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldUseFallbackTelemetryText(false));
+    EXPECT_TRUE(memochat::tests::logging::IsTelemetryEnabled(true, true));
+    EXPECT_FALSE(memochat::tests::logging::IsTelemetryEnabled(true, false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldDropExportJob(true, false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldDropExportJob(false, true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldDropExportJob(false, false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldKeepSpanAttribute(false, false));
+    EXPECT_FALSE(memochat::tests::logging::ShouldKeepSpanAttribute(true, false));
+    EXPECT_FALSE(memochat::tests::logging::ShouldKeepSpanAttribute(false, true));
+}
+
+TEST(JsonLoggerTest, GrpcTraceAlgorithms_DefineMetadataPropagationGuards)
+{
+    EXPECT_TRUE(memochat::tests::logging::ShouldInjectGrpcTraceId(false));
+    EXPECT_FALSE(memochat::tests::logging::ShouldInjectGrpcTraceId(true));
+    EXPECT_TRUE(memochat::tests::logging::ShouldGenerateGrpcRequestId(true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldGenerateGrpcRequestId(false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldInjectGrpcSpanId(false));
+    EXPECT_FALSE(memochat::tests::logging::ShouldInjectGrpcSpanId(true));
+    EXPECT_TRUE(memochat::tests::logging::ShouldGenerateBoundGrpcTraceId(true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldGenerateBoundGrpcTraceId(false));
+    EXPECT_TRUE(memochat::tests::logging::ShouldGenerateBoundGrpcRequestId(true));
+    EXPECT_FALSE(memochat::tests::logging::ShouldGenerateBoundGrpcRequestId(false));
+}
+
 // ---------------------------------------------------------------------------
 // Log levels — macros don't crash
 // ---------------------------------------------------------------------------
@@ -152,6 +219,40 @@ TEST(JsonLoggerTest, Log_AcceptsFieldsMap)
     std::map<std::string, std::string> fields = {{"user_id", "123"}, {"action", "login"}, {"duration_ms", "42"}};
     ASSERT_NO_THROW(Logger::Log(spdlog::level::info, "login_action", "user logged in", fields));
     EXPECT_NO_THROW(Logger::Shutdown());
+}
+
+TEST(JsonLoggerTest, Redaction_UsesModuleBackedSensitiveKeyPolicy)
+{
+    EXPECT_NE(memochat::tests::logging::ClassifySensitiveKey("token", 5), 0);
+    EXPECT_NE(memochat::tests::logging::ClassifySensitiveKey("email", 5), 0);
+    EXPECT_EQ(memochat::tests::logging::ClassifySensitiveKey("display_name", 12), 0);
+    EXPECT_TRUE(memochat::tests::logging::ShouldCollapseTokenMask(8));
+    EXPECT_FALSE(memochat::tests::logging::ShouldCollapseTokenMask(9));
+    EXPECT_EQ(memochat::tests::logging::VisibleEmailLocalPrefix(1), 1);
+    EXPECT_EQ(memochat::tests::logging::VisibleEmailLocalPrefix(5), 2);
+
+    EXPECT_TRUE(IsSensitiveKey("TOKEN"));
+    EXPECT_TRUE(IsSensitiveKey("access_token"));
+    EXPECT_TRUE(IsSensitiveKey("login_ticket"));
+    EXPECT_TRUE(IsSensitiveKey("password_hash"));
+    EXPECT_TRUE(IsSensitiveKey("pwd"));
+    EXPECT_TRUE(IsSensitiveKey("api_key"));
+    EXPECT_TRUE(IsSensitiveKey("client_secret"));
+    EXPECT_TRUE(IsSensitiveKey("x-token"));
+    EXPECT_TRUE(IsSensitiveKey("set-cookie"));
+    EXPECT_TRUE(IsSensitiveKey("provider_token"));
+    EXPECT_TRUE(IsSensitiveKey("Email"));
+    EXPECT_TRUE(IsSensitiveKey("verify_code"));
+    EXPECT_FALSE(IsSensitiveKey("display_name"));
+
+    EXPECT_EQ(RedactValue("token", "12345678", true), "****");
+    EXPECT_EQ(RedactValue("token", "123456789", true), "1234...6789");
+    EXPECT_EQ(RedactValue("email", "a@example.com", true), "a***@example.com");
+    EXPECT_EQ(RedactValue("email", "alice@example.com", true), "al***@example.com");
+    EXPECT_EQ(RedactValue("password", "secret", true), "****");
+    EXPECT_EQ(RedactValue("login_ticket", "ticket-value-1234", true), "tick...1234");
+    EXPECT_EQ(RedactValue("api_key", "secret", true), "****");
+    EXPECT_EQ(RedactValue("token", "123456789", false), "123456789");
 }
 
 // ---------------------------------------------------------------------------

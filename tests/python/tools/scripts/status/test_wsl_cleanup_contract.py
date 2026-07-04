@@ -25,7 +25,7 @@ class WslCleanupContractTests(unittest.TestCase):
             "$IncludeMcp",
             "MEMOCHAT_WSL_DISTRO",
             "MEMOCHAT_WSL_PROJECT_ROOT",
-            "/root/code/MemoChat-Qml-Drogon-linux",
+            "/root/code/MemoChat",
         ):
             self.assertIn(token, source)
 

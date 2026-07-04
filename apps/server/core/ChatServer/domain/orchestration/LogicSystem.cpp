@@ -1,14 +1,14 @@
-#include "LogicSystem.h"
+#include "LogicSystem.hpp"
 
-#include "ChatHandlerRegistrars.h"
-#include "ChatRuntimeComposition.h"
-#include "ConfigMgr.h"
-#include "CSession.h"
-#include "MessageDeliveryService.h"
-#include "PostgresMgr.h"
-#include "const.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "ChatHandlerRegistrars.hpp"
+#include "ChatRuntimeComposition.hpp"
+#include "ConfigMgr.hpp"
+#include "CSession.hpp"
+#include "MessageDeliveryService.hpp"
+#include "PostgresMgr.hpp"
+#include "const.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -79,6 +79,79 @@ void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::st
     {
         memolog::TraceContext::SetSessionId(session->GetSessionId());
     }
+}
+
+bool IsPreAuthMessage(short msg_id)
+{
+    return msg_id == MSG_CHAT_LOGIN || msg_id == ID_HEART_BEAT_REQ;
+}
+
+bool RejectUnauthenticatedBusinessMessage(const std::shared_ptr<CSession>& session, short msg_id)
+{
+    if (IsPreAuthMessage(msg_id))
+    {
+        return false;
+    }
+    if (session && session->GetUserId() > 0)
+    {
+        return false;
+    }
+    memolog::LogWarn(
+        "chat.message.unauthenticated",
+        "reject unauthenticated chat business message",
+        {{"msg_id", std::to_string(msg_id)}, {"session_id", session ? session->GetSessionId() : std::string()}});
+    if (session)
+    {
+        session->Close();
+    }
+    return true;
+}
+
+std::string
+NormalizeAuthenticatedCallerFields(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+{
+    if (IsPreAuthMessage(msg_id) || !session || session->GetUserId() <= 0)
+    {
+        return msg_data;
+    }
+
+    memochat::json::JsonReader reader;
+    memochat::json::JsonValue root;
+    if (!reader.parse(msg_data, root) || !root.isObject())
+    {
+        return msg_data;
+    }
+
+    const int session_uid = session->GetUserId();
+    bool changed = false;
+    const char* caller_fields[] = {"uid", "fromuid", "owner_uid", "from_uid", "reviewer_uid", "viewer_uid"};
+    for (const char* field : caller_fields)
+    {
+        if (!root.isMember(field))
+        {
+            continue;
+        }
+        const int payload_uid = root[field].asInt();
+        if (payload_uid != session_uid)
+        {
+            memolog::LogWarn("chat.message.uid_mismatch",
+                             "overrode client supplied uid with authenticated session uid",
+                             {{"msg_id", std::to_string(msg_id)},
+                              {"field", field},
+                              {"payload_uid", std::to_string(payload_uid)},
+                              {"session_uid", std::to_string(session_uid)}});
+        }
+        root[field] = session_uid;
+        changed = true;
+    }
+    if (!changed)
+    {
+        return msg_data;
+    }
+
+    memochat::json::JsonStreamWriterBuilder builder;
+    builder["indentation"] = "";
+    return memochat::json::writeString(builder, root);
 }
 } // namespace
 
@@ -215,7 +288,13 @@ void LogicSystem::workerLoop(size_t worker_id)
         {
             continue;
         }
-        const std::string msg_data(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len);
+        const std::string raw_msg_data(msg_node->_recvnode->_data, msg_node->_recvnode->_cur_len);
+        if (RejectUnauthenticatedBusinessMessage(msg_node->_session, msg_node->_recvnode->_msg_id))
+        {
+            continue;
+        }
+        const std::string msg_data =
+            NormalizeAuthenticatedCallerFields(msg_node->_session, msg_node->_recvnode->_msg_id, raw_msg_data);
         BindTcpTraceContext(msg_node->_session, msg_data);
         Defer clear_trace(
             []()

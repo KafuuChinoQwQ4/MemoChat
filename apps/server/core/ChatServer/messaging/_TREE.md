@@ -2,6 +2,12 @@
 
 > ChatServer 的异步事件/任务总线抽象及多种实现：Kafka/Redis 事件总线、RabbitMQ/Inline 任务总线，承载消息投递与事件分发的解耦。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | messaging 配置使用的项目自有 C++ module 接口 |
+
 ## 文件
 
 | 文件 | 作用概括 |
@@ -26,5 +32,7 @@
 | `RabbitMqTaskBus.h` | RabbitMQ 任务总线声明 |
 | `RedisAsyncEventBus.cpp` | Redis 事件总线实现 |
 | `RedisAsyncEventBus.h` | Redis 事件总线声明 |
+| `SessionSendSupport.cpp` | 隔离 CSession 发送调用，避免异步事件分发器 module consumer 直接包含 session 运行时头 |
+| `SessionSendSupport.h` | CSession 发送隔离 helper 声明 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

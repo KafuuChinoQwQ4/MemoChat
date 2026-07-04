@@ -1,5 +1,6 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
 #include "AgentStreamClient.h"
 #include "AgentMessageModel.h"
 #include "ClientGateway.h"
@@ -30,13 +31,14 @@ void AgentController::loadSessions()
 {
     ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
-    ReqId reqId = ID_AI_SESSION_LIST;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ListSessions, QString(), uid);
-    QUrl url(gate_url_prefix + "/ai/session/list");
+    QUrl url = agentApiUrl(QStringLiteral("/ai/session/list"));
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("model_type", _current_model_backend);
     query.addQueryItem("model_name", _current_model_name);
+    addAuthToQuery(query);
     url.setQuery(query);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -55,14 +57,12 @@ void AgentController::createSession()
     payload["uid"] = uid;
     payload["model_type"] = _current_model_backend;
     payload["model_name"] = _current_model_name;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SESSION_CREATE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::CreateSession, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/session")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::switchSession(const QString& sessionId)
@@ -92,15 +92,13 @@ void AgentController::deleteSession(const QString& sessionId)
     QJsonObject payload;
     payload["uid"] = uid;
     payload["session_id"] = sessionId;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SESSION_DELETE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::DeleteSession, QString(), uid);
     _pendingDeleteSessionId = sessionId;
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session/delete"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/session/delete")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::renameSession(const QString& sessionId, const QString& title)
@@ -123,29 +121,28 @@ void AgentController::renameSession(const QString& sessionId, const QString& tit
     payload["uid"] = uid;
     payload["session_id"] = trimmedSessionId;
     payload["title"] = trimmedTitle;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SESSION_UPDATE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::RenameSession, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/session/update"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/session/update")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::loadHistory(const QString& sessionId)
 {
     ensureUserScope();
     auto uid = _gateway->userMgr()->GetUid();
-    QUrl url(gate_url_prefix + "/ai/history");
+    QUrl url = agentApiUrl(QStringLiteral("/ai/history"));
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("session_id", sessionId);
     query.addQueryItem("limit", "50");
     query.addQueryItem("offset", "0");
+    addAuthToQuery(query);
     url.setQuery(query);
 
-    ReqId reqId = ID_AI_HISTORY;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::History, QString(), uid);
     setCurrentGeneratingMsgId(QString());
     _loading = true;

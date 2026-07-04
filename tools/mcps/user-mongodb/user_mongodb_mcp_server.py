@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 import json
+import os
 import subprocess
 import sys
+import urllib.parse
 from typing import Any
 
-CONTAINER = "memochat-mongo"
-MONGO_URI = "mongodb://memochat_app:123456@127.0.0.1:27017/memochat"
+CONTAINER = os.environ.get("MEMOCHAT_MONGO_CONTAINER", "memochat-mongo")
 TIMEOUT_SECONDS = 30
+
+MONGO_URI_ENV = ("MEMOCHAT_MONGODB_URI", "MEMOCHAT_MONGO_URI")
+MONGO_USER_ENV = ("MEMOCHAT_MONGO_APP_USER", "MEMOCHAT_MONGODB_USER")
+MONGO_PASSWORD_ENV = ("MEMOCHAT_MONGO_APP_PASSWORD", "MEMOCHAT_MONGODB_PASSWORD")
 
 TOOLS = {
     "mongodb_list_collections": {
@@ -65,6 +70,49 @@ def _json_response(data: Any) -> dict[str, Any]:
     return _text_response(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def _env_first(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _required_env_first(names: tuple[str, ...]) -> str:
+    value = _env_first(names)
+    if value:
+        return value
+    raise RuntimeError("Missing required environment variable: one of " + ", ".join(names))
+
+
+def _quote_mongo_part(value: str) -> str:
+    return urllib.parse.quote_plus(value)
+
+
+def _mongo_uri() -> str:
+    uri = _env_first(MONGO_URI_ENV)
+    if uri:
+        return uri
+
+    user = _required_env_first(MONGO_USER_ENV)
+    password = _required_env_first(MONGO_PASSWORD_ENV)
+    host = os.environ.get("MEMOCHAT_MONGO_HOST", "127.0.0.1")
+    port = os.environ.get("MEMOCHAT_MONGO_PORT", "27017")
+    database = os.environ.get("MEMOCHAT_MONGO_DATABASE", "memochat")
+    return (
+        f"mongodb://{_quote_mongo_part(user)}:{_quote_mongo_part(password)}@{host}:{port}/{_quote_mongo_part(database)}"
+    )
+
+
+def _redact_known_secrets(text: str) -> str:
+    redacted = text
+    for name in (*MONGO_URI_ENV, *MONGO_PASSWORD_ENV):
+        value = os.environ.get(name)
+        if value:
+            redacted = redacted.replace(value, "[REDACTED]")
+    return redacted
+
+
 def _run_mongosh(script: str) -> Any:
     cmd = [
         "docker",
@@ -72,7 +120,7 @@ def _run_mongosh(script: str) -> Any:
         "-i",
         CONTAINER,
         "mongosh",
-        MONGO_URI,
+        _mongo_uri(),
         "--quiet",
         "--eval",
         script,
@@ -84,7 +132,7 @@ def _run_mongosh(script: str) -> Any:
         timeout=TIMEOUT_SECONDS,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip())
+        raise RuntimeError(_redact_known_secrets(proc.stderr.strip() or proc.stdout.strip()))
     output = proc.stdout.strip()
     if not output:
         return None

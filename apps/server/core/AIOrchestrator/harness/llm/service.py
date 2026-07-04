@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import socket
+import ssl
+from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterable
+from urllib.parse import urlsplit
 
 import httpx
 from config import settings
@@ -21,6 +26,14 @@ _RUNTIME_PROVIDER_FILE = Path(
         str(Path(__file__).resolve().parents[2] / ".data" / "api_providers.json"),
     )
 )
+
+
+@dataclass(frozen=True)
+class _ValidatedProviderBaseUrl:
+    normalized_url: str
+    host: str
+    port: int | None
+    pinned_addresses: tuple[str, ...]
 
 
 def _wrap_thinking(reasoning: str, content: str) -> str:
@@ -170,18 +183,30 @@ class _OpenAICompatibleClient:
         model_name: str,
         timeout_sec: int = 120,
         thinking_parameter: str = "",
+        pinned_addresses: Iterable[str] | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model_name = model_name
         self.timeout_sec = timeout_sec
         self.thinking_parameter = thinking_parameter
+        self.pinned_addresses = _public_provider_addresses(pinned_addresses or []) if pinned_addresses else []
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-            self._client = httpx.AsyncClient(timeout=httpx.Timeout(float(self.timeout_sec)), headers=headers)
+            transport = None
+            if self.pinned_addresses:
+                parsed = urlsplit(self.base_url)
+                transport = _PinnedProviderAsyncTransport(parsed.hostname or "", self.pinned_addresses)
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(float(self.timeout_sec)),
+                headers=headers,
+                follow_redirects=False,
+                trust_env=False,
+                transport=transport,
+            )
         return self._client
 
     async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
@@ -241,6 +266,8 @@ class _OpenAICompatibleClient:
     async def list_models(self) -> list[dict]:
         client = await self._get_client()
         response = await client.get(f"{self.base_url}/models")
+        if 300 <= response.status_code < 400:
+            raise RuntimeError("provider redirects are not allowed")
         response.raise_for_status()
         data = response.json()
         raw_models = data.get("data", data.get("models", []))
@@ -380,6 +407,7 @@ class LLMEndpointRegistry:
     def __init__(self):
         self._manager = LLMManager.get_instance()
         self._custom_clients: dict[str, object] = {}
+        self._runtime_provider_api_keys: dict[str, str] = {}
 
     def list_endpoints(self) -> list[ProviderEndpoint]:
         endpoints: list[ProviderEndpoint] = []
@@ -485,7 +513,8 @@ class LLMEndpointRegistry:
         for endpoint_cfg in self._load_runtime_providers():
             if not endpoint_cfg.get("enabled", True):
                 continue
-            if not endpoint_cfg.get("api_key", ""):
+            api_key = self._runtime_provider_api_key(endpoint_cfg)
+            if not api_key:
                 continue
             append_endpoint(
                 ProviderEndpoint(
@@ -498,7 +527,7 @@ class LLMEndpointRegistry:
                     thinking_parameter=endpoint_cfg.get("thinking_parameter", ""),
                     models=endpoint_cfg.get("models", []),
                 ),
-                endpoint_cfg.get("api_key", ""),
+                api_key,
             )
 
         return endpoints
@@ -511,15 +540,20 @@ class LLMEndpointRegistry:
         adapter: str = "openai_compatible",
     ) -> ProviderEndpoint:
         provider_id = _normalize_provider_id(provider_name or "custom-api")
-        normalized_url = _normalize_base_url(base_url)
-        if not normalized_url:
-            raise ValueError("base_url is required")
+        validated = _validate_public_provider_base_url(base_url)
+        normalized_url = validated.normalized_url
         if not api_key:
             raise ValueError("api_key is required")
         if adapter != "openai_compatible":
             raise ValueError("only openai_compatible adapter is supported by UI registration")
 
-        client = _OpenAICompatibleClient(normalized_url, api_key, "", timeout_sec=30)
+        client = _OpenAICompatibleClient(
+            normalized_url,
+            api_key,
+            "",
+            timeout_sec=30,
+            pinned_addresses=validated.pinned_addresses,
+        )
         try:
             models = await client.list_models()
         finally:
@@ -539,25 +573,24 @@ class LLMEndpointRegistry:
             provider
             for provider in providers
             if provider.get("name") not in {provider_id, target_provider_id}
-            and _provider_api_identity(
-                str(provider.get("adapter") or "openai_compatible"),
-                str(provider.get("base_url") or ""),
-                str(provider.get("api_key") or ""),
-            )
-            != target_identity
+            and _runtime_provider_identity(provider) != target_identity
         ]
+        api_key_env = _runtime_provider_api_key_env_name(target_provider_id)
         provider_config = {
             "name": target_provider_id,
             "adapter": adapter,
             "deployment": "external_api",
             "base_url": normalized_url,
-            "api_key": api_key,
+            "api_key_env": api_key_env,
+            "api_key_fingerprint": _provider_api_fingerprint(api_key),
             "default_model": models[0]["name"],
             "enabled": True,
             "timeout_sec": 120,
             "thinking_parameter": _guess_thinking_parameter(provider_id, normalized_url),
+            "pinned_addresses": list(validated.pinned_addresses),
             "models": models,
         }
+        self._runtime_provider_api_keys[target_provider_id] = api_key
         providers.append(provider_config)
         self._save_runtime_providers(providers)
         for cache_key in list(self._custom_clients.keys()):
@@ -583,6 +616,8 @@ class LLMEndpointRegistry:
         if len(next_providers) == len(providers):
             return False
         self._save_runtime_providers(next_providers)
+        self._runtime_provider_api_keys.pop(provider_id, None)
+        self._runtime_provider_api_keys.pop(normalized_provider_id, None)
         for cache_key in list(self._custom_clients.keys()):
             if cache_key.startswith(f"{provider_id}:") or cache_key.startswith(f"{normalized_provider_id}:"):
                 self._custom_clients.pop(cache_key, None)
@@ -696,14 +731,20 @@ class LLMEndpointRegistry:
         runtime_cfg = self._find_runtime_provider(endpoint.provider_id)
         api_key = ""
         timeout_sec = 120
+        pinned_addresses: list[str] = []
         if endpoint_cfg is not None:
             api_key = endpoint_cfg.api_key
             if endpoint_cfg.api_key_env:
                 api_key = os.getenv(endpoint_cfg.api_key_env, api_key)
             timeout_sec = endpoint_cfg.timeout_sec
+            if endpoint_cfg.adapter == "openai_compatible" and endpoint_cfg.deployment == "external_api":
+                pinned_addresses = list(_validate_public_provider_base_url(endpoint.base_url).pinned_addresses)
         elif runtime_cfg is not None:
-            api_key = runtime_cfg.get("api_key", "")
+            api_key = self._runtime_provider_api_key(runtime_cfg)
             timeout_sec = int(runtime_cfg.get("timeout_sec", timeout_sec) or timeout_sec)
+            pinned_addresses = _runtime_provider_pinned_addresses(runtime_cfg)
+            if not pinned_addresses:
+                pinned_addresses = list(_validate_public_provider_base_url(endpoint.base_url).pinned_addresses)
 
         if endpoint.adapter == "ollama":
             client = _OllamaCompatibleClient(endpoint.base_url, model_name, timeout_sec=timeout_sec)
@@ -716,6 +757,7 @@ class LLMEndpointRegistry:
                 model_name,
                 timeout_sec=timeout_sec,
                 thinking_parameter=endpoint.thinking_parameter,
+                pinned_addresses=pinned_addresses,
             )
 
         self._custom_clients[cache_key] = client
@@ -753,15 +795,19 @@ class LLMEndpointRegistry:
             (
                 provider
                 for provider in self._load_runtime_providers()
-                if _provider_api_identity(
-                    str(provider.get("adapter") or "openai_compatible"),
-                    str(provider.get("base_url") or ""),
-                    str(provider.get("api_key") or ""),
-                )
-                == identity
+                if _runtime_provider_identity(provider) == identity
             ),
             None,
         )
+
+    def _runtime_provider_api_key(self, provider_cfg: dict) -> str:
+        provider_name = str(provider_cfg.get("name") or "").strip()
+        if provider_name and provider_name in self._runtime_provider_api_keys:
+            return self._runtime_provider_api_keys[provider_name]
+        env_name = str(provider_cfg.get("api_key_env") or "").strip()
+        if not env_name and provider_name:
+            env_name = _runtime_provider_api_key_env_name(provider_name)
+        return os.getenv(env_name, "").strip() if env_name else ""
 
     def _list_ollama_configured_models(self, base_url: str, configured_models: list) -> list[dict]:
         configured_by_name = {model.name: model.model_dump() for model in configured_models}
@@ -801,13 +847,37 @@ def _normalize_provider_id(name: str) -> str:
     return cleaned[:48]
 
 
+def _runtime_provider_api_key_env_name(provider_id: str) -> str:
+    suffix = re.sub(r"[^A-Z0-9]+", "_", (provider_id or "").strip().upper()).strip("_")
+    if not suffix:
+        suffix = "CUSTOM_API"
+    return f"MEMOCHAT_AI_PROVIDER_{suffix}_API_KEY"
+
+
+def _provider_api_fingerprint(api_key: str) -> str:
+    return hashlib.sha256((api_key or "").strip().encode("utf-8")).hexdigest()
+
+
 def _provider_api_identity(adapter: str, base_url: str, api_key: str) -> tuple[str, str, str] | None:
     normalized_url = _normalize_base_url(base_url)
     normalized_adapter = (adapter or "openai_compatible").strip().lower()
     key = (api_key or "").strip()
     if not normalized_url or not key:
         return None
-    return normalized_adapter, normalized_url, hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return normalized_adapter, normalized_url, _provider_api_fingerprint(key)
+
+
+def _runtime_provider_identity(provider: dict) -> tuple[str, str, str] | None:
+    normalized_url = _normalize_base_url(str(provider.get("base_url") or ""))
+    normalized_adapter = str(provider.get("adapter") or "openai_compatible").strip().lower()
+    fingerprint = str(provider.get("api_key_fingerprint") or "").strip()
+    if not fingerprint:
+        legacy_key = str(provider.get("api_key") or "").strip()
+        if legacy_key:
+            fingerprint = _provider_api_fingerprint(legacy_key)
+    if not normalized_url or not fingerprint:
+        return None
+    return normalized_adapter, normalized_url, fingerprint
 
 
 def _provider_identities_match(left: tuple[str, str, str] | None, right: tuple[str, str, str] | None) -> bool:
@@ -844,12 +914,13 @@ def _dedupe_runtime_providers(providers: list[dict]) -> list[dict]:
         if not isinstance(raw_provider, dict):
             continue
         provider = dict(raw_provider)
+        legacy_api_key = str(provider.pop("api_key", "") or "").strip()
+        if not provider.get("api_key_fingerprint") and legacy_api_key:
+            provider["api_key_fingerprint"] = _provider_api_fingerprint(legacy_api_key)
         name = str(provider.get("name") or "").strip()
-        identity = _provider_api_identity(
-            str(provider.get("adapter") or "openai_compatible"),
-            str(provider.get("base_url") or ""),
-            str(provider.get("api_key") or ""),
-        )
+        identity = _runtime_provider_identity(provider)
+        if name and not provider.get("api_key_env"):
+            provider["api_key_env"] = _runtime_provider_api_key_env_name(name)
 
         index = by_name.get(name) if name else None
         if index is None and identity is not None:
@@ -874,6 +945,12 @@ def _dedupe_runtime_providers(providers: list[dict]) -> list[dict]:
             current["thinking_parameter"] = provider.get("thinking_parameter")
         if not current.get("timeout_sec") and provider.get("timeout_sec"):
             current["timeout_sec"] = provider.get("timeout_sec")
+        if not current.get("api_key_env") and provider.get("api_key_env"):
+            current["api_key_env"] = provider.get("api_key_env")
+        if not current.get("api_key_fingerprint") and provider.get("api_key_fingerprint"):
+            current["api_key_fingerprint"] = provider.get("api_key_fingerprint")
+        if not current.get("pinned_addresses") and provider.get("pinned_addresses"):
+            current["pinned_addresses"] = provider.get("pinned_addresses")
 
     return result
 
@@ -897,6 +974,142 @@ def _merge_model_lists(existing_models: list[dict], discovered_models: list[dict
     return list(merged.values())
 
 
+class _PinnedProviderNetworkBackend:
+    def __init__(self, host: str, pinned_addresses: Iterable[str], delegate=None):
+        self._host = _normalize_provider_host(host)
+        self._pinned_addresses = _public_provider_addresses(pinned_addresses)
+        if delegate is None:
+            from httpcore._backends.auto import AutoBackend
+
+            delegate = AutoBackend()
+        self._delegate = delegate
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options=None,
+    ):
+        requested_host = _normalize_provider_host(host)
+        if requested_host != self._host:
+            return await self._delegate.connect_tcp(
+                host,
+                port,
+                timeout=timeout,
+                local_address=local_address,
+                socket_options=socket_options,
+            )
+
+        last_exc: Exception | None = None
+        for address in self._pinned_addresses:
+            try:
+                return await self._delegate.connect_tcp(
+                    address,
+                    port,
+                    timeout=timeout,
+                    local_address=local_address,
+                    socket_options=socket_options,
+                )
+            except Exception as exc:
+                last_exc = exc
+        if last_exc is not None:
+            raise last_exc
+        raise OSError("provider pinned address list is empty")
+
+    async def connect_unix_socket(self, path: str, timeout: float | None = None, socket_options=None):
+        return await self._delegate.connect_unix_socket(path, timeout=timeout, socket_options=socket_options)
+
+    async def sleep(self, seconds: float) -> None:
+        await self._delegate.sleep(seconds)
+
+
+class _PinnedProviderAsyncTransport:
+    def __init__(self, host: str, pinned_addresses: Iterable[str]):
+        self._host = _normalize_provider_host(host)
+        self._pinned_addresses = _public_provider_addresses(pinned_addresses)
+        self._pool = None
+
+    def _ensure_pool(self):
+        if self._pool is not None:
+            return self._pool
+        import httpcore
+
+        self._pool = httpcore.AsyncConnectionPool(
+            ssl_context=ssl.create_default_context(),
+            max_connections=100,
+            max_keepalive_connections=20,
+            keepalive_expiry=5.0,
+            http1=True,
+            http2=False,
+            retries=0,
+            network_backend=_PinnedProviderNetworkBackend(self._host, self._pinned_addresses),
+        )
+        return self._pool
+
+    async def handle_async_request(self, request):
+        import httpcore
+        from httpx._transports.default import AsyncResponseStream, map_httpcore_exceptions
+
+        req = httpcore.Request(
+            method=request.method,
+            url=httpcore.URL(
+                scheme=request.url.raw_scheme,
+                host=request.url.raw_host,
+                port=request.url.port,
+                target=request.url.raw_path,
+            ),
+            headers=request.headers.raw,
+            content=request.stream,
+            extensions=request.extensions,
+        )
+        with map_httpcore_exceptions():
+            resp = await self._ensure_pool().handle_async_request(req)
+        return httpx.Response(
+            status_code=resp.status,
+            headers=resp.headers,
+            stream=AsyncResponseStream(resp.stream),
+            extensions=resp.extensions,
+        )
+
+    async def aclose(self) -> None:
+        if self._pool is not None:
+            await self._pool.aclose()
+
+
+def _normalize_provider_host(host: str) -> str:
+    if isinstance(host, bytes):
+        host = host.decode("ascii", "ignore")
+    normalized = str(host or "").strip().rstrip(".").lower()
+    try:
+        return normalized.encode("idna").decode("ascii")
+    except UnicodeError:
+        return normalized
+
+
+def _public_provider_addresses(addresses: Iterable[str]) -> list[str]:
+    result: list[str] = []
+    for address in addresses:
+        text = str(address or "").strip()
+        if not text:
+            continue
+        if _is_disallowed_provider_ip(text):
+            raise ValueError("provider pinned addresses must be public IP addresses")
+        if text not in result:
+            result.append(text)
+    if not result:
+        raise ValueError("provider pinned addresses are required")
+    return result
+
+
+def _runtime_provider_pinned_addresses(provider_cfg: dict) -> list[str]:
+    raw_addresses = provider_cfg.get("pinned_addresses", [])
+    if not isinstance(raw_addresses, list):
+        return []
+    return _public_provider_addresses(raw_addresses) if raw_addresses else []
+
+
 def _normalize_base_url(base_url: str) -> str:
     url = (base_url or "").strip().rstrip("/")
     if not url:
@@ -909,6 +1122,80 @@ def _normalize_base_url(base_url: str) -> str:
     if "api.deepseek.com" in lower and lower.endswith("/v1"):
         url = url[:-3]
     return url.rstrip("/")
+
+
+def _is_disallowed_provider_ip(address: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return not parsed.is_global
+
+
+def _resolved_provider_addresses(host: str, port: int | None) -> set[str]:
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError("base_url host cannot be resolved") from exc
+
+    addresses: set[str] = set()
+    for info in infos:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        address = str(sockaddr[0])
+        if address:
+            addresses.add(address)
+    if not addresses:
+        raise ValueError("base_url host cannot be resolved")
+    return addresses
+
+
+def _validate_public_provider_base_url(base_url: str) -> _ValidatedProviderBaseUrl:
+    raw_url = (base_url or "").strip()
+    if "://" in raw_url:
+        raw_scheme = urlsplit(raw_url).scheme
+        if raw_scheme not in {"http", "https"}:
+            raise ValueError("base_url must use http or https")
+
+    normalized_url = _normalize_base_url(base_url)
+    if not normalized_url:
+        raise ValueError("base_url is required")
+
+    try:
+        parsed = urlsplit(normalized_url)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("base_url is invalid") from exc
+
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("base_url must use http or https")
+    if parsed.username or parsed.password:
+        raise ValueError("base_url must not include user info")
+
+    host = (parsed.hostname or "").strip().rstrip(".")
+    if not host:
+        raise ValueError("base_url host is required")
+
+    lowered_host = host.lower()
+    if lowered_host == "localhost" or lowered_host.endswith(".localhost"):
+        raise ValueError("base_url host must be public")
+
+    addresses = _resolved_provider_addresses(host, port)
+    for address in addresses:
+        if _is_disallowed_provider_ip(address):
+            raise ValueError("base_url host must resolve to public addresses")
+
+    return _ValidatedProviderBaseUrl(
+        normalized_url=normalized_url,
+        host=host,
+        port=port,
+        pinned_addresses=tuple(sorted(addresses)),
+    )
+
+
+def _normalize_and_validate_public_provider_base_url(base_url: str) -> str:
+    return _validate_public_provider_base_url(base_url).normalized_url
 
 
 def _guess_supports_thinking(model_id: str) -> bool:

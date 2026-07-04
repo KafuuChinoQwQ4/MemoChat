@@ -59,9 +59,9 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
 
         self.assertIn("VarifyServer.exe", source)
         self.assertIn("VarifyServer1", source)
-        self.assertIn("VarifyServer2", source)
         self.assertIn('"50051"', source)
-        self.assertIn('"48083"', source)
+        self.assertNotIn("VarifyServer2", source)
+        self.assertNotIn('"48083"', source)
         self.assertNotIn("node server.js", source)
         self.assertNotIn("npm install", source)
         self.assertNotIn("node_modules", source)
@@ -70,7 +70,9 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
         source = read(REPO_ROOT / "tools/scripts/status/stop-all-services.bat")
 
         self.assertIn("VarifyServer.exe", source)
-        self.assertIn("50051,48083,8083,8087", source)
+        self.assertIn("50051,8083", source)
+        self.assertNotIn("48083", source)
+        self.assertNotIn("8087", source)
         self.assertNotIn("VarifyServer (Node.js)", source)
         self.assertNotIn("VarifyServer Node", source)
 
@@ -121,16 +123,14 @@ class VarifyServerCppOnlyContractTests(unittest.TestCase):
         deploy = read(REPO_ROOT / "tools/scripts/status/deploy_services.sh")
         start = read(REPO_ROOT / "tools/scripts/status/start-all-services.sh")
 
-        # VarifyServer is a C++ binary (executable == source_executable == "VarifyServer"), two
-        # instances, with their config files and TCP wait ports — encoded as topology rows.
+        # VarifyServer is a C++ binary (executable == source_executable == "VarifyServer"), with
+        # its config file and TCP wait port encoded as a topology row.
         self.assertIn(
             "varify|VarifyServer1|VarifyServer|VarifyServer|VarifyServer/config.ini|VarifyServer-1|50051",
             topology,
         )
-        self.assertIn(
-            "varify|VarifyServer2|VarifyServer|VarifyServer|VarifyServer/varify2.ini|VarifyServer-2|48083",
-            topology,
-        )
+        self.assertNotIn("VarifyServer2", topology)
+        self.assertNotIn("VarifyServer-2", topology)
 
         # Both scripts source the shared topology and iterate it (no per-service hardcoding).
         for source in (deploy, start):

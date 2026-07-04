@@ -248,7 +248,12 @@ foreach ($r in $results) {
 }
 
 # Save to JSON
-$reportDir = "D:\MemoChat-Qml\Memo_ops\artifacts\reports\loadtest"
+$projectRoot = if ($env:MEMOCHAT_ROOT) {
+    $env:MEMOCHAT_ROOT
+} else {
+    (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
+}
+$reportDir = Join-Path $projectRoot "Memo_ops\artifacts\reports\loadtest"
 if (-not (Test-Path $reportDir)) {
     New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
 }

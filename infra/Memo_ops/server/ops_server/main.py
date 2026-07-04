@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 import uvicorn
 from fastapi import FastAPI
@@ -17,12 +18,19 @@ from Memo_ops.server.ops_server.routes import (
 from Memo_ops.server.ops_server.runtime import DEFAULT_CONFIG, OpsServerRuntime
 
 
+def _cors_allowed_origins() -> list[str]:
+    configured = os.getenv("MEMOCHAT_OPS_CORS_ALLOWED_ORIGINS", "")
+    if not configured.strip():
+        configured = "http://127.0.0.1,http://localhost,https://127.0.0.1,https://localhost"
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+
 def create_app(runtime: OpsServerRuntime | None = None) -> FastAPI:
     server_runtime = runtime or OpsServerRuntime()
     app = FastAPI(title="Memo_ops OpsServer", version="1.0.0")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_cors_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -1,46 +1,22 @@
-#include "KafkaConfig.h"
+#include "KafkaConfig.hpp"
 
-#include "ChatRuntime.h"
-#include "ConfigMgr.h"
+#include "ChatRuntime.hpp"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
-#include <cctype>
+import memochat.chat.messaging_config_algorithms;
 
 namespace
 {
 int ReadIntConfig(const char* section, const char* key, int fallback)
 {
     const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty())
-    {
-        return fallback;
-    }
-    try
-    {
-        return std::stoi(raw);
-    }
-    catch (...)
-    {
-        return fallback;
-    }
+    return memochat::chat::messaging::modules::ParseIntOr(raw.data(), raw.size(), fallback);
 }
 
 bool ReadBoolConfig(const char* section, const char* key, bool fallback)
 {
     const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty())
-    {
-        return fallback;
-    }
-    std::string value = raw;
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
-    return value == "1" || value == "true" || value == "yes" || value == "on";
+    return memochat::chat::messaging::modules::ParseBoolFlagOr(raw.data(), raw.size(), fallback);
 }
 } // namespace
 

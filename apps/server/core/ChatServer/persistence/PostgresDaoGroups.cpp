@@ -1,14 +1,12 @@
-#include "PostgresDao.h"
-#include "ConfigMgr.h"
-#include "PostgresDaoUtil.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
-#include "SnowflakeUtil.h"
+#include "PostgresDao.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresDaoUtil.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
+#include "SnowflakeUtil.hpp"
 #include <pqxx/pqxx>
 #include <set>
-#include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <unordered_set>
 #include <unordered_map>
 #include <random>
@@ -16,21 +14,24 @@
 #include <limits>
 #include <sstream>
 
+import memochat.chat.postgres_dao_groups_algorithms;
+
+namespace postgres_dao_groups_modules = memochat::chat::persistence::postgres_dao_groups::modules;
+
 namespace
 {
 bool IsValidGroupCode(const std::string& group_code)
 {
-    if (group_code.size() != 10 || group_code[0] != 'g')
-    {
-        return false;
-    }
-    if (group_code[1] < '1' || group_code[1] > '9')
+    const int length = static_cast<int>(group_code.size());
+    const char prefix = length > 0 ? group_code[0] : '\0';
+    const char first_digit = length > 1 ? group_code[1] : '\0';
+    if (!postgres_dao_groups_modules::HasGroupCodeHeader(length, prefix, first_digit))
     {
         return false;
     }
     for (size_t i = 2; i < group_code.size(); ++i)
     {
-        if (!std::isdigit(static_cast<unsigned char>(group_code[i])))
+        if (!postgres_dao_groups_modules::IsGroupCodeTailChar(group_code[i]))
         {
             return false;
         }
@@ -63,7 +64,7 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
 {
     out_group_id = 0;
     out_group_code.clear();
-    if (owner_uid <= 0 || name.empty())
+    if (!postgres_dao_groups_modules::CanCreateGroup(owner_uid, name.empty()))
     {
         return false;
     }
@@ -72,16 +73,17 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
     {
         try
         {
-            const int final_limit = std::max(2, std::min(member_limit, 200));
+            const int final_limit = postgres_dao_groups_modules::ClampMemberLimit(member_limit);
             std::unordered_set<int> member_set;
             for (int uid : initial_members)
             {
-                if (uid > 0 && uid != owner_uid)
+                if (postgres_dao_groups_modules::ShouldKeepInitialMember(uid, owner_uid))
                 {
                     member_set.insert(uid);
                 }
             }
-            if (static_cast<int>(member_set.size()) + 1 > final_limit)
+            if (!postgres_dao_groups_modules::IsMemberCountWithinLimit(static_cast<int>(member_set.size()) + 1,
+                                                                       final_limit))
             {
                 return false;
             }
@@ -117,6 +119,11 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
                 return false;
             }
             out_group_id = group_rows[0]["group_id"].as<int64_t>();
+            if (!postgres_dao_groups_modules::HasValidGeneratedGroupId(out_group_id))
+            {
+                txn.abort();
+                return false;
+            }
 
             txn.exec_params0("INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
                              "VALUES($1,$2,3,0,0,1)",
@@ -155,16 +162,17 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
 
     try
     {
-        const int final_limit = std::max(2, std::min(member_limit, 200));
+        const int final_limit = postgres_dao_groups_modules::ClampMemberLimit(member_limit);
         std::unordered_set<int> member_set;
         for (int uid : initial_members)
         {
-            if (uid > 0 && uid != owner_uid)
+            if (postgres_dao_groups_modules::ShouldKeepInitialMember(uid, owner_uid))
             {
                 member_set.insert(uid);
             }
         }
-        if (static_cast<int>(member_set.size()) + 1 > final_limit)
+        if (!postgres_dao_groups_modules::IsMemberCountWithinLimit(static_cast<int>(member_set.size()) + 1,
+                                                                   final_limit))
         {
             return false;
         }
@@ -199,7 +207,7 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
         ins_group->setInt(3, owner_uid);
         ins_group->setString(4, announcement);
         ins_group->setInt(5, final_limit);
-        if (ins_group->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(ins_group->executeUpdate()))
         {
             con->_con->rollback();
             return false;
@@ -213,6 +221,11 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
             return false;
         }
         out_group_id = static_cast<int64_t>(std::stoll(id_res->getString("group_id")));
+        if (!postgres_dao_groups_modules::HasValidGeneratedGroupId(out_group_id))
+        {
+            con->_con->rollback();
+            return false;
+        }
 
         std::unique_ptr<sql::PreparedStatement> ins_member(con->_con->prepareStatement(
             "INSERT INTO chat_group_member(group_id, uid, role, mute_until, join_source, status) "
@@ -223,7 +236,7 @@ bool PostgresDao::CreateGroup(const int& owner_uid,
         ins_member->setInt(3, 3);
         ins_member->setInt64(4, 0);
         ins_member->setInt(5, 0);
-        if (ins_member->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(ins_member->executeUpdate()))
         {
             con->_con->rollback();
             return false;
@@ -278,7 +291,7 @@ bool PostgresDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_g
                 return false;
             }
             out_group_id = rows[0]["group_id"].as<int64_t>();
-            return out_group_id > 0;
+            return postgres_dao_groups_modules::HasPositiveGroupId(out_group_id);
         }
         catch (const std::exception& e)
         {
@@ -309,7 +322,7 @@ bool PostgresDao::GetGroupIdByCode(const std::string& group_code, int64_t& out_g
             return false;
         }
         out_group_id = static_cast<int64_t>(std::stoll(res->getString("group_id")));
-        return out_group_id > 0;
+        return postgres_dao_groups_modules::HasPositiveGroupId(out_group_id);
     }
     catch (sql::SQLException& e)
     {
@@ -549,7 +562,7 @@ bool PostgresDao::InviteGroupMember(const int64_t& group_id,
     {
         return false;
     }
-    if (static_cast<int>(members.size()) >= group_info->member_limit)
+    if (!postgres_dao_groups_modules::HasRoomForMember(static_cast<int>(members.size()), group_info->member_limit))
     {
         return false;
     }
@@ -719,7 +732,7 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
                 return false;
             }
 
-            if (found->status != 0)
+            if (!postgres_dao_groups_modules::IsPendingApplyStatus(found->status))
             {
                 apply_info = found;
                 txn.commit();
@@ -729,10 +742,10 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
             const auto updated = txn.exec_params(
                 "UPDATE chat_group_apply SET status = $1, reviewer_uid = $2, updated_at = CURRENT_TIMESTAMP "
                 "WHERE apply_id = $3",
-                agree ? 1 : 2,
+                postgres_dao_groups_modules::ReviewedApplyStatus(agree),
                 reviewer_uid,
                 apply_id);
-            if (updated.affected_rows() <= 0)
+            if (!postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows()))
             {
                 txn.abort();
                 return false;
@@ -746,14 +759,14 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
                                 "status = 1, role = 1, mute_until = 0, updated_at = CURRENT_TIMESTAMP",
                                 found->group_id,
                                 found->applicant_uid,
-                                found->type == "invite" ? 1 : 2);
+                                postgres_dao_groups_modules::JoinSourceForApplyType(found->type == "invite"));
                 txn.exec_params("DELETE FROM chat_group_admin_permission WHERE group_id = $1 AND uid = $2",
                                 found->group_id,
                                 found->applicant_uid);
             }
 
             txn.commit();
-            found->status = agree ? 1 : 2;
+            found->status = postgres_dao_groups_modules::ReviewedApplyStatus(agree);
             apply_info = found;
             return true;
         }
@@ -804,7 +817,7 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
             return false;
         }
 
-        if (found->status != 0)
+        if (!postgres_dao_groups_modules::IsPendingApplyStatus(found->status))
         {
             apply_info = found;
             con->_con->commit();
@@ -814,10 +827,10 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
         std::unique_ptr<sql::PreparedStatement> upd(con->_con->prepareStatement(
             "UPDATE chat_group_apply SET status = ?, reviewer_uid = ?, updated_at = CURRENT_TIMESTAMP "
             "WHERE apply_id = ?"));
-        upd->setInt(1, agree ? 1 : 2);
+        upd->setInt(1, postgres_dao_groups_modules::ReviewedApplyStatus(agree));
         upd->setInt(2, reviewer_uid);
         upd->setInt64(3, apply_id);
-        if (upd->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(upd->executeUpdate()))
         {
             con->_con->rollback();
             return false;
@@ -831,7 +844,7 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
                 "CURRENT_TIMESTAMP"));
             ins_member->setInt64(1, found->group_id);
             ins_member->setInt(2, found->applicant_uid);
-            ins_member->setInt(3, found->type == "invite" ? 1 : 2);
+            ins_member->setInt(3, postgres_dao_groups_modules::JoinSourceForApplyType(found->type == "invite"));
             ins_member->executeUpdate();
             std::unique_ptr<sql::PreparedStatement> del_perm(
                 con->_con->prepareStatement("DELETE FROM chat_group_admin_permission WHERE group_id = ? AND uid = ?"));
@@ -841,7 +854,7 @@ bool PostgresDao::ReviewGroupApply(const int64_t& apply_id,
         }
 
         con->_con->commit();
-        found->status = agree ? 1 : 2;
+        found->status = postgres_dao_groups_modules::ReviewedApplyStatus(agree);
         apply_info = found;
         return true;
     }
@@ -878,7 +891,7 @@ bool PostgresDao::UpdateGroupAnnouncement(const int64_t& group_id,
                                 announcement,
                                 group_id);
             txn.commit();
-            return updated.affected_rows() > 0;
+            return postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows());
         }
         catch (const std::exception& e)
         {
@@ -903,7 +916,7 @@ bool PostgresDao::UpdateGroupAnnouncement(const int64_t& group_id,
                                         "group_id = ? AND status = 1"));
         pstmt->setString(1, announcement);
         pstmt->setInt64(2, group_id);
-        return pstmt->executeUpdate() > 0;
+        return postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate());
     }
     catch (sql::SQLException& e)
     {
@@ -931,7 +944,7 @@ bool PostgresDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_u
                                                  icon,
                                                  group_id);
             txn.commit();
-            return updated.affected_rows() > 0;
+            return postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows());
         }
         catch (const std::exception& e)
         {
@@ -955,7 +968,7 @@ bool PostgresDao::UpdateGroupIcon(const int64_t& group_id, const int& operator_u
             "UPDATE chat_group SET icon = ?, updated_at = CURRENT_TIMESTAMP WHERE group_id = ? AND status = 1"));
         pstmt->setString(1, icon);
         pstmt->setInt64(2, group_id);
-        return pstmt->executeUpdate() > 0;
+        return postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate());
     }
     catch (sql::SQLException& e)
     {
@@ -977,32 +990,26 @@ bool PostgresDao::SetGroupAdmin(const int64_t& group_id,
         return false;
     }
     int operator_role = 0;
-    if (!GetUserRoleInGroup(group_id, operator_uid, operator_role) || operator_role < 2)
+    if (!GetUserRoleInGroup(group_id, operator_uid, operator_role) ||
+        !postgres_dao_groups_modules::CanOperatorManageAdmins(operator_role))
     {
         return false;
     }
     int target_role = 0;
-    if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role == 3)
+    if (!GetUserRoleInGroup(group_id, target_uid, target_role) ||
+        !postgres_dao_groups_modules::CanTargetBecomeAdmin(target_role))
     {
         return false;
     }
-    if (operator_role < 3 && target_role >= operator_role)
+    if (!postgres_dao_groups_modules::CanOperatorChangeTargetRole(operator_role, target_role))
     {
         return false;
     }
-    int64_t normalized_perm_bits = kDefaultAdminPermBits;
-    if (permission_bits > 0)
-    {
-        normalized_perm_bits = permission_bits & kOwnerPermBits;
-        if (normalized_perm_bits <= 0)
-        {
-            normalized_perm_bits = kDefaultAdminPermBits;
-        }
-    }
-    if (!is_admin)
-    {
-        normalized_perm_bits = 0;
-    }
+    const int64_t normalized_perm_bits =
+        postgres_dao_groups_modules::NormalizeAdminPermissionBitsForRole(is_admin,
+                                                                         permission_bits,
+                                                                         kOwnerPermBits,
+                                                                         kDefaultAdminPermBits);
     if (use_postgres_)
     {
         try
@@ -1015,7 +1022,7 @@ bool PostgresDao::SetGroupAdmin(const int64_t& group_id,
                                 is_admin ? 2 : 1,
                                 group_id,
                                 target_uid);
-            if (updated.affected_rows() <= 0)
+            if (!postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows()))
             {
                 txn.abort();
                 return false;
@@ -1065,7 +1072,7 @@ bool PostgresDao::SetGroupAdmin(const int64_t& group_id,
         pstmt->setInt(1, is_admin ? 2 : 1);
         pstmt->setInt64(2, group_id);
         pstmt->setInt(3, target_uid);
-        if (pstmt->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate()))
         {
             con->_con->rollback();
             return false;
@@ -1115,13 +1122,15 @@ bool PostgresDao::MuteGroupMember(const int64_t& group_id,
                                   const int64_t& mute_until)
 {
     int op_role = 0;
-    if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2 ||
+    if (!GetUserRoleInGroup(group_id, operator_uid, op_role) ||
+        !postgres_dao_groups_modules::CanModerateOperatorRole(op_role) ||
         !HasGroupPermission(group_id, operator_uid, kPermBanUsers))
     {
         return false;
     }
     int target_role = 0;
-    if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role >= op_role)
+    if (!GetUserRoleInGroup(group_id, target_uid, target_role) ||
+        !postgres_dao_groups_modules::CanModerateTargetRole(op_role, target_role))
     {
         return false;
     }
@@ -1134,11 +1143,11 @@ bool PostgresDao::MuteGroupMember(const int64_t& group_id,
             const auto updated =
                 txn.exec_params("UPDATE chat_group_member SET mute_until = $1, updated_at = CURRENT_TIMESTAMP "
                                 "WHERE group_id = $2 AND uid = $3 AND status = 1",
-                                std::max<int64_t>(0, mute_until),
+                                postgres_dao_groups_modules::ClampMuteUntil(mute_until),
                                 group_id,
                                 target_uid);
             txn.commit();
-            return updated.affected_rows() > 0;
+            return postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows());
         }
         catch (const std::exception& e)
         {
@@ -1161,10 +1170,10 @@ bool PostgresDao::MuteGroupMember(const int64_t& group_id,
         std::unique_ptr<sql::PreparedStatement> pstmt(
             con->_con->prepareStatement("UPDATE chat_group_member SET mute_until = ?, updated_at = CURRENT_TIMESTAMP "
                                         "WHERE group_id = ? AND uid = ? AND status = 1"));
-        pstmt->setInt64(1, std::max<int64_t>(0, mute_until));
+        pstmt->setInt64(1, postgres_dao_groups_modules::ClampMuteUntil(mute_until));
         pstmt->setInt64(2, group_id);
         pstmt->setInt(3, target_uid);
-        return pstmt->executeUpdate() > 0;
+        return postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate());
     }
     catch (sql::SQLException& e)
     {
@@ -1178,13 +1187,15 @@ bool PostgresDao::MuteGroupMember(const int64_t& group_id,
 bool PostgresDao::KickGroupMember(const int64_t& group_id, const int& operator_uid, const int& target_uid)
 {
     int op_role = 0;
-    if (!GetUserRoleInGroup(group_id, operator_uid, op_role) || op_role < 2 ||
+    if (!GetUserRoleInGroup(group_id, operator_uid, op_role) ||
+        !postgres_dao_groups_modules::CanModerateOperatorRole(op_role) ||
         !HasGroupPermission(group_id, operator_uid, kPermBanUsers))
     {
         return false;
     }
     int target_role = 0;
-    if (!GetUserRoleInGroup(group_id, target_uid, target_role) || target_role >= op_role)
+    if (!GetUserRoleInGroup(group_id, target_uid, target_role) ||
+        !postgres_dao_groups_modules::CanModerateTargetRole(op_role, target_role))
     {
         return false;
     }
@@ -1199,7 +1210,7 @@ bool PostgresDao::KickGroupMember(const int64_t& group_id, const int& operator_u
                                 "WHERE group_id = $1 AND uid = $2 AND status = 1",
                                 group_id,
                                 target_uid);
-            if (updated.affected_rows() <= 0)
+            if (!postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows()))
             {
                 txn.abort();
                 return false;
@@ -1233,7 +1244,7 @@ bool PostgresDao::KickGroupMember(const int64_t& group_id, const int& operator_u
                                         "WHERE group_id = ? AND uid = ? AND status = 1"));
         pstmt->setInt64(1, group_id);
         pstmt->setInt(2, target_uid);
-        if (pstmt->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate()))
         {
             return false;
         }
@@ -1260,7 +1271,7 @@ bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid)
     {
         return false;
     }
-    if (role == 3)
+    if (!postgres_dao_groups_modules::CanQuitGroupRole(role))
     {
         return false;
     }
@@ -1275,7 +1286,7 @@ bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid)
                                 "WHERE group_id = $1 AND uid = $2 AND status = 1",
                                 group_id,
                                 uid);
-            if (updated.affected_rows() <= 0)
+            if (!postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows()))
             {
                 txn.abort();
                 return false;
@@ -1307,7 +1318,7 @@ bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid)
                                         "WHERE group_id = ? AND uid = ? AND status = 1"));
         pstmt->setInt64(1, group_id);
         pstmt->setInt(2, uid);
-        if (pstmt->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(pstmt->executeUpdate()))
         {
             return false;
         }
@@ -1330,7 +1341,7 @@ bool PostgresDao::QuitGroup(const int64_t& group_id, const int& uid)
 bool PostgresDao::DissolveGroup(const int64_t& group_id, const int& operator_uid)
 {
     int role = 0;
-    if (!GetUserRoleInGroup(group_id, operator_uid, role) || role != 3)
+    if (!GetUserRoleInGroup(group_id, operator_uid, role) || !postgres_dao_groups_modules::CanDissolveGroupRole(role))
     {
         return false;
     }
@@ -1344,7 +1355,7 @@ bool PostgresDao::DissolveGroup(const int64_t& group_id, const int& operator_uid
                                                  "WHERE group_id = $1 AND owner_uid = $2 AND status = 1",
                                                  group_id,
                                                  operator_uid);
-            if (updated.affected_rows() <= 0)
+            if (!postgres_dao_groups_modules::HasAffectedRows(updated.affected_rows()))
             {
                 txn.abort();
                 return false;
@@ -1380,7 +1391,7 @@ bool PostgresDao::DissolveGroup(const int64_t& group_id, const int& operator_uid
                                         "WHERE group_id = ? AND owner_uid = ? AND status = 1"));
         update_group->setInt64(1, group_id);
         update_group->setInt(2, operator_uid);
-        if (update_group->executeUpdate() <= 0)
+        if (!postgres_dao_groups_modules::HasAffectedRows(update_group->executeUpdate()))
         {
             con->_con->rollback();
             return false;
@@ -1570,14 +1581,9 @@ bool PostgresDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid
     {
         return false;
     }
-    if (role >= 3)
+    out_bits = postgres_dao_groups_modules::FallbackPermissionBitsForRole(role, kOwnerPermBits, kDefaultAdminPermBits);
+    if (postgres_dao_groups_modules::IsOwnerRole(role) || postgres_dao_groups_modules::IsNormalMemberRole(role))
     {
-        out_bits = kOwnerPermBits;
-        return true;
-    }
-    if (role < 2)
-    {
-        out_bits = 0;
         return true;
     }
     if (use_postgres_)
@@ -1592,14 +1598,11 @@ bool PostgresDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid
                                               uid);
             if (rows.empty() || rows[0]["permission_bits"].is_null())
             {
-                out_bits = kDefaultAdminPermBits;
                 return true;
             }
-            out_bits = rows[0]["permission_bits"].as<int64_t>();
-            if (out_bits <= 0)
-            {
-                out_bits = kDefaultAdminPermBits;
-            }
+            out_bits =
+                postgres_dao_groups_modules::NormalizeStoredPermissionBits(rows[0]["permission_bits"].as<int64_t>(),
+                                                                           kDefaultAdminPermBits);
             return true;
         }
         catch (const std::exception& e)
@@ -1630,14 +1633,11 @@ bool PostgresDao::GetGroupPermissionBits(const int64_t& group_id, const int& uid
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         if (!res->next())
         {
-            out_bits = kDefaultAdminPermBits;
             return true;
         }
-        out_bits = static_cast<int64_t>(std::stoll(res->getString("permission_bits")));
-        if (out_bits <= 0)
-        {
-            out_bits = kDefaultAdminPermBits;
-        }
+        out_bits = postgres_dao_groups_modules::NormalizeStoredPermissionBits(
+            static_cast<int64_t>(std::stoll(res->getString("permission_bits"))),
+            kDefaultAdminPermBits);
         return true;
     }
     catch (sql::SQLException& e)
@@ -1656,5 +1656,5 @@ bool PostgresDao::HasGroupPermission(const int64_t& group_id, const int& uid, in
     {
         return false;
     }
-    return (bits & required_bits) == required_bits;
+    return postgres_dao_groups_modules::HasRequiredPermissionBits(bits, required_bits);
 }

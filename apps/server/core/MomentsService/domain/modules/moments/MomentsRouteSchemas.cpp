@@ -1,7 +1,9 @@
-#include "modules/moments/MomentsRouteModule.h"
+#include "modules/moments/MomentsRouteModule.hpp"
 
-#include "services/moments/MomentsOutputDtos.h"
-#include "services/moments/MomentsPublicDtos.h"
+#include "services/moments/MomentsOutputDtos.hpp"
+#include "services/moments/MomentsPublicDtos.hpp"
+
+import memochat.moments.route_schema_algorithms;
 
 namespace memochat::gate::modules::moments
 {
@@ -9,54 +11,55 @@ namespace memochat::gate::modules::moments
 std::vector<memochat::gate::routing::RouteSchemaDescriptor> MomentsRouteModule::RouteSchemas()
 {
     namespace svc = memochat::gate::services::moments;
+    namespace modules = memochat::moments::route_schema::modules;
     using memochat::gate::routing::MakeRouteSchema;
 
     return {
-        MakeRouteSchema<svc::MomentPublishRequestDto, svc::MomentIdResponseDto>("POST",
-                                                                                "/api/moments/publish",
-                                                                                "moments.publish",
-                                                                                "MomentPublishRequestDto",
-                                                                                "MomentIdResponseDto"),
-        MakeRouteSchema<svc::MomentListRequestDto, svc::MomentListResponseDto>("POST",
-                                                                               "/api/moments/list",
-                                                                               "moments.list",
-                                                                               "MomentListRequestDto",
-                                                                               "MomentListResponseDto"),
-        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentDetailResponseDto>("POST",
-                                                                               "/api/moments/detail",
-                                                                               "moments.detail",
-                                                                               "MomentIdRequestDto",
-                                                                               "MomentDetailResponseDto"),
-        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentIdResponseDto>("POST",
-                                                                           "/api/moments/delete",
-                                                                           "moments.delete",
-                                                                           "MomentIdRequestDto",
-                                                                           "MomentIdResponseDto"),
-        MakeRouteSchema<svc::MomentLikeRequestDto, svc::MomentLikeResponseDto>("POST",
-                                                                               "/api/moments/like",
-                                                                               "moments.like",
-                                                                               "MomentLikeRequestDto",
-                                                                               "MomentLikeResponseDto"),
+        MakeRouteSchema<svc::MomentPublishRequestDto, svc::MomentIdResponseDto>(modules::PostMethod(),
+                                                                                modules::PublishPath(),
+                                                                                modules::PublishRouteName(),
+                                                                                modules::PublishRequestTypeName(),
+                                                                                modules::MomentIdResponseTypeName()),
+        MakeRouteSchema<svc::MomentListRequestDto, svc::MomentListResponseDto>(modules::PostMethod(),
+                                                                               modules::ListPath(),
+                                                                               modules::ListRouteName(),
+                                                                               modules::ListRequestTypeName(),
+                                                                               modules::ListResponseTypeName()),
+        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentDetailResponseDto>(modules::PostMethod(),
+                                                                               modules::DetailPath(),
+                                                                               modules::DetailRouteName(),
+                                                                               modules::MomentIdRequestTypeName(),
+                                                                               modules::DetailResponseTypeName()),
+        MakeRouteSchema<svc::MomentIdRequestDto, svc::MomentIdResponseDto>(modules::PostMethod(),
+                                                                           modules::DeletePath(),
+                                                                           modules::DeleteRouteName(),
+                                                                           modules::MomentIdRequestTypeName(),
+                                                                           modules::MomentIdResponseTypeName()),
+        MakeRouteSchema<svc::MomentLikeRequestDto, svc::MomentLikeResponseDto>(modules::PostMethod(),
+                                                                               modules::LikePath(),
+                                                                               modules::LikeRouteName(),
+                                                                               modules::LikeRequestTypeName(),
+                                                                               modules::LikeResponseTypeName()),
         MakeRouteSchema<svc::MomentCommentRequestDto, svc::MomentCommentMutationResponseDto>(
-            "POST",
-            "/api/moments/comment",
-            "moments.comment",
-            "MomentCommentRequestDto",
-            "MomentCommentMutationResponseDto",
+            modules::PostMethod(),
+            modules::CommentPath(),
+            modules::CommentRouteName(),
+            modules::CommentRequestTypeName(),
+            modules::CommentMutationResponseTypeName(),
             {{"delete_", "delete"}},
             {{"delete_", "delete"}}),
         MakeRouteSchema<svc::MomentCommentListRequestDto, svc::MomentCommentListResponseDto>(
-            "POST",
-            "/api/moments/comment/list",
-            "moments.comment.list",
-            "MomentCommentListRequestDto",
-            "MomentCommentListResponseDto"),
+            modules::PostMethod(),
+            modules::CommentListPath(),
+            modules::CommentListRouteName(),
+            modules::CommentListRequestTypeName(),
+            modules::CommentListResponseTypeName()),
         MakeRouteSchema<svc::MomentCommentLikeRequestDto, svc::MomentCommentLikeResponseDto>(
-            "POST",
-            "/api/moments/comment/like",
-            "moments.comment.like",
-            "MomentCommentLikeRequestDto",
-            "MomentCommentLikeResponseDto"),
+            modules::PostMethod(),
+            modules::CommentLikePath(),
+            modules::CommentLikeRouteName(),
+            modules::CommentLikeRequestTypeName(),
+            modules::CommentLikeResponseTypeName()),
     };
 }
 

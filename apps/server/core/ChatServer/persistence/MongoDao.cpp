@@ -1,9 +1,7 @@
-#include "MongoDao.h"
+#include "MongoDao.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <iostream>
 
@@ -20,6 +18,10 @@
 #include <mongocxx/options/replace.hpp>
 #include <mongocxx/pool.hpp>
 #include <mongocxx/uri.hpp>
+
+import memochat.chat.mongo_dao_algorithms;
+
+namespace mongo_dao_modules = memochat::chat::persistence::mongo_dao::modules;
 
 namespace
 {
@@ -38,15 +40,7 @@ mongocxx::instance& MongoInstance()
 
 bool ParseBool(const std::string& raw)
 {
-    std::string normalized = raw;
-    std::transform(normalized.begin(),
-                   normalized.end(),
-                   normalized.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
-    return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+    return mongo_dao_modules::ParseBoolText(raw.c_str());
 }
 
 std::string GetString(const bsoncxx::document::view& view, const char* key, const std::string& default_value = "")
@@ -107,14 +101,14 @@ MongoDao::~MongoDao()
 
 bool MongoDao::Enabled() const
 {
-    return enabled_ && init_ok_ && pool_ != nullptr;
+    return mongo_dao_modules::IsEnabled(enabled_, init_ok_, pool_ != nullptr);
 }
 
 bool MongoDao::Init()
 {
     auto& cfg = ConfigMgr::Inst();
     enabled_ = ParseBool(cfg.GetValue("Mongo", "Enabled"));
-    if (!enabled_)
+    if (!mongo_dao_modules::ShouldInitializeMongo(enabled_))
     {
         return false;
     }
@@ -123,16 +117,16 @@ bool MongoDao::Init()
     database_name_ = cfg.GetValue("Mongo", "Database");
     private_collection_name_ = cfg.GetValue("Mongo", "PrivateCollection");
     group_collection_name_ = cfg.GetValue("Mongo", "GroupCollection");
-    if (uri_.empty() || database_name_.empty())
+    if (!mongo_dao_modules::HasRequiredConfig(uri_.empty(), database_name_.empty()))
     {
         std::cerr << "[MongoDao] Mongo config missing Uri or Database" << std::endl;
         return false;
     }
-    if (private_collection_name_.empty())
+    if (mongo_dao_modules::ShouldUseDefaultCollectionName(private_collection_name_.empty()))
     {
         private_collection_name_ = "private_messages";
     }
-    if (group_collection_name_.empty())
+    if (mongo_dao_modules::ShouldUseDefaultCollectionName(group_collection_name_.empty()))
     {
         group_collection_name_ = "group_messages";
     }
@@ -153,7 +147,7 @@ bool MongoDao::Init()
 
 bool MongoDao::EnsureIndexes()
 {
-    if (!pool_)
+    if (!mongo_dao_modules::CanEnsureIndexes(pool_ != nullptr))
     {
         return false;
     }
@@ -192,14 +186,14 @@ bool MongoDao::EnsureIndexes()
 
 std::string MongoDao::BuildPrivateConvKey(int uid_a, int uid_b) const
 {
-    const int conv_min = std::min(uid_a, uid_b);
-    const int conv_max = std::max(uid_a, uid_b);
+    const int conv_min = mongo_dao_modules::MinInt(uid_a, uid_b);
+    const int conv_max = mongo_dao_modules::MaxInt(uid_a, uid_b);
     return std::string("p_") + std::to_string(conv_min) + "_" + std::to_string(conv_max);
 }
 
 bool MongoDao::SavePrivateMessage(const PrivateMessageInfo& msg)
 {
-    if (!Enabled() || msg.msg_id.empty())
+    if (!mongo_dao_modules::CanSavePrivateMessage(Enabled(), msg.msg_id.empty()))
     {
         return false;
     }
@@ -245,7 +239,7 @@ bool MongoDao::GetPrivateHistory(const int& uid,
 {
     messages.clear();
     has_more = false;
-    if (!Enabled() || uid <= 0 || peer_uid <= 0 || limit <= 0)
+    if (!mongo_dao_modules::CanReadPrivateHistory(Enabled(), uid, peer_uid, limit))
     {
         return false;
     }
@@ -254,11 +248,11 @@ bool MongoDao::GetPrivateHistory(const int& uid,
     {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][private_collection_name_];
-        const int final_limit = std::max(1, std::min(limit, 50));
+        const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
 
         bsoncxx::builder::basic::document filter;
         filter.append(kvp("conv_key", BuildPrivateConvKey(uid, peer_uid)));
-        if (before_ts > 0 && !before_msg_id.empty())
+        if (mongo_dao_modules::ShouldApplyPrivateTieBreaker(before_ts, before_msg_id.empty()))
         {
             filter.append(kvp("$or",
                               [&](sub_array arr)
@@ -268,7 +262,7 @@ bool MongoDao::GetPrivateHistory(const int& uid,
                                                            kvp("_id", make_document(kvp("$lt", before_msg_id)))));
                               }));
         }
-        else if (before_ts > 0)
+        else if (mongo_dao_modules::ShouldApplyTimestampFilter(before_ts))
         {
             filter.append(kvp("created_at", make_document(kvp("$lt", before_ts))));
         }
@@ -295,7 +289,7 @@ bool MongoDao::GetPrivateHistory(const int& uid,
             messages.push_back(info);
         }
 
-        if (static_cast<int>(messages.size()) > final_limit)
+        if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
         {
             has_more = true;
             messages.resize(final_limit);
@@ -314,7 +308,7 @@ bool MongoDao::GetPrivateHistory(const int& uid,
 bool MongoDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message)
 {
     message = nullptr;
-    if (!Enabled() || msg_id.empty())
+    if (!mongo_dao_modules::CanFindPrivateMessage(Enabled(), msg_id.empty()))
     {
         return false;
     }
@@ -358,25 +352,25 @@ bool MongoDao::UpdatePrivateMessageContent(const int& uid,
                                            const std::string& content,
                                            int64_t edited_at_ms)
 {
-    if (!Enabled() || uid <= 0 || peer_uid <= 0 || msg_id.empty() || content.empty())
+    if (!mongo_dao_modules::CanUpdatePrivateMessage(Enabled(), uid, peer_uid, msg_id.empty(), content.empty()))
     {
         return false;
     }
-    if (edited_at_ms <= 0)
-    {
-        edited_at_ms = static_cast<int64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-                .count());
-    }
+    const auto now_ms = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    edited_at_ms = mongo_dao_modules::SelectOperationTimestamp(edited_at_ms, now_ms);
 
     std::shared_ptr<PrivateMessageInfo> message;
     if (!GetPrivateMessageByMsgId(msg_id, message) || !message)
     {
         return false;
     }
-    const int conv_min = std::min(uid, peer_uid);
-    const int conv_max = std::max(uid, peer_uid);
-    if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+    if (!mongo_dao_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                  message->conv_uid_max,
+                                                  message->from_uid,
+                                                  uid,
+                                                  peer_uid))
     {
         return false;
     }
@@ -404,27 +398,30 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
                                     const std::string& msg_id,
                                     int64_t deleted_at_ms)
 {
-    if (!Enabled() || uid <= 0 || peer_uid <= 0 || msg_id.empty())
+    if (!mongo_dao_modules::CanRequestPrivateMessageRevoke(Enabled(), uid, peer_uid, msg_id.empty()))
     {
         return false;
     }
-    if (deleted_at_ms <= 0)
-    {
-        deleted_at_ms = static_cast<int64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-                .count());
-    }
+    const auto now_ms = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    deleted_at_ms = mongo_dao_modules::SelectOperationTimestamp(deleted_at_ms, now_ms);
 
     std::shared_ptr<PrivateMessageInfo> message;
     if (!GetPrivateMessageByMsgId(msg_id, message) || !message)
     {
         return false;
     }
-    const int conv_min = std::min(uid, peer_uid);
-    const int conv_max = std::max(uid, peer_uid);
-    if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
-        message->deleted_at_ms > 0 || message->created_at <= 0 ||
-        deleted_at_ms - message->created_at > kMessageRevokeWindowMsMongoDao)
+    const bool owner_matches = mongo_dao_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                                        message->conv_uid_max,
+                                                                        message->from_uid,
+                                                                        uid,
+                                                                        peer_uid);
+    if (!mongo_dao_modules::CanRevokePrivateMessage(owner_matches,
+                                                    message->deleted_at_ms,
+                                                    message->created_at,
+                                                    deleted_at_ms,
+                                                    kMessageRevokeWindowMsMongoDao))
     {
         return false;
     }
@@ -433,6 +430,8 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
     {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][private_collection_name_];
+        const int conv_min = mongo_dao_modules::MinInt(uid, peer_uid);
+        const int conv_max = mongo_dao_modules::MaxInt(uid, peer_uid);
         auto update = make_document(kvp("$set",
                                         make_document(kvp("content", "[消息已撤回]"),
                                                       kvp("deleted_at_ms", deleted_at_ms),
@@ -456,7 +455,7 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
 
 bool MongoDao::SaveGroupMessage(const GroupMessageInfo& msg)
 {
-    if (!Enabled() || msg.msg_id.empty() || msg.group_id <= 0)
+    if (!mongo_dao_modules::CanSaveGroupMessage(Enabled(), msg.msg_id.empty(), msg.group_id))
     {
         return false;
     }
@@ -508,7 +507,7 @@ bool MongoDao::GetGroupHistory(const int64_t& group_id,
 {
     messages.clear();
     has_more = false;
-    if (!Enabled() || group_id <= 0 || limit <= 0)
+    if (!mongo_dao_modules::CanReadGroupHistory(Enabled(), group_id, limit))
     {
         return false;
     }
@@ -517,15 +516,15 @@ bool MongoDao::GetGroupHistory(const int64_t& group_id,
     {
         auto client = pool_->acquire();
         auto collection = (*client)[database_name_][group_collection_name_];
-        const int final_limit = std::max(1, std::min(limit, 50));
+        const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
 
         bsoncxx::builder::basic::document filter;
         filter.append(kvp("group_id", group_id));
-        if (before_seq > 0)
+        if (mongo_dao_modules::ShouldApplyGroupSeqFilter(before_seq))
         {
             filter.append(kvp("group_seq", make_document(kvp("$lt", before_seq))));
         }
-        else if (before_ts > 0)
+        else if (mongo_dao_modules::ShouldApplyGroupTimestampFilter(before_seq, before_ts))
         {
             filter.append(kvp("created_at", make_document(kvp("$lt", before_ts))));
         }
@@ -560,7 +559,7 @@ bool MongoDao::GetGroupHistory(const int64_t& group_id,
             messages.push_back(info);
         }
 
-        if (static_cast<int>(messages.size()) > final_limit)
+        if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
         {
             has_more = true;
             messages.resize(final_limit);
@@ -581,7 +580,7 @@ bool MongoDao::GetGroupMessageByMsgId(const int64_t& group_id,
                                       std::shared_ptr<GroupMessageInfo>& message)
 {
     message = nullptr;
-    if (!Enabled() || group_id <= 0 || msg_id.empty())
+    if (!mongo_dao_modules::CanFindGroupMessage(Enabled(), group_id, msg_id.empty()))
     {
         return false;
     }
@@ -634,16 +633,14 @@ bool MongoDao::UpdateGroupMessageContent(const int64_t& group_id,
                                          int64_t edited_at_ms)
 {
     (void) operator_uid;
-    if (!Enabled() || group_id <= 0 || msg_id.empty() || content.empty())
+    if (!mongo_dao_modules::CanUpdateGroupMessage(Enabled(), group_id, msg_id.empty(), content.empty()))
     {
         return false;
     }
-    if (edited_at_ms <= 0)
-    {
-        edited_at_ms = static_cast<int64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-                .count());
-    }
+    const auto now_ms = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    edited_at_ms = mongo_dao_modules::SelectOperationTimestamp(edited_at_ms, now_ms);
 
     try
     {
@@ -674,24 +671,26 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
                                   const std::string& msg_id,
                                   int64_t deleted_at_ms)
 {
-    if (!Enabled() || group_id <= 0 || operator_uid <= 0 || msg_id.empty())
+    if (!mongo_dao_modules::CanRequestGroupMessageRevoke(Enabled(), group_id, operator_uid, msg_id.empty()))
     {
         return false;
     }
-    if (deleted_at_ms <= 0)
-    {
-        deleted_at_ms = static_cast<int64_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-                .count());
-    }
+    const auto now_ms = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count());
+    deleted_at_ms = mongo_dao_modules::SelectOperationTimestamp(deleted_at_ms, now_ms);
 
     std::shared_ptr<GroupMessageInfo> message;
     if (!GetGroupMessageByMsgId(group_id, msg_id, message) || !message)
     {
         return false;
     }
-    if (message->from_uid != operator_uid || message->deleted_at_ms > 0 || message->created_at <= 0 ||
-        deleted_at_ms - message->created_at > kMessageRevokeWindowMsMongoDao)
+    if (!mongo_dao_modules::CanApplyGroupMessageRevoke(message->from_uid,
+                                                       operator_uid,
+                                                       message->deleted_at_ms,
+                                                       message->created_at,
+                                                       deleted_at_ms,
+                                                       kMessageRevokeWindowMsMongoDao))
     {
         return false;
     }

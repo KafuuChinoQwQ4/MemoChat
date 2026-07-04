@@ -1,36 +1,37 @@
-#include "ChatSessionRepository.h"
+#include "ChatSessionRepository.hpp"
 
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "const.h"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "const.hpp"
 
-bool ChatSessionRepository::GetLegacyToken(int uid, std::string& token)
+import memochat.chat.session_repository_algorithms;
+
+namespace
 {
-    if (uid <= 0)
-    {
-        return false;
-    }
-    return RedisMgr::GetInstance()->Get(std::string(USERTOKENPREFIX) + std::to_string(uid), token);
+namespace session_repository_modules = memochat::chat::persistence::session_repository::modules;
+
+std::string DuplicateLoginLockKey(int uid)
+{
+    return std::string(LOCK_PREFIX) + std::to_string(uid);
 }
+} // namespace
 
 std::string ChatSessionRepository::AcquireDuplicateLoginLock(int uid)
 {
-    if (uid <= 0)
+    if (!session_repository_modules::ShouldAcquireDuplicateLoginLock(uid))
     {
         return std::string();
     }
-    return RedisMgr::GetInstance()->acquireLock(std::string(LOCK_PREFIX) + std::to_string(uid),
-                                                LOCK_TIME_OUT,
-                                                ACQUIRE_TIME_OUT);
+    return RedisMgr::GetInstance()->acquireLock(DuplicateLoginLockKey(uid), LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
 }
 
 void ChatSessionRepository::ReleaseDuplicateLoginLock(int uid, const std::string& lock_identifier)
 {
-    if (uid <= 0 || lock_identifier.empty())
+    if (!session_repository_modules::ShouldReleaseDuplicateLoginLock(uid, lock_identifier.empty()))
     {
         return;
     }
-    RedisMgr::GetInstance()->releaseLock(std::string(LOCK_PREFIX) + std::to_string(uid), lock_identifier);
+    RedisMgr::GetInstance()->releaseLock(DuplicateLoginLockKey(uid), lock_identifier);
 }
 
 bool ChatSessionRepository::GetUndeliveredPrivateMessages(int uid,
@@ -39,5 +40,9 @@ bool ChatSessionRepository::GetUndeliveredPrivateMessages(int uid,
                                                           int limit,
                                                           std::vector<std::shared_ptr<PrivateMessageInfo>>& messages)
 {
+    if (!session_repository_modules::ShouldQueryUndeliveredPrivateMessages(uid, limit))
+    {
+        return false;
+    }
     return PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages(uid, before_ts, before_msg_id, limit, messages);
 }

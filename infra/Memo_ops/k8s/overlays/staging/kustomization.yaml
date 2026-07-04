@@ -26,7 +26,7 @@ patches:
       metadata:
         name: memochat-varifyserver
       spec:
-        replicas: 2
+        replicas: 1
     target:
       kind: Deployment
       name: memochat-varifyserver
@@ -36,7 +36,7 @@ patches:
       metadata:
         name: memochat-chatserver
       spec:
-        replicas: 3
+        replicas: 1
     target:
       kind: StatefulSet
       name: memochat-chatserver

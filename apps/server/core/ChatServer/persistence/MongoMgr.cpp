@@ -1,4 +1,16 @@
-#include "MongoMgr.h"
+#include "MongoMgr.hpp"
+
+import memochat.chat.mongo_mgr_algorithms;
+
+namespace
+{
+namespace mongo_mgr_modules = memochat::chat::persistence::mongo_mgr::modules;
+
+static_assert(mongo_mgr_modules::IsCompleteForwardingSurface(mongo_mgr_modules::EnabledForwardCount(),
+                                                             mongo_mgr_modules::PrivateMessageForwardCount(),
+                                                             mongo_mgr_modules::GroupMessageForwardCount()));
+static_assert(mongo_mgr_modules::ForwardingSurfaceCount() == 11);
+} // namespace
 
 MongoMgr::MongoMgr()
 {

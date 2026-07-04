@@ -529,7 +529,7 @@ class AgentHarnessService:
             metadata=langsmith_metadata,
             tags=["agent", "guardrails", "tools"],
         ) as tool_guardrail_run:
-            tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs())
+            tool_guardrails = self._guardrail_service.check_tool_plan(request, plan_steps, self._tool_specs(), skill)
             set_run_output(
                 tool_guardrail_run, {"status": _guardrail_event_status(tool_guardrails), "count": len(tool_guardrails)}
             )
@@ -574,6 +574,7 @@ class AgentHarnessService:
                     target_lang=getattr(request, "target_lang", ""),
                     requested_tools=getattr(request, "requested_tools", []),
                     tool_arguments=getattr(request, "tool_arguments", {}),
+                    skill=skill,
                 )
                 set_run_output(
                     tool_run, {"observation_count": len(observations), "tools": [obs.name for obs in observations]}
@@ -679,7 +680,13 @@ class AgentHarnessService:
             return {**state, "react_done": True}
 
         request = state["request"]
-        followup_guardrails = self._guardrail_service.check_tool_plan(request, followup_steps, self._tool_specs())
+        skill = state["skill"]
+        followup_guardrails = self._guardrail_service.check_tool_plan(
+            request,
+            followup_steps,
+            self._tool_specs(),
+            skill,
+        )
         await self._add_guardrail_event(
             state["trace"].trace_id,
             f"react_tool_plan_round_{state.get('react_round', 0)}",
@@ -717,6 +724,7 @@ class AgentHarnessService:
                     target_lang=getattr(request, "target_lang", ""),
                     requested_tools=getattr(request, "requested_tools", []),
                     tool_arguments=getattr(request, "tool_arguments", {}),
+                    skill=state["skill"],
                 )
                 set_run_output(
                     tool_run,

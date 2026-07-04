@@ -25,8 +25,8 @@
 | `QuicChatTransport.cpp` | QUIC 聊天传输实现 |
 | `QuicChatTransport.h` | QUIC 聊天传输声明 |
 | `QuicChatTransportMsquic.cpp` | 基于 MsQuic 的 QUIC 传输实现 |
-| `TelemetryUtils.cpp` | 遥测/埋点工具实现 |
-| `TelemetryUtils.h` | 遥测/埋点工具声明 |
+| `TelemetryUtils.cpp` | 遥测/埋点工具实现，包含 HTTP span URL 脱敏 |
+| `TelemetryUtils.h` | 遥测/埋点工具声明，提供 HTTP span URL 脱敏接口 |
 | `httpmgr.cpp` | HTTP 管理器实现（请求发起与回调） |
 | `httpmgr.h` | HTTP 管理器声明 |
 | `tcpmgr.cpp` | TCP 长连接管理器实现 |

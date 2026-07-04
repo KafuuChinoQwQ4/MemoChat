@@ -1,6 +1,8 @@
-#include "services/moments/MomentsPublicDtos.h"
+#include "services/moments/MomentsPublicDtos.hpp"
 
 #include <cstdlib>
+
+import memochat.moments.public_algorithms;
 
 namespace
 {
@@ -72,13 +74,10 @@ bool MomentsReadBool(const memochat::json::JsonValue& obj, const char* key, bool
     {
     }
     const std::string text = value.asString();
-    if (text == "true" || text == "1")
+    bool parsed_text = false;
+    if (memochat::moments::modules::TryParseBoolText(text.data(), text.size(), &parsed_text))
     {
-        return true;
-    }
-    if (text == "false" || text == "0")
-    {
-        return false;
+        return parsed_text;
     }
     try
     {
@@ -106,11 +105,19 @@ std::string MomentsReadString(const memochat::json::JsonValue& obj, const char* 
 
 void NormalizeMomentPublicItem(MomentItemInfo& item)
 {
-    if (item.media_type != "image" && item.media_type != "video")
+    const auto item_kind = memochat::moments::modules::NormalizeMomentItemKind(item.media_type.data(),
+                                                                               item.media_type.size(),
+                                                                               item.media_key.data(),
+                                                                               item.media_key.size());
+    if (item_kind == memochat::moments::modules::kMomentItemKindImage)
     {
-        item.media_type = "text";
+        item.media_type = "image";
     }
-    if ((item.media_type == "image" || item.media_type == "video") && item.media_key.empty())
+    else if (item_kind == memochat::moments::modules::kMomentItemKindVideo)
+    {
+        item.media_type = "video";
+    }
+    else
     {
         item.media_type = "text";
     }
@@ -180,14 +187,7 @@ MomentListRequestDto MomentListRequestFromJsonValue(const memochat::json::JsonVa
     request.last_moment_id = MomentsReadInt64(root, "last_moment_id", 0);
     request.limit = MomentsReadInt(root, "limit", 20);
     request.author_uid = MomentsReadInt(root, "author_uid", 0);
-    if (request.limit <= 0)
-    {
-        request.limit = 20;
-    }
-    if (request.limit > 50)
-    {
-        request.limit = 50;
-    }
+    request.limit = memochat::moments::modules::NormalizePageLimit(request.limit, 20, 50);
     return request;
 }
 
@@ -236,14 +236,7 @@ MomentCommentListRequestDto MomentCommentListRequestFromJsonValue(const memochat
     request.moment_id = MomentsReadInt64(root, "moment_id", 0);
     request.last_comment_id = MomentsReadInt64(root, "last_comment_id", 0);
     request.limit = MomentsReadInt(root, "limit", 20);
-    if (request.limit <= 0)
-    {
-        request.limit = 20;
-    }
-    if (request.limit > 50)
-    {
-        request.limit = 50;
-    }
+    request.limit = memochat::moments::modules::NormalizePageLimit(request.limit, 20, 50);
     return request;
 }
 

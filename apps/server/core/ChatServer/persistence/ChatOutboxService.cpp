@@ -1,9 +1,10 @@
-#include "ChatOutboxService.h"
+#include "ChatOutboxService.hpp"
 
-#include "PostgresMgr.h"
-#include "logging/Logger.h"
+#include "PostgresMgr.hpp"
+#include "logging/Logger.hpp"
 
-#include <algorithm>
+import memochat.chat.outbox_algorithms;
+
 #include <chrono>
 #include <thread>
 #include <utility>
@@ -11,6 +12,8 @@
 
 namespace
 {
+namespace outbox_modules = memochat::chat::persistence::outbox::modules;
+
 int64_t NowMsOutbox()
 {
     return static_cast<int64_t>(
@@ -91,16 +94,17 @@ void ChatOutboxService::RunLoop()
                 continue;
             }
 
-            const int next_retry_count = event.retry_count + 1;
-            const int backoff_ms =
-                std::min(_config.outbox_retry_max_ms, _config.outbox_retry_base_ms * std::max(1, next_retry_count));
-            const bool terminal_error = next_retry_count >= _config.consume_retry_max;
+            const int next_retry_count = outbox_modules::NextRetryCount(event.retry_count);
+            const int backoff_ms = outbox_modules::SelectBackoffMs(_config.outbox_retry_base_ms,
+                                                                   _config.outbox_retry_max_ms,
+                                                                   next_retry_count);
+            const bool terminal_error = outbox_modules::IsTerminalRetry(next_retry_count, _config.consume_retry_max);
             PostgresMgr::GetInstance()->MarkChatOutboxEventRetry(event.id,
                                                                  next_retry_count,
                                                                  NowMsOutbox() + backoff_ms,
                                                                  publish_error,
                                                                  terminal_error);
-            if (!terminal_error && _publish_repair_task_fn)
+            if (outbox_modules::ShouldScheduleRepairTask(terminal_error, static_cast<bool>(_publish_repair_task_fn)))
             {
                 _publish_repair_task_fn(event.id, backoff_ms, _config.consume_retry_max, publish_error);
             }

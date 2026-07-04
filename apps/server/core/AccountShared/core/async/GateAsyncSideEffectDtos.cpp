@@ -1,8 +1,10 @@
-#include "GateAsyncSideEffectDtos.h"
+#include "GateAsyncSideEffectDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
 
 #include <glaze/glaze.hpp>
+
+import memochat.account.async_side_effect_dto_algorithms;
 
 #include <utility>
 
@@ -182,7 +184,7 @@ GateRabbitTaskEnvelopeDto BuildRabbitTaskEnvelope(const std::string& task_id,
 
 bool IsValidCacheInvalidatePayload(const GateCacheInvalidatePayloadDto& payload)
 {
-    return !payload.email.empty();
+    return memochat::account::async_side_effect::modules::IsValidCacheInvalidatePayloadShape(payload.email.empty());
 }
 
 memochat::json::JsonValue ToJsonValue(const GateUserProfileChangedPayloadDto& payload)

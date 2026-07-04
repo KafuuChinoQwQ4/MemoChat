@@ -1,14 +1,14 @@
-﻿#include "MessageDeliveryService.h"
+﻿#include "MessageDeliveryService.hpp"
 
-#include "ChatGrpcClient.h"
-#include "ChatRuntime.h"
-#include "CSession.h"
-#include "delivery/MessageDeliveryTaskPayload.h"
-#include "MessageDeliveryPayload.h"
-#include "ports/OnlineRouteResolver.h"
-#include "logging/Logger.h"
+#include "ChatGrpcClient.hpp"
+#include "ChatRuntime.hpp"
+#include "CSession.hpp"
+#include "delivery/MessageDeliveryTaskPayload.hpp"
+#include "MessageDeliveryPayload.hpp"
+#include "ports/OnlineRouteResolver.hpp"
+#include "logging/Logger.hpp"
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <unordered_map>
 #include <unordered_set>
 

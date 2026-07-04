@@ -1,6 +1,13 @@
-#include "ChatRelationRepository.h"
+#include "ChatRelationRepository.hpp"
 
-#include "PostgresMgr.h"
+#include "PostgresMgr.hpp"
+
+import memochat.chat.relation_repository_algorithms;
+
+namespace
+{
+namespace relation_repository_modules = memochat::chat::persistence::relation_repository::modules;
+} // namespace
 
 bool ChatRelationRepository::GetUidByUserId(const std::string& user_id, int& uid)
 {
@@ -97,16 +104,28 @@ bool ChatRelationRepository::DeleteFriend(int from, int to)
 
 bool ChatRelationRepository::IsPrivateFriend(int self_id, int friend_id)
 {
+    if (!relation_repository_modules::ShouldQueryPrivateFriendship(self_id, friend_id))
+    {
+        return false;
+    }
     return PostgresMgr::GetInstance()->IsFriend(self_id, friend_id);
 }
 
 std::vector<int> ChatRelationRepository::FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids)
 {
+    if (!relation_repository_modules::ShouldFilterFriendUids(viewer_uid, author_uids.empty()))
+    {
+        return {};
+    }
     return PostgresMgr::GetInstance()->FilterFriendUids(viewer_uid, author_uids);
 }
 
 bool ChatRelationRepository::IsGroupMember(int64_t group_id, int uid)
 {
+    if (!relation_repository_modules::ShouldQueryGroupMembership(group_id, uid))
+    {
+        return false;
+    }
     return PostgresMgr::GetInstance()->IsUserInGroup(group_id, uid);
 }
 

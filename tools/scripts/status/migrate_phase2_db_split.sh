@@ -17,7 +17,7 @@ CONTAINER="${MEMOCHAT_PG_CONTAINER:-memochat-postgres}"
 PG_USER="${MEMOCHAT_PG_USER:-memochat}"
 SRC_DB="${MEMOCHAT_PG_SRC_DB:-memo_pg}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd 2>/dev/null || echo /root/code/MemoChat-Qml-Drogon-linux)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd 2>/dev/null || echo /root/code/MemoChat)"
 MIG_DIR="${PROJECT_ROOT}/apps/server/migrations/postgresql/business"
 
 # domain -> "database|schema_file|table list"
@@ -29,6 +29,41 @@ declare -A TABLES_OF=(
     [call]="chat_call_session"
 )
 DOMAINS=(media moments call)
+
+first_env()
+{
+    local name
+    for name in "$@"; do
+        if [[ -n "${!name:-}" ]]; then
+            printf '%s' "${!name}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+require_value()
+{
+    local label="$1"
+    local value="$2"
+    if [[ -z "${value}" ]]; then
+        echo "[ERROR] Missing ${label}; export MEMOCHAT_PHASE2_SERVICE_ROLE_PASSWORD." >&2
+        exit 1
+    fi
+}
+
+sql_quote_literal()
+{
+    printf "%s" "$1" | sed "s/'/''/g"
+}
+
+required_service_role_password()
+{
+    local value
+    value="$(first_env MEMOCHAT_PHASE2_SERVICE_ROLE_PASSWORD MEMOCHAT_POSTGRES_SERVICE_ROLE_PASSWORD || true)"
+    require_value "service role password" "${value}"
+    printf '%s' "${value}"
+}
 
 psql_db() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$1" "${@:2}"; }
 psql_src() { psql_db "$SRC_DB" "$@"; }
@@ -49,9 +84,18 @@ src_count() { psql_src -tAc "SELECT count(*) FROM memo.$1" 2>/dev/null | tr -d '
 dst_count() { psql_db "$1" -tAc "SELECT count(*) FROM memo.$2" 2>/dev/null | tr -d '[:space:]'; }
 
 do_migrate() {
+    local service_password service_password_sql
+    service_password="$(required_service_role_password)"
+    service_password_sql="$(sql_quote_literal "${service_password}")"
+
     echo "[STEP] Create roles (008_db_split_media_moments_call.sql)"
     psql_src < "${MIG_DIR}/008_db_split_media_moments_call.sql" >/dev/null
     echo "  [OK] roles ensured"
+    for d in "${DOMAINS[@]}"; do
+        docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$SRC_DB" \
+            -c "ALTER ROLE memo_${d}_app PASSWORD '${service_password_sql}'" >/dev/null
+    done
+    echo "  [OK] role passwords injected from environment"
 
     # A service role must not be able to connect to the shared maintenance db
     # memo_pg (it owns only its own per-service db). PUBLIC holds implicit CONNECT
@@ -95,6 +139,8 @@ do_migrate() {
 
 do_verify() {
     local fail=0
+    local service_password
+    service_password="$(required_service_role_password)"
     echo "[STEP] Verify row-count parity (source memo_pg vs per-service db)"
     echo "  [NOTE] parity is a point-in-time check: run right after migrate. If the"
     echo "         GateServer monolith (memo_pg) served writes since migration, re-run"
@@ -122,14 +168,14 @@ do_verify() {
         echo "  [OK] memo_moments has no media table"
     fi
     # role isolation: media role cannot connect to moments db.
-    if docker exec "$CONTAINER" env PGPASSWORD=123456 psql -U memo_media_app -d memo_moments -tAc "SELECT 1" >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" env PGPASSWORD="${service_password}" psql -U memo_media_app -d memo_moments -tAc "SELECT 1" >/dev/null 2>&1; then
         echo "  [FAIL] memo_media_app could connect to memo_moments (role breach)"; fail=1
     else
         echo "  [OK] memo_media_app cannot connect to memo_moments"
     fi
     # service roles must not connect to the shared maintenance db memo_pg.
     for d in "${DOMAINS[@]}"; do
-        if docker exec "$CONTAINER" env PGPASSWORD=123456 psql -U "memo_${d}_app" -d "$SRC_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
+        if docker exec "$CONTAINER" env PGPASSWORD="${service_password}" psql -U "memo_${d}_app" -d "$SRC_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
             echo "  [FAIL] memo_${d}_app could connect to $SRC_DB (must be isolated)"; fail=1
         else
             echo "  [OK] memo_${d}_app cannot connect to $SRC_DB"

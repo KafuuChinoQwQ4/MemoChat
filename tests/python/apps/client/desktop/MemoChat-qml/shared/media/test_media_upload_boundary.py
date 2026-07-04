@@ -7,6 +7,7 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 QML_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
 MEDIA_DIR = QML_DIR / "shared/media"
+CORE_NETWORK_DIR = QML_DIR / "core/network"
 APP_DIR = QML_DIR / "app"
 APP_CONTROLLER_DIR = APP_DIR / "controller"
 APP_COORDINATORS = APP_DIR / "coordinators/AppCoordinators.h"
@@ -105,6 +106,29 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         self.assertIn('mediaUploadUrl(QStringLiteral("/upload_media_status"))', uploads)
         self.assertIn('mediaUploadUrl(QStringLiteral("/upload_media_chunk"))', uploads)
         self.assertIn('mediaUploadUrl(QStringLiteral("/upload_media_complete"))', uploads)
+
+    def test_media_and_core_http_telemetry_redacts_sensitive_url_queries(self):
+        uploads = (MEDIA_DIR / "MediaUploadServiceUploads.cpp").read_text(encoding="utf-8")
+        media_network = (MEDIA_DIR / "MediaUploadServiceNetwork.cpp").read_text(encoding="utf-8")
+        httpmgr = (CORE_NETWORK_DIR / "httpmgr.cpp").read_text(encoding="utf-8")
+        telemetry_header = (CORE_NETWORK_DIR / "TelemetryUtils.h").read_text(encoding="utf-8")
+        telemetry_source = (CORE_NETWORK_DIR / "TelemetryUtils.cpp").read_text(encoding="utf-8")
+
+        self.assertIn('statusQuery.addQueryItem("token", token);', uploads)
+        self.assertIn("QString redactedUrlForTelemetry(const QUrl& url);", telemetry_header)
+        for sensitive_key in ("token", "login_ticket", "media_key", "varifycode"):
+            with self.subTest(sensitive_key=sensitive_key):
+                self.assertIn(f'QStringLiteral("{sensitive_key}")', telemetry_source)
+        self.assertIn('QStringLiteral("[REDACTED]")', telemetry_source)
+        self.assertIn("url.setFragment(QString());", telemetry_source)
+        self.assertIn("QUrl::RemovePassword", telemetry_source)
+
+        for source_name, source in (("media", media_network), ("httpmgr", httpmgr)):
+            with self.subTest(source=source_name):
+                self.assertRegex(source, r'\w+\.insert\("http\.url",\s*redactedUrlForTelemetry')
+                self.assertNotIn('attrs.insert("http.url", url.toString())', source)
+                self.assertNotIn('spanAttrs.insert("http.url", url.toString())', source)
+                self.assertNotIn('attrs.insert("http.url", reply->url().toString())', source)
 
     def test_old_upload_signature_wraps_request_result_boundary(self):
         service = (MEDIA_DIR / "MediaUploadService.cpp").read_text(encoding="utf-8")

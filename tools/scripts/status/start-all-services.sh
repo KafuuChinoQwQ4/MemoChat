@@ -238,6 +238,68 @@ is_truthy() {
     esac
 }
 
+first_env_value() {
+    local name value
+    for name in "$@"; do
+        value="${!name-}"
+        if [[ -n "$value" ]]; then
+            printf '%s' "$value"
+            return 0
+        fi
+    done
+    return 1
+}
+
+ensure_ai_internal_api_key() {
+    if [[ -n "${MEMOCHAT_AI_INTERNAL_API_KEY:-}" ]]; then
+        export MEMOCHAT_AI_INTERNAL_API_KEY
+        return 0
+    fi
+
+    local generated=""
+    if command -v openssl >/dev/null 2>&1; then
+        generated="$(openssl rand -hex 32)"
+    elif [[ -r /proc/sys/kernel/random/uuid ]]; then
+        generated="$(tr -d '-' </proc/sys/kernel/random/uuid)$(tr -d '-' </proc/sys/kernel/random/uuid)"
+    fi
+
+    if [[ -z "$generated" ]]; then
+        echo "[FAIL] MEMOCHAT_AI_INTERNAL_API_KEY is empty and no local random source is available" >&2
+        return 1
+    fi
+
+    export MEMOCHAT_AI_INTERNAL_API_KEY="$generated"
+    echo "  [INFO] Generated local MEMOCHAT_AI_INTERNAL_API_KEY for this startup"
+}
+
+export_minio_runtime_credentials() {
+    local access_key secret_key
+    access_key="$(first_env_value \
+        MEMOCHAT_MINIO_ACCESSKEY \
+        MEMOCHAT_MINIO_ACCESS_KEY \
+        MEMOCHAT_MINIO_ROOT_USER \
+        MINIO_ROOT_USER \
+        MINIO_ACCESS_KEY || true)"
+    secret_key="$(first_env_value \
+        MEMOCHAT_MINIO_SECRETKEY \
+        MEMOCHAT_MINIO_SECRET_KEY \
+        MEMOCHAT_MINIO_ROOT_PASSWORD \
+        MINIO_ROOT_PASSWORD \
+        MINIO_SECRET_KEY || true)"
+
+    # Local compose defaults. Production deployments should provide explicit env/config values.
+    access_key="${access_key:-memochat_admin}"
+    secret_key="${secret_key:-MinioPass2026!}"
+
+    export MINIO_ACCESS_KEY="$access_key"
+    export MINIO_SECRET_KEY="$secret_key"
+    export MEMOCHAT_MINIO_ACCESSKEY="${MEMOCHAT_MINIO_ACCESSKEY:-$access_key}"
+    export MEMOCHAT_MINIO_SECRETKEY="${MEMOCHAT_MINIO_SECRETKEY:-$secret_key}"
+}
+
+ensure_ai_internal_api_key
+export_minio_runtime_credentials
+
 wait_for_minio() {
     local waited=0
     while (( waited < WAIT_SECONDS )); do
@@ -442,11 +504,38 @@ sanitize_name() {
 
 pid_running() {
     local pid_file="$1"
+    local svc_dir="${2:-}"
+    local exe_path="${3:-}"
     [[ -f "$pid_file" ]] || return 1
     local pid
     pid="$(cat "$pid_file" 2>/dev/null || true)"
     [[ -n "$pid" ]] || return 1
-    kill -0 "$pid" >/dev/null 2>&1
+    kill -0 "$pid" >/dev/null 2>&1 || return 1
+    if [[ -z "$svc_dir" ]]; then
+        return 0
+    fi
+    if service_pid_matches_runtime "$pid" "$svc_dir" "$exe_path"; then
+        return 0
+    fi
+    echo "  [WARN] pid file ${pid_file} points to pid ${pid}, but it is not under ${svc_dir}; removing stale pid file"
+    rm -f -- "$pid_file"
+    return 1
+}
+
+service_pid_matches_runtime() {
+    local pid="$1"
+    local svc_dir="$2"
+    local exe_path="${3:-}"
+    local cwd=""
+    local proc_exe=""
+    local expected_exe=""
+    cwd="$(readlink "/proc/${pid}/cwd" 2>/dev/null || true)"
+    proc_exe="$(readlink "/proc/${pid}/exe" 2>/dev/null || true)"
+    expected_exe="$(readlink -f "$exe_path" 2>/dev/null || true)"
+    if [[ "$cwd" == "$svc_dir" || "$cwd" == "${svc_dir}/"* ]]; then
+        return 0
+    fi
+    [[ -n "$expected_exe" && "$proc_exe" == "$expected_exe" ]]
 }
 
 ensure_runtime() {
@@ -715,14 +804,20 @@ launch_svc() {
         return 0
     fi
 
-    if pid_running "$pid_file"; then
+    if pid_running "$pid_file" "$svc_dir" "$exe_path"; then
         echo "  [WARN] ${svc_name}: already running with pid $(cat "$pid_file")"
         return 0
     fi
 
     if [[ -n "$port" ]] && port_listening "$port"; then
-        echo "  [WARN] ${svc_name}: port ${port} is already listening"
-        return 0
+        local port_owner
+        port_owner="$(port_pid "$port")"
+        if [[ -n "$port_owner" ]] && service_pid_matches_runtime "$port_owner" "$svc_dir" "$exe_path"; then
+            echo "  [WARN] ${svc_name}: port ${port} is already listening by expected runtime pid ${port_owner}"
+            return 0
+        fi
+        echo "  [X] ${svc_name}: port ${port} is already listening by non-matching pid ${port_owner:-unknown}; run stop-all-services.sh or free the port"
+        return 1
     fi
 
     if [[ -z "$instance_name" ]]; then
@@ -742,6 +837,11 @@ launch_svc() {
             MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
             MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
             MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}" \
+            MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}" \
+            MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}" \
+            MEMOCHAT_MINIO_ACCESSKEY="${MEMOCHAT_MINIO_ACCESSKEY:-}" \
+            MEMOCHAT_MINIO_SECRETKEY="${MEMOCHAT_MINIO_SECRETKEY:-}" \
+            MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}" \
             MEMOCHAT_INSTANCE_NAME="$instance_name" \
             "./${exe_name}"
     ) >>"$out_log" 2>>"$err_log" </dev/null &

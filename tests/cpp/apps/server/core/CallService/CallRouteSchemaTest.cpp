@@ -1,9 +1,32 @@
-#include "modules/call/CallRouteModule.h"
+#include "modules/call/CallRouteModule.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
+
+namespace memochat::tests::call::route_schema
+{
+const char* PostMethod();
+const char* StartPath();
+const char* StartRouteName();
+const char* StartRequestTypeName();
+const char* StartResponseTypeName();
+const char* AcceptPath();
+const char* AcceptRouteName();
+const char* RejectPath();
+const char* RejectRouteName();
+const char* CancelPath();
+const char* CancelRouteName();
+const char* HangupPath();
+const char* HangupRouteName();
+const char* AuthRequestTypeName();
+const char* EventResponseTypeName();
+const char* TokenPath();
+const char* TokenPostRouteName();
+const char* TokenRequestTypeName();
+const char* TokenResponseTypeName();
+} // namespace memochat::tests::call::route_schema
 
 namespace
 {
@@ -219,35 +242,35 @@ TEST(CallRouteSchemaTest, ListsOnlySchemaEligibleCallJsonBodyRoutes)
     const auto schemas = memochat::gate::modules::call::CallRouteModule::RouteSchemas();
 
     ASSERT_EQ(schemas.size(), 6U);
-    EXPECT_EQ(schemas[0].name, "call.start");
-    EXPECT_EQ(schemas[0].method, "POST");
-    EXPECT_EQ(schemas[0].path, "/api/call/start");
-    EXPECT_EQ(schemas[0].request.type_name, "CallStartRequestDto");
-    EXPECT_EQ(schemas[0].response.type_name, "CallStartResponseDto");
+    EXPECT_EQ(schemas[0].name, memochat::tests::call::route_schema::StartRouteName());
+    EXPECT_EQ(schemas[0].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[0].path, memochat::tests::call::route_schema::StartPath());
+    EXPECT_EQ(schemas[0].request.type_name, memochat::tests::call::route_schema::StartRequestTypeName());
+    EXPECT_EQ(schemas[0].response.type_name, memochat::tests::call::route_schema::StartResponseTypeName());
 
-    EXPECT_EQ(schemas[1].name, "call.accept");
-    EXPECT_EQ(schemas[1].method, "POST");
-    EXPECT_EQ(schemas[1].path, "/api/call/accept");
-    EXPECT_EQ(schemas[1].request.type_name, "CallAuthRequestDto");
-    EXPECT_EQ(schemas[1].response.type_name, "CallEventResponseDto");
+    EXPECT_EQ(schemas[1].name, memochat::tests::call::route_schema::AcceptRouteName());
+    EXPECT_EQ(schemas[1].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[1].path, memochat::tests::call::route_schema::AcceptPath());
+    EXPECT_EQ(schemas[1].request.type_name, memochat::tests::call::route_schema::AuthRequestTypeName());
+    EXPECT_EQ(schemas[1].response.type_name, memochat::tests::call::route_schema::EventResponseTypeName());
 
-    EXPECT_EQ(schemas[2].name, "call.reject");
-    EXPECT_EQ(schemas[2].method, "POST");
-    EXPECT_EQ(schemas[2].path, "/api/call/reject");
+    EXPECT_EQ(schemas[2].name, memochat::tests::call::route_schema::RejectRouteName());
+    EXPECT_EQ(schemas[2].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[2].path, memochat::tests::call::route_schema::RejectPath());
 
-    EXPECT_EQ(schemas[3].name, "call.cancel");
-    EXPECT_EQ(schemas[3].method, "POST");
-    EXPECT_EQ(schemas[3].path, "/api/call/cancel");
+    EXPECT_EQ(schemas[3].name, memochat::tests::call::route_schema::CancelRouteName());
+    EXPECT_EQ(schemas[3].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[3].path, memochat::tests::call::route_schema::CancelPath());
 
-    EXPECT_EQ(schemas[4].name, "call.hangup");
-    EXPECT_EQ(schemas[4].method, "POST");
-    EXPECT_EQ(schemas[4].path, "/api/call/hangup");
+    EXPECT_EQ(schemas[4].name, memochat::tests::call::route_schema::HangupRouteName());
+    EXPECT_EQ(schemas[4].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[4].path, memochat::tests::call::route_schema::HangupPath());
 
-    EXPECT_EQ(schemas[5].name, "call.token.post");
-    EXPECT_EQ(schemas[5].method, "POST");
-    EXPECT_EQ(schemas[5].path, "/api/call/token");
-    EXPECT_EQ(schemas[5].request.type_name, "CallTokenRequestDto");
-    EXPECT_EQ(schemas[5].response.type_name, "CallTokenResponseDto");
+    EXPECT_EQ(schemas[5].name, memochat::tests::call::route_schema::TokenPostRouteName());
+    EXPECT_EQ(schemas[5].method, memochat::tests::call::route_schema::PostMethod());
+    EXPECT_EQ(schemas[5].path, memochat::tests::call::route_schema::TokenPath());
+    EXPECT_EQ(schemas[5].request.type_name, memochat::tests::call::route_schema::TokenRequestTypeName());
+    EXPECT_EQ(schemas[5].response.type_name, memochat::tests::call::route_schema::TokenResponseTypeName());
 }
 
 TEST(CallRouteSchemaTest, BuildsFieldInventoriesFromCallDtos)

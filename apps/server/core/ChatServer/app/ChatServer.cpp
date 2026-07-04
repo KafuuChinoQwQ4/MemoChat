@@ -1,27 +1,28 @@
 
 //
 
-#include "LogicSystem.h"
-#include "SnowflakeUtil.h"
+#include "LogicSystem.hpp"
+#include "SnowflakeUtil.hpp"
 #include <csignal>
 #include <thread>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
-#include "AsioIOServicePool.h"
-#include "CServer.h"
-#include "ConfigMgr.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "ChatServiceImpl.h"
-#include "ChatIngressCoordinator.h"
-#include "ChatRuntime.h"
-#include "const.h"
-#include "cluster/ChatClusterDiscovery.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "AsioIOServicePool.hpp"
+#include "CServer.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "ChatServiceImpl.hpp"
+#include "ChatIngressCoordinator.hpp"
+#include "ChatRuntime.hpp"
+#include "const.hpp"
+#include "auth/AuthSecret.hpp"
+#include "cluster/ChatClusterDiscovery.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 #include <cstdlib>
 
 bool bstop = false;
@@ -161,6 +162,12 @@ int main(int argc, char** argv)
             });
         memolog::Logger::Init("ChatServer", log_cfg);
         memolog::Telemetry::Init("ChatServer", telemetry_cfg);
+        auto chat_auth_secret = cfg.GetValue("ChatAuth", "HmacSecret");
+        if (chat_auth_secret.empty())
+        {
+            chat_auth_secret = std::string(memochat::auth::kWellKnownDevHmacSecret);
+        }
+        memochat::auth::RequireNonDefaultChatAuthSecretInProduction("ChatServer", chat_auth_secret);
         auto pool = AsioIOServicePool::GetInstance();
         const auto storage_init_start = std::chrono::steady_clock::now();
         PostgresMgr::GetInstance();
@@ -239,9 +246,17 @@ int main(int argc, char** argv)
                 {
                     ingress_coordinator->Stop();
                 }
-                io_context.stop();
-                pool->Stop();
-                server->Shutdown();
+                boost::asio::post(io_context,
+                                  [&io_context, pool, &server]()
+                                  {
+                                      boost::asio::post(io_context,
+                                                        [&io_context, pool, &server]()
+                                                        {
+                                                            io_context.stop();
+                                                            pool->Stop();
+                                                            server->Shutdown();
+                                                        });
+                                  });
             });
 
         LogicSystem::GetInstance()->SetServer(pointer_server);

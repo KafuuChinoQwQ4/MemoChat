@@ -34,7 +34,7 @@ Start-Sleep -Seconds 2
 
 # === 6. 启动 ChatServers ===
 $chatProcs = @()
-$chatNodes = @("chatserver1","chatserver2")
+$chatNodes = @("chatserver1")
 foreach ($node in $chatNodes) {
     $proc = Start-Process -FilePath "$ProjectRoot\Memo_ops\runtime\services\$node\ChatServer.exe" -ArgumentList "--config","config.ini" -WorkingDirectory "$ProjectRoot\Memo_ops\runtime\services\$node" -PassThru -RedirectStandardOutput "$diagDir\chat_$node.log" -RedirectStandardError "$diagDir\chat_${node}_err.log" -WindowStyle Hidden
     $chatProcs += $proc
@@ -49,7 +49,7 @@ Start-Sleep -Seconds 5
 # === 7. 验证端口 ===
 Write-Host ""
 Write-Host "=== Port Status ==="
-$ports = @(8080,50051,8090,8091,50055,50056)
+$ports = @(8080,50051,8090,50055)
 foreach ($port in $ports) {
     $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
     if ($conn) {

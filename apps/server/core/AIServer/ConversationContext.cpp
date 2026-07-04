@@ -1,6 +1,8 @@
-#include "ConversationContext.h"
+#include "ConversationContext.hpp"
 
-#include "AIServiceJsonDtos.h"
+#include "AIServiceJsonDtos.hpp"
+
+import memochat.ai.conversation_context_algorithms;
 
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -29,7 +31,7 @@ void ConversationContext::AddUserMessage(const std::string& content)
 {
     ChatMessage m;
     m.msg_id = boost::uuids::to_string(boost::uuids::random_generator()());
-    m.role = "user";
+    m.role = memochat::ai::conversation_context::modules::UserRole();
     m.content = content;
     m.created_at =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -42,7 +44,7 @@ void ConversationContext::AddAssistantMessage(const std::string& content)
 {
     ChatMessage m;
     m.msg_id = boost::uuids::to_string(boost::uuids::random_generator()());
-    m.role = "assistant";
+    m.role = memochat::ai::conversation_context::modules::AssistantRole();
     m.content = content;
     m.created_at =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -53,7 +55,7 @@ void ConversationContext::AddAssistantMessage(const std::string& content)
 
 void ConversationContext::Prune(size_t max_size)
 {
-    if (messages.size() > max_size)
+    if (memochat::ai::conversation_context::modules::ShouldPruneMessages(messages.size(), max_size))
     {
         messages.erase(messages.begin(), messages.end() - max_size);
     }

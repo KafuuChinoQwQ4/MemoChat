@@ -6,7 +6,7 @@ services:
     container_name: memochat-prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -27,14 +27,14 @@ services:
     container_name: memochat-influxdb
     restart: unless-stopped
     ports:
-      - "8086:8086"
+      - "127.0.0.1:8086:8086"
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: adminadmin
+      DOCKER_INFLUXDB_INIT_USERNAME: "${MEMOCHAT_INFLUXDB_USERNAME:-admin}"
+      DOCKER_INFLUXDB_INIT_PASSWORD: "${MEMOCHAT_INFLUXDB_PASSWORD:-adminadmin}"
       DOCKER_INFLUXDB_INIT_ORG: memochat
       DOCKER_INFLUXDB_INIT_BUCKET: metrics
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-super-secret-admin-token
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}"
     volumes:
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb:/var/lib/influxdb2
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb/config:/etc/influxdb2
@@ -46,10 +46,11 @@ services:
     container_name: memochat-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: "${MEMOCHAT_GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-admin}"
+      MEMOCHAT_INFLUXDB_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}"
       GF_USERS_DEFAULT_THEME: light
     volumes:
       - ../observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -62,7 +63,7 @@ services:
     container_name: memochat-loki
     restart: unless-stopped
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     command:
       - -config.file=/etc/loki/config.yaml
     volumes:
@@ -74,7 +75,7 @@ services:
     container_name: memochat-tempo
     restart: unless-stopped
     ports:
-      - "3200:3200"
+      - "127.0.0.1:3200:3200"
     command:
       - -config.file=/etc/tempo/config.yaml
     volumes:
@@ -89,10 +90,10 @@ services:
       - loki
       - tempo
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "9411:9411"
-      - "9464:9464"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:9411:9411"
+      - "127.0.0.1:9464:9464"
     command:
       - --config=/etc/otelcol-contrib/config.yaml
     volumes:
@@ -107,7 +108,7 @@ services:
     container_name: memochat-cadvisor
     restart: unless-stopped
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
     privileged: true
     devices:
       - /dev/kmsg
@@ -124,7 +125,7 @@ services:
     profiles:
       - nvidia
     ports:
-      - "9400:9400"
+      - "127.0.0.1:9400:9400"
     environment:
       DCGM_EXPORTER_LISTEN: ":9400"
     deploy:

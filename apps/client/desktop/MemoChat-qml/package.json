@@ -1,0 +1,16 @@
+{
+  "name": "memochat-qml-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2",
+    "typescript": "5.7.3"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true
+  }
+}

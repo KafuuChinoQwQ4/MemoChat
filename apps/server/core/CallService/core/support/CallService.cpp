@@ -1,30 +1,36 @@
-#include "CallService.h"
+#include "CallService.hpp"
 
-#include "CallPublicDtos.h"
-#include "CallSessionCacheDto.h"
-#include "ChatGrpcClient.h"
-#include "ConfigMgr.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "logging/Logger.h"
-#include "json/GlazeCompat.h"
+#include "CallPersistence.hpp"
+#include "CallPublicDtos.hpp"
+#include "CallSessionCacheDto.hpp"
+#include "ChatGrpcClient.hpp"
+#include "ConfigMgr.hpp"
+#include "RedisMgr.hpp"
+#include "logging/Logger.hpp"
+#include "json/GlazeCompat.hpp"
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <algorithm>
 #include <chrono>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
 
+import memochat.call.token_algorithms;
+import memochat.call.service_algorithms;
+import memochat.call.session_math_algorithms;
+
 #ifdef _WIN32
-#include "WinSdkCompat.h"
+#include "WinSdkCompat.hpp"
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
 #endif
 
 namespace
 {
-constexpr short kCallEventMsgId = 1085;
+namespace service_modules = memochat::call::service::modules;
+namespace session_math_modules = memochat::call::session_math::modules;
+
+const short kCallEventMsgId = session_math_modules::CallEventNotifyMsgId();
 
 int64_t NowMs()
 {
@@ -104,7 +110,7 @@ MakeCallStartResponseDto(const memochat::call::CallEventResponseDto& event, int 
 
 bool ValidateGateUserToken(int uid, const std::string& token)
 {
-    if (uid <= 0 || token.empty())
+    if (!service_modules::HasValidAuthRequest(uid, token.empty()))
     {
         return false;
     }
@@ -118,25 +124,17 @@ bool ValidateGateUserToken(int uid, const std::string& token)
 
 std::string Base64UrlEncode(const std::string& input)
 {
-    static const char* kTable = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    std::string out;
-    out.reserve(((input.size() + 2) / 3) * 4);
-    unsigned int val = 0;
-    int valb = -6;
-    for (unsigned char c : input)
+    std::string out(memochat::call::modules::Base64UrlEncodedSize(input.size()), '\0');
+    const auto encoded_size =
+        memochat::call::modules::EncodeBase64Url(reinterpret_cast<const unsigned char*>(input.data()),
+                                                 input.size(),
+                                                 out.data(),
+                                                 out.size());
+    if (encoded_size == 0 && !input.empty())
     {
-        val = (val << 8) + c;
-        valb += 8;
-        while (valb >= 0)
-        {
-            out.push_back(kTable[(val >> valb) & 0x3F]);
-            valb -= 6;
-        }
+        return {};
     }
-    if (valb > -6)
-    {
-        out.push_back(kTable[((val << 8) >> (valb + 8)) & 0x3F]);
-    }
+    out.resize(encoded_size);
     return out;
 }
 
@@ -219,7 +217,7 @@ CallService::CallConfig CallService::LoadConfig() const
     const auto token_ttl = ini["Call"]["TokenTtlSec"];
     if (!enabled.empty())
     {
-        cfg.enabled = enabled == "1" || enabled == "true" || enabled == "TRUE" || enabled == "True";
+        cfg.enabled = service_modules::IsEnabledText(enabled.c_str());
     }
     if (!base_url.empty())
         cfg.base_url = base_url;
@@ -232,11 +230,11 @@ CallService::CallConfig CallService::LoadConfig() const
     if (!room_prefix.empty())
         cfg.room_prefix = room_prefix;
     if (!ring_timeout.empty())
-        cfg.ring_timeout_sec = std::max(15, std::atoi(ring_timeout.c_str()));
+        cfg.ring_timeout_sec = service_modules::NormalizeRingTimeoutSec(std::atoi(ring_timeout.c_str()));
     if (!busy_key_ttl.empty())
-        cfg.busy_key_ttl_sec = std::max(15, std::atoi(busy_key_ttl.c_str()));
+        cfg.busy_key_ttl_sec = service_modules::NormalizeBusyKeyTtlSec(std::atoi(busy_key_ttl.c_str()));
     if (!token_ttl.empty())
-        cfg.token_ttl_sec = std::max(300, std::atoi(token_ttl.c_str()));
+        cfg.token_ttl_sec = service_modules::NormalizeTokenTtlSec(std::atoi(token_ttl.c_str()));
     return cfg;
 }
 
@@ -249,7 +247,7 @@ bool CallService::ParseAuthRequest(const memochat::json::JsonValue& request,
     uid = auth_request.uid;
     token = auth_request.token;
     call_id = auth_request.call_id;
-    return uid > 0 && !token.empty();
+    return service_modules::HasValidAuthRequest(uid, token.empty());
 }
 
 bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& session) const
@@ -262,7 +260,7 @@ bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& sessi
             return true;
         }
     }
-    return PostgresMgr::GetInstance()->GetCallSession(call_id, session);
+    return CallPersistence::Instance().LoadSession(call_id, session);
 }
 
 bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) const
@@ -280,7 +278,7 @@ bool CallService::SaveSession(const CallSessionInfo& session, int ttl_seconds) c
     {
         RedisMgr::GetInstance()->Set(std::string(CALL_SESSION_PREFIX) + session.call_id, payload);
     }
-    return PostgresMgr::GetInstance()->UpsertCallSession(session);
+    return CallPersistence::Instance().SaveSession(session);
 }
 
 void CallService::ClearBusyState(const CallSessionInfo& session) const
@@ -368,8 +366,8 @@ std::string CallService::CreateToken(const CallSessionInfo& session, int uid, co
     memochat::json::JsonValue payload = memochat::json::make_document();
     payload["iss"] = cfg.api_key;
     payload["sub"] = std::to_string(uid);
-    payload["nbf"] = now_sec - 5;
-    payload["exp"] = now_sec + cfg.token_ttl_sec;
+    payload["nbf"] = static_cast<int64_t>(service_modules::TokenNotBeforeSec(now_sec));
+    payload["exp"] = static_cast<int64_t>(service_modules::TokenExpiresAtSec(now_sec, cfg.token_ttl_sec));
     payload["name"] = std::string("memochat-") + role + "-" + std::to_string(uid);
     payload["video"] = video;
 
@@ -395,19 +393,19 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
     int peer_uid = start_request.peer_uid;
     std::string token;
     std::string unused_call_id;
-    if (!ParseAuthRequest(request, uid, token, unused_call_id) || !ValidateGateUserToken(uid, token) || peer_uid <= 0 ||
-        uid == peer_uid)
+    if (!ParseAuthRequest(request, uid, token, unused_call_id) || !ValidateGateUserToken(uid, token) ||
+        !service_modules::HasValidStartPeer(uid, peer_uid))
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
     }
     const std::string call_type = start_request.call_type;
-    if (call_type != "voice" && call_type != "video")
+    if (!service_modules::IsSupportedCallType(call_type.c_str()))
     {
         response["error"] = ErrorCodes::Error_Json;
         return true;
     }
-    if (!PostgresMgr::GetInstance()->IsFriend(uid, peer_uid) || !PostgresMgr::GetInstance()->IsFriend(peer_uid, uid))
+    if (!CallPersistence::Instance().AreUsersMutualFriends(uid, peer_uid))
     {
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
@@ -428,8 +426,7 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
 
     CallUserProfile caller;
     CallUserProfile callee;
-    if (!PostgresMgr::GetInstance()->GetCallUserProfile(uid, caller) ||
-        !PostgresMgr::GetInstance()->GetCallUserProfile(peer_uid, callee))
+    if (!CallPersistence::Instance().LoadUserProfiles(uid, peer_uid, caller, callee))
     {
         response["error"] = ErrorCodes::UidInvalid;
         return true;
@@ -437,23 +434,23 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
 
     CallSessionInfo session;
     session.call_id = NewId();
-    session.room_name = cfg.room_prefix + "-" + session.call_id.substr(0, 8);
+    session.room_name = cfg.room_prefix + "-" + session.call_id.substr(0, session_math_modules::RoomShortIdLength());
     session.call_type = call_type;
     session.caller_uid = uid;
     session.callee_uid = peer_uid;
-    session.state = "ringing";
+    session.state = service_modules::RingingState();
     session.started_at_ms = NowMs();
-    session.expires_at_ms = session.started_at_ms + static_cast<int64_t>(cfg.ring_timeout_sec) * 1000;
+    session.expires_at_ms = session_math_modules::SessionExpiryMs(session.started_at_ms, cfg.ring_timeout_sec);
     session.trace_id = trace_id;
     session.updated_at_ms = session.started_at_ms;
-    SaveSession(session, cfg.ring_timeout_sec + 600);
-    SetRingingState(session, std::max(cfg.ring_timeout_sec + 5, cfg.busy_key_ttl_sec));
+    SaveSession(session, service_modules::RingingSessionTtlSec(cfg.ring_timeout_sec));
+    SetRingingState(session, service_modules::RingingBusyTtlSec(cfg.ring_timeout_sec, cfg.busy_key_ttl_sec));
 
     const memochat::call::CallEventResponseDto event_response =
-        MakeCallEventResponseDto("call.state_sync", session, caller, callee, "", cfg.livekit_url);
+        MakeCallEventResponseDto(service_modules::StateSyncEvent(), session, caller, callee, "", cfg.livekit_url);
     response = memochat::call::CallStartResponseToJsonValue(MakeCallStartResponseDto(event_response, peer_uid, callee));
 
-    NotifyUsers({peer_uid}, BuildEventPayload("call.invite", session, caller, callee));
+    NotifyUsers({peer_uid}, BuildEventPayload(service_modules::InviteEvent(), session, caller, callee));
     memolog::LogInfo("call.start.dispatched",
                      "call invite dispatched",
                      {{"uid", std::to_string(uid)},
@@ -487,23 +484,22 @@ bool CallService::AcceptCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
-    if (session.state != "ringing")
+    if (!service_modules::IsRingingState(session.state.c_str()))
     {
         response["error"] = ErrorCodes::CallStateInvalid;
         return true;
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
-    session.state = "accepted";
+    CallPersistence::Instance().LoadUserProfiles(session.caller_uid, session.callee_uid, caller, callee);
+    session.state = service_modules::AcceptedState();
     session.accepted_at_ms = NowMs();
     session.updated_at_ms = session.accepted_at_ms;
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
-    SaveSession(session, 86400);
+    SaveSession(session, service_modules::PersistentSessionTtlSec());
     ClearBusyState(session);
     SetActiveState(session);
-    response = BuildEventPayload("call.accepted", session, caller, callee);
+    response = BuildEventPayload(service_modules::AcceptedEvent(), session, caller, callee);
     NotifyUsers({session.caller_uid, session.callee_uid}, response);
     return true;
 }
@@ -531,23 +527,22 @@ bool CallService::RejectCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
-    if (session.state != "ringing")
+    if (!service_modules::IsRingingState(session.state.c_str()))
     {
         response["error"] = ErrorCodes::CallStateInvalid;
         return true;
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
-    session.state = "rejected";
-    session.reason = "rejected";
+    CallPersistence::Instance().LoadUserProfiles(session.caller_uid, session.callee_uid, caller, callee);
+    session.state = service_modules::RejectedState();
+    session.reason = service_modules::RejectedState();
     session.ended_at_ms = NowMs();
     session.updated_at_ms = session.ended_at_ms;
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
-    SaveSession(session, 86400);
+    SaveSession(session, service_modules::PersistentSessionTtlSec());
     ClearBusyState(session);
-    response = BuildEventPayload("call.rejected", session, caller, callee);
+    response = BuildEventPayload(service_modules::RejectedEvent(), session, caller, callee);
     NotifyUsers({session.caller_uid, session.callee_uid}, response);
     return true;
 }
@@ -575,7 +570,7 @@ bool CallService::CancelCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
-    if (session.state != "ringing")
+    if (!service_modules::IsRingingState(session.state.c_str()))
     {
         response["error"] = ErrorCodes::CallStateInvalid;
         return true;
@@ -583,16 +578,16 @@ bool CallService::CancelCall(const memochat::json::JsonValue& request,
     const auto now_ms = NowMs();
     CallUserProfile caller;
     CallUserProfile callee;
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
-    session.state = now_ms > session.expires_at_ms ? "timeout" : "cancelled";
+    CallPersistence::Instance().LoadUserProfiles(session.caller_uid, session.callee_uid, caller, callee);
+    const bool timed_out = service_modules::HasCancelTimedOut(now_ms, session.expires_at_ms);
+    session.state = service_modules::CancelTerminalState(timed_out);
     session.reason = session.state;
     session.ended_at_ms = now_ms;
     session.updated_at_ms = now_ms;
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
-    SaveSession(session, 86400);
+    SaveSession(session, service_modules::PersistentSessionTtlSec());
     ClearBusyState(session);
-    response = BuildEventPayload(session.state == "timeout" ? "call.timeout" : "call.cancel", session, caller, callee);
+    response = BuildEventPayload(service_modules::CancelTerminalEvent(timed_out), session, caller, callee);
     NotifyUsers({session.caller_uid, session.callee_uid}, response);
     return true;
 }
@@ -620,27 +615,26 @@ bool CallService::HangupCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
-    if (session.state != "accepted" && session.state != "joining" && session.state != "in_call")
+    if (!service_modules::IsActiveCallState(session.state.c_str()))
     {
         response["error"] = ErrorCodes::CallStateInvalid;
         return true;
     }
     CallUserProfile caller;
     CallUserProfile callee;
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.caller_uid, caller);
-    PostgresMgr::GetInstance()->GetCallUserProfile(session.callee_uid, callee);
-    session.state = "ended";
-    session.reason = "hangup";
+    CallPersistence::Instance().LoadUserProfiles(session.caller_uid, session.callee_uid, caller, callee);
+    session.state = service_modules::EndedState();
+    session.reason = service_modules::HangupReason();
     session.ended_at_ms = NowMs();
-    if (session.accepted_at_ms > 0 && session.ended_at_ms > session.accepted_at_ms)
+    if (session_math_modules::ShouldComputeDurationSec(session.accepted_at_ms, session.ended_at_ms))
     {
-        session.duration_sec = static_cast<int>((session.ended_at_ms - session.accepted_at_ms) / 1000);
+        session.duration_sec = session_math_modules::SessionDurationSec(session.accepted_at_ms, session.ended_at_ms);
     }
     session.updated_at_ms = session.ended_at_ms;
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
-    SaveSession(session, 86400);
+    SaveSession(session, service_modules::PersistentSessionTtlSec());
     ClearBusyState(session);
-    response = BuildEventPayload("call.hangup", session, caller, callee);
+    response = BuildEventPayload(service_modules::HangupEvent(), session, caller, callee);
     NotifyUsers({session.caller_uid, session.callee_uid}, response);
     return true;
 }
@@ -670,21 +664,31 @@ bool CallService::GetToken(int uid,
         response["error"] = ErrorCodes::CallPermissionDenied;
         return true;
     }
-    if (session.state != "accepted" && session.state != "joining" && session.state != "in_call")
+    if (!service_modules::IsActiveCallState(session.state.c_str()))
     {
         response["error"] = ErrorCodes::CallStateInvalid;
         return true;
     }
-    session.state = "joining";
+    const auto cfg = LoadConfig();
+    if (cfg.api_key.empty() || cfg.api_secret.empty())
+    {
+        memolog::LogError("call.livekit.config_missing",
+                          "LiveKit API credentials missing",
+                          {{"missing_api_key", cfg.api_key.empty() ? "true" : "false"},
+                           {"missing_api_secret", cfg.api_secret.empty() ? "true" : "false"}});
+        response["error"] = ErrorCodes::Error_Json;
+        return true;
+    }
+    session.state = service_modules::JoiningState();
     session.updated_at_ms = NowMs();
     session.trace_id = trace_id.empty() ? session.trace_id : trace_id;
-    SaveSession(session, 86400);
+    SaveSession(session, service_modules::PersistentSessionTtlSec());
     memochat::call::CallTokenResponseDto token_response;
     token_response.error = ErrorCodes::Success;
     token_response.call_id = session.call_id;
     token_response.room_name = session.room_name;
-    token_response.role = role.empty() ? (is_caller ? "caller" : "callee") : role;
-    token_response.livekit_url = LoadConfig().livekit_url;
+    token_response.role = role.empty() ? service_modules::DefaultParticipantRole(is_caller) : role;
+    token_response.livekit_url = cfg.livekit_url;
     token_response.token = CreateToken(session, uid, token_response.role);
     token_response.trace_id = session.trace_id;
     response = memochat::call::CallTokenResponseToJsonValue(token_response);

@@ -5,6 +5,7 @@ project(MemoChatServer LANGUAGES CXX)
 option(BUILD_SERVER_SERVICES "Build backend service executables" ON)
 option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Memo_ops/runtime/services during build" OFF)
 option(MEMOCHAT_ENABLE_CPP26_REFLECTION "Enable experimental C++26 static reflection for supported server targets" OFF)
+option(MEMOCHAT_ENABLE_GNU_MODULES "Enable project-owned GNU C++ module CMI construction for selected server targets" OFF)
 
 # Require at least C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
 # Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
@@ -116,6 +117,8 @@ find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
 find_package(msquic CONFIG QUIET)
 find_package(OpenSSL CONFIG QUIET)
+find_package(unofficial-sodium CONFIG QUIET)
+find_package(PkgConfig QUIET)
 find_package(libh2o CONFIG QUIET)
 find_package(AWSSDK CONFIG QUIET)
 if(AWSSDK_FOUND)
@@ -172,6 +175,18 @@ if(TARGET libpqxx::pqxx)
     set(MEMOCHAT_PQXX_TARGET libpqxx::pqxx)
 else()
     message(FATAL_ERROR "libpqxx target not found")
+endif()
+
+if(TARGET unofficial-sodium::sodium)
+    set(MEMOCHAT_SODIUM_TARGET unofficial-sodium::sodium)
+elseif(PkgConfig_FOUND)
+    pkg_check_modules(MEMOCHAT_SODIUM IMPORTED_TARGET libsodium)
+    if(TARGET PkgConfig::MEMOCHAT_SODIUM)
+        set(MEMOCHAT_SODIUM_TARGET PkgConfig::MEMOCHAT_SODIUM)
+    endif()
+endif()
+if(NOT MEMOCHAT_SODIUM_TARGET)
+    message(FATAL_ERROR "libsodium target not found. Install vcpkg package libsodium or system package libsodium.")
 endif()
 
 set(MEMOCHAT_ENABLE_KAFKA 0)
@@ -231,6 +246,25 @@ target_link_libraries(memochat_logging PUBLIC
     Boost::headers
     memochat_boost_stubs
 )
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(memochat_logging
+        MODULES
+            memochat.logging.config_algorithms=common/logging/cxx_modules/LoggingConfig.cppm
+            memochat.logging.grpc_trace_algorithms=common/logging/cxx_modules/GrpcTrace.cppm
+            memochat.logging.log_config_algorithms=common/logging/cxx_modules/LogConfig.cppm
+            memochat.logging.logger_algorithms=common/logging/cxx_modules/Logger.cppm
+            memochat.logging.redaction_algorithms=common/logging/cxx_modules/Redaction.cppm
+            memochat.logging.telemetry_algorithms=common/logging/cxx_modules/Telemetry.cppm
+            memochat.logging.telemetry_config_algorithms=common/logging/cxx_modules/TelemetryConfig.cppm
+        CONSUMER_SOURCES
+            common/logging/GrpcTrace.cpp
+            common/logging/LogConfig.cpp
+            common/logging/Logger.cpp
+            common/logging/Redaction.cpp
+            common/logging/Telemetry.cpp
+            common/logging/TelemetryConfig.cpp
+    )
+endif()
 
 add_library(memochat_runtime STATIC
     common/runtime/IniConfig.cpp
@@ -246,6 +280,30 @@ target_link_libraries(memochat_runtime PUBLIC
     Boost::headers
     memochat_boost_stubs
 )
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(memochat_runtime
+        MODULES
+            memochat.runtime.etcd_config_algorithms=common/runtime/cxx_modules/EtcdConfig.cppm
+            memochat.runtime.io_context_pool_algorithms=common/runtime/cxx_modules/IoContextPool.cppm
+            memochat.runtime.ini_config_algorithms=common/runtime/cxx_modules/IniConfig.cppm
+        CONSUMER_SOURCES
+            common/runtime/EtcdConfig.cpp
+            common/runtime/IniConfig.cpp
+            common/runtime/IoContextPool.cpp
+    )
+endif()
+
+add_library(memochat_auth_security STATIC
+    common/auth/PasswordHasher.cpp
+    common/auth/PasswordHasher.hpp
+    common/auth/RefreshToken.cpp
+    common/auth/RefreshToken.hpp
+)
+target_compile_features(memochat_auth_security PUBLIC cxx_std_23)
+target_include_directories(memochat_auth_security PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+target_link_libraries(memochat_auth_security PUBLIC ${MEMOCHAT_SODIUM_TARGET})
 
 set(MEMOCHAT_PROTO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(MEMOCHAT_PROTO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/common/proto/message.proto")
@@ -346,6 +404,7 @@ target_link_libraries(memochat_server_deps INTERFACE
     memochat_cpp26_reflection
     memochat_logging
     memochat_runtime
+    memochat_auth_security
     memochat_proto
     memochat_boost_stubs
     Boost::filesystem

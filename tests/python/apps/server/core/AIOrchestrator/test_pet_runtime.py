@@ -1311,7 +1311,7 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(Path(payload["diagnostics"]["gpt_sovits_reference_audio"]).exists())
         self.assertTrue(Path(payload["manifest_path"]).exists())
         self.assertIn(payload["job_id"], payload["artifact_path"])
-        self.assertEqual(runtime.get_voice_training_job(payload["job_id"]).job_id, payload["job_id"])
+        self.assertEqual(runtime.get_voice_training_job(payload["job_id"], uid=7).job_id, payload["job_id"])
 
     async def test_runtime_voice_metadata_uses_latest_ready_training_reference(self):
         from harness.pet import VoiceTrainingRequest
@@ -1332,10 +1332,11 @@ class PetRuntimeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         job = runtime.create_voice_training_job(
-            VoiceTrainingRequest(reference_audio_path=str(audio_path), consent_confirmed=True)
+            VoiceTrainingRequest(uid=7, reference_audio_path=str(audio_path), consent_confirmed=True)
         )
         payload = job.to_dict()
-        metadata = runtime._voice_runtime_metadata()
+        self.assertEqual(runtime._voice_runtime_metadata(), {})
+        metadata = runtime._voice_runtime_metadata(uid=7)
 
         self.assertEqual(metadata["voice_provider"], "gpt-sovits")
         self.assertEqual(metadata["ref_audio_path"], payload["diagnostics"]["gpt_sovits_reference_audio"])

@@ -1,4 +1,6 @@
-#include "MessageDeliveryPayload.h"
+#include "MessageDeliveryPayload.hpp"
+
+import memochat.chat.message_delivery_algorithms;
 
 namespace memochat::chat::delivery
 {
@@ -20,15 +22,19 @@ bool BuildPrivateTextNotifyRequest(int recipient_uid,
     }
 
     request->Clear();
-    if (!payload.isObject())
+    const bool payload_is_object = payload.isObject();
+    if (!payload_is_object)
     {
         return false;
     }
 
     const int from_uid = payload.get("fromuid", 0).asInt();
-    const int to_uid = recipient_uid > 0 ? recipient_uid : payload.get("touid", 0).asInt();
+    const int to_uid = modules::SelectPrivateNotifyRecipient(recipient_uid, payload.get("touid", 0).asInt());
     const memochat::json::JsonValue text_array = payload["text_array"];
-    if (from_uid <= 0 || to_uid <= 0 || !text_array.isArray() || text_array.empty())
+    if (!modules::HasValidPrivateNotifyEnvelope(payload_is_object,
+                                                from_uid,
+                                                to_uid,
+                                                text_array.isArray() && !text_array.empty()))
     {
         return false;
     }
@@ -39,7 +45,7 @@ bool BuildPrivateTextNotifyRequest(int recipient_uid,
     {
         const std::string msg_id = item.get("msgid", "").asString();
         const std::string content = item.get("content", "").asString();
-        if (msg_id.empty() || content.empty())
+        if (!modules::IsValidPrivateTextItem(!msg_id.empty(), !content.empty()))
         {
             continue;
         }

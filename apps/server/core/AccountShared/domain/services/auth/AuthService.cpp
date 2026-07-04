@@ -1,25 +1,32 @@
-#include "services/auth/AuthService.h"
+#include "services/auth/AuthService.hpp"
 
-#include "AuthCache.h"
-#include "AuthLoginSupport.h"
-#include "AuthPublicDtos.h"
-#include "AuthVerifyClient.h"
-#include "GateAsyncSideEffects.h"
-#include "GateWorkerPool.h"
-#include "auth/ChatLoginTicket.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
-#include "services/account/AccountPersistence.h"
+#include "AuthCache.hpp"
+#include "AuthLoginRateLimiter.hpp"
+#include "AuthLoginSupport.hpp"
+#include "AuthPublicDtos.hpp"
+#include "AuthVerifyClient.hpp"
+#include "GateAsyncSideEffects.hpp"
+#include "GateWorkerPool.hpp"
+#include "auth/ChatLoginTicket.hpp"
+#include "auth/RefreshToken.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
+#include "services/account/AccountPersistence.hpp"
 
+#include <algorithm>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <cctype>
 #include <sstream>
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
+
+import memochat.account.auth_service_algorithms;
 
 namespace memochat::gate::services::auth
 {
 
+namespace auth_algo = memochat::account::auth_service::modules;
 namespace account = memochat::gate::services::account;
 using memochat::gate::core::AuthCache;
 
@@ -28,9 +35,279 @@ namespace
 
 void WriteJson(memochat::gate::routing::GateResponse& response, const memochat::json::JsonValue& root)
 {
-    response.status = 200;
-    response.content_type = "application/json";
+    response.status = auth_algo::ResponseOkStatus();
+    response.content_type = auth_algo::JsonContentType();
     response.body = root.toStyledString();
+}
+
+void WriteRateLimited(memochat::gate::routing::GateResponse& response,
+                      memochat::json::JsonValue& root,
+                      const gateauthsupport::AuthLoginRateLimitResult& rate_limit)
+{
+    root["error"] = ErrorCodes::RateLimited;
+    root["rate_limited"] = true;
+    root["retry_after_sec"] = rate_limit.retry_after_sec;
+    WriteJson(response, root);
+}
+
+std::string Trim(std::string value)
+{
+    auto not_space = [](unsigned char ch)
+    {
+        return !std::isspace(ch);
+    };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
+    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
+    return value;
+}
+
+std::string LowerAscii(std::string value)
+{
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return value;
+}
+
+std::string HeaderValue(const memochat::gate::routing::GateRequest& request, const std::string& name)
+{
+    const auto expected = LowerAscii(name);
+    for (const auto& [key, value] : request.headers)
+    {
+        if (LowerAscii(key) == expected)
+        {
+            return value;
+        }
+    }
+    return "";
+}
+
+std::string RefreshTokenUserAgent(const memochat::gate::routing::GateRequest& request)
+{
+    return Trim(HeaderValue(request, "user-agent"));
+}
+
+std::string RefreshTokenIpHash(const memochat::gate::routing::GateRequest& request)
+{
+    const auto client_ip = gateauthsupport::ResolveLoginRateLimitClientIp(request);
+    std::string ip_hash;
+    if (!memochat::auth::HashRefreshTokenMetadata(client_ip, ip_hash))
+    {
+        return "";
+    }
+    return ip_hash;
+}
+
+gateauthsupport::UserInfo ToAuthUserInfo(const account::AccountProfile& profile)
+{
+    gateauthsupport::UserInfo userInfo;
+    userInfo.name = profile.name;
+    userInfo.uid = profile.uid;
+    userInfo.user_id = profile.user_id;
+    userInfo.email = profile.email;
+    userInfo.nick = profile.nick;
+    userInfo.icon = profile.icon;
+    userInfo.desc = profile.desc;
+    userInfo.sex = profile.sex;
+    return userInfo;
+}
+
+bool AttachIssuedRefreshToken(memochat::json::JsonValue& root,
+                              int uid,
+                              const memochat::gate::routing::GateRequest& request)
+{
+    const int refresh_ttl_sec = gateauthsupport::GetRefreshTokenTtlSec();
+    const auto refresh_token = account::AccountPersistence::Instance().IssueRefreshToken(uid,
+                                                                                         refresh_ttl_sec,
+                                                                                         RefreshTokenUserAgent(request),
+                                                                                         RefreshTokenIpHash(request));
+    if (!refresh_token.ok)
+    {
+        memolog::LogError("gate.auth.refresh_issue_failed",
+                          "refresh token issue failed",
+                          {{"uid", std::to_string(uid)}});
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+
+    root["refresh_token"] = refresh_token.refresh_token;
+    root["refresh_token_expires_in_sec"] = refresh_ttl_sec;
+    return true;
+}
+
+bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& request,
+                              const gateauthsupport::UserInfo& userInfo,
+                              memochat::json::JsonValue& root,
+                              int64_t session_start_ms,
+                              int64_t account_check_ms,
+                              bool login_cache_hit)
+{
+    std::vector<std::string> server_load_snapshot;
+    std::vector<std::string> least_loaded_servers;
+    std::string route_source;
+    std::string status_route_detail;
+    std::string http_token;
+    const auto route_start_ms = gateauthsupport::NowMs();
+    const auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
+                                                                      &server_load_snapshot,
+                                                                      &least_loaded_servers,
+                                                                      &route_source,
+                                                                      &status_route_detail,
+                                                                      &http_token);
+    const auto route_select_ms = gateauthsupport::NowMs() - route_start_ms;
+    if (route_nodes.empty())
+    {
+        memolog::LogWarn(
+            "gate.auth.session_issue_failed",
+            "no chat server available",
+            {{"uid", std::to_string(userInfo.uid)}, {"error_code", std::to_string(ErrorCodes::RPCFailed)}});
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+
+    const auto ticket_start_ms = gateauthsupport::NowMs();
+    http_token = boost::uuids::to_string(boost::uuids::random_generator()());
+    if (!AuthCache::Instance().SetHttpToken(userInfo.uid, http_token, gateauthsupport::GetHttpTokenTtlSec()))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+    memochat::auth::ChatLoginTicketClaims claims;
+    claims.uid = userInfo.uid;
+    claims.user_id = userInfo.user_id;
+    claims.name = userInfo.name;
+    claims.nick = userInfo.nick;
+    claims.icon = userInfo.icon;
+    claims.desc = userInfo.desc;
+    claims.email = userInfo.email;
+    claims.sex = userInfo.sex;
+    claims.target_server = route_nodes.front().name;
+    claims.protocol_version = gateauthsupport::LoginProtocolVersion();
+    claims.issued_at_ms = gateauthsupport::NowMs();
+    claims.expire_at_ms = claims.issued_at_ms + static_cast<int64_t>(gateauthsupport::GetChatTicketTtlSec()) * 1000;
+    claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());
+    const std::string login_ticket = memochat::auth::EncodeTicket(claims, gateauthsupport::GetChatAuthSecret());
+    const auto ticket_issue_ms = gateauthsupport::NowMs() - ticket_start_ms;
+    if (login_ticket.empty())
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+
+    memolog::TraceContext::SetUid(std::to_string(userInfo.uid));
+    root["error"] = 0;
+    root["protocol_version"] = gateauthsupport::LoginProtocolVersion();
+    root["preferred_transport"] =
+        auth_algo::PreferredTransport(!route_nodes.front().quic_host.empty(), !route_nodes.front().quic_port.empty());
+    root["fallback_transport"] = auth_algo::FallbackTransport();
+    root["email"] = userInfo.email;
+    root["uid"] = userInfo.uid;
+    root["user_id"] = userInfo.user_id;
+    root["token"] = http_token;
+    root["login_ticket"] = login_ticket;
+    root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
+    gateauthsupport::AuthLoginUserProfileDto user_profile_dto;
+    user_profile_dto.uid = userInfo.uid;
+    user_profile_dto.user_id = userInfo.user_id;
+    user_profile_dto.name = userInfo.name;
+    user_profile_dto.nick = userInfo.nick;
+    user_profile_dto.icon = userInfo.icon;
+    user_profile_dto.desc = userInfo.desc;
+    user_profile_dto.email = userInfo.email;
+    user_profile_dto.sex = userInfo.sex;
+    root["user_profile"] = gateauthsupport::AuthLoginUserProfileToJsonValue(user_profile_dto);
+
+    memochat::json::JsonValue chat_endpoints_arr(memochat::json::array_t{});
+    for (const auto& route_node : route_nodes)
+    {
+        if (!route_node.quic_host.empty() && !route_node.quic_port.empty())
+        {
+            memochat::json::glaze_array_append(
+                chat_endpoints_arr,
+                gateauthsupport::AuthChatEndpointToJsonValue(
+                    gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::QuicTransport(),
+                                                         .host = route_node.quic_host,
+                                                         .port = route_node.quic_port,
+                                                         .server_name = route_node.name,
+                                                         .priority = route_node.priority}));
+        }
+        memochat::json::glaze_array_append(
+            chat_endpoints_arr,
+            gateauthsupport::AuthChatEndpointToJsonValue(
+                gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::TcpTransport(),
+                                                     .host = route_node.host,
+                                                     .port = route_node.port,
+                                                     .server_name = route_node.name,
+                                                     .priority = route_node.priority}));
+    }
+    root["chat_endpoints"] = chat_endpoints_arr;
+
+    gateauthsupport::AuthLoginStageMetricsDto stage_metrics_dto;
+    stage_metrics_dto.mysql_check_pwd_ms = static_cast<int64_t>(account_check_ms);
+    stage_metrics_dto.route_select_ms = static_cast<int64_t>(route_select_ms);
+    stage_metrics_dto.ticket_issue_ms = static_cast<int64_t>(ticket_issue_ms);
+    stage_metrics_dto.user_login_total_ms = static_cast<int64_t>(gateauthsupport::NowMs() - session_start_ms);
+    stage_metrics_dto.route_source = route_source;
+    stage_metrics_dto.status_route_detail = status_route_detail;
+    root["stage_metrics"] = gateauthsupport::AuthLoginStageMetricsToJsonValue(stage_metrics_dto);
+    memolog::LogInfo("gate.auth.session_issued",
+                     "auth session issued",
+                     {{"uid", std::to_string(userInfo.uid)},
+                      {"route", request.path.empty() ? "/user_login" : request.path},
+                      {"chat_host", route_nodes.front().host},
+                      {"chat_port", route_nodes.front().port},
+                      {"chat_server", route_nodes.front().name},
+                      {"route_source", route_source},
+                      {"status_route_detail", status_route_detail},
+                      {"login_cache_hit", login_cache_hit ? "true" : "false"},
+                      {"account_check_ms", std::to_string(account_check_ms)},
+                      {"route_select_ms", std::to_string(route_select_ms)},
+                      {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
+                      {"session_issue_total_ms", std::to_string(gateauthsupport::NowMs() - session_start_ms)},
+                      {"server_loads",
+                       [&server_load_snapshot]()
+                       {
+                           std::ostringstream oss;
+                           for (size_t i = 0; i < server_load_snapshot.size(); ++i)
+                           {
+                               if (i > 0)
+                               {
+                                   oss << ",";
+                               }
+                               oss << server_load_snapshot[i];
+                           }
+                           return oss.str();
+                       }()}});
+    memolog::LogInfo("login.stage.summary",
+                     "gate login stage summary",
+                     {{"uid", std::to_string(userInfo.uid)},
+                      {"login_cache_hit", login_cache_hit ? "true" : "false"},
+                      {"mysql_check_pwd_ms", std::to_string(account_check_ms)},
+                      {"route_select_ms", std::to_string(route_select_ms)},
+                      {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
+                      {"user_login_total_ms", std::to_string(gateauthsupport::NowMs() - session_start_ms)}});
+    const auto audit_uid = userInfo.uid;
+    const auto audit_user_id = userInfo.user_id;
+    const auto audit_email = userInfo.email;
+    const auto audit_chat_server = route_nodes.front().name;
+    const auto audit_chat_host = route_nodes.front().host;
+    const auto audit_chat_port = route_nodes.front().port;
+    GateWorkerPool::GetInstance()->post(
+        [audit_uid, audit_user_id, audit_email, audit_chat_server, audit_chat_host, audit_chat_port, login_cache_hit]()
+        {
+            GateAsyncSideEffects::Instance().PublishAuditLogin(audit_uid,
+                                                               audit_user_id,
+                                                               audit_email,
+                                                               audit_chat_server,
+                                                               audit_chat_host,
+                                                               audit_chat_port,
+                                                               login_cache_hit);
+        });
+    return true;
 }
 
 } // namespace
@@ -125,14 +402,21 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
+    AuthCache::Instance().DeleteVerificationCode(email);
     memolog::LogInfo("gate.reset_pwd", "password updated", {{"email", email}});
     gateauthsupport::InvalidateLoginCacheByEmail(email);
+    int reset_uid = 0;
+    std::string reset_name;
+    if (account_persistence.FindUserByEmail(email, reset_uid, reset_name) && reset_uid > 0)
+    {
+        AuthCache::Instance().DeleteHttpToken(reset_uid);
+        gateauthsupport::InvalidateLoginCacheByUid(reset_uid);
+    }
     GateAsyncSideEffects::Instance().PublishCacheInvalidate(email, name, "reset_pwd");
     gateauthsupport::AuthResetPasswordResponseDto reset_response;
     reset_response.error = 0;
     reset_response.email = email;
     reset_response.user = name;
-    reset_response.passwd = pwd;
     reset_response.varifycode = reset_pwd_request.varifycode;
     root = gateauthsupport::AuthResetPasswordResponseToJsonValue(reset_response);
     WriteJson(response, root);
@@ -185,7 +469,7 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
 
     auto& account_persistence = account::AccountPersistence::Instance();
     const int uid = account_persistence.RegisterUser(name, email, pwd, icon);
-    if (uid == 0 || uid == -1)
+    if (!auth_algo::IsRegisteredUidValid(uid))
     {
         memolog::LogWarn("gate.user_register.failed", "user or email exists", {{"email", email}, {"name", name}});
         root["error"] = ErrorCodes::UserExist;
@@ -200,8 +484,6 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
     register_response.user_id = user_id;
     register_response.email = email;
     register_response.user = name;
-    register_response.passwd = pwd;
-    register_response.confirm = confirm;
     register_response.icon = icon;
     register_response.varifycode = register_request.varifycode;
     root = gateauthsupport::AuthRegisterResponseToJsonValue(register_response);
@@ -210,7 +492,6 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
     cached_user.user_id = user_id;
     cached_user.name = name;
     cached_user.email = email;
-    cached_user.pwd = pwd;
     cached_user.nick = name;
     cached_user.icon = icon;
     cached_user.desc = "";
@@ -241,7 +522,7 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
     const auto pwd = login_request.passwd;
     const auto client_ver = login_request.client_ver;
     root["min_version"] = gateauthsupport::MinClientVersion();
-    root["feature_group_chat"] = true;
+    root["feature_group_chat"] = auth_algo::FeatureGroupChatEnabled();
     memolog::LogInfo("gate.user_login.version_check",
                      "version check",
                      {{"client_ver", client_ver}, {"min_ver", gateauthsupport::MinClientVersion()}});
@@ -255,26 +536,46 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         return true;
     }
 
+    const auto rate_limit = gateauthsupport::CheckLoginRateLimit(email, request);
+    if (rate_limit.redis_error)
+    {
+        memolog::LogWarn("gate.user_login.rate_limit_redis_error",
+                         "login rate-limit counter check failed closed",
+                         {{"email", email}});
+        root["error"] = ErrorCodes::RateLimited;
+        root["rate_limited"] = true;
+        root["retry_after_sec"] = 60;
+        WriteJson(response, root);
+        return true;
+    }
+    if (rate_limit.rate_limited)
+    {
+        memolog::LogWarn("gate.user_login.rate_limited",
+                         "too many failed login attempts",
+                         {{"email", email}, {"retry_after_sec", std::to_string(rate_limit.retry_after_sec)}});
+        WriteRateLimited(response, root, rate_limit);
+        return true;
+    }
+
     gateauthsupport::UserInfo userInfo;
     const auto mysql_start_ms = gateauthsupport::NowMs();
     gateauthsupport::UserInfo tempUser;
-    bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, pwd, tempUser);
-    if (login_cache_hit)
-    {
-        userInfo = tempUser;
-        gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);
-    }
-    bool pwd_valid = login_cache_hit;
+    bool login_cache_hit = gateauthsupport::TryLoadCachedLoginProfile(email, tempUser);
+    bool pwd_valid = false;
     int64_t mysql_check_pwd_ms = 0;
-    if (!pwd_valid)
+    account::AccountProfile dbUser;
+    pwd_valid = account::AccountPersistence::Instance().CheckPassword(email, pwd, dbUser);
+    mysql_check_pwd_ms = gateauthsupport::NowMs() - mysql_start_ms;
+    if (pwd_valid)
     {
-        account::AccountProfile dbUser;
-        pwd_valid = account::AccountPersistence::Instance().CheckPassword(email, pwd, dbUser);
-        mysql_check_pwd_ms = gateauthsupport::NowMs() - mysql_start_ms;
-        if (pwd_valid)
+        if (login_cache_hit && tempUser.uid == dbUser.uid)
+        {
+            userInfo = tempUser;
+            gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);
+        }
+        else
         {
             userInfo.name = dbUser.name;
-            userInfo.pwd = dbUser.password;
             userInfo.uid = dbUser.uid;
             userInfo.user_id = dbUser.user_id;
             userInfo.email = dbUser.email;
@@ -283,10 +584,31 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
             userInfo.desc = dbUser.desc;
             userInfo.sex = dbUser.sex;
             gateauthsupport::CacheLoginProfile(email, userInfo);
+            login_cache_hit = false;
         }
     }
     if (!pwd_valid)
     {
+        const auto failure_limit = gateauthsupport::RecordLoginFailure(email, request);
+        if (failure_limit.redis_error)
+        {
+            memolog::LogWarn("gate.user_login.rate_limit_redis_error",
+                             "login rate-limit failure counter update failed closed",
+                             {{"email", email}});
+            root["error"] = ErrorCodes::RateLimited;
+            root["rate_limited"] = true;
+            root["retry_after_sec"] = 60;
+            WriteJson(response, root);
+            return true;
+        }
+        if (failure_limit.rate_limited)
+        {
+            memolog::LogWarn("gate.user_login.rate_limited",
+                             "failed login threshold reached",
+                             {{"email", email}, {"retry_after_sec", std::to_string(failure_limit.retry_after_sec)}});
+            WriteRateLimited(response, root, failure_limit);
+            return true;
+        }
         memolog::LogWarn("gate.user_login.failed",
                          "password invalid",
                          {{"email", email}, {"error_code", std::to_string(ErrorCodes::PasswdInvalid)}});
@@ -294,167 +616,176 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         WriteJson(response, root);
         return true;
     }
+    gateauthsupport::ClearLoginFailureCounters(email, request);
 
-    std::vector<std::string> server_load_snapshot;
-    std::vector<std::string> least_loaded_servers;
-    std::string route_source;
-    std::string status_route_detail;
-    std::string http_token;
-    const auto route_start_ms = gateauthsupport::NowMs();
-    const auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
-                                                                      &server_load_snapshot,
-                                                                      &least_loaded_servers,
-                                                                      &route_source,
-                                                                      &status_route_detail,
-                                                                      &http_token);
-    const auto route_select_ms = gateauthsupport::NowMs() - route_start_ms;
-    if (route_nodes.empty())
+    memochat::json::JsonValue session_root = root;
+    if (!IssueLoginSessionForUser(request, userInfo, session_root, login_start_ms, mysql_check_pwd_ms, login_cache_hit))
     {
-        memolog::LogWarn(
-            "gate.user_login.failed",
-            "no chat server available",
-            {{"uid", std::to_string(userInfo.uid)}, {"error_code", std::to_string(ErrorCodes::RPCFailed)}});
-        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, session_root);
+        return true;
+    }
+    if (!AttachIssuedRefreshToken(session_root, userInfo.uid, request))
+    {
+        memochat::json::JsonValue failure_root;
+        failure_root["trace_id"] = request.trace_id;
+        failure_root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, failure_root);
+        return true;
+    }
+
+    memolog::LogInfo("gate.user_login", "user login succeeded", {{"uid", std::to_string(userInfo.uid)}});
+    WriteJson(response, session_root);
+    return true;
+}
+
+bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    const auto refresh_start_ms = gateauthsupport::NowMs();
+    memochat::json::JsonValue root;
+    root["trace_id"] = request.trace_id;
+    root["min_version"] = gateauthsupport::MinClientVersion();
+    root["feature_group_chat"] = auth_algo::FeatureGroupChatEnabled();
+
+    gateauthsupport::AuthRefreshRequestDto refresh_request;
+    if (!gateauthsupport::DecodeAuthRefreshRequest(request.body, &refresh_request))
+    {
+        memolog::LogWarn("gate.auth_refresh.invalid_json", "request json parse failed");
+        root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
     }
 
-    const auto ticket_start_ms = gateauthsupport::NowMs();
-    if (http_token.empty() && (!AuthCache::Instance().GetHttpToken(userInfo.uid, http_token) || http_token.empty()))
+    if (!gateauthsupport::IsClientVersionAllowed(refresh_request.client_ver, gateauthsupport::MinClientVersion()))
     {
-        http_token = boost::uuids::to_string(boost::uuids::random_generator()());
-        AuthCache::Instance().SetHttpToken(userInfo.uid, http_token);
-    }
-    memochat::auth::ChatLoginTicketClaims claims;
-    claims.uid = userInfo.uid;
-    claims.user_id = userInfo.user_id;
-    claims.name = userInfo.name;
-    claims.nick = userInfo.nick;
-    claims.icon = userInfo.icon;
-    claims.desc = userInfo.desc;
-    claims.email = userInfo.email;
-    claims.sex = userInfo.sex;
-    claims.target_server = route_nodes.front().name;
-    claims.protocol_version = gateauthsupport::LoginProtocolVersion();
-    claims.issued_at_ms = gateauthsupport::NowMs();
-    claims.expire_at_ms = claims.issued_at_ms + static_cast<int64_t>(gateauthsupport::GetChatTicketTtlSec()) * 1000;
-    const std::string login_ticket = memochat::auth::EncodeTicket(claims, gateauthsupport::GetChatAuthSecret());
-    const auto ticket_issue_ms = gateauthsupport::NowMs() - ticket_start_ms;
-    if (login_ticket.empty())
-    {
-        root["error"] = ErrorCodes::RPCFailed;
+        root["error"] = ErrorCodes::ClientVersionTooLow;
+        memolog::LogWarn("gate.auth_refresh.failed",
+                         "client version too low",
+                         {{"client_ver", refresh_request.client_ver},
+                          {"error_code", std::to_string(ErrorCodes::ClientVersionTooLow)}});
         WriteJson(response, root);
         return true;
     }
 
-    memolog::TraceContext::SetUid(std::to_string(userInfo.uid));
-    root["error"] = 0;
-    root["protocol_version"] = gateauthsupport::LoginProtocolVersion();
-    root["preferred_transport"] =
-        (!route_nodes.front().quic_host.empty() && !route_nodes.front().quic_port.empty()) ? "quic" : "tcp";
-    root["fallback_transport"] = "tcp";
-    root["email"] = email;
-    root["uid"] = userInfo.uid;
-    root["user_id"] = userInfo.user_id;
-    root["token"] = http_token;
-    root["login_ticket"] = login_ticket;
-    root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
-    gateauthsupport::AuthLoginUserProfileDto user_profile_dto;
-    user_profile_dto.uid = userInfo.uid;
-    user_profile_dto.user_id = userInfo.user_id;
-    user_profile_dto.name = userInfo.name;
-    user_profile_dto.nick = userInfo.nick;
-    user_profile_dto.icon = userInfo.icon;
-    user_profile_dto.desc = userInfo.desc;
-    user_profile_dto.email = userInfo.email;
-    user_profile_dto.sex = userInfo.sex;
-    root["user_profile"] = gateauthsupport::AuthLoginUserProfileToJsonValue(user_profile_dto);
+    const auto rotated =
+        account::AccountPersistence::Instance().RotateRefreshToken(refresh_request.refresh_token,
+                                                                   gateauthsupport::GetRefreshTokenTtlSec(),
+                                                                   RefreshTokenUserAgent(request),
+                                                                   RefreshTokenIpHash(request));
 
-    memochat::json::JsonValue chat_endpoints_arr(memochat::json::array_t{});
-    for (const auto& route_node : route_nodes)
+    if (rotated.status != account::RefreshTokenStatus::Success)
     {
-        if (!route_node.quic_host.empty() && !route_node.quic_port.empty())
+        int error_code = ErrorCodes::TokenInvalid;
+        if (rotated.status == account::RefreshTokenStatus::StorageError)
         {
-            memochat::json::glaze_array_append(
-                chat_endpoints_arr,
-                gateauthsupport::AuthChatEndpointToJsonValue(
-                    gateauthsupport::AuthChatEndpointDto{.transport = "quic",
-                                                         .host = route_node.quic_host,
-                                                         .port = route_node.quic_port,
-                                                         .server_name = route_node.name,
-                                                         .priority = route_node.priority}));
+            error_code = ErrorCodes::RPCFailed;
         }
-        memochat::json::glaze_array_append(chat_endpoints_arr,
-                                           gateauthsupport::AuthChatEndpointToJsonValue(
-                                               gateauthsupport::AuthChatEndpointDto{.transport = "tcp",
-                                                                                    .host = route_node.host,
-                                                                                    .port = route_node.port,
-                                                                                    .server_name = route_node.name,
-                                                                                    .priority = route_node.priority}));
+        root["error"] = error_code;
+        memolog::LogWarn("gate.auth_refresh.failed",
+                         "refresh token rejected",
+                         {{"uid", std::to_string(rotated.uid)},
+                          {"status", std::to_string(static_cast<int>(rotated.status))},
+                          {"error_code", std::to_string(error_code)}});
+        WriteJson(response, root);
+        return true;
     }
-    root["chat_endpoints"] = chat_endpoints_arr;
 
-    gateauthsupport::AuthLoginStageMetricsDto stage_metrics_dto;
-    stage_metrics_dto.mysql_check_pwd_ms = static_cast<int64_t>(mysql_check_pwd_ms);
-    stage_metrics_dto.route_select_ms = static_cast<int64_t>(route_select_ms);
-    stage_metrics_dto.ticket_issue_ms = static_cast<int64_t>(ticket_issue_ms);
-    stage_metrics_dto.user_login_total_ms = static_cast<int64_t>(gateauthsupport::NowMs() - login_start_ms);
-    stage_metrics_dto.route_source = route_source;
-    stage_metrics_dto.status_route_detail = status_route_detail;
-    root["stage_metrics"] = gateauthsupport::AuthLoginStageMetricsToJsonValue(stage_metrics_dto);
-    memolog::LogInfo("gate.user_login",
-                     "user login succeeded",
-                     {{"uid", std::to_string(userInfo.uid)},
-                      {"route", "/user_login"},
-                      {"chat_host", route_nodes.front().host},
-                      {"chat_port", route_nodes.front().port},
-                      {"chat_server", route_nodes.front().name},
-                      {"route_source", route_source},
-                      {"status_route_detail", status_route_detail},
-                      {"login_cache_hit", login_cache_hit ? "true" : "false"},
-                      {"mysql_check_pwd_ms", std::to_string(mysql_check_pwd_ms)},
-                      {"route_select_ms", std::to_string(route_select_ms)},
-                      {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
-                      {"user_login_total_ms", std::to_string(gateauthsupport::NowMs() - login_start_ms)},
-                      {"server_loads",
-                       [&server_load_snapshot]()
-                       {
-                           std::ostringstream oss;
-                           for (size_t i = 0; i < server_load_snapshot.size(); ++i)
-                           {
-                               if (i > 0)
-                               {
-                                   oss << ",";
-                               }
-                               oss << server_load_snapshot[i];
-                           }
-                           return oss.str();
-                       }()}});
-    memolog::LogInfo("login.stage.summary",
-                     "gate login stage summary",
-                     {{"uid", std::to_string(userInfo.uid)},
-                      {"login_cache_hit", login_cache_hit ? "true" : "false"},
-                      {"mysql_check_pwd_ms", std::to_string(mysql_check_pwd_ms)},
-                      {"route_select_ms", std::to_string(route_select_ms)},
-                      {"ticket_issue_ms", std::to_string(ticket_issue_ms)},
-                      {"user_login_total_ms", std::to_string(gateauthsupport::NowMs() - login_start_ms)}});
-    const auto audit_uid = userInfo.uid;
-    const auto audit_user_id = userInfo.user_id;
-    const auto audit_email = email;
-    const auto audit_chat_server = route_nodes.front().name;
-    const auto audit_chat_host = route_nodes.front().host;
-    const auto audit_chat_port = route_nodes.front().port;
-    GateWorkerPool::GetInstance()->post(
-        [audit_uid, audit_user_id, audit_email, audit_chat_server, audit_chat_host, audit_chat_port, login_cache_hit]()
-        {
-            GateAsyncSideEffects::Instance().PublishAuditLogin(audit_uid,
-                                                               audit_user_id,
-                                                               audit_email,
-                                                               audit_chat_server,
-                                                               audit_chat_host,
-                                                               audit_chat_port,
-                                                               login_cache_hit);
-        });
+    auto userInfo = ToAuthUserInfo(rotated.profile);
+    gateauthsupport::CacheLoginProfile(userInfo.email, userInfo);
+    if (!IssueLoginSessionForUser(request, userInfo, root, refresh_start_ms, 0, false))
+    {
+        WriteJson(response, root);
+        return true;
+    }
+
+    root["refresh_token"] = rotated.refresh_token;
+    root["refresh_token_expires_in_sec"] = gateauthsupport::GetRefreshTokenTtlSec();
+    memolog::LogInfo("gate.auth_refresh",
+                     "refresh token rotated and session issued",
+                     {{"uid", std::to_string(userInfo.uid)}});
+    WriteJson(response, root);
+    return true;
+}
+
+bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& request,
+                                   memochat::gate::routing::GateResponse& response)
+{
+    memochat::json::JsonValue root;
+    root["trace_id"] = request.trace_id;
+    root["min_version"] = gateauthsupport::MinClientVersion();
+
+    gateauthsupport::AuthLogoutRequestDto logout_request;
+    if (!gateauthsupport::DecodeAuthLogoutRequest(request.body, &logout_request))
+    {
+        memolog::LogWarn("gate.auth_logout.invalid_json", "request json parse failed");
+        root["error"] = ErrorCodes::Error_Json;
+        WriteJson(response, root);
+        return true;
+    }
+
+    if (!gateauthsupport::IsClientVersionAllowed(logout_request.client_ver, gateauthsupport::MinClientVersion()))
+    {
+        root["error"] = ErrorCodes::ClientVersionTooLow;
+        memolog::LogWarn("gate.auth_logout.failed",
+                         "client version too low",
+                         {{"client_ver", logout_request.client_ver},
+                          {"error_code", std::to_string(ErrorCodes::ClientVersionTooLow)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    std::string provided_token;
+    if (logout_request.uid <= 0 || logout_request.token.empty() ||
+        !AuthCache::Instance().GetHttpToken(logout_request.uid, provided_token) ||
+        provided_token != logout_request.token)
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+        memolog::LogWarn(
+            "gate.auth_logout.failed",
+            "http token rejected",
+            {{"uid", std::to_string(logout_request.uid)}, {"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    bool revoked = false;
+    if (logout_request.all_devices)
+    {
+        revoked = account::AccountPersistence::Instance().RevokeAllRefreshTokensForUid(logout_request.uid);
+    }
+    else
+    {
+        int refresh_uid = 0;
+        revoked =
+            !logout_request.refresh_token.empty() &&
+            account::AccountPersistence::Instance().RevokeRefreshToken(logout_request.refresh_token, refresh_uid) &&
+            refresh_uid == logout_request.uid;
+    }
+
+    if (!revoked)
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+        memolog::LogWarn("gate.auth_logout.failed",
+                         "refresh token revoke failed",
+                         {{"uid", std::to_string(logout_request.uid)},
+                          {"all_devices", logout_request.all_devices ? "true" : "false"},
+                          {"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    AuthCache::Instance().DeleteHttpToken(logout_request.uid);
+    gateauthsupport::InvalidateLoginCacheByUid(logout_request.uid);
+
+    gateauthsupport::AuthLogoutResponseDto logout_response;
+    logout_response.error = ErrorCodes::Success;
+    logout_response.uid = logout_request.uid;
+    logout_response.all_devices = logout_request.all_devices;
+    root = gateauthsupport::AuthLogoutResponseToJsonValue(logout_response);
+    memolog::LogInfo(
+        "gate.auth_logout",
+        "auth credentials revoked",
+        {{"uid", std::to_string(logout_request.uid)}, {"all_devices", logout_request.all_devices ? "true" : "false"}});
     WriteJson(response, root);
     return true;
 }

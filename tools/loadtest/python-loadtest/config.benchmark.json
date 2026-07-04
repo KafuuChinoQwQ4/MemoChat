@@ -6,7 +6,6 @@
   ],
   "login_path": "/user_login",
   "client_ver": "3.0.0",
-  "use_xor_passwd": true,
   "use_k6_http": true,
   "fast_http": true,
   "keep_alive": true,

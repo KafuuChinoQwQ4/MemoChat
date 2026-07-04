@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "services/media/MediaUploadSessionDto.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "services/media/MediaUploadSessionDto.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>
@@ -10,7 +10,7 @@
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadSessionDto>(
-    std::array<std::string_view, 11>{"uid",
+    std::array<std::string_view, 15>{"uid",
                                      "upload_id",
                                      "media_type",
                                      "file_name",
@@ -20,7 +20,11 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUpload
                                      "total_chunks",
                                      "created_at",
                                      "expires_at",
-                                     "storage_provider"}));
+                                     "storage_provider",
+                                     "grant_uids",
+                                     "grant_group_id",
+                                     "grant_public",
+                                     "grant_friends"}));
 #endif
 
 namespace
@@ -40,6 +44,10 @@ memochat::media::MediaUploadSessionDto MakeSession()
     session.created_at = 1000;
     session.expires_at = 2000;
     session.storage_provider = "local";
+    session.grant_uids = {7, 8};
+    session.grant_group_id = 99;
+    session.grant_public = true;
+    session.grant_friends = false;
     return session;
 }
 
@@ -50,26 +58,28 @@ TEST(MediaUploadSessionDtoTest, EncodesSessionWithExistingWireFieldNames)
     std::string body;
     ASSERT_TRUE(memochat::media::EncodeMediaUploadSession(MakeSession(), &body));
 
-    memochat::json::JsonValue root;
-    ASSERT_TRUE(memochat::json::glaze_parse(root, body));
-    EXPECT_EQ(root["uid"].asInt(), 42);
-    EXPECT_EQ(root["upload_id"].asString(), "upload-1");
-    EXPECT_EQ(root["media_type"].asString(), "image");
-    EXPECT_EQ(root["file_name"].asString(), "photo.png");
-    EXPECT_EQ(root["mime"].asString(), "image/png");
-    EXPECT_EQ(root["file_size"].asInt64(), 4096);
-    EXPECT_EQ(root["chunk_size"].asInt(), 1024);
-    EXPECT_EQ(root["total_chunks"].asInt(), 4);
-    EXPECT_EQ(root["created_at"].asInt64(), 1000);
-    EXPECT_EQ(root["expires_at"].asInt64(), 2000);
-    EXPECT_EQ(root["storage_provider"].asString(), "local");
+    EXPECT_NE(body.find(R"("uid":42)"), std::string::npos);
+    EXPECT_NE(body.find(R"("upload_id":"upload-1")"), std::string::npos);
+    EXPECT_NE(body.find(R"("media_type":"image")"), std::string::npos);
+    EXPECT_NE(body.find(R"("file_name":"photo.png")"), std::string::npos);
+    EXPECT_NE(body.find(R"("mime":"image/png")"), std::string::npos);
+    EXPECT_NE(body.find(R"("file_size":4096)"), std::string::npos);
+    EXPECT_NE(body.find(R"("chunk_size":1024)"), std::string::npos);
+    EXPECT_NE(body.find(R"("total_chunks":4)"), std::string::npos);
+    EXPECT_NE(body.find(R"("created_at":1000)"), std::string::npos);
+    EXPECT_NE(body.find(R"("expires_at":2000)"), std::string::npos);
+    EXPECT_NE(body.find(R"("storage_provider":"local")"), std::string::npos);
+    EXPECT_NE(body.find(R"("grant_uids":[7,8])"), std::string::npos);
+    EXPECT_NE(body.find(R"("grant_group_id":99)"), std::string::npos);
+    EXPECT_NE(body.find(R"("grant_public":true)"), std::string::npos);
+    EXPECT_NE(body.find(R"("grant_friends":false)"), std::string::npos);
 }
 
 TEST(MediaUploadSessionDtoTest, DecodesFullSession)
 {
     memochat::media::MediaUploadSessionDto session;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadSession(
-        R"({"uid":7,"upload_id":"upload-2","media_type":"file","file_name":"doc.pdf","mime":"application/pdf","file_size":2048,"chunk_size":1024,"total_chunks":2,"created_at":10,"expires_at":20,"storage_provider":"s3"})",
+        R"({"uid":7,"upload_id":"upload-2","media_type":"file","file_name":"doc.pdf","mime":"application/pdf","file_size":2048,"chunk_size":1024,"total_chunks":2,"created_at":10,"expires_at":20,"storage_provider":"s3","grant_uids":[9,9,0,10],"grant_group_id":123,"grant_public":false,"grant_friends":true})",
         &session));
 
     EXPECT_EQ(session.uid, 7);
@@ -83,6 +93,12 @@ TEST(MediaUploadSessionDtoTest, DecodesFullSession)
     EXPECT_EQ(session.created_at, 10);
     EXPECT_EQ(session.expires_at, 20);
     EXPECT_EQ(session.storage_provider, "s3");
+    ASSERT_EQ(session.grant_uids.size(), 2U);
+    EXPECT_EQ(session.grant_uids[0], 9);
+    EXPECT_EQ(session.grant_uids[1], 10);
+    EXPECT_EQ(session.grant_group_id, 123);
+    EXPECT_FALSE(session.grant_public);
+    EXPECT_TRUE(session.grant_friends);
 }
 
 TEST(MediaUploadSessionDtoTest, DecodesMissingOptionalFieldsWithDefaults)
@@ -103,6 +119,10 @@ TEST(MediaUploadSessionDtoTest, DecodesMissingOptionalFieldsWithDefaults)
     EXPECT_EQ(session.created_at, 0);
     EXPECT_EQ(session.expires_at, 0);
     EXPECT_EQ(session.storage_provider, "local");
+    EXPECT_TRUE(session.grant_uids.empty());
+    EXPECT_EQ(session.grant_group_id, 0);
+    EXPECT_FALSE(session.grant_public);
+    EXPECT_FALSE(session.grant_friends);
 }
 
 TEST(MediaUploadSessionDtoTest, RejectsInvalidSession)
@@ -145,6 +165,10 @@ TEST(MediaUploadSessionDtoTest, BridgesSessionToAndFromJsonValue)
     EXPECT_EQ(decoded.upload_id, "upload-1");
     EXPECT_EQ(decoded.media_type, "image");
     EXPECT_EQ(decoded.storage_provider, "local");
+    ASSERT_EQ(decoded.grant_uids.size(), 2U);
+    EXPECT_EQ(decoded.grant_group_id, 99);
+    EXPECT_TRUE(decoded.grant_public);
+    EXPECT_FALSE(decoded.grant_friends);
 }
 
 TEST(MediaUploadSessionDtoTest, ReportsNullEncodeOutput)

@@ -1,23 +1,24 @@
-﻿#include "AuthLoginSupport.h"
-#include "AuthCache.h"
-#include "AuthLoginCacheProfileDto.h"
-#include "json/GlazeCompat.h"
-#include "ConfigMgr.h"
-#include "PostgresDao.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "auth/ChatLoginTicket.h"
-#include "auth/AuthSecret.h"
-#include "cluster/ChatClusterDiscovery.h"
-#include "logging/Logger.h"
+﻿#include "AuthLoginSupport.hpp"
+#include "AuthCache.hpp"
+#include "AuthLoginCacheProfileDto.hpp"
+#include "json/GlazeCompat.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresDao.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "auth/ChatLoginTicket.hpp"
+#include "auth/AuthSecret.hpp"
+#include "cluster/ChatClusterDiscovery.hpp"
+#include "logging/Logger.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <climits>
 #include <cstdlib>
-#include <cctype>
 #include <mutex>
 #include <sstream>
+
+import memochat.account.auth_login_algorithms;
 
 namespace
 {
@@ -34,43 +35,6 @@ bool IsTruthyFlag(const char* raw)
     const std::string value(raw);
     return value == "1" || value == "true" || value == "TRUE" || value == "on" || value == "ON";
 }
-
-bool ParseSemVer(const std::string& ver, int& major, int& minor, int& patch)
-{
-    major = 0;
-    minor = 0;
-    patch = 0;
-    if (ver.empty())
-    {
-        return false;
-    }
-    std::stringstream ss(ver);
-    std::string token;
-    std::vector<int> parts;
-    while (std::getline(ss, token, '.'))
-    {
-        if (token.empty())
-        {
-            return false;
-        }
-        for (char c : token)
-        {
-            if (!std::isdigit(static_cast<unsigned char>(c)))
-            {
-                return false;
-            }
-        }
-        parts.push_back(std::stoi(token));
-    }
-    if (parts.empty() || parts.size() > 3)
-    {
-        return false;
-    }
-    major = parts[0];
-    minor = (parts.size() >= 2) ? parts[1] : 0;
-    patch = (parts.size() >= 3) ? parts[2] : 0;
-    return true;
-}
 } // namespace
 
 namespace gateauthsupport
@@ -85,6 +49,28 @@ int GetLoginCacheTtlSec()
         return 3600;
     }
     return std::max(60, std::atoi(ttl.c_str()));
+}
+
+int GetRefreshTokenTtlSec()
+{
+    auto& cfg = ConfigMgr::Inst();
+    const auto ttl = cfg.GetValue("AuthRefresh", "RefreshTokenTtlSec");
+    if (ttl.empty())
+    {
+        return 30 * 24 * 60 * 60;
+    }
+    return std::clamp(std::atoi(ttl.c_str()), 3600, 180 * 24 * 60 * 60);
+}
+
+int GetHttpTokenTtlSec()
+{
+    auto& cfg = ConfigMgr::Inst();
+    const auto ttl = cfg.GetValue("AuthToken", "HttpTokenTtlSec");
+    if (ttl.empty())
+    {
+        return 24 * 60 * 60;
+    }
+    return std::clamp(std::atoi(ttl.c_str()), 60, 30 * 24 * 60 * 60);
 }
 
 } // namespace gateauthsupport
@@ -120,25 +106,17 @@ bool IsClientVersionAllowed(const std::string& clientVer, const std::string& min
     {
         return true;
     }
-    int cMaj = 0, cMin = 0, cPatch = 0;
-    int mMaj = 0, mMin = 0, mPatch = 0;
-    if (!ParseSemVer(clientVer, cMaj, cMin, cPatch))
+    memochat::account::auth::modules::SemVerParts client_version;
+    memochat::account::auth::modules::SemVerParts min_version;
+    if (!memochat::account::auth::modules::ParseSemVer(clientVer.data(), clientVer.size(), client_version))
     {
         return false;
     }
-    if (!ParseSemVer(minVer, mMaj, mMin, mPatch))
+    if (!memochat::account::auth::modules::ParseSemVer(minVer.data(), minVer.size(), min_version))
     {
         return true;
     }
-    if (cMaj != mMaj)
-    {
-        return cMaj > mMaj;
-    }
-    if (cMin != mMin)
-    {
-        return cMin > mMin;
-    }
-    return cPatch >= mPatch;
+    return memochat::account::auth::modules::CompareSemVer(client_version, min_version) >= 0;
 }
 
 std::string GetChatAuthSecret()
@@ -174,7 +152,7 @@ int GetChatTicketTtlSec()
     return std::max(5, std::atoi(ttl.c_str()));
 }
 
-bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd, UserInfo& userInfo)
+bool TryLoadCachedLoginProfile(const std::string& email, UserInfo& userInfo)
 {
     std::string cached_json;
     if (!memochat::gate::core::AuthCache::Instance().LoadLoginProfileJson(email, cached_json) || cached_json.empty())
@@ -183,10 +161,6 @@ bool TryLoadCachedLoginProfile(const std::string& email, const std::string& pwd,
     }
     UserInfo cached_user;
     if (!DecodeLoginCacheProfile(cached_json, &cached_user))
-    {
-        return false;
-    }
-    if (pwd != cached_user.pwd)
     {
         return false;
     }
@@ -390,8 +364,8 @@ std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,
     // the per-login target decision stays here because chat sessions are stateful
     // (the signed ticket binds a uid to a specific target_server).
     //
-    // The HTTP token is left empty so the caller reuses/generates it via AuthCache
-    // on the shared `utoken_<uid>` key (the same key ChatServer validates against).
+    // The HTTP token is left empty so the caller rotates it via AuthCache on the
+    // shared `utoken_<uid>` key (the same key focused services validate against).
     if (http_token)
     {
         http_token->clear();

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 from graph.recommendation import RecommendationEngine
-from harness.contracts import PlanStep, ToolObservation, ToolSpec
+from harness.contracts import AgentSkill, PlanStep, ToolObservation, ToolSpec
 from observability.langsmith_instrument import set_run_error, set_run_output, trace_context
 from tools.knowledge_base_tool import KnowledgeBaseTool
 from tools.registry import ToolRegistry
@@ -39,6 +39,7 @@ class ToolExecutor:
         target_lang: str = "",
         requested_tools: list[str] | None = None,
         tool_arguments: dict[str, dict] | None = None,
+        skill: AgentSkill | None = None,
     ) -> list[ToolObservation]:
         observations: list[ToolObservation] = []
         requested_tools = requested_tools or []
@@ -96,6 +97,16 @@ class ToolExecutor:
                     )
                 elif step.action == "mcp_tool":
                     for tool_name in requested_tools:
+                        if not self._mcp_tool_allowed(skill, tool_name):
+                            observations.append(
+                                ToolObservation(
+                                    name=tool_name,
+                                    source="mcp",
+                                    output=f"工具执行失败: MCP tool is not allowed by skill policy: {tool_name}",
+                                    metadata={"blocked": True, "policy": "skill_mcp_allowlist"},
+                                )
+                            )
+                            continue
                         result = await self._invoke_tool(tool_name, tool_arguments.get(tool_name, {}))
                         observations.append(ToolObservation(name=tool_name, source="mcp", output=result))
             except Exception as exc:
@@ -109,6 +120,35 @@ class ToolExecutor:
                 )
 
         return observations
+
+    def _mcp_tool_allowed(self, skill: AgentSkill | None, tool_name: str) -> bool:
+        if skill is None or not skill.allow_mcp:
+            return False
+        return str(tool_name or "").strip() in self._skill_allowed_tools(skill)
+
+    def _skill_allowed_tools(self, skill: AgentSkill) -> set[str]:
+        metadata = skill.metadata if isinstance(skill.metadata, dict) else {}
+        allowed: set[str] = set()
+
+        def add_values(raw) -> None:
+            if not isinstance(raw, (list, tuple, set)):
+                return
+            for item in raw:
+                text = str(item or "").strip()
+                if text:
+                    allowed.add(text)
+
+        add_values(metadata.get("allowed_tools"))
+        tool_policy = metadata.get("tool_policy", {})
+        if isinstance(tool_policy, dict):
+            add_values(tool_policy.get("allowed_tools"))
+        agent_spec = metadata.get("agent_spec", {})
+        if isinstance(agent_spec, dict):
+            add_values(agent_spec.get("allowed_tools"))
+            agent_tool_policy = agent_spec.get("tool_policy", {})
+            if isinstance(agent_tool_policy, dict):
+                add_values(agent_tool_policy.get("allowed_tools"))
+        return allowed
 
     def _register_knowledge_tool(self) -> None:
         if self._knowledge_service is None:

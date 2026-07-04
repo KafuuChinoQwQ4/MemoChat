@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
 
-#include "ConfigMgr.h"
-#include "RelationQueryGrpcClient.h"
-#include "RelationQueryServiceConfig.h"
-#include "RelationQueryServiceFactory.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "ConfigMgr.hpp"
+#include "RelationQueryGrpcClient.hpp"
+#include "RelationQueryServiceConfig.hpp"
+#include "RelationQueryServiceFactory.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <algorithm>
 #include <cstdlib>

@@ -52,6 +52,13 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
     auto self = shared_from_this();
     const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
     QNetworkReply* reply = _manager.post(request, data);
+    // VerifyNone on the SSL config suppresses socket-level verification, but
+    // QNetworkAccessManager still aborts on self-signed cert errors unless we
+    // explicitly opt out at the reply level too.
+    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
+    {
+        reply->ignoreSslErrors();
+    }
 
     QTimer* timeoutTimer = new QTimer(reply);
     timeoutTimer->setSingleShot(true);
@@ -88,7 +95,7 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
             const qint64 durationMs = qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs);
             QVariantMap attrs;
             attrs.insert("http.method", QStringLiteral("POST"));
-            attrs.insert("http.url", reply->url().toString());
+            attrs.insert("http.url", redactedUrlForTelemetry(reply->url()));
             attrs.insert("module", module);
             attrs.insert("request.id", requestId);
 
@@ -157,6 +164,10 @@ void HttpMgr::getHttpReqInternal(const QUrl& url,
     auto self = shared_from_this();
     const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
     QNetworkReply* reply = _manager.get(request);
+    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
+    {
+        reply->ignoreSslErrors();
+    }
 
     QTimer* timeoutTimer = new QTimer(reply);
     timeoutTimer->setSingleShot(true);
@@ -182,7 +193,7 @@ void HttpMgr::getHttpReqInternal(const QUrl& url,
             const qint64 durationMs = qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs);
             QVariantMap attrs;
             attrs.insert("http.method", QStringLiteral("GET"));
-            attrs.insert("http.url", reply->url().toString());
+            attrs.insert("http.url", redactedUrlForTelemetry(reply->url()));
             attrs.insert("module", module);
             attrs.insert("request.id", requestId);
 

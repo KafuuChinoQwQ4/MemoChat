@@ -1,4 +1,4 @@
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
 ConfigMgr::ConfigMgr()
     : _config()

@@ -11,17 +11,17 @@
 -- Rollback: 008_db_split_media_moments_call_rollback.sql (drops the databases and
 -- roles). Data migration + verification are orchestrated by the shell script.
 
--- ── Roles (least privilege; passwords are dev-only, matching existing convention)
+-- ── Roles (least privilege; passwords are injected by migrate_phase2_db_split.sh)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'memo_media_app') THEN
-        CREATE ROLE memo_media_app LOGIN PASSWORD '123456';
+        CREATE ROLE memo_media_app LOGIN;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'memo_moments_app') THEN
-        CREATE ROLE memo_moments_app LOGIN PASSWORD '123456';
+        CREATE ROLE memo_moments_app LOGIN;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'memo_call_app') THEN
-        CREATE ROLE memo_call_app LOGIN PASSWORD '123456';
+        CREATE ROLE memo_call_app LOGIN;
     END IF;
 END
 $$;

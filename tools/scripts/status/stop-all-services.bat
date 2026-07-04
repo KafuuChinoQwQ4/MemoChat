@@ -54,14 +54,14 @@ REM Tier 3: C++ 后端服务
 REM ============================================================
 echo.
 echo [STEP] Stop C++ backend services
-powershell -NoProfile -Command "$ports = @(50051,48083,8083,8087); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer ports released' } else { Write-Host '  [-] VarifyServer ports not listening' }" 2>nul
+powershell -NoProfile -Command "$ports = @(50051,8083); $pids = @(); foreach ($port in $ports) { $pids += Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess }; $pids = $pids | Where-Object { $_ } | Sort-Object -Unique; if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] VarifyServer ports released' } else { Write-Host '  [-] VarifyServer ports not listening' }" 2>nul
 
 REM 按启动顺序逆序停止
 call :kill_by_name "GateServer.exe"         "GateServer1/GateServer2"
 call :kill_by_name "AIServer.exe"           "AIServer"
 call :kill_by_name "ChatServer.exe"         "ChatServer all instances"
 call :kill_by_name "VarifyServer.exe"       "VarifyServer"
-powershell -NoProfile -Command "$self = $PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like '*run-service-console.ps1*MemoChat-Qml-Drogon*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] service runner windows closed'"
+powershell -NoProfile -Command "$self = $PID; Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like '*run-service-console.ps1*MemoChat*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Write-Host '  [OK] service runner windows closed'"
 
 REM ============================================================
 REM 完成: 存活检查报告

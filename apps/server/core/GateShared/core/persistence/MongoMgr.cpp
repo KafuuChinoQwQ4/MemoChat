@@ -1,4 +1,17 @@
-#include "MongoMgr.h"
+#include "MongoMgr.hpp"
+
+import memochat.gate.mongo_mgr_algorithms;
+
+namespace
+{
+namespace mongo_mgr_modules = memochat::gate::mongo_mgr::modules;
+
+// Lock the pure-forwarding facade surface: every MongoMgr method forwards
+// directly to the single shared MongoDao member, so the moment-content method
+// count and total must match the module contract.
+static_assert(mongo_mgr_modules::IsCompleteForwardingSurface(mongo_mgr_modules::MomentContentForwardCount()));
+static_assert(mongo_mgr_modules::ForwardingSurfaceCount() == 3u);
+} // namespace
 
 MongoMgr::~MongoMgr()
 {

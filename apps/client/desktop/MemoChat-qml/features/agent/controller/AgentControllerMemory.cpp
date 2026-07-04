@@ -1,5 +1,6 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
 #include "ClientGateway.h"
 #include "global.h"
 #include "httpmgr.h"
@@ -57,12 +58,13 @@ void AgentController::listMemories()
     clearErrorState();
     clearMemoryError();
     setMemoryBusy(true, "正在加载记忆...");
-    QUrl url(gate_url_prefix + "/ai/memory/list");
+    QUrl url = agentApiUrl(QStringLiteral("/ai/memory/list"));
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
+    addAuthToQuery(query);
     url.setQuery(query);
 
-    ReqId reqId = ID_AI_MEMORY_LIST;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::MemoryList, QString(), uid);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -83,14 +85,12 @@ void AgentController::createMemory(const QString& content)
     QJsonObject payload;
     payload["uid"] = uid;
     payload["content"] = trimmed;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_MEMORY_CREATE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::MemoryCreate, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/memory")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteMemory(const QString& memoryId)
@@ -109,14 +109,12 @@ void AgentController::deleteMemory(const QString& memoryId)
     QJsonObject payload;
     payload["uid"] = uid;
     payload["memory_id"] = trimmed;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_MEMORY_DELETE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::MemoryDelete, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/memory/delete"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/memory/delete")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::handleMemoryRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)

@@ -69,6 +69,10 @@ MediaUploadResult MediaUploadService::uploadLocalFile(const MediaUploadRequest& 
                                      mimeType,
                                      request.uid,
                                      request.token,
+                                     request.grantUids,
+                                     request.grantGroupId,
+                                     request.grantPublic,
+                                     request.grantFriends,
                                      &result.info,
                                      &result.errorText,
                                      progress);
@@ -83,6 +87,10 @@ MediaUploadResult MediaUploadService::uploadLocalFile(const MediaUploadRequest& 
                                       mediaCfg,
                                       request.uid,
                                       request.token,
+                                      request.grantUids,
+                                      request.grantGroupId,
+                                      request.grantPublic,
+                                      request.grantFriends,
                                       &result.info,
                                       &result.errorText,
                                       progress);

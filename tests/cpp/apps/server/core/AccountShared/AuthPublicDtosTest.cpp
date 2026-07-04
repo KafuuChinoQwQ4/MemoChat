@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "AuthPublicDtos.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "AuthPublicDtos.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>
@@ -17,19 +17,24 @@ static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRegiste
     std::array<std::string_view, 7>{"email", "user", "passwd", "confirm", "icon", "varifycode", "sex"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginRequestDto>(
     std::array<std::string_view, 3>{"email", "passwd", "client_ver"}));
+static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRefreshRequestDto>(
+    std::array<std::string_view, 2>{"refresh_token", "client_ver"}));
+static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLogoutRequestDto>(
+    std::array<std::string_view, 5>{"uid", "token", "refresh_token", "client_ver", "all_devices"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::ProfileUpdateRequestDto>(
-    std::array<std::string_view, 5>{"uid", "name", "nick", "desc", "icon"}));
+    std::array<std::string_view, 6>{"uid", "token", "name", "nick", "desc", "icon"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::GetUserInfoRequestDto>(
     std::array<std::string_view, 1>{"uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthResetPasswordResponseDto>(
-    std::array<std::string_view, 5>{"error", "email", "user", "passwd", "varifycode"}));
+    std::array<std::string_view, 4>{"error", "email", "user", "varifycode"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRegisterResponseDto>(
-    std::array<std::string_view,
-               9>{"error", "uid", "user_id", "email", "user", "passwd", "confirm", "icon", "varifycode"}));
+    std::array<std::string_view, 7>{"error", "uid", "user_id", "email", "user", "icon", "varifycode"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::ProfileUpdateResponseDto>(
     std::array<std::string_view, 6>{"error", "uid", "name", "nick", "desc", "icon"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::UserInfoResponseDto>(
     std::array<std::string_view, 9>{"error", "uid", "user_id", "name", "email", "nick", "icon", "desc", "sex"}));
+static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLogoutResponseDto>(
+    std::array<std::string_view, 3>{"error", "uid", "all_devices"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginUserProfileDto>(
     std::array<std::string_view, 8>{"uid", "user_id", "name", "nick", "icon", "desc", "email", "sex"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthChatEndpointDto>(
@@ -41,6 +46,22 @@ static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginSt
                                     "user_login_total_ms",
                                     "route_source",
                                     "status_route_detail"}));
+static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginResponseDto>(
+    std::array<std::string_view, 15>{"error",
+                                     "protocol_version",
+                                     "preferred_transport",
+                                     "fallback_transport",
+                                     "email",
+                                     "uid",
+                                     "user_id",
+                                     "token",
+                                     "login_ticket",
+                                     "ticket_expire_ms",
+                                     "refresh_token",
+                                     "refresh_token_expires_in_sec",
+                                     "user_profile",
+                                     "chat_endpoints",
+                                     "stage_metrics"}));
 #endif
 
 namespace
@@ -110,16 +131,48 @@ TEST(AuthPublicDtosTest, DecodesLoginRequestWithClientVersionDefault)
     EXPECT_EQ(missing_client_ver.client_ver, "");
 }
 
+TEST(AuthPublicDtosTest, DecodesRefreshRequestWithClientVersionDefault)
+{
+    const auto full = gateauthsupport::AuthRefreshRequestFromJsonValue(
+        Parse(R"({"refresh_token":"selector.verifier","client_ver":"3.0.0"})"));
+    EXPECT_EQ(full.refresh_token, "selector.verifier");
+    EXPECT_EQ(full.client_ver, "3.0.0");
+
+    const auto missing_client_ver =
+        gateauthsupport::AuthRefreshRequestFromJsonValue(Parse(R"({"refresh_token":"selector.verifier"})"));
+    EXPECT_EQ(missing_client_ver.refresh_token, "selector.verifier");
+    EXPECT_EQ(missing_client_ver.client_ver, "");
+}
+
+TEST(AuthPublicDtosTest, DecodesLogoutRequestWithDefaults)
+{
+    const auto full = gateauthsupport::AuthLogoutRequestFromJsonValue(Parse(
+        R"({"uid":42,"token":"access","refresh_token":"selector.verifier","client_ver":"3.0.0","all_devices":true})"));
+    EXPECT_EQ(full.uid, 42);
+    EXPECT_EQ(full.token, "access");
+    EXPECT_EQ(full.refresh_token, "selector.verifier");
+    EXPECT_EQ(full.client_ver, "3.0.0");
+    EXPECT_TRUE(full.all_devices);
+
+    const auto minimal = gateauthsupport::AuthLogoutRequestFromJsonValue(Parse(R"({"uid":42,"token":"access"})"));
+    EXPECT_EQ(minimal.uid, 42);
+    EXPECT_EQ(minimal.token, "access");
+    EXPECT_EQ(minimal.refresh_token, "");
+    EXPECT_EQ(minimal.client_ver, "");
+    EXPECT_FALSE(minimal.all_devices);
+}
+
 TEST(AuthPublicDtosTest, DecodesProfileUpdateAndRequiredKeys)
 {
     memochat::json::JsonValue parsed;
     gateauthsupport::ProfileUpdateRequestDto request;
     ASSERT_TRUE(gateauthsupport::DecodeProfileUpdateRequest(
-        R"({"uid":42,"name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})",
+        R"({"uid":42,"token":"access","name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})",
         &request,
         &parsed));
 
     EXPECT_EQ(request.uid, 42);
+    EXPECT_EQ(request.token, "access");
     EXPECT_EQ(request.name, "alice");
     EXPECT_EQ(request.nick, "Alice");
     EXPECT_EQ(request.desc, "hello");
@@ -127,9 +180,11 @@ TEST(AuthPublicDtosTest, DecodesProfileUpdateAndRequiredKeys)
     EXPECT_TRUE(gateauthsupport::HasProfileUpdateRequiredFields(parsed));
 
     const auto missing_name = gateauthsupport::ProfileUpdateRequestFromJsonValue(
-        Parse(R"({"uid":42,"nick":"Alice","desc":"hello","icon":"i.png"})"));
+        Parse(R"({"uid":42,"token":"access","nick":"Alice","desc":"hello","icon":"i.png"})"));
     EXPECT_EQ(missing_name.name, "");
     EXPECT_TRUE(gateauthsupport::HasProfileUpdateRequiredFields(
+        Parse(R"({"uid":42,"token":"access","nick":"Alice","desc":"hello","icon":"i.png"})")));
+    EXPECT_FALSE(gateauthsupport::HasProfileUpdateRequiredFields(
         Parse(R"({"uid":42,"nick":"Alice","desc":"hello","icon":"i.png"})")));
     EXPECT_FALSE(gateauthsupport::HasProfileUpdateRequiredFields(Parse(R"({"uid":42,"nick":"Alice","icon":"i.png"})")));
 }
@@ -149,6 +204,7 @@ TEST(AuthPublicDtosTest, PreservesRepresentativeWrongTypeDefaults)
     const auto profile = gateauthsupport::ProfileUpdateRequestFromJsonValue(
         Parse(R"({"uid":"bad","name":false,"nick":7,"desc":{},"icon":[]})"));
     EXPECT_EQ(profile.uid, 0);
+    EXPECT_EQ(profile.token, "");
     EXPECT_EQ(profile.name, "");
     EXPECT_EQ(profile.nick, "");
     EXPECT_EQ(profile.desc, "");
@@ -181,7 +237,6 @@ TEST(AuthPublicDtosTest, WritesResetPasswordResponseWithExistingWireFields)
     reset.error = 0;
     reset.email = "alice@example.com";
     reset.user = "alice";
-    reset.passwd = "new";
     reset.varifycode = "123456";
 
     const memochat::json::JsonValue reset_json = gateauthsupport::AuthResetPasswordResponseToJsonValue(reset);
@@ -189,8 +244,8 @@ TEST(AuthPublicDtosTest, WritesResetPasswordResponseWithExistingWireFields)
     EXPECT_EQ(memochat::json::glaze_safe_get<int>(reset_json, "error", -1), 0);
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(reset_json, "email", ""), "alice@example.com");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(reset_json, "user", ""), "alice");
-    EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(reset_json, "passwd", ""), "new");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(reset_json, "varifycode", ""), "123456");
+    EXPECT_FALSE(memochat::json::glaze_has_key(reset_json, "passwd"));
 }
 
 TEST(AuthPublicDtosTest, WritesRegisterResponseWithExistingWireFields)
@@ -201,8 +256,6 @@ TEST(AuthPublicDtosTest, WritesRegisterResponseWithExistingWireFields)
     response.user_id = "u-42";
     response.email = "alice@example.com";
     response.user = "alice";
-    response.passwd = "pw";
-    response.confirm = "pw";
     response.icon = "i.png";
     response.varifycode = "654321";
 
@@ -213,10 +266,27 @@ TEST(AuthPublicDtosTest, WritesRegisterResponseWithExistingWireFields)
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "user_id", ""), "u-42");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "email", ""), "alice@example.com");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "user", ""), "alice");
-    EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "passwd", ""), "pw");
-    EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "confirm", ""), "pw");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "icon", ""), "i.png");
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(root, "varifycode", ""), "654321");
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "passwd"));
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "confirm"));
+}
+
+TEST(AuthPublicDtosTest, WritesLogoutResponseWithoutSecrets)
+{
+    gateauthsupport::AuthLogoutResponseDto response;
+    response.error = 0;
+    response.uid = 42;
+    response.all_devices = true;
+
+    const memochat::json::JsonValue root = gateauthsupport::AuthLogoutResponseToJsonValue(response);
+    ASSERT_TRUE(root.isObject()) << root.toStyledString();
+    EXPECT_EQ(memochat::json::glaze_safe_get<int>(root, "error", -1), 0);
+    EXPECT_EQ(memochat::json::glaze_safe_get<int>(root, "uid", 0), 42);
+    EXPECT_TRUE(memochat::json::glaze_safe_get<bool>(root, "all_devices", false));
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "token"));
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "refresh_token"));
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "login_ticket"));
 }
 
 TEST(AuthPublicDtosTest, WritesProfileResponsesWithExistingWireFields)

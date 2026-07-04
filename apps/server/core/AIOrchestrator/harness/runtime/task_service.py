@@ -155,9 +155,22 @@ class AgentTaskService:
             return task
         return await self._load_task_from_disk(task_id)
 
-    async def cancel_task(self, task_id: str) -> AgentTask | None:
+    async def get_task_for_uid(self, task_id: str, uid: int) -> AgentTask | None:
+        task = await self.get_task(task_id)
+        if task is None or uid <= 0:
+            return None
+        task_uid = int(task.payload.get("uid") or task.metadata.get("uid") or 0)
+        return task if task_uid == int(uid) else None
+
+    async def cancel_task(self, task_id: str, uid: int = 0) -> AgentTask | None:
         task = await self.get_task(task_id)
         if task is None:
+            return None
+        if uid > 0:
+            task_uid = int(task.payload.get("uid") or task.metadata.get("uid") or 0)
+            if task_uid != int(uid):
+                return None
+        elif uid < 0:
             return None
         handle = self._background.pop(task_id, None)
         if handle is not None and not handle.done():
@@ -180,9 +193,15 @@ class AgentTaskService:
             await self._emit_event("canceled", task)
         return task
 
-    async def resume_task(self, task_id: str) -> AgentTask | None:
+    async def resume_task(self, task_id: str, uid: int = 0) -> AgentTask | None:
         task = await self.get_task(task_id)
         if task is None:
+            return None
+        if uid > 0:
+            task_uid = int(task.payload.get("uid") or task.metadata.get("uid") or 0)
+            if task_uid != int(uid):
+                return None
+        elif uid < 0:
             return None
         changed = False
         async with self._lock:

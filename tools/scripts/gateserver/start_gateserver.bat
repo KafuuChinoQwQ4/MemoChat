@@ -6,9 +6,31 @@ REM Prerequisites: Arch Docker running with memochat-minio up.
 REM ============================================================
 setlocal enabledelayedexpansion
 
-REM MinIO credentials (must match docker-compose.yml memochat-minio)
-set "MINIO_ROOT_USER=memochat_admin"
-set "MINIO_ROOT_PASSWORD=MinioPass2026!"
+if defined MEMOCHAT_ROOT (
+    set "PROJECT_ROOT=%MEMOCHAT_ROOT%"
+) else (
+    pushd "%~dp0..\..\.." >nul
+    set "PROJECT_ROOT=%CD%"
+    popd >nul
+)
+set "GATESERVER_DIR=%PROJECT_ROOT%\Memo_ops\runtime\services\GateServer"
+set "GATESERVER_CONFIG=%PROJECT_ROOT%\server\GateServer\config.ini"
+
+REM MinIO credentials (must match the running memochat-minio container)
+if not defined MINIO_ROOT_USER if defined MEMOCHAT_MINIO_ROOT_USER set "MINIO_ROOT_USER=%MEMOCHAT_MINIO_ROOT_USER%"
+if not defined MINIO_ROOT_USER if defined MEMOCHAT_MINIO_ACCESSKEY set "MINIO_ROOT_USER=%MEMOCHAT_MINIO_ACCESSKEY%"
+if not defined MINIO_ROOT_USER if defined MEMOCHAT_MINIO_ACCESS_KEY set "MINIO_ROOT_USER=%MEMOCHAT_MINIO_ACCESS_KEY%"
+if not defined MINIO_ROOT_PASSWORD if defined MEMOCHAT_MINIO_ROOT_PASSWORD set "MINIO_ROOT_PASSWORD=%MEMOCHAT_MINIO_ROOT_PASSWORD%"
+if not defined MINIO_ROOT_PASSWORD if defined MEMOCHAT_MINIO_SECRETKEY set "MINIO_ROOT_PASSWORD=%MEMOCHAT_MINIO_SECRETKEY%"
+if not defined MINIO_ROOT_PASSWORD if defined MEMOCHAT_MINIO_SECRET_KEY set "MINIO_ROOT_PASSWORD=%MEMOCHAT_MINIO_SECRET_KEY%"
+if not defined MINIO_ROOT_USER (
+    echo [ERROR] Missing MinIO user. Set MEMOCHAT_MINIO_ROOT_USER.
+    exit /b 1
+)
+if not defined MINIO_ROOT_PASSWORD (
+    echo [ERROR] Missing MinIO password. Set MEMOCHAT_MINIO_ROOT_PASSWORD.
+    exit /b 1
+)
 
 REM GateServer env
 set "MINIO_ACCESS_KEY=%MINIO_ROOT_USER%"
@@ -45,7 +67,7 @@ if exist "!MC_BIN!" (
 )
 
 echo [INFO] Starting GateServer...
-cd /d "D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer"
-"D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer\GateServer.exe" --config="D:\MemoChat-Qml\server\GateServer\config.ini"
+cd /d "%GATESERVER_DIR%"
+"%GATESERVER_DIR%\GateServer.exe" --config="%GATESERVER_CONFIG%"
 echo GateServer exit code: %ERRORLEVEL%
 endlocal

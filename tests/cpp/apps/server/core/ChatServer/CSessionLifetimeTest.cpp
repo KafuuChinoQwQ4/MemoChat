@@ -17,7 +17,7 @@
 
 #include <gtest/gtest.h>
 
-#include "CSession.h"
+#include "CSession.hpp"
 
 #include <boost/asio.hpp>
 

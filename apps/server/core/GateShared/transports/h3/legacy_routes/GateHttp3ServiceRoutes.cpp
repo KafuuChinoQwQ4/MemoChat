@@ -1,19 +1,22 @@
-#include "GateHttp3ServiceRoutes.h"
+#include "GateHttp3ServiceRoutes.hpp"
 
-#include "GateHttp3Connection.h"
-#include "GateRouteProfileRegistrar.h"
-#include "LogicSystem.h"
-#include "adapters/h3/H3RouteAdapter.h"
-#include "modules/health/HealthRouteModule.h"
-#include "routing/RouteRegistry.h"
+#include "GateHttp3Connection.hpp"
+#include "GateRouteProfileRegistrar.hpp"
+#include "LogicSystem.hpp"
+#include "adapters/h3/H3RouteAdapter.hpp"
+#include "modules/health/HealthRouteModule.hpp"
+#include "routing/RouteRegistry.hpp"
 
 #include <memory>
+
+import memochat.gate.h3_legacy_route_algorithms;
 
 namespace GateHttp3ServiceImpl
 {
 
 namespace
 {
+namespace h3_legacy_modules = memochat::gate::h3::legacy::modules;
 
 memochat::gate::routing::RouteRegistry& SharedRouteRegistry()
 {
@@ -52,7 +55,9 @@ bool DispatchSharedRoute(const std::shared_ptr<GateHttp3Connection>& connection)
         return false;
     }
 
-    connection->SendResponse(404, R"({"error":404,"message":"route not found"})", "application/json");
+    connection->SendResponse(h3_legacy_modules::RouteNotFoundStatus(),
+                             h3_legacy_modules::RouteNotFoundBody(),
+                             h3_legacy_modules::JsonContentType());
     return true;
 }
 
@@ -60,39 +65,15 @@ bool DispatchSharedRoute(const std::shared_ptr<GateHttp3Connection>& connection)
 
 void RegisterRoutes(LogicSystem& logic)
 {
-    logic.RegGet("/healthz", DispatchSharedRoute);
-    logic.RegGet("/readyz", DispatchSharedRoute);
+    for (int index = 0; index < h3_legacy_modules::GetRouteCount(); ++index)
+    {
+        logic.RegGet(h3_legacy_modules::GetRoutePathAt(index), DispatchSharedRoute);
+    }
 
-    logic.RegPost("/get_varifycode", DispatchSharedRoute);
-    logic.RegPost("/user_register", DispatchSharedRoute);
-    logic.RegPost("/reset_pwd", DispatchSharedRoute);
-    logic.RegPost("/user_login", DispatchSharedRoute);
-
-    logic.RegPost("/user_update_profile", DispatchSharedRoute);
-    logic.RegPost("/get_user_info", DispatchSharedRoute);
-
-    logic.RegPost("/api/call/token", DispatchSharedRoute);
-    logic.RegPost("/api/call/start", DispatchSharedRoute);
-    logic.RegPost("/api/call/accept", DispatchSharedRoute);
-    logic.RegPost("/api/call/reject", DispatchSharedRoute);
-    logic.RegPost("/api/call/cancel", DispatchSharedRoute);
-    logic.RegPost("/api/call/hangup", DispatchSharedRoute);
-
-    logic.RegPost("/upload_media_init", DispatchSharedRoute);
-    logic.RegPost("/upload_media_chunk", DispatchSharedRoute);
-    logic.RegPost("/upload_media_complete", DispatchSharedRoute);
-    logic.RegPost("/upload_media", DispatchSharedRoute);
-    logic.RegGet("/upload_media_status", DispatchSharedRoute);
-    logic.RegGet("/media/download", DispatchSharedRoute);
-
-    logic.RegPost("/api/moments/publish", DispatchSharedRoute);
-    logic.RegPost("/api/moments/list", DispatchSharedRoute);
-    logic.RegPost("/api/moments/detail", DispatchSharedRoute);
-    logic.RegPost("/api/moments/delete", DispatchSharedRoute);
-    logic.RegPost("/api/moments/like", DispatchSharedRoute);
-    logic.RegPost("/api/moments/comment", DispatchSharedRoute);
-    logic.RegPost("/api/moments/comment/list", DispatchSharedRoute);
-    logic.RegPost("/api/moments/comment/like", DispatchSharedRoute);
+    for (int index = 0; index < h3_legacy_modules::PostRouteCount(); ++index)
+    {
+        logic.RegPost(h3_legacy_modules::PostRoutePathAt(index), DispatchSharedRoute);
+    }
 }
 
 } // namespace GateHttp3ServiceImpl

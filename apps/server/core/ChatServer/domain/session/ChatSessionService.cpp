@@ -1,18 +1,19 @@
-﻿#include "ChatSessionService.h"
+﻿#include "ChatSessionService.hpp"
 
-#include "ChatGrpcClient.h"
-#include "ChatHistoryOutputDtos.h"
-#include "CServer.h"
-#include "CSession.h"
-#include "ChatUserSupport.h"
-#include "LogicSystem.h"
-#include "auth/ChatLoginTicket.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "ChatGrpcClient.hpp"
+#include "ChatHistoryOutputDtos.hpp"
+#include "CServer.hpp"
+#include "CSession.hpp"
+#include "LogicSystem.hpp"
+#include "RedisMgr.hpp"
+#include "auth/ChatLoginTicket.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <chrono>
 #include <ctime>
-#include "json/GlazeCompat.h"
+#include <algorithm>
+#include "json/GlazeCompat.hpp"
 #include <thread>
 
 namespace
@@ -30,6 +31,21 @@ std::string JsonValueToWireString(const memochat::json::JsonValue& v)
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
     return memochat::json::writeString(builder, v);
+}
+
+bool ConsumeLoginTicketJti(const memochat::auth::ChatLoginTicketClaims& claims)
+{
+    if (claims.jti.empty())
+    {
+        return false;
+    }
+    const int64_t remaining_ms = claims.expire_at_ms - NowMsLocal();
+    if (remaining_ms <= 0)
+    {
+        return false;
+    }
+    const int ttl_sec = static_cast<int>(std::clamp<int64_t>((remaining_ms + 999) / 1000, 1, 300));
+    return RedisMgr::GetInstance()->SetNxEx("chat_login_ticket_jti:" + claims.jti, std::to_string(claims.uid), ttl_sec);
 }
 } // namespace
 
@@ -58,14 +74,8 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(msg_data, root);
-    const int protocol_version = memochat::json::glaze_safe_get<int>(root, "protocol_version", 1);
+    const int protocol_version = memochat::json::glaze_safe_get<int>(root, "protocol_version", 0);
     auto uid = 0;
-    auto token = std::string{};
-    if (protocol_version < 3)
-    {
-        uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-        token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    }
     const auto verify_start_ms = NowMsLocal();
     auto trace_id = root.get("trace_id", "").asString();
     if (trace_id.empty())
@@ -99,106 +109,81 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
             session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
         });
     rtvalue["trace_id"] = trace_id;
-    rtvalue["protocol_version"] = 2;
+    rtvalue["protocol_version"] = 3;
 
     memochat::auth::ChatLoginTicketClaims ticket_claims;
     const auto self_server_name = _online_route_store
                                       ? _online_route_store->SelfServerName()
                                       : (_session_config ? _session_config->SelfServerName() : std::string());
-    std::string uid_str = std::to_string(uid);
-    std::string relation_bootstrap_mode = "inline";
-    if (protocol_version >= 3)
-    {
-        relation_bootstrap_mode = "explicit_pull";
-        rtvalue["protocol_version"] = 3;
-        std::string ticket_error;
-        const auto login_ticket = root.get("login_ticket", "").asString();
-        if (!memochat::auth::DecodeAndVerifyTicket(login_ticket,
-                                                   _session_config ? _session_config->ChatAuthSecret()
-                                                                   : std::string("memochat-dev-chat-secret"),
-                                                   ticket_claims,
-                                                   &ticket_error))
-        {
-            rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
-            memolog::LogWarn("chat.login.failed",
-                             "chat ticket invalid",
-                             {{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}, {"detail", ticket_error}});
-            return;
-        }
-        if (ticket_claims.expire_at_ms > 0 && ticket_claims.expire_at_ms < NowMsLocal())
-        {
-            rtvalue["error"] = ErrorCodes::ChatTicketExpired;
-            memolog::LogWarn("chat.login.failed",
-                             "chat ticket expired",
-                             {{"error_code", std::to_string(ErrorCodes::ChatTicketExpired)}});
-            return;
-        }
-        if (!ticket_claims.target_server.empty() && ticket_claims.target_server != self_server_name)
-        {
-            rtvalue["error"] = ErrorCodes::ChatServerMismatch;
-            memolog::LogWarn("chat.login.failed",
-                             "chat ticket target server mismatch",
-                             {{"error_code", std::to_string(ErrorCodes::ChatServerMismatch)},
-                              {"ticket_target_server", ticket_claims.target_server},
-                              {"self_server", self_server_name}});
-            return;
-        }
-        uid = ticket_claims.uid;
-        uid_str = std::to_string(uid);
-        memolog::TraceContext::SetUid(uid_str);
-    }
-    else if (protocol_version != 2)
+    const std::string relation_bootstrap_mode = "explicit_pull";
+    if (protocol_version != 3)
     {
         rtvalue["error"] = ErrorCodes::ProtocolVersionMismatch;
         return;
     }
 
-    if (protocol_version < 3)
+    std::string ticket_error;
+    const auto login_ticket = root.get("login_ticket", "").asString();
+    if (!memochat::auth::DecodeAndVerifyTicket(login_ticket,
+                                               _session_config ? _session_config->ChatAuthSecret()
+                                                               : std::string("memochat-dev-chat-secret"),
+                                               ticket_claims,
+                                               &ticket_error))
     {
-        std::string token_value;
-        if (!_session_repository || !_session_repository->GetLegacyToken(uid, token_value))
-        {
-            rtvalue["error"] = ErrorCodes::UidInvalid;
-            memolog::LogWarn("chat.login.failed",
-                             "uid invalid",
-                             {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
-            return;
-        }
-        if (token_value != token)
-        {
-            rtvalue["error"] = ErrorCodes::TokenInvalid;
-            memolog::LogWarn("chat.login.failed",
-                             "token invalid",
-                             {{"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
-            return;
-        }
+        rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
+        memolog::LogWarn("chat.login.failed",
+                         "chat ticket invalid",
+                         {{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}, {"detail", ticket_error}});
+        return;
     }
+    if (ticket_claims.protocol_version != 3)
+    {
+        rtvalue["error"] = ErrorCodes::ProtocolVersionMismatch;
+        memolog::LogWarn("chat.login.failed",
+                         "chat ticket protocol version mismatch",
+                         {{"error_code", std::to_string(ErrorCodes::ProtocolVersionMismatch)},
+                          {"ticket_protocol_version", std::to_string(ticket_claims.protocol_version)}});
+        return;
+    }
+    if (ticket_claims.expire_at_ms > 0 && ticket_claims.expire_at_ms < NowMsLocal())
+    {
+        rtvalue["error"] = ErrorCodes::ChatTicketExpired;
+        memolog::LogWarn("chat.login.failed",
+                         "chat ticket expired",
+                         {{"error_code", std::to_string(ErrorCodes::ChatTicketExpired)}});
+        return;
+    }
+    if (!ticket_claims.target_server.empty() && ticket_claims.target_server != self_server_name)
+    {
+        rtvalue["error"] = ErrorCodes::ChatServerMismatch;
+        memolog::LogWarn("chat.login.failed",
+                         "chat ticket target server mismatch",
+                         {{"error_code", std::to_string(ErrorCodes::ChatServerMismatch)},
+                          {"ticket_target_server", ticket_claims.target_server},
+                          {"self_server", self_server_name}});
+        return;
+    }
+    if (!ConsumeLoginTicketJti(ticket_claims))
+    {
+        rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
+        memolog::LogWarn("chat.login.failed",
+                         "chat ticket replayed or missing jti",
+                         {{"error_code", std::to_string(ErrorCodes::ChatTicketInvalid)}});
+        return;
+    }
+    uid = ticket_claims.uid;
+    memolog::TraceContext::SetUid(std::to_string(uid));
 
     rtvalue["error"] = ErrorCodes::Success;
     auto user_info = std::make_shared<UserInfo>();
-    if (protocol_version >= 3)
-    {
-        user_info->uid = ticket_claims.uid;
-        user_info->user_id = ticket_claims.user_id;
-        user_info->name = ticket_claims.name;
-        user_info->nick = ticket_claims.nick;
-        user_info->icon = ticket_claims.icon;
-        user_info->desc = ticket_claims.desc;
-        user_info->email = ticket_claims.email;
-        user_info->sex = ticket_claims.sex;
-    }
-    else
-    {
-        std::string base_key = USER_BASE_INFO + uid_str;
-        if (!chatusersupport::GetBaseInfo(base_key, uid, user_info))
-        {
-            rtvalue["error"] = ErrorCodes::UidInvalid;
-            memolog::LogWarn("chat.login.failed",
-                             "user base info not found",
-                             {{"error_code", std::to_string(ErrorCodes::UidInvalid)}});
-            return;
-        }
-    }
+    user_info->uid = ticket_claims.uid;
+    user_info->user_id = ticket_claims.user_id;
+    user_info->name = ticket_claims.name;
+    user_info->nick = ticket_claims.nick;
+    user_info->icon = ticket_claims.icon;
+    user_info->desc = ticket_claims.desc;
+    user_info->email = ticket_claims.email;
+    user_info->sex = ticket_claims.sex;
     rtvalue["uid"] = uid;
     // Do not echo password hash over chat transport (security + avoids rare JSON/Qt parse issues).
     rtvalue["name"] = user_info->name;
@@ -208,11 +193,6 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     rtvalue["sex"] = user_info->sex;
     rtvalue["icon"] = user_info->icon;
     rtvalue["user_id"] = user_info->user_id;
-
-    if (protocol_version < 3 && _relation_query_service)
-    {
-        _relation_query_service->AppendRelationBootstrapJson(uid, rtvalue);
-    }
 
     const auto ticket_verify_ms = NowMsLocal() - verify_start_ms;
     const auto attach_start_ms = NowMsLocal();
@@ -280,7 +260,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
                          "chat login success",
                          {{"uid", std::to_string(uid)},
                           {"session_id", session->GetSessionId()},
-                          {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+                          {"login_protocol_version", "3"},
                           {"ticket_verify_ms", std::to_string(ticket_verify_ms)},
                           {"session_attach_ms", std::to_string(session_attach_ms)},
                           {"relation_bootstrap_ms", "0"},
@@ -289,7 +269,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
         memolog::LogInfo("login.stage.summary",
                          "chat login stage summary",
                          {{"uid", std::to_string(uid)},
-                          {"login_protocol_version", std::to_string(protocol_version >= 3 ? 3 : 2)},
+                          {"login_protocol_version", "3"},
                           {"ticket_verify_ms", std::to_string(ticket_verify_ms)},
                           {"session_attach_ms", std::to_string(session_attach_ms)},
                           {"relation_bootstrap_ms", "0"},

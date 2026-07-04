@@ -1,19 +1,19 @@
-﻿#include "PrivateMessageService.h"
+﻿#include "PrivateMessageService.hpp"
 
-#include "ChatGrpcClient.h"
-#include "ChatHistoryCommandDtos.h"
-#include "ChatHistoryOutputDtos.h"
-#include "ChatMessageCommandDtos.h"
-#include "ChatRuntime.h"
-#include "CSession.h"
-#include "MessageServiceUtil.h"
-#include "ports/OnlineRouteResolver.h"
-#include "logging/Logger.h"
+#include "ChatGrpcClient.hpp"
+#include "ChatHistoryCommandDtos.hpp"
+#include "ChatHistoryOutputDtos.hpp"
+#include "ChatMessageCommandDtos.hpp"
+#include "ChatRuntime.hpp"
+#include "CSession.hpp"
+#include "MessageServiceUtil.hpp"
+#include "ports/OnlineRouteResolver.hpp"
+#include "logging/Logger.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <map>
 #include <optional>
 #include <vector>
@@ -98,6 +98,11 @@ BuildMessageCommandRequestLocal(const std::shared_ptr<CSession>& session, short 
     return request;
 }
 
+int AuthenticatedRequestUidLocal(const MessageCommandRequest& request, int payload_uid)
+{
+    return request.session_uid > 0 ? request.session_uid : payload_uid;
+}
+
 void SendMessageCommandResultLocal(const std::shared_ptr<CSession>& session, const MessageCommandResult& result)
 {
     if (!session || result.response_msg_id == 0)
@@ -128,7 +133,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     memochat::json::JsonValue root;
     ParseJsonObjectLocal(request.payload_json, root);
 
-    const auto uid = root["fromuid"].asInt();
+    const auto uid = AuthenticatedRequestUidLocal(request, root["fromuid"].asInt());
     const auto touid = root["touid"].asInt();
     const memochat::json::JsonValue arrays = root["text_array"];
     const bool kafka_backend = KafkaBackendEnabledLocal();
@@ -292,7 +297,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatPrivateForwardRequestFromJsonValue(root);
-    const int from_uid = command.from_uid;
+    const int from_uid = AuthenticatedRequestUidLocal(request, command.from_uid);
     const int peer_uid = command.peer_uid;
     const std::string& source_msg_id = command.source_msg_id;
     std::string client_msg_id = command.client_msg_id;
@@ -479,7 +484,7 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
-    const int uid = root["fromuid"].asInt();
+    const int uid = AuthenticatedRequestUidLocal(request, root["fromuid"].asInt());
     const int peer_uid = root.get("peer_uid", 0).asInt();
     int64_t read_ts = root.get("read_ts", 0).asInt64();
     const auto result = []()
@@ -523,7 +528,7 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatPrivateEditRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedRequestUidLocal(request, command.uid);
     const int peer_uid = command.peer_uid;
     const std::string& target_msg_id = command.msgid;
     const std::string& content = command.content;
@@ -590,7 +595,7 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatPrivateRevokeRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedRequestUidLocal(request, command.uid);
     const int peer_uid = command.peer_uid;
     const std::string& target_msg_id = command.msgid;
     const int64_t now_ms = NowMs();
@@ -658,7 +663,7 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatHistoryCommand::ChatPrivateHistoryRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedRequestUidLocal(request, command.uid);
     const int peer_uid = command.peer_uid;
     const int64_t before_ts = command.before_ts;
     const std::string& before_msg_id = command.before_msg_id;

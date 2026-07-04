@@ -74,8 +74,12 @@ public:
     Q_INVOKABLE void clearStatusState();
 
     bool validateProfile(const QString& nick, const QString& desc, QString* errorText) const;
-    void
-    sendSaveProfile(int uid, const QString& name, const QString& nick, const QString& desc, const QString& icon) const;
+    void sendSaveProfile(int uid,
+                         const QString& token,
+                         const QString& name,
+                         const QString& nick,
+                         const QString& desc,
+                         const QString& icon) const;
     void setStatus(const QString& text, bool isError);
     void syncStatus(const QString& text, bool isError);
     void setCommandPort(ProfileCommandPort port);

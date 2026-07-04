@@ -1,6 +1,6 @@
-#include "logging/Redaction.h"
-#include <algorithm>
-#include <cctype>
+#include "logging/Redaction.hpp"
+
+import memochat.logging.redaction_algorithms;
 
 namespace memolog
 {
@@ -11,19 +11,13 @@ namespace
 
 std::string ToLower(std::string value)
 {
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char c)
-                   {
-                       return static_cast<char>(std::tolower(c));
-                   });
+    memochat::logging::redaction_modules::LowerAsciiInPlace(value.data(), value.size());
     return value;
 }
 
 std::string RedactToken(const std::string& value)
 {
-    if (value.size() <= 8U)
+    if (memochat::logging::redaction_modules::ShouldCollapseTokenMask(value.size()))
     {
         return "****";
     }
@@ -33,13 +27,14 @@ std::string RedactToken(const std::string& value)
 std::string RedactEmail(const std::string& value)
 {
     const auto at = value.find('@');
-    if (at == std::string::npos || at == 0U)
+    if (!memochat::logging::redaction_modules::IsMaskableEmail(at != std::string::npos, at))
     {
         return "****";
     }
     const auto local = value.substr(0, at);
     const auto domain = value.substr(at);
-    if (local.size() <= 2U)
+    const auto visible_prefix = memochat::logging::redaction_modules::VisibleEmailLocalPrefix(local.size());
+    if (visible_prefix == 1U)
     {
         return local.substr(0, 1) + "***" + domain;
     }
@@ -51,24 +46,23 @@ std::string RedactEmail(const std::string& value)
 bool IsSensitiveKey(const std::string& key)
 {
     const std::string lower = ToLower(key);
-    return lower == "passwd" || lower == "password" || lower == "token" || lower == "access_token" ||
-           lower == "refresh_token" || lower == "authorization" || lower == "cookie" || lower == "email" ||
-           lower == "phone" || lower == "verify_code";
+    const int kind = memochat::logging::redaction_modules::ClassifyLowerSensitiveKey(lower.data(), lower.size());
+    return memochat::logging::redaction_modules::IsSensitiveKind(kind);
 }
 
 std::string RedactValue(const std::string& key, const std::string& value, bool enabled)
 {
-    if (!enabled || !IsSensitiveKey(key))
+    const std::string lower = ToLower(key);
+    const int kind = memochat::logging::redaction_modules::ClassifyLowerSensitiveKey(lower.data(), lower.size());
+    if (!enabled || !memochat::logging::redaction_modules::IsSensitiveKind(kind))
     {
         return value;
     }
-    const std::string lower = ToLower(key);
-    if (lower == "email")
+    if (memochat::logging::redaction_modules::ShouldRedactAsEmail(kind))
     {
         return RedactEmail(value);
     }
-    if (lower == "token" || lower == "access_token" || lower == "refresh_token" || lower == "authorization" ||
-        lower == "cookie")
+    if (memochat::logging::redaction_modules::ShouldRedactAsToken(kind))
     {
         return RedactToken(value);
     }

@@ -3,7 +3,10 @@ $DockerCli = Join-Path $PSScriptRoot "docker\arch-docker.ps1"
 
 $container = "memochat-rabbitmq"
 $rabbitUser = if ($env:MEMOCHAT_RABBITMQ_USER) { $env:MEMOCHAT_RABBITMQ_USER } else { "memochat" }
-$rabbitPassword = if ($env:MEMOCHAT_RABBITMQ_PASSWORD) { $env:MEMOCHAT_RABBITMQ_PASSWORD } else { "123456" }
+if (-not $env:MEMOCHAT_RABBITMQ_PASSWORD) {
+    throw "Missing MEMOCHAT_RABBITMQ_PASSWORD"
+}
+$rabbitPassword = $env:MEMOCHAT_RABBITMQ_PASSWORD
 
 & $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.direct type=direct durable=true | Out-Host
 & $DockerCli exec $container rabbitmqadmin --username=$rabbitUser --password=$rabbitPassword declare exchange name=memochat.dlx type=direct durable=true | Out-Host

@@ -1,68 +1,74 @@
-#include "modules/moments/MomentsRouteModule.h"
+#include "modules/moments/MomentsRouteModule.hpp"
 
-#include "routing/RouteRegistry.h"
-#include "services/moments/MomentsService.h"
+#include "routing/RouteRegistry.hpp"
+#include "services/moments/MomentsService.hpp"
+
+import memochat.moments.route_registration_algorithms;
 
 namespace memochat::gate::modules::moments
 {
 
 void MomentsRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& registry)
 {
+    namespace modules = memochat::moments::route_registration::modules;
+    // Single Instance() call at registration time; stable pointer captured by all lambdas.
+    auto* svc = &memochat::gate::services::moments::MomentsService::Instance();
+
     registry.Register(
-        "POST",
-        "/api/moments/publish",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::PublishPath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandlePublish(request, response);
+            return svc->HandlePublish(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/list",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::ListPath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleList(request, response);
+            return svc->HandleList(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/detail",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::DetailPath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleDetail(request, response);
+            return svc->HandleDetail(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/delete",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::DeletePath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleDelete(request, response);
+            return svc->HandleDelete(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/like",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::LikePath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleLike(request, response);
+            return svc->HandleLike(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/comment",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::CommentPath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleComment(request, response);
+            return svc->HandleComment(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/comment/list",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::CommentListPath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleCommentList(request, response);
+            return svc->HandleCommentList(request, response);
         });
     registry.Register(
-        "POST",
-        "/api/moments/comment/like",
-        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        modules::PostMethod(),
+        modules::CommentLikePath(),
+        [svc](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
-            return memochat::gate::services::moments::MomentsService::Instance().HandleCommentLike(request, response);
+            return svc->HandleCommentLike(request, response);
         });
 }
 

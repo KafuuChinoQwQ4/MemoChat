@@ -28,7 +28,7 @@ project(GateInfraCore LANGUAGES CXX)
 # single shared infrastructure unit and lives wholly in GateInfraCore; it cannot
 # be split per domain without splitting the Dao/Mgr classes themselves.
 
-# GlazeCompat.h (glaze) requires C++23; enforce it regardless of inherited
+# GlazeCompat.hpp (glaze) requires C++23; enforce it regardless of inherited
 # CMAKE_CXX_STANDARD in subdirectory builds.
 set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,38 +41,62 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # at the server/core root (memochat_configure_gate_core_lib). ------------------
 add_library(GateInfraCore STATIC
     cache/RedisMgr.cpp
-    cache/RedisMgr.h
+    cache/RedisMgr.hpp
     cache/RedisPipelines.cpp
-    cache/RedisPipelines.h
+    cache/RedisPipelines.hpp
     clients/AuthVerifyClient.cpp
-    clients/AuthVerifyClient.h
+    clients/AuthVerifyClient.hpp
     clients/ChatGrpcClient.cpp
-    clients/ChatGrpcClient.h
+    clients/ChatGrpcClient.hpp
     clients/VerifyGrpcClient.cpp
-    clients/VerifyGrpcClient.h
+    clients/VerifyGrpcClient.hpp
     config/ConfigMgr.cpp
-    config/ConfigMgr.h
-    config/const.h
-    persistence/CallSessionTypes.h
+    config/ConfigMgr.hpp
+    config/const.hpp
+    persistence/CallSessionTypes.hpp
     persistence/PostgresDao.cpp
     persistence/PostgresDaoAccount.cpp
-    persistence/PostgresDao.h
+    persistence/PostgresDao.hpp
     persistence/PostgresMgr.cpp
-    persistence/PostgresMgr.h
+    persistence/PostgresMgr.hpp
     persistence/MongoDao.cpp
-    persistence/MongoDao.h
+    persistence/MongoDao.hpp
     persistence/MongoMgr.cpp
-    persistence/MongoMgr.h
+    persistence/MongoMgr.hpp
     runtime/AsioIOServicePool.cpp
-    runtime/AsioIOServicePool.h
+    runtime/AsioIOServicePool.hpp
     runtime/GateGlobals.cpp
-    runtime/GateGlobals.h
-    runtime/Singleton.h
-    support/GateRouteModules.h           # Shared route registration interface (H1+H3 handlers)
+    runtime/GateGlobals.hpp
+    runtime/Singleton.hpp
+    support/GateRouteModules.hpp           # Shared route registration interface (H1+H3 handlers)
     support/UserTokenValidator.cpp        # Shared utoken_<uid> Redis token validator (finding ④)
-    support/UserTokenValidator.h
+    support/UserTokenValidator.hpp
 )
 memochat_configure_gate_core_lib(GateInfraCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(GateInfraCore
+        MODULES
+            memochat.gate.chat_grpc_client_algorithms=clients/cxx_modules/ChatGrpcClient.cppm
+            memochat.gate.mongo_dao_algorithms=persistence/cxx_modules/MongoDao.cppm
+            memochat.gate.mongo_mgr_algorithms=persistence/cxx_modules/MongoMgr.cppm
+            memochat.gate.postgres_dao_account_algorithms=persistence/cxx_modules/PostgresDaoAccount.cppm
+            memochat.gate.postgres_dao_algorithms=persistence/cxx_modules/PostgresDao.cppm
+            memochat.gate.postgres_mgr_algorithms=persistence/cxx_modules/PostgresMgr.cppm
+            memochat.gate.redis_mgr_algorithms=cache/cxx_modules/RedisMgr.cppm
+            memochat.gate.redis_pipeline_algorithms=cache/cxx_modules/RedisPipeline.cppm
+            memochat.gate.user_token_validator_algorithms=support/cxx_modules/UserTokenValidator.cppm
+        CONSUMER_SOURCES
+            clients/ChatGrpcClient.cpp
+            persistence/MongoDao.cpp
+            persistence/MongoMgr.cpp
+            persistence/PostgresDaoAccount.cpp
+            persistence/PostgresDao.cpp
+            persistence/PostgresMgr.cpp
+            cache/RedisMgr.cpp
+            cache/RedisPipelines.cpp
+            support/UserTokenValidator.cpp
+    )
+endif()
 
 # --- GateServerCore: INTERFACE aggregate of the full monolith-era surface:
 # GateInfraCore + every relocated per-domain support core + every relocated

@@ -23,7 +23,6 @@ readonly MEMOCHAT_TOPOLOGY_GROUP_AI="ai"
 
 readonly -a MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY=(
     "chat|chatserver1|ChatServer|ChatServer|ChatServer/chatserver1.ini|ChatServer-1|8090|8190||8090 50055|8190|../../artifacts/logs/services/chatserver1|ChatServer|memochat"
-    "chat|chatserver2|ChatServer|ChatServer|ChatServer/chatserver2.ini|ChatServer-2|8091|8191||8091 50056|8191|../../artifacts/logs/services/chatserver2|ChatServer|memochat"
     "worker|ChatDeliveryWorker1|ChatDeliveryWorker|ChatDeliveryWorker|ChatServer/chatdeliveryworker1.ini|ChatDeliveryWorker-1|||chatdeliveryworker1|||../../artifacts/logs/services/chatdeliveryworker1|ChatDeliveryWorker|memochat"
     "relation_query|ChatRelationQueryService1|ChatRelationQueryService|ChatRelationQueryService|ChatServer/chatrelationquery1.ini|ChatRelationQueryService-1|50090||chatrelationquery1|50090||../../artifacts/logs/services/chatrelationquery1|ChatRelationQueryService|memochat"
     "relation_service|ChatRelationServiceWorker1|ChatRelationServiceWorker|ChatRelationServiceWorker|ChatServer/chatrelationservice1.ini|ChatRelationServiceWorker-1|50091||chatrelationservice1|50091||../../artifacts/logs/services/chatrelationservice1|ChatRelationServiceWorker|memochat"
@@ -38,7 +37,6 @@ readonly -a MEMOCHAT_RUNTIME_SERVICE_TOPOLOGY=(
     "account|AccountService1|AccountServer|AccountServer|AccountService/account.ini|AccountService-1|8103||accountservice1|8103||../../artifacts/logs/services/AccountService1|AccountService1|memochat"
     "ai|AIServer|AIServer|AIServer|AIServer/config.ini|AIServer|8095|||8095||../../artifacts/logs/services/AIServer|AIServer|memochat"
     "varify|VarifyServer1|VarifyServer|VarifyServer|VarifyServer/config.ini|VarifyServer-1|50051|||50051 8083||../../artifacts/logs/services/VarifyServer1|VarifyServer1|memochat"
-    "varify|VarifyServer2|VarifyServer|VarifyServer|VarifyServer/varify2.ini|VarifyServer-2|48083|||48083 8087||../../artifacts/logs/services/VarifyServer2|VarifyServer2|memochat"
 )
 
 readonly -a MEMOCHAT_CORE_START_GROUPS=(
@@ -78,9 +76,7 @@ readonly -a MEMOCHAT_STOP_PID_ORDER=(
     "ChatMessageService-1"
     "ChatRelationServiceWorker-1"
     "ChatRelationQueryService-1"
-    "ChatServer-2"
     "ChatServer-1"
-    "VarifyServer-2"
     "VarifyServer-1"
 )
 

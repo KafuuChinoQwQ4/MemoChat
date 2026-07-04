@@ -60,16 +60,17 @@ void AppChatConnectionCoordinator::onTcpConnectFinished(bool success)
     qInfo() << "Chat transport connected, sending chat login for uid:" << snapshot.uid;
     _port.setTip("聊天服务连接成功，正在登录...", false);
     QJsonObject obj;
-    obj["protocol_version"] = snapshot.protocolVersion;
-    if (snapshot.protocolVersion >= 3 && !snapshot.loginTicket.isEmpty())
+    if (snapshot.protocolVersion != 3 || snapshot.loginTicket.trimmed().isEmpty())
     {
-        obj["login_ticket"] = snapshot.loginTicket;
+        qWarning() << "Chat login ticket missing or protocol mismatch. protocol_version:" << snapshot.protocolVersion
+                   << "uid:" << snapshot.uid;
+        _port.setBusy(false);
+        _port.setTip("聊天登录票据缺失，请重新登录", true);
+        _port.closeConnection();
+        return;
     }
-    else
-    {
-        obj["uid"] = snapshot.uid;
-        obj["token"] = snapshot.token;
-    }
+    obj["protocol_version"] = 3;
+    obj["login_ticket"] = snapshot.loginTicket;
     if (!snapshot.traceId.isEmpty())
     {
         obj["trace_id"] = snapshot.traceId;

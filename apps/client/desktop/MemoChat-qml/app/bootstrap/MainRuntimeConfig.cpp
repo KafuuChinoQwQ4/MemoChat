@@ -40,7 +40,12 @@ void configureGateUrlPrefixes(const QString& configPath)
         gatePort = QStringLiteral("8080");
     }
 
-    QString mediaGatePort = settings.value("GateServer/http_port").toString().trimmed();
+    const QString mediaBaseUrl = settings.value("Media/BaseUrl").toString().trimmed();
+    QString mediaGatePort = settings.value("GateServer/media_port").toString().trimmed();
+    if (mediaGatePort.isEmpty())
+    {
+        mediaGatePort = settings.value("GateServer/http_port").toString().trimmed();
+    }
     if (mediaGatePort.isEmpty())
     {
         mediaGatePort = gatePort;
@@ -50,5 +55,6 @@ void configureGateUrlPrefixes(const QString& configPath)
                       ? QStringLiteral("https://") + gateHost +
                                        QStringLiteral(":") + gatePort
                                        : QStringLiteral("http://") + gateHost + QStringLiteral(":") + gatePort;
-    gate_media_url_prefix = QStringLiteral("http://") + gateHost + QStringLiteral(":") + mediaGatePort;
+    gate_media_url_prefix = mediaBaseUrl.isEmpty()
+        ? QStringLiteral("http://") + gateHost + QStringLiteral(":") + mediaGatePort : mediaBaseUrl;
 }

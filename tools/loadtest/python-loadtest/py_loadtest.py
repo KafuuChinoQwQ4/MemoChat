@@ -18,6 +18,7 @@ import hmac
 import http.client
 import json
 import math
+import os
 import shutil
 import socket
 import ssl
@@ -132,11 +133,6 @@ def load_accounts(path: Path, prefer_last_password: bool = False) -> list[Accoun
                     )
                 )
     return accounts
-
-
-def xor_encode(raw: str) -> str:
-    key = len(raw) % 255
-    return "".join(chr(ord(ch) ^ key) for ch in raw)
 
 
 def post_json(url: str, payload: dict[str, Any], timeout: float = 8.0) -> tuple[int, dict[str, Any], str]:
@@ -417,10 +413,9 @@ def gate_login(config: dict[str, Any], account: Account, gate_url: str | None = 
     started = time.perf_counter()
     gate_url = (gate_url or config.get("gate_url", "http://127.0.0.1:8080")).rstrip("/")
     login_path = config.get("login_path", "/user_login")
-    password = xor_encode(account.password) if config.get("use_xor_passwd", True) else account.password
     payload = {
         "email": account.email,
-        "passwd": password,
+        "passwd": account.password,
         "client_ver": str(config.get("client_ver", "3.0.0")),
     }
     if config.get("fast_http", False):
@@ -735,10 +730,13 @@ async def open_logged_in_quic_session(
     session = MemoChatQuicSession(cm, protocol, stream_id, queue, timeout)
     login_ticket = data.get("login_ticket", "")
     if endpoint_forced:
+        ticket_secret = str(config.get("quic_ticket_secret") or os.environ.get("MEMOCHAT_CHATAUTH_HMACSECRET", ""))
+        if not ticket_secret:
+            raise RuntimeError("Missing quic_ticket_secret or MEMOCHAT_CHATAUTH_HMACSECRET")
         login_ticket = rewrite_chat_ticket_target(
             str(login_ticket),
             str(endpoint.get("server_name", "")),
-            str(config.get("quic_ticket_secret", "memochat-dev-chat-secret")),
+            ticket_secret,
         )
     payload = {
         "uid": int(data.get("uid", 0)),

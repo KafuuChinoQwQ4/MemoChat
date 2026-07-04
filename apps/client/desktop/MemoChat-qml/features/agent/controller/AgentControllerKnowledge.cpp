@@ -1,4 +1,5 @@
 #include "AgentController.h"
+#include "AgentNetworkRequestUtils.h"
 #include "LocalFilePickerService.h"
 #include "global.h"
 #include "httpmgr.h"
@@ -106,17 +107,15 @@ void AgentController::uploadDocument(const QString& filePath)
     payload["file_name"] = fileName;
     payload["file_type"] = fileType;
     payload["content"] = QString::fromLatin1(fileData.toBase64());
+    addAuthToPayload(payload);
 
     emit kbUploadProgress(0);
     setKnowledgeBusy(true, QString("正在上传 %1...").arg(fileName));
 
-    ReqId reqId = ID_AI_KB_UPLOAD;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeUpload, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/upload"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/kb/upload")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::chooseAndUploadDocument()
@@ -151,14 +150,12 @@ void AgentController::searchKnowledgeBase(const QString& query)
     payload["uid"] = uid;
     payload["query"] = query;
     payload["top_k"] = 5;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_KB_SEARCH;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeSearch, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/search"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/kb/search")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::listKnowledgeBases()
@@ -168,12 +165,13 @@ void AgentController::listKnowledgeBases()
     clearErrorState();
     clearKnowledgeError();
     setKnowledgeBusy(true, "正在加载知识库...");
-    QUrl url(gate_url_prefix + "/ai/kb/list");
+    QUrl url = agentApiUrl(QStringLiteral("/ai/kb/list"));
     QUrlQuery query;
     query.addQueryItem("uid", QString::number(uid));
+    addAuthToQuery(query);
     url.setQuery(query);
 
-    ReqId reqId = ID_AI_KB_LIST;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeList, QString(), uid);
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
@@ -190,14 +188,12 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
     QJsonObject payload;
     payload["uid"] = uid;
     payload["kb_id"] = kbId;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_KB_DELETE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeDelete, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/kb/delete"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/kb/delete")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::handleKbRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)

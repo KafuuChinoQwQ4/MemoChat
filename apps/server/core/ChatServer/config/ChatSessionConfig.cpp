@@ -1,11 +1,12 @@
-#include "ChatSessionConfig.h"
+#include "ChatSessionConfig.hpp"
 
-#include "ConfigMgr.h"
-#include "auth/AuthSecret.h"
-#include "logging/Logger.h"
+#include "ConfigMgr.hpp"
+#include "auth/AuthSecret.hpp"
+#include "logging/Logger.hpp"
 
-#include <algorithm>
-#include <cctype>
+#include <string>
+
+import memochat.chat.config_algorithms;
 
 std::string ChatSessionConfig::ChatAuthSecret() const
 {
@@ -31,18 +32,7 @@ std::string ChatSessionConfig::ChatAuthSecret() const
 bool ChatSessionConfig::FeatureFlagDefaultTrue(const std::string& name) const
 {
     auto raw = ConfigMgr::Inst().GetValue("FeatureFlags", name);
-    if (raw.empty())
-    {
-        return true;
-    }
-    std::transform(raw.begin(),
-                   raw.end(),
-                   raw.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
-    return raw == "1" || raw == "true" || raw == "yes" || raw == "on";
+    return memochat::chat::config::modules::FeatureFlagDefaultTrue(raw.data(), raw.size());
 }
 
 int ChatSessionConfig::HeartbeatRouteRefreshSec() const
@@ -73,7 +63,7 @@ int ChatSessionConfig::ConfigInt(const std::string& section,
     }
     try
     {
-        return std::clamp(std::stoi(raw), min_value, max_value);
+        return memochat::chat::config::modules::ClampInt(std::stoi(raw), min_value, max_value);
     }
     catch (...)
     {

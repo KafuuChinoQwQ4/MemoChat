@@ -60,7 +60,16 @@ inline QString attachMediaDownloadAuth(QString icon)
 
 inline bool isMediaDownloadPath(const QString& path)
 {
-    return path.endsWith(QStringLiteral("/media/download")) || path.contains(QStringLiteral("/media/download"));
+    // Must start with exactly "/media/download" followed by end-of-string or "?"
+    // (query string). Bare contains() would allow path traversal such as
+    // "/media/download/../../admin" to pass, which could direct authenticated
+    // requests to unintended server endpoints.
+    const QString kBase = QStringLiteral("/media/download");
+    if (!path.startsWith(kBase))
+    {
+        return false;
+    }
+    return path.size() == kBase.size() || path.at(kBase.size()) == QLatin1Char('?');
 }
 
 inline bool isLocalMediaHost(const QString& host)
@@ -108,7 +117,7 @@ inline QString withGateMediaUrlPrefix(QString icon)
     QString baseUrl = mediaDownloadBaseUrl();
     if (baseUrl.isEmpty())
     {
-        return icon;
+        return {}; // prefix not yet configured; caller treats empty as unresolvable
     }
     if (baseUrl.endsWith(QLatin1Char('/')) && icon.startsWith(QLatin1Char('/')))
     {
@@ -124,7 +133,12 @@ inline QString normalizeRelativeMediaDownloadUrl(QString icon)
         return icon;
     }
 
-    return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));
+    const QString full = withGateMediaUrlPrefix(icon);
+    if (full.isEmpty())
+    {
+        return {}; // prefix not yet configured; propagate upward
+    }
+    return attachMediaDownloadAuth(full);
 }
 
 inline bool looksLikeMediaKey(const QString& icon)
@@ -148,7 +162,7 @@ inline QString mediaKeyDownloadUrl(const QString& mediaKey)
     QString baseUrl = mediaDownloadBaseUrl();
     if (baseUrl.isEmpty())
     {
-        return attachMediaDownloadAuth(QStringLiteral("/media/download?asset=") + mediaKey);
+        return {}; // prefix not yet configured; normalizeIconForQml will fall through to kDefaultIcon
     }
     if (baseUrl.endsWith(QLatin1Char('/')))
     {
@@ -219,6 +233,10 @@ inline QString normalizeIconForQml(QString icon)
     }
 
     const QString mediaDownloadUrl = normalizeRelativeMediaDownloadUrl(icon);
+    if (mediaDownloadUrl.isEmpty())
+    {
+        return kDefaultIcon; // prefix not yet configured; show placeholder
+    }
     if (mediaDownloadUrl != icon)
     {
         return mediaDownloadUrl;
@@ -241,7 +259,8 @@ inline QString normalizeIconForQml(QString icon)
 
     if (!icon.contains('/') && !icon.contains('\\') && looksLikeMediaKey(icon))
     {
-        return mediaKeyDownloadUrl(icon);
+        const QString keyUrl = mediaKeyDownloadUrl(icon);
+        return keyUrl.isEmpty() ? kDefaultIcon : keyUrl;
     }
 
     const QUrl parsedUrl(icon);

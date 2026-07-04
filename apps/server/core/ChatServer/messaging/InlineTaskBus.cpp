@@ -1,9 +1,13 @@
-#include "InlineTaskBus.h"
+#include "InlineTaskBus.hpp"
 
-#include "logging/Logger.h"
+#include "logging/Logger.hpp"
 
 #include <algorithm>
 #include <chrono>
+
+import memochat.chat.inline_task_bus_algorithms;
+
+namespace inline_task_modules = memochat::chat::messaging::inline_task_bus::modules;
 
 namespace
 {
@@ -30,7 +34,8 @@ bool InlineTaskBus::ConsumeOnce(const std::vector<std::string>& routing_keys, Co
     const auto now_ms = NowMsInlineTask();
     for (auto it = _queue.begin(); it != _queue.end(); ++it)
     {
-        if (!RoutingKeyAccepted(routing_keys, *it) || it->available_at_ms > now_ms)
+        if (!RoutingKeyAccepted(routing_keys, *it) ||
+            !inline_task_modules::ShouldConsumeAvailableTask(it->available_at_ms, now_ms))
         {
             continue;
         }
@@ -62,7 +67,7 @@ void InlineTaskBus::NackLastConsumed(const std::string& error)
     }
     TaskEnvelope task = _last_consumed.envelope;
     task.retry_count += 1;
-    if (task.retry_count > task.max_retries)
+    if (inline_task_modules::ShouldDropAfterRetry(task.retry_count, task.max_retries))
     {
         memolog::LogWarn("chat.task.inline_drop",
                          "inline task dropped after retries",
@@ -74,7 +79,7 @@ void InlineTaskBus::NackLastConsumed(const std::string& error)
     }
     else
     {
-        task.available_at_ms = NowMsInlineTask() + 1000;
+        task.available_at_ms = NowMsInlineTask() + inline_task_modules::RetryDelayMs();
         _queue.push_back(task);
     }
     _last_consumed = ConsumedTask();
@@ -83,7 +88,7 @@ void InlineTaskBus::NackLastConsumed(const std::string& error)
 
 bool InlineTaskBus::RoutingKeyAccepted(const std::vector<std::string>& routing_keys, const TaskEnvelope& task) const
 {
-    if (routing_keys.empty())
+    if (inline_task_modules::AcceptsAllRoutingKeys(routing_keys.empty()))
     {
         return true;
     }

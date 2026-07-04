@@ -90,6 +90,7 @@ buildUploadedDraftMomentItems(const QString& text,
                               const QVariantList& normalizedAttachments,
                               int uid,
                               const QString& token,
+                              int visibility,
                               const std::function<void(int, int, const QString&, int)>& progressCallback)
 {
     MomentPublishTaskResult result;
@@ -111,13 +112,16 @@ buildUploadedDraftMomentItems(const QString& text,
 
         UploadedMediaInfo uploaded;
         QString uploadError;
-        const bool ok = MediaUploadService::uploadLocalFile(
-            fileUrl,
-            uploadMediaType,
-            uid,
-            token,
-            &uploaded,
-            &uploadError,
+        MediaUploadRequest request;
+        request.localFileUrl = fileUrl;
+        request.mediaType = uploadMediaType;
+        request.uid = uid;
+        request.token = token;
+        request.fallbackName = attachment.value(QStringLiteral("fileName")).toString();
+        request.grantPublic = visibility == 0;
+        request.grantFriends = visibility == 1;
+        const MediaUploadResult uploadResult = MediaUploadService::uploadLocalFile(
+            request,
             [index, attachmentCount, progressCallback](int percent, const QString& stage)
             {
                 if (progressCallback)
@@ -125,6 +129,9 @@ buildUploadedDraftMomentItems(const QString& text,
                     progressCallback(index, attachmentCount, stage, percent);
                 }
             });
+        const bool ok = uploadResult.ok;
+        uploaded = uploadResult.info;
+        uploadError = uploadResult.errorText;
         if (!ok)
         {
             result.errorText = uploadError.isEmpty() ? QStringLiteral("素材上传失败") : uploadError;

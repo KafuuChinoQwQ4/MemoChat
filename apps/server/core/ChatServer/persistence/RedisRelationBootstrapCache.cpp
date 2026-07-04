@@ -1,25 +1,29 @@
-#include "RedisRelationBootstrapCache.h"
+#include "RedisRelationBootstrapCache.hpp"
 
-#include "ConfigMgr.h"
-#include "RedisMgr.h"
+#include "ConfigMgr.hpp"
+#include "RedisMgr.hpp"
 
-#include <algorithm>
+import memochat.chat.relation_bootstrap_cache_algorithms;
+
 #include <memory>
 #include <string>
 
 namespace
 {
-constexpr int kRelationBootstrapCacheSchemaVersion = 2;
+namespace cache_modules = memochat::chat::persistence::relation_bootstrap_cache::modules;
+
+constexpr int kDefaultRelationBootstrapCacheTtlSec = 15;
+constexpr int kMinimumRelationBootstrapCacheTtlSec = 1;
 
 bool RelationBootstrapCachePayloadIsCurrent(const memochat::json::JsonValue& cached)
 {
-    return cached.isObject() && cached.get("schema_version", 0).asInt() == kRelationBootstrapCacheSchemaVersion;
+    return cache_modules::IsCurrentSchemaVersion(cached.isObject(), cached.get("schema_version", 0).asInt());
 }
 } // namespace
 
 std::string RedisRelationBootstrapCache::CacheKey(int uid) const
 {
-    return std::string("relation_bootstrap_v") + std::to_string(kRelationBootstrapCacheSchemaVersion) + "_" +
+    return std::string("relation_bootstrap_v") + std::to_string(cache_modules::SchemaVersion()) + "_" +
            std::to_string(uid);
 }
 
@@ -29,21 +33,30 @@ int RedisRelationBootstrapCache::TtlSec() const
     const auto raw = cfg.GetValue("RelationBootstrapCache", "TtlSec");
     if (raw.empty())
     {
-        return 15;
+        return cache_modules::SelectTtlSec(false,
+                                           0,
+                                           kDefaultRelationBootstrapCacheTtlSec,
+                                           kMinimumRelationBootstrapCacheTtlSec);
     }
     try
     {
-        return std::max(1, std::stoi(raw));
+        return cache_modules::SelectTtlSec(true,
+                                           std::stoi(raw),
+                                           kDefaultRelationBootstrapCacheTtlSec,
+                                           kMinimumRelationBootstrapCacheTtlSec);
     }
     catch (...)
     {
-        return 15;
+        return cache_modules::SelectTtlSec(false,
+                                           0,
+                                           kDefaultRelationBootstrapCacheTtlSec,
+                                           kMinimumRelationBootstrapCacheTtlSec);
     }
 }
 
 bool RedisRelationBootstrapCache::TryAppend(int uid, memochat::json::JsonValue& out)
 {
-    if (uid <= 0)
+    if (!cache_modules::IsValidUid(uid))
     {
         return false;
     }
@@ -81,13 +94,13 @@ bool RedisRelationBootstrapCache::TryAppend(int uid, memochat::json::JsonValue& 
 
 void RedisRelationBootstrapCache::Store(int uid, const memochat::json::JsonValue& payload)
 {
-    if (uid <= 0 || !payload.isObject())
+    if (!cache_modules::IsValidUid(uid) || !payload.isObject())
     {
         return;
     }
 
     memochat::json::JsonValue versioned_payload = payload;
-    versioned_payload["schema_version"] = kRelationBootstrapCacheSchemaVersion;
+    versioned_payload["schema_version"] = cache_modules::SchemaVersion();
 
     memochat::json::JsonStreamWriterBuilder builder;
     builder["indentation"] = "";
@@ -102,7 +115,7 @@ void RedisRelationBootstrapCache::Store(int uid, const memochat::json::JsonValue
 
 void RedisRelationBootstrapCache::Invalidate(int uid)
 {
-    if (uid > 0)
+    if (cache_modules::IsValidUid(uid))
     {
         RedisMgr::GetInstance()->Del(CacheKey(uid));
     }

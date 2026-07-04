@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "ChatMessageInternalGrpcService.h"
-#include "MessageGrpcClient.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "ChatMessageInternalGrpcService.hpp"
+#include "MessageGrpcClient.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <chrono>
 #include <functional>
@@ -168,6 +168,19 @@ private:
     }
 };
 
+class NonObjectGroupListService final : public chatinternal::ChatGroupMessageInternalService::Service
+{
+public:
+    grpc::Status BuildGroupList(grpc::ServerContext*,
+                                const chatinternal::BootstrapRequest*,
+                                chatinternal::BootstrapResponse* response) override
+    {
+        response->set_error(ErrorCodes::Success);
+        response->set_payload_json(R"(["not-an-object"])");
+        return grpc::Status::OK;
+    }
+};
+
 struct RunningGrpcServer
 {
     int port = 0;
@@ -186,6 +199,16 @@ RunningGrpcServer StartServer(ChatMessageInternalGrpcService* service)
     builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &running.port);
     builder.RegisterService(static_cast<chatinternal::ChatPrivateMessageInternalService::Service*>(service));
     builder.RegisterService(static_cast<chatinternal::ChatGroupMessageInternalService::Service*>(service));
+    running.server = builder.BuildAndStart();
+    return running;
+}
+
+RunningGrpcServer StartGroupServer(chatinternal::ChatGroupMessageInternalService::Service* service)
+{
+    RunningGrpcServer running;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &running.port);
+    builder.RegisterService(service);
     running.server = builder.BuildAndStart();
     return running;
 }
@@ -297,6 +320,27 @@ TEST(MessageGrpcClientTest, BuildGroupListMergesRemotePayload)
     ASSERT_TRUE(groups.isArray());
     EXPECT_EQ(groups[0].asString(), "group-a");
     EXPECT_FALSE(out.isMember("message_remote_error"));
+    running.server->Shutdown();
+}
+
+TEST(MessageGrpcClientTest, BuildGroupListRejectsNonObjectRemotePayload)
+{
+    NonObjectGroupListService service;
+    auto running = StartGroupServer(&service);
+    ASSERT_NE(running.server, nullptr);
+    ASSERT_GT(running.port, 0);
+
+    MessageGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    memochat::json::JsonValue out(memochat::json::object_t{});
+    out["error"] = ErrorCodes::Success;
+
+    client.BuildGroupListJson(42, out);
+
+    EXPECT_EQ(out["error"].asInt(), ErrorCodes::Success);
+    EXPECT_EQ(out["message_remote_method"].asString(), "BuildGroupList");
+    EXPECT_EQ(out["message_remote_error"].asString(), "invalid message payload json");
+    EXPECT_EQ(out["message_remote_status_code"].asInt(), ErrorCodes::RPCFailed);
+    EXPECT_FALSE(out.isMember("0"));
     running.server->Shutdown();
 }
 

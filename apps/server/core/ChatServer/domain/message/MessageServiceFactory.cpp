@@ -1,11 +1,13 @@
-#include "MessageServiceFactory.h"
+#include "MessageServiceFactory.hpp"
 
-#include "MessageGrpcServiceAdapter.h"
-#include "GroupMessageService.h"
-#include "PrivateMessageService.h"
-#include "logging/Logger.h"
+#include "MessageGrpcServiceAdapter.hpp"
+#include "GroupMessageService.hpp"
+#include "PrivateMessageService.hpp"
+#include "logging/Logger.hpp"
 
 #include <stdexcept>
+
+import memochat.chat.service_factory_algorithms;
 
 std::unique_ptr<IPrivateMessageService> CreateInProcessPrivateMessageService(ISessionRegistry* session_registry,
                                                                              IOnlineRouteStore* online_route_store,
@@ -42,7 +44,7 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
                                                                     IEventPublisher* event_publisher)
 {
     const auto backend = message_service_config.MessageServiceBackend();
-    if (backend == "inprocess")
+    if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
     {
         return CreateInProcessPrivateMessageService(session_registry,
                                                     online_route_store,
@@ -51,7 +53,7 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
                                                     delivery_gateway,
                                                     event_publisher);
     }
-    if (backend == "grpc" || backend == "remote")
+    if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
         const auto endpoint = message_service_config.MessageServiceEndpoint();
         if (endpoint.empty())
@@ -79,14 +81,14 @@ std::unique_ptr<IGroupMessageService> CreateGroupMessageService(const IMessageSe
                                                                 IEventPublisher* event_publisher)
 {
     const auto backend = message_service_config.MessageServiceBackend();
-    if (backend == "inprocess")
+    if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
     {
         return CreateInProcessGroupMessageService(message_repository,
                                                   relation_repository,
                                                   delivery_gateway,
                                                   event_publisher);
     }
-    if (backend == "grpc" || backend == "remote")
+    if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
         const auto endpoint = message_service_config.MessageServiceEndpoint();
         if (endpoint.empty())

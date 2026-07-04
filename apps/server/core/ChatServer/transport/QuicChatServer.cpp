@@ -1,9 +1,9 @@
-#include "QuicChatServer.h"
+#include "QuicChatServer.hpp"
 
-#include "ConfigMgr.h"
-#include "MsgNode.h"
-#include "QuicSession.h"
-#include "logging/Logger.h"
+#include "ConfigMgr.hpp"
+#include "MsgNode.hpp"
+#include "QuicSession.hpp"
+#include "logging/Logger.hpp"
 
 #include <atomic>
 #include <cstring>
@@ -14,7 +14,7 @@
 #include <vector>
 
 #if MEMOCHAT_ENABLE_MSQUIC
-#include "WinSdkCompat.h"
+#include "WinSdkCompat.hpp"
 #ifdef _WIN32
 #include <wincrypt.h>
 #endif

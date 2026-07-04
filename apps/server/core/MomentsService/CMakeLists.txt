@@ -1,27 +1,44 @@
 # MomentsService owns the moments domain code (relocated from GateShared in
 # slice j). GateMomentsDomain (moments route module + service facade); target
-# name unchanged. Moments reads its own Mongo + the one known cross-domain user
-# lookup, so it needs no dedicated Gate<X>Core support library beyond the shared
-# infra base (Postgres/Mongo managers live in GateInfraCore).
+# name unchanged. A narrow local persistence Module owns the remaining Postgres
+# adapter calls for moment rows and user-profile reads.
 
 add_library(GateMomentsDomain STATIC
-    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.h
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/GateRouteProfileRegistrar.hpp
     domain/profiles/GateMomentsProfile.cpp
     domain/modules/moments/MomentsRouteModule.cpp
     domain/modules/moments/MomentsRouteSchemas.cpp
     domain/services/moments/MomentsOutputDtos.cpp
-    domain/services/moments/MomentsOutputDtos.h
+    domain/services/moments/MomentsOutputDtos.hpp
+    domain/services/moments/MomentsPersistence.cpp
+    domain/services/moments/MomentsPersistence.hpp
     domain/services/moments/MomentsPublicDtos.cpp
-    domain/services/moments/MomentsPublicDtos.h
+    domain/services/moments/MomentsPublicDtos.hpp
     domain/services/moments/MomentsService.cpp
     domain/MomentsRouteModules.cpp
-    domain/MomentsRouteModules.h
+    domain/MomentsRouteModules.hpp
     clients/MomentsRelationClient.cpp
-    clients/MomentsRelationClient.h
+    clients/MomentsRelationClient.hpp
 )
 memochat_configure_gate_app_lib(GateMomentsDomain)
 target_include_directories(GateMomentsDomain PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(GateMomentsDomain PUBLIC GateRuntimeCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(GateMomentsDomain
+        MODULES
+            memochat.moments.output_algorithms=domain/services/moments/cxx_modules/MomentsOutput.cppm
+            memochat.moments.public_algorithms=domain/services/moments/cxx_modules/MomentsPublic.cppm
+            memochat.moments.route_registration_algorithms=domain/modules/moments/cxx_modules/MomentsRouteRegistration.cppm
+            memochat.moments.route_schema_algorithms=domain/modules/moments/cxx_modules/MomentsRouteSchema.cppm
+            memochat.moments.service_algorithms=domain/services/moments/cxx_modules/MomentsService.cppm
+        CONSUMER_SOURCES
+            domain/modules/moments/MomentsRouteModule.cpp
+            domain/modules/moments/MomentsRouteSchemas.cpp
+            domain/services/moments/MomentsOutputDtos.cpp
+            domain/services/moments/MomentsPublicDtos.cpp
+            domain/services/moments/MomentsService.cpp
+    )
+endif()
 
 add_executable(MomentsGatewayServer
     app/MomentsGatewayServer.cpp

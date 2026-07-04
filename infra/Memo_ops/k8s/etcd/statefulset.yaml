@@ -49,7 +49,12 @@ spec:
               name: peer
           env:
             - name: ALLOW_NONE_AUTHENTICATION
-              value: "yes"
+              value: "no"
+            - name: ETCD_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: memochat-etcd-secrets
+                  key: root-password
             - name: ETCD_ADVERTISE_CLIENT_URLS
               value: "http://$(HOSTNAME).memochat-etcd:2379"
             - name: ETCD_INITIAL_CLUSTER_STATE

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "ChatHistoryOutputDtos.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "ChatHistoryOutputDtos.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string_view>

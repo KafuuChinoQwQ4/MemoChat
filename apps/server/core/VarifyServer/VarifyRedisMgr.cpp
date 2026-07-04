@@ -1,12 +1,16 @@
-#include "VarifyRedisMgr.h"
-#include "ConfigMgr.h"
+#include "VarifyRedisMgr.hpp"
+#include "ConfigMgr.hpp"
+#include "common_lua_scripts.hpp"
 
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
 
+import memochat.varify.redis_algorithms;
+
 namespace varifyservice
 {
+namespace redis_modules = memochat::varify::redis::modules;
 
 VarifyRedisConPool::VarifyRedisConPool(size_t poolSize, const char* host, int port, const char* pwd)
     : poolSize_(poolSize)
@@ -26,10 +30,11 @@ VarifyRedisConPool::VarifyRedisConPool(size_t poolSize, const char* host, int po
             continue;
         }
 
-        if (pwd && pwd[0] != '\0')
+        if (pwd && redis_modules::HasPassword(pwd[0]))
         {
             auto reply = (redisReply*) redisCommand(context, "AUTH %s", pwd);
-            if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+            if (!redis_modules::HasReply(reply != nullptr) ||
+                redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_ERROR))
             {
                 if (reply)
                     freeReplyObject(reply);
@@ -110,7 +115,7 @@ void VarifyRedisConPool::CheckThreadProc()
         connections_.pop();
 
         auto reply = (redisReply*) redisCommand(context, "PING");
-        if (reply == nullptr || context->err != 0)
+        if (redis_modules::ShouldDropPoolConnection(reply != nullptr, context->err))
         {
             if (reply)
                 freeReplyObject(reply);
@@ -128,12 +133,12 @@ VarifyRedisMgr::VarifyRedisMgr()
     auto host = cfg["Redis"]["Host"];
     auto port_str = cfg["Redis"]["Port"];
     auto pwd = cfg["Redis"]["Passwd"];
-    int port = 6379;
+    int port = redis_modules::DefaultRedisPort();
     if (!port_str.empty())
     {
         port = std::atoi(port_str.c_str());
     }
-    pool_.reset(new VarifyRedisConPool(5, host.c_str(), port, pwd.c_str()));
+    pool_.reset(new VarifyRedisConPool(redis_modules::DefaultConnectionPoolSize(), host.c_str(), port, pwd.c_str()));
 }
 
 VarifyRedisMgr::~VarifyRedisMgr()
@@ -164,7 +169,7 @@ bool VarifyRedisMgr::Get(const std::string& key, std::string& value)
         return false;
     auto reply = (redisReply*) redisCommand(ctx, "GET %s", key.c_str());
     bool ok = false;
-    if (reply && reply->type == REDIS_REPLY_STRING)
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_STRING))
     {
         value = reply->str;
         ok = true;
@@ -182,7 +187,7 @@ bool VarifyRedisMgr::SetEx(const std::string& key, const std::string& value, int
         return false;
     auto reply = (redisReply*) redisCommand(ctx, "SETEX %s %d %s", key.c_str(), expire_sec, value.c_str());
     bool ok = false;
-    if (reply && (reply->type == REDIS_REPLY_STATUS))
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_STATUS))
     {
         ok = (strcmp(reply->str, "OK") == 0);
     }
@@ -196,21 +201,15 @@ int64_t VarifyRedisMgr::IncrWithExpire(const std::string& key, int expire_sec)
 {
     auto* ctx = pool_->GetConnection();
     if (!ctx)
-        return -1;
-    auto reply = (redisReply*) redisCommand(ctx, "INCR %s", key.c_str());
-    int64_t count = -1;
-    if (reply && reply->type == REDIS_REPLY_INTEGER)
+        return redis_modules::RedisCounterError();
+
+    const std::string lua_script(memochat::common::lua_scripts::kincr_with_expire);
+
+    auto reply = (redisReply*) redisCommand(ctx, "EVAL %s 1 %s %d", lua_script.c_str(), key.c_str(), expire_sec);
+    int64_t count = redis_modules::RedisCounterError();
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         count = reply->integer;
-        if (count == 1)
-        {
-            freeReplyObject(reply);
-            reply = (redisReply*) redisCommand(ctx, "EXPIRE %s %d", key.c_str(), expire_sec);
-            if (reply && reply->type == REDIS_REPLY_INTEGER)
-            {
-                // TTL set
-            }
-        }
     }
     if (reply)
         freeReplyObject(reply);
@@ -222,10 +221,10 @@ int64_t VarifyRedisMgr::TTL(const std::string& key)
 {
     auto* ctx = pool_->GetConnection();
     if (!ctx)
-        return -2;
+        return redis_modules::RedisMissingTtl();
     auto reply = (redisReply*) redisCommand(ctx, "TTL %s", key.c_str());
-    int64_t ttl = -2;
-    if (reply && reply->type == REDIS_REPLY_INTEGER)
+    int64_t ttl = redis_modules::RedisMissingTtl();
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         ttl = reply->integer;
     }
@@ -242,7 +241,7 @@ bool VarifyRedisMgr::Del(const std::string& key)
         return false;
     auto reply = (redisReply*) redisCommand(ctx, "DEL %s", key.c_str());
     bool ok = false;
-    if (reply && reply->type == REDIS_REPLY_INTEGER)
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_INTEGER))
     {
         ok = true;
     }
@@ -259,7 +258,7 @@ bool VarifyRedisMgr::Ping()
         return false;
     auto reply = (redisReply*) redisCommand(ctx, "PING");
     bool ok = false;
-    if (reply && reply->type == REDIS_REPLY_STATUS)
+    if (reply && redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_STATUS))
     {
         ok = true;
     }

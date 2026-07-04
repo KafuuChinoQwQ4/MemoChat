@@ -1240,7 +1240,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         service = VoiceTrainingService(voice_clone_enabled=False, artifact_root=temp_dir.name)
 
         with self.assertRaisesRegex(ValueError, "consent"):
-            service.create_job(VoiceTrainingRequest(reference_audio_path="voice.mp3", consent_confirmed=False))
+            service.create_job(VoiceTrainingRequest(uid=7, reference_audio_path="voice.mp3", consent_confirmed=False))
 
         job = service.create_job(
             VoiceTrainingRequest(
@@ -1277,13 +1277,53 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             service.latest_ready_reference_audio(uid=7), payload["diagnostics"]["reference_audio_runtime_path"]
         )
+        self.assertEqual(service.latest_ready_reference_audio(uid=0), "")
+        self.assertEqual(service.latest_ready_reference_audio(uid=99), "")
         self.assertEqual(payload["language"], "zh-CN")
         self.assertTrue(Path(payload["manifest_path"]).exists())
-        self.assertEqual(service.get_job(payload["job_id"]).job_id, payload["job_id"])
+        self.assertEqual(service.get_job(payload["job_id"], uid=7).job_id, payload["job_id"])
+        with self.assertRaises(KeyError):
+            service.get_job(payload["job_id"], uid=99)
+        with self.assertRaises(KeyError):
+            service.get_job(payload["job_id"], uid=0)
+        self.assertEqual(service.list_jobs(uid=0), [])
         self.assertEqual([item.job_id for item in service.list_jobs(uid=7)], [payload["job_id"]])
 
         restored = VoiceTrainingService(voice_clone_enabled=False, artifact_root=temp_dir.name)
-        self.assertEqual(restored.get_job(payload["job_id"]).manifest_path, payload["manifest_path"])
+        self.assertEqual(restored.get_job(payload["job_id"], uid=7).manifest_path, payload["manifest_path"])
+
+    async def test_voice_training_service_rejects_runtime_paths_outside_artifact_root(self):
+        VoiceTrainingRequest = _load_attr("harness.pet.voice_training", "VoiceTrainingRequest")
+        VoiceTrainingService = _load_attr("harness.pet.voice_training", "VoiceTrainingService")
+        temp_dir = tempfile.TemporaryDirectory()
+        outside_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.addCleanup(outside_dir.cleanup)
+        outside_audio = Path(outside_dir.name) / "secret.wav"
+        _write_wav(outside_audio, duration_sec=8.0)
+
+        service = VoiceTrainingService(voice_clone_enabled=False, artifact_root=temp_dir.name)
+        job = service.create_job(
+            VoiceTrainingRequest(
+                uid=7,
+                reference_audio_path=str(outside_audio),
+                consent_confirmed=True,
+            )
+        )
+        payload = job.to_dict()
+
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["stage"], "reference_not_visible")
+        self.assertFalse(payload["diagnostics"]["audio_persisted"])
+        self.assertEqual(
+            payload["diagnostics"]["reference_audio_persist_error"],
+            "reference audio path is outside voice training staging root",
+        )
+        self.assertEqual(payload["diagnostics"]["reference_audio_size_bytes"], 0)
+        self.assertEqual(payload["reference_audio_path"], outside_audio.name)
+        self.assertNotIn(str(outside_audio.parent), payload["reference_audio_path"])
+        self.assertEqual(payload["diagnostics"]["reference_audio_original_path"], outside_audio.name)
+        self.assertNotIn(str(outside_audio.parent), payload["diagnostics"]["reference_audio_original_path"])
 
     async def test_voice_training_service_normalizes_loaded_ready_for_worker_jobs(self):
         VoiceTrainingService = _load_attr("harness.pet.voice_training", "VoiceTrainingService")
@@ -1328,7 +1368,7 @@ class PetRuntimeComponentTests(unittest.IsolatedAsyncioTestCase):
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
         service = VoiceTrainingService(voice_clone_enabled=False, artifact_root=temp_dir.name)
-        payload = service.get_job("voice-train-old-ready").to_dict()
+        payload = service.get_job("voice-train-old-ready", uid=7).to_dict()
 
         self.assertEqual(payload["status"], "ready")
         self.assertEqual(payload["stage"], "ready_for_gpt_sovits")

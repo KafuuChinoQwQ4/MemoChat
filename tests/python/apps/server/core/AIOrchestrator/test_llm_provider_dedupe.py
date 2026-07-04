@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 import os
@@ -209,6 +210,7 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             provider_file = Path(tmpdir) / "api_providers.json"
             os.environ["MEMOCHAT_API_PROVIDERS_FILE"] = str(provider_file)
+            os.environ.pop("MEMOCHAT_AI_PROVIDER_API_DEEPSEEK_FLASH_API_KEY", None)
             _install_service_stubs()
 
             try:
@@ -231,8 +233,15 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                     },
                 ]
 
-                with patch.object(
-                    service._OpenAICompatibleClient, "list_models", new=AsyncMock(return_value=discovered)
+                with (
+                    patch.object(
+                        service.socket,
+                        "getaddrinfo",
+                        return_value=[(None, None, None, "", ("93.184.216.34", 443))],
+                    ),
+                    patch.object(
+                        service._OpenAICompatibleClient, "list_models", new=AsyncMock(return_value=discovered)
+                    ),
                 ):
                     first = await registry.register_api_provider(
                         "deepseek flash",
@@ -250,6 +259,10 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                 providers = data["providers"]
                 self.assertEqual(len(providers), 1)
                 self.assertEqual(providers[0]["base_url"], "https://api.deepseek.com")
+                self.assertNotIn("api_key", providers[0])
+                self.assertEqual(providers[0]["api_key_env"], "MEMOCHAT_AI_PROVIDER_API_DEEPSEEK_FLASH_API_KEY")
+                self.assertRegex(providers[0]["api_key_fingerprint"], r"^[0-9a-f]{64}$")
+                self.assertEqual(providers[0]["pinned_addresses"], ["93.184.216.34"])
                 self.assertEqual(
                     sorted(model["name"] for model in providers[0]["models"]),
                     ["deepseek-v4-flash", "deepseek-v4-pro"],
@@ -260,10 +273,263 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                 ]
                 self.assertEqual(len(endpoints), 1)
                 self.assertEqual(len(endpoints[0].models), 2)
+
+                restarted_registry = service.LLMEndpointRegistry()
+                self.assertFalse(
+                    [
+                        endpoint
+                        for endpoint in restarted_registry.list_endpoints()
+                        if endpoint.provider_id == first.provider_id
+                    ]
+                )
+                with patch.dict(
+                    os.environ,
+                    {"MEMOCHAT_AI_PROVIDER_API_DEEPSEEK_FLASH_API_KEY": "same-key"},
+                    clear=False,
+                ):
+                    restarted_endpoints = [
+                        endpoint
+                        for endpoint in restarted_registry.list_endpoints()
+                        if endpoint.provider_id == first.provider_id
+                    ]
+                self.assertEqual(len(restarted_endpoints), 1)
             finally:
                 os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
                 _clear_service_stubs()
                 sys.modules.pop("harness.llm.service", None)
+
+
+class AIOrchestratorSecurityConfigTests(unittest.TestCase):
+    def test_internal_auth_config_helpers_allow_health_and_loopback_only(self):
+        _clear_service_stubs()
+        sys.modules.pop("config", None)
+
+        import config as config_module
+
+        self.assertTrue(config_module.is_unauthenticated_path("/health", ["/health", "/ready"]))
+        self.assertTrue(config_module.is_unauthenticated_path("/health/", ["/health"]))
+        self.assertFalse(config_module.is_unauthenticated_path("/chat", ["/health", "/ready"]))
+        self.assertTrue(config_module.is_trusted_client_host("127.0.0.1", ["127.0.0.1", "::1"]))
+        self.assertFalse(config_module.is_trusted_client_host("10.0.0.8", ["127.0.0.1", "::1"]))
+
+        security = config_module.SecurityConfig(
+            internal_api_key="config-key",
+            internal_api_key_env="MEMOCHAT_TEST_AI_INTERNAL_KEY",
+            provider_admin_key="provider-config-key",
+            provider_admin_key_env="MEMOCHAT_TEST_AI_PROVIDER_ADMIN_KEY",
+        )
+        with patch.dict(os.environ, {"MEMOCHAT_TEST_AI_INTERNAL_KEY": "env-key"}, clear=False):
+            self.assertEqual(config_module.resolve_internal_api_key(security), "env-key")
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(config_module.resolve_internal_api_key(security), "config-key")
+        with patch.dict(os.environ, {"MEMOCHAT_TEST_AI_PROVIDER_ADMIN_KEY": "provider-env-key"}, clear=False):
+            self.assertEqual(config_module.resolve_provider_admin_key(security), "provider-env-key")
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(config_module.resolve_provider_admin_key(security), "provider-config-key")
+
+
+class LLMProviderSsrfGuardTests(unittest.TestCase):
+    def setUp(self):
+        _install_service_stubs()
+        import harness.llm.service as service
+
+        self.service = importlib.reload(service)
+
+    def tearDown(self):
+        _clear_service_stubs()
+        sys.modules.pop("harness.llm.service", None)
+
+    def test_provider_registration_rejects_local_and_private_hosts(self):
+        with self.assertRaisesRegex(ValueError, "public"):
+            self.service._normalize_and_validate_public_provider_base_url("http://localhost:11434")
+
+        with patch.object(
+            self.service.socket,
+            "getaddrinfo",
+            return_value=[(None, None, None, "", ("10.0.0.12", 443))],
+        ):
+            with self.assertRaisesRegex(ValueError, "public addresses"):
+                self.service._normalize_and_validate_public_provider_base_url("https://api.example.test/v1")
+
+        with self.assertRaisesRegex(ValueError, "http or https"):
+            self.service._normalize_and_validate_public_provider_base_url("ftp://api.example.test")
+
+    def test_provider_registration_accepts_public_http_hosts(self):
+        with patch.object(
+            self.service.socket,
+            "getaddrinfo",
+            return_value=[(None, None, None, "", ("93.184.216.34", 443))],
+        ):
+            self.assertEqual(
+                self.service._normalize_and_validate_public_provider_base_url("https://api.deepseek.com/v1"),
+                "https://api.deepseek.com",
+            )
+
+    def test_openai_compatible_client_disables_redirects(self):
+        calls = {}
+
+        class FakeAsyncClient:
+            is_closed = False
+
+            def __init__(self, **kwargs):
+                calls.update(kwargs)
+
+        self.service.httpx.AsyncClient = FakeAsyncClient
+        self.service.httpx.Timeout = lambda value: ("timeout", value)
+
+        client = self.service._OpenAICompatibleClient("https://api.example.test/v1", "key", "")
+        asyncio.run(client._get_client())
+
+        self.assertIn("follow_redirects", calls)
+        self.assertFalse(calls["follow_redirects"])
+        self.assertFalse(calls["trust_env"])
+        self.assertIsNone(calls["transport"])
+
+    def test_openai_compatible_client_uses_pinned_transport_for_runtime_provider(self):
+        calls = {}
+
+        class FakeAsyncClient:
+            is_closed = False
+
+            def __init__(self, **kwargs):
+                calls.update(kwargs)
+
+        self.service.httpx.AsyncClient = FakeAsyncClient
+        self.service.httpx.Timeout = lambda value: ("timeout", value)
+
+        client = self.service._OpenAICompatibleClient(
+            "https://api.example.test/v1",
+            "key",
+            "",
+            pinned_addresses=["93.184.216.34"],
+        )
+        asyncio.run(client._get_client())
+
+        self.assertFalse(calls["trust_env"])
+        self.assertFalse(calls["follow_redirects"])
+        self.assertIsNotNone(calls["transport"])
+
+    def test_static_external_provider_uses_pinned_transport(self):
+        calls = {}
+
+        class FakeClient:
+            def __init__(
+                self, base_url, api_key, model_name, timeout_sec=120, thinking_parameter="", pinned_addresses=None
+            ):
+                calls["base_url"] = base_url
+                calls["api_key"] = api_key
+                calls["model_name"] = model_name
+                calls["timeout_sec"] = timeout_sec
+                calls["thinking_parameter"] = thinking_parameter
+                calls["pinned_addresses"] = pinned_addresses
+
+        endpoint_cfg = types.SimpleNamespace(
+            name="static-provider",
+            adapter="openai_compatible",
+            deployment="external_api",
+            base_url="https://api.example.test/v1",
+            api_key="static-key",
+            api_key_env="",
+            timeout_sec=45,
+            thinking_parameter="",
+        )
+        self.service.settings.harness.providers.endpoints = [endpoint_cfg]
+        endpoint = _ProviderEndpoint(
+            provider_id="static-provider",
+            adapter="openai_compatible",
+            deployment="external_api",
+            base_url="https://api.example.test/v1",
+            default_model="demo",
+            enabled=True,
+        )
+
+        with (
+            patch.object(self.service, "_OpenAICompatibleClient", FakeClient),
+            patch.object(
+                self.service.socket,
+                "getaddrinfo",
+                return_value=[(None, None, None, "", ("93.184.216.34", 443))],
+            ),
+        ):
+            self.service.LLMEndpointRegistry()._get_custom_client(endpoint, "demo")
+
+        self.assertEqual(calls["base_url"], "https://api.example.test/v1")
+        self.assertEqual(calls["api_key"], "static-key")
+        self.assertEqual(calls["model_name"], "demo")
+        self.assertEqual(calls["timeout_sec"], 45)
+        self.assertEqual(calls["pinned_addresses"], ["93.184.216.34"])
+
+    def test_static_external_provider_rejects_private_dns_before_client_creation(self):
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("client should not be created for private provider addresses")
+
+        endpoint_cfg = types.SimpleNamespace(
+            name="static-provider",
+            adapter="openai_compatible",
+            deployment="external_api",
+            base_url="https://api.example.test/v1",
+            api_key="static-key",
+            api_key_env="",
+            timeout_sec=45,
+            thinking_parameter="",
+        )
+        self.service.settings.harness.providers.endpoints = [endpoint_cfg]
+        endpoint = _ProviderEndpoint(
+            provider_id="static-provider",
+            adapter="openai_compatible",
+            deployment="external_api",
+            base_url="https://api.example.test/v1",
+            default_model="demo",
+            enabled=True,
+        )
+
+        with (
+            patch.object(self.service, "_OpenAICompatibleClient", FakeClient),
+            patch.object(
+                self.service.socket,
+                "getaddrinfo",
+                return_value=[(None, None, None, "", ("10.0.0.8", 443))],
+            ),
+            self.assertRaisesRegex(ValueError, "public addresses"),
+        ):
+            self.service.LLMEndpointRegistry()._get_custom_client(endpoint, "demo")
+
+    def test_pinned_provider_network_backend_connects_to_validated_ip_only(self):
+        class FakeDelegate:
+            def __init__(self):
+                self.calls = []
+
+            async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+                self.calls.append((host, port))
+                return {"host": host, "port": port}
+
+            async def connect_unix_socket(self, path, timeout=None, socket_options=None):
+                return {"path": path}
+
+            async def sleep(self, seconds):
+                return None
+
+        delegate = FakeDelegate()
+        backend = self.service._PinnedProviderNetworkBackend(
+            "api.example.test",
+            ["93.184.216.34"],
+            delegate=delegate,
+        )
+
+        pinned_result = asyncio.run(backend.connect_tcp("api.example.test", 443))
+        passthrough_result = asyncio.run(backend.connect_tcp("other.example.test", 443))
+
+        self.assertEqual(pinned_result["host"], "93.184.216.34")
+        self.assertEqual(passthrough_result["host"], "other.example.test")
+        self.assertEqual(delegate.calls, [("93.184.216.34", 443), ("other.example.test", 443)])
+
+        with self.assertRaisesRegex(ValueError, "public IP"):
+            self.service._PinnedProviderNetworkBackend(
+                "api.example.test",
+                ["10.0.0.8"],
+                delegate=FakeDelegate(),
+            )
 
 
 if __name__ == "__main__":

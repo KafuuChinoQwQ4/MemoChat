@@ -1,46 +1,25 @@
-#include "logging/TelemetryConfig.h"
+#include "logging/TelemetryConfig.hpp"
 
-#include <algorithm>
-#include <cctype>
+import memochat.logging.config_algorithms;
+import memochat.logging.telemetry_config_algorithms;
 
 namespace memolog
 {
+namespace telemetry_config_modules = memochat::logging::telemetry_config_modules;
+
 namespace
 {
 
 std::string Trim(std::string value)
 {
-    auto is_space = [](unsigned char c)
-    {
-        return std::isspace(c) != 0;
-    };
-    value.erase(value.begin(),
-                std::find_if(value.begin(),
-                             value.end(),
-                             [&](char c)
-                             {
-                                 return !is_space(static_cast<unsigned char>(c));
-                             }));
-    value.erase(std::find_if(value.rbegin(),
-                             value.rend(),
-                             [&](char c)
-                             {
-                                 return !is_space(static_cast<unsigned char>(c));
-                             })
-                    .base(),
-                value.end());
-    return value;
+    const auto begin = memochat::logging::modules::TrimAsciiBegin(value.data(), value.size());
+    const auto end = memochat::logging::modules::TrimAsciiEnd(value.data(), value.size());
+    return value.substr(begin, end - begin);
 }
 
 std::string ToLower(std::string value)
 {
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char c)
-                   {
-                       return static_cast<char>(std::tolower(c));
-                   });
+    memochat::logging::modules::LowerAsciiInPlace(value.data(), value.size());
     return value;
 }
 
@@ -51,11 +30,11 @@ bool ParseBool(const std::string& raw, bool fallback)
         return fallback;
     }
     const std::string v = ToLower(Trim(raw));
-    if (v == "1" || v == "true" || v == "yes" || v == "on")
+    if (telemetry_config_modules::IsTrueBoolToken(v.data(), v.size()))
     {
         return true;
     }
-    if (v == "0" || v == "false" || v == "no" || v == "off")
+    if (telemetry_config_modules::IsFalseBoolToken(v.data(), v.size()))
     {
         return false;
     }
@@ -104,18 +83,11 @@ TelemetryConfig::FromGetter(const std::function<std::string(const std::string&, 
     cfg.service_name = read("ServiceName", cfg.service_name);
     cfg.service_namespace = read("ServiceNamespace", cfg.service_namespace);
 
-    if (cfg.sample_ratio < 0.0)
-    {
-        cfg.sample_ratio = 0.0;
-    }
-    else if (cfg.sample_ratio > 1.0)
-    {
-        cfg.sample_ratio = 1.0;
-    }
+    cfg.sample_ratio = telemetry_config_modules::ClampSampleRatio(cfg.sample_ratio);
 
-    if (cfg.protocol.empty())
+    if (telemetry_config_modules::ShouldUseDefaultProtocol(cfg.protocol.empty()))
     {
-        cfg.protocol = "zipkin-json";
+        cfg.protocol = telemetry_config_modules::DefaultProtocol();
     }
     return cfg;
 }

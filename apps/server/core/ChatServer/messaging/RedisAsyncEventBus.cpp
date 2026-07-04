@@ -1,21 +1,25 @@
-#include "RedisAsyncEventBus.h"
+#include "RedisAsyncEventBus.hpp"
 
-#include "ChatAsyncEvent.h"
-#include "ChatRuntime.h"
-#include "RedisMgr.h"
+#include "ChatAsyncEvent.hpp"
+#include "ChatRuntime.hpp"
+#include "RedisMgr.hpp"
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <memory>
+
+import memochat.chat.redis_async_event_bus_algorithms;
+
+namespace redis_event_modules = memochat::chat::messaging::redis_event_bus::modules;
 
 bool RedisAsyncEventBus::Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
 {
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
     const auto serialized = SerializeAsyncEventEnvelope(envelope);
-    if (serialized.empty())
+    if (redis_event_modules::ShouldRejectSerializedPayload(serialized.empty()))
     {
         if (error)
         {
-            *error = "serialize_failed";
+            *error = redis_event_modules::SerializeFailedError();
         }
         return false;
     }
@@ -23,7 +27,7 @@ bool RedisAsyncEventBus::Publish(const std::string& topic, const memochat::json:
     {
         if (error)
         {
-            *error = "queue_publish_failed";
+            *error = redis_event_modules::QueuePublishFailedError();
         }
         return false;
     }
@@ -50,7 +54,7 @@ bool RedisAsyncEventBus::ConsumeOnce(const std::vector<std::string>& topics,
             event.envelope.topic = one_topic;
             if (error)
             {
-                *error = "parse_failed";
+                *error = redis_event_modules::ParseFailedError();
             }
         }
         _last_topic = one_topic;
@@ -69,7 +73,7 @@ void RedisAsyncEventBus::AckLastConsumed()
 
 void RedisAsyncEventBus::NackLastConsumed(const std::string&)
 {
-    if (_last_topic.empty() || _last_serialized.empty())
+    if (!redis_event_modules::ShouldRequeueLastConsumed(_last_topic.empty(), _last_serialized.empty()))
     {
         return;
     }

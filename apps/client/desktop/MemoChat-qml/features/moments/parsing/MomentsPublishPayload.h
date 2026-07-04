@@ -30,6 +30,7 @@ buildUploadedDraftMomentItems(const QString& text,
                               const QVariantList& normalizedAttachments,
                               int uid,
                               const QString& token,
+                              int visibility,
                               const std::function<void(int, int, const QString&, int)>& progressCallback);
 QJsonObject
 buildPublishPayload(QJsonObject authPayload, const QString& location, int visibility, const QVariantList& items);

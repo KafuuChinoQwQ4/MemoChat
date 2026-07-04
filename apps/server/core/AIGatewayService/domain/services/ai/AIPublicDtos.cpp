@@ -1,6 +1,8 @@
-#include "services/ai/AIPublicDtos.h"
+#include "services/ai/AIPublicDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.ai.public_dto_algorithms;
 
 #include <exception>
 
@@ -67,7 +69,8 @@ template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& va
 memochat::json::JsonValue ParseDynamicJsonOrNull(const std::string& json_str)
 {
     memochat::json::JsonValue value;
-    if (!json_str.empty() && memochat::json::reader_parse(json_str, value))
+    if (memochat::gate::services::ai::modules::ShouldParseDynamicJson(json_str.empty()) &&
+        memochat::json::reader_parse(json_str, value))
     {
         return value;
     }
@@ -77,7 +80,8 @@ memochat::json::JsonValue ParseDynamicJsonOrNull(const std::string& json_str)
 memochat::json::JsonValue ParseDynamicJsonOrEmptyArray(const std::string& json_str)
 {
     memochat::json::JsonValue value;
-    if (!json_str.empty() && memochat::json::reader_parse(json_str, value))
+    if (memochat::gate::services::ai::modules::ShouldParseDynamicJson(json_str.empty()) &&
+        memochat::json::reader_parse(json_str, value))
     {
         return value;
     }
@@ -313,7 +317,7 @@ memochat::json::JsonValue AIModelListResponseToJsonValue(const AIModelListRespon
                                                          bool include_default_model)
 {
     memochat::json::JsonValue root = AIModelListResponseToJsonValue(response);
-    if (!include_default_model && root.isObject())
+    if (!modules::ShouldKeepOptionalResponseObject(include_default_model, root.isObject()))
     {
         root.impl().get<memochat::json::object_t>().erase("default_model");
     }
@@ -328,7 +332,7 @@ memochat::json::JsonValue AISessionInfoResponseToJsonValue(const AISessionInfoRe
 memochat::json::JsonValue AISessionResponseToJsonValue(const AISessionResponseDto& response, bool include_session)
 {
     memochat::json::JsonValue root = TypedJsonToJsonValue(response);
-    if (!include_session && root.isObject())
+    if (!modules::ShouldKeepOptionalResponseObject(include_session, root.isObject()))
     {
         root.impl().get<memochat::json::object_t>().erase("session");
     }

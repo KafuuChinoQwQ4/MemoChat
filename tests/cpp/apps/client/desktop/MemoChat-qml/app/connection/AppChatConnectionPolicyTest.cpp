@@ -81,7 +81,7 @@ TEST(AppChatConnectionPolicyTest, LoginTcpFallbackIsFalseWithNoTcpEndpoint)
     EXPECT_FALSE(decision.allowed);
 }
 
-TEST(AppChatConnectionPolicyTest, LoginTcpFallbackIsFalseWithMissingCredential)
+TEST(AppChatConnectionPolicyTest, LoginTcpFallbackIsFalseWithMissingOrNonV3Ticket)
 {
     auto input = validFallbackInput();
     input.loginTicket.clear();
@@ -89,7 +89,8 @@ TEST(AppChatConnectionPolicyTest, LoginTcpFallbackIsFalseWithMissingCredential)
 
     input = validFallbackInput();
     input.protocolVersion = 2;
-    input.token.clear();
+    input.token = QStringLiteral("legacy-token");
+    input.loginTicket = QStringLiteral("legacy-ticket");
     EXPECT_FALSE(AppChatConnectionPolicy::evaluateLoginTcpFallback(input).allowed);
 }
 
@@ -125,6 +126,19 @@ TEST(AppChatConnectionPolicyTest, ReconnectIsFalseAfterMaxAttempts)
     const auto decision = AppChatConnectionPolicy::evaluateReconnect(input);
 
     EXPECT_FALSE(decision.allowed);
+}
+
+TEST(AppChatConnectionPolicyTest, ReconnectIsFalseWithMissingOrNonV3Ticket)
+{
+    auto input = validReconnectInput();
+    input.loginTicket.clear();
+    EXPECT_FALSE(AppChatConnectionPolicy::evaluateReconnect(input).allowed);
+
+    input = validReconnectInput();
+    input.protocolVersion = 2;
+    input.token = QStringLiteral("legacy-token");
+    input.loginTicket = QStringLiteral("legacy-ticket");
+    EXPECT_FALSE(AppChatConnectionPolicy::evaluateReconnect(input).allowed);
 }
 
 TEST(AppChatConnectionPolicyTest, ReconnectPrefersQuicWhenAvailableOtherwiseTcp)

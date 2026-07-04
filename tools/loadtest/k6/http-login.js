@@ -12,7 +12,6 @@ const clientVer = __ENV.CLIENT_VER || "3.0.0";
 const scenarioName = __ENV.SCENARIO || "login";
 const totalRequests = Number.parseInt(__ENV.TOTAL || "100", 10);
 const concurrency = Number.parseInt(__ENV.CONCURRENCY || "10", 10);
-const useXorPassword = (__ENV.USE_XOR_PASSWD || "true").toLowerCase() !== "false";
 const summaryPath = __ENV.SUMMARY_PATH || "k6_summary.json";
 
 const accounts = new SharedArray("accounts", () => {
@@ -46,15 +45,6 @@ export const options = {
   },
 };
 
-function xorEncode(raw) {
-  const key = raw.length % 255;
-  let out = "";
-  for (let i = 0; i < raw.length; i += 1) {
-    out += String.fromCharCode(raw.charCodeAt(i) ^ key);
-  }
-  return out;
-}
-
 function gateUrlFor(iteration) {
   return gateUrls[iteration % gateUrls.length];
 }
@@ -74,10 +64,9 @@ export default function () {
   }
 
   const account = accounts[iteration % accounts.length];
-  const password = useXorPassword ? xorEncode(account.password) : account.password;
   const payload = JSON.stringify({
     email: account.email,
-    passwd: password,
+    passwd: account.password,
     client_ver: clientVer,
   });
   const response = http.post(`${gateUrlFor(iteration)}${loginPath}`, payload, {

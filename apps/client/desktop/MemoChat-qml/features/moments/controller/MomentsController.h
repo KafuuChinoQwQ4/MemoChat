@@ -118,6 +118,7 @@ private:
         int desiredCount = 0;
         bool requestInFlight = false;
         bool requestLiked = false;
+        int retryCount = 0; ///< incremented on each server-error retry; capped at kMaxLikeRetries
     };
 
     MomentsModel* _model;
@@ -129,6 +130,8 @@ private:
     int _author_filter_uid = 0;
     qint64 _pending_published_moment_id = 0;
     static constexpr int kPageSize = 20;
+    /// Maximum server-error retries for a single like toggle before giving up and rolling back the UI.
+    static constexpr int kMaxLikeRetries = 3;
 
     /// One network request per moment at a time. Extra taps update desired state and are sent after the current request
     /// resolves.

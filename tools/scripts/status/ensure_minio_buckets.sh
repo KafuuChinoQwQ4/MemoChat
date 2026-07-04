@@ -2,8 +2,26 @@
 set -euo pipefail
 
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://127.0.0.1:9000}"
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-memochat_admin}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-MinioPass2026!}"
+
+first_env()
+{
+    local name
+    for name in "$@"; do
+        if [[ -n "${!name:-}" ]]; then
+            printf '%s' "${!name}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+MINIO_ACCESS_KEY="$(first_env MEMOCHAT_MINIO_ROOT_USER MEMOCHAT_MINIO_ACCESSKEY MEMOCHAT_MINIO_ACCESS_KEY MINIO_ROOT_USER MINIO_ACCESS_KEY || true)"
+MINIO_SECRET_KEY="$(first_env MEMOCHAT_MINIO_ROOT_PASSWORD MEMOCHAT_MINIO_SECRETKEY MEMOCHAT_MINIO_SECRET_KEY MINIO_ROOT_PASSWORD MINIO_SECRET_KEY || true)"
+
+if [[ -z "${MINIO_ACCESS_KEY}" || -z "${MINIO_SECRET_KEY}" ]]; then
+    echo "[ERROR] Missing MinIO credentials. Set MEMOCHAT_MINIO_ROOT_USER and MEMOCHAT_MINIO_ROOT_PASSWORD." >&2
+    exit 1
+fi
 
 BUCKETS=(
     "${MINIO_BUCKET_AVATAR:-memochat-avatar}"

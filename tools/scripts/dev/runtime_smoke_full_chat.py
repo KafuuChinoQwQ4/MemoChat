@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ctypes
+import ctypes.util
 import hashlib
 import json
 import math
 import os
 import socket
+import ssl
 import struct
 import subprocess
 import sys
@@ -50,6 +53,50 @@ PNG_1X1 = base64.b64decode(
 )
 
 
+def env_first(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def hash_password(password: str) -> str:
+    libname = ctypes.util.find_library("sodium")
+    if not libname:
+        raise RuntimeError("libsodium is required to seed runtime smoke password_hash values")
+
+    sodium = ctypes.CDLL(libname)
+    sodium.sodium_init.restype = ctypes.c_int
+    if sodium.sodium_init() < 0:
+        raise RuntimeError("libsodium initialization failed")
+
+    sodium.crypto_pwhash_strbytes.restype = ctypes.c_size_t
+    sodium.crypto_pwhash_opslimit_interactive.restype = ctypes.c_ulonglong
+    sodium.crypto_pwhash_memlimit_interactive.restype = ctypes.c_size_t
+    sodium.crypto_pwhash_str.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.c_ulonglong,
+        ctypes.c_ulonglong,
+        ctypes.c_size_t,
+    ]
+    sodium.crypto_pwhash_str.restype = ctypes.c_int
+
+    password_bytes = password.encode("utf-8")
+    out = ctypes.create_string_buffer(sodium.crypto_pwhash_strbytes())
+    rc = sodium.crypto_pwhash_str(
+        out,
+        password_bytes,
+        len(password_bytes),
+        sodium.crypto_pwhash_opslimit_interactive(),
+        sodium.crypto_pwhash_memlimit_interactive(),
+    )
+    if rc != 0:
+        raise RuntimeError("libsodium password hash generation failed")
+    return out.value.decode("ascii")
+
+
 @dataclass
 class Account:
     uid: int
@@ -71,11 +118,6 @@ class ChatSession:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
-
-
-def xor_encode(raw: str) -> str:
-    key = len(raw) % 255
-    return "".join(chr(ord(ch) ^ key) for ch in raw)
 
 
 def sql_quote(value: str) -> str:
@@ -214,7 +256,8 @@ def verify_uploaded_storage(
 
 def prepare_data(args: argparse.Namespace, accounts: tuple[Account, Account]) -> int:
     a, b = accounts
-    password_hash = xor_encode(a.raw_password)
+    password_hash_a = hash_password(a.raw_password)
+    password_hash_b = hash_password(b.raw_password)
     # The account aggregate (user/user_id) was split into memo_account by the
     # gateserver microservice DB split; login/account services read it there.
     # Seed users into memo_account so the smoke exercises the same data the
@@ -222,14 +265,15 @@ def prepare_data(args: argparse.Namespace, accounts: tuple[Account, Account]) ->
     user_sql = f"""
 SET search_path TO memo, public;
 BEGIN;
-INSERT INTO "user" (uid, name, email, pwd, nick, "desc", sex, icon, user_id)
+INSERT INTO "user" (uid, name, email, pwd, password_hash, nick, "desc", sex, icon, user_id)
 VALUES
-  ({a.uid}, {sql_quote(a.name)}, {sql_quote(a.email)}, {sql_quote(password_hash)}, {sql_quote(a.name)}, 'runtime smoke user', 0, '', {sql_quote(a.user_id)}),
-  ({b.uid}, {sql_quote(b.name)}, {sql_quote(b.email)}, {sql_quote(password_hash)}, {sql_quote(b.name)}, 'runtime smoke user', 0, '', {sql_quote(b.user_id)})
+  ({a.uid}, {sql_quote(a.name)}, {sql_quote(a.email)}, '', {sql_quote(password_hash_a)}, {sql_quote(a.name)}, 'runtime smoke user', 0, '', {sql_quote(a.user_id)}),
+  ({b.uid}, {sql_quote(b.name)}, {sql_quote(b.email)}, '', {sql_quote(password_hash_b)}, {sql_quote(b.name)}, 'runtime smoke user', 0, '', {sql_quote(b.user_id)})
 ON CONFLICT (uid) DO UPDATE SET
   name = EXCLUDED.name,
   email = EXCLUDED.email,
   pwd = EXCLUDED.pwd,
+  password_hash = EXCLUDED.password_hash,
   nick = EXCLUDED.nick,
   "desc" = EXCLUDED."desc",
   sex = EXCLUDED.sex,
@@ -421,7 +465,7 @@ def send_request(
 def gate_login(args: argparse.Namespace, account: Account) -> dict[str, Any]:
     payload = {
         "email": account.email,
-        "passwd": xor_encode(account.raw_password),
+        "passwd": account.raw_password,
         "client_ver": "3.0.0",
     }
     response = post_json(args.gate_url.rstrip("/") + "/user_login", payload, args.timeout)
@@ -443,6 +487,13 @@ def open_chat_session(args: argparse.Namespace, account: Account) -> ChatSession
     gate = gate_login(args, account)
     host = normalize_host(gate.get("host") or gate.get("tcp_host"))
     port = int(gate.get("port") or gate.get("tcp_port") or 0)
+    for endpoint in gate.get("chat_endpoints", []) or []:
+        if port > 0:
+            break
+        if str(endpoint.get("transport", "")).lower() != "tcp":
+            continue
+        host = normalize_host(endpoint.get("host"))
+        port = int(endpoint.get("port") or 0)
     if port <= 0:
         raise RuntimeError(f"gate response did not include a chat port: {gate}")
     sock = socket.create_connection((host, port), timeout=args.timeout)
@@ -785,11 +836,47 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--redis-container", default="memochat-redis")
     parser.add_argument("--minio-container", default="memochat-minio")
     parser.add_argument("--minio-endpoint", default="http://127.0.0.1:9000")
-    parser.add_argument("--minio-access-key", default=os.environ.get("MEMOCHAT_MINIO_ACCESS_KEY", "memochat_admin"))
-    parser.add_argument("--minio-secret-key", default=os.environ.get("MEMOCHAT_MINIO_SECRET_KEY", "MinioPass2026!"))
+    parser.add_argument(
+        "--minio-access-key",
+        default=env_first(
+            (
+                "MEMOCHAT_MINIO_ROOT_USER",
+                "MEMOCHAT_MINIO_ACCESSKEY",
+                "MEMOCHAT_MINIO_ACCESS_KEY",
+                "MINIO_ROOT_USER",
+                "MINIO_ACCESS_KEY",
+            )
+        ),
+    )
+    parser.add_argument(
+        "--minio-secret-key",
+        default=env_first(
+            (
+                "MEMOCHAT_MINIO_ROOT_PASSWORD",
+                "MEMOCHAT_MINIO_SECRETKEY",
+                "MEMOCHAT_MINIO_SECRET_KEY",
+                "MINIO_ROOT_PASSWORD",
+                "MINIO_SECRET_KEY",
+            )
+        ),
+    )
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--group-code", default="smkfull01")
+    parser.add_argument(
+        "--insecure-tls",
+        action="store_true",
+        help="trust the local self-signed Envoy certificate when --gate-url uses https",
+    )
     args = parser.parse_args(argv)
+    if args.insecure_tls:
+        urllib.request.install_opener(
+            urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))
+        )
+    if not args.minio_access_key or not args.minio_secret_key:
+        parser.error(
+            "missing MinIO credentials; set MEMOCHAT_MINIO_ROOT_USER and MEMOCHAT_MINIO_ROOT_PASSWORD "
+            "or pass --minio-access-key/--minio-secret-key"
+        )
 
     run_id = uuid.uuid4().hex[:10]
     password = "Sm0ke123456"

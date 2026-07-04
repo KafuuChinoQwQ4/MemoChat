@@ -1,12 +1,15 @@
-#include "ChatUserSupport.h"
+#include "ChatUserSupport.hpp"
 
-#include "ChatUserProfileDto.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "data.h"
+#include "ChatUserProfileDto.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "data.hpp"
 
-#include <cctype>
 #include <iostream>
+
+import memochat.chat.user_support_algorithms;
+
+namespace user_support_modules = memochat::chat::user_support::modules;
 
 namespace chatusersupport
 {
@@ -15,7 +18,7 @@ bool IsPureDigit(const std::string& str)
 {
     for (char c : str)
     {
-        if (!std::isdigit(static_cast<unsigned char>(c)))
+        if (!user_support_modules::IsAsciiDigit(static_cast<unsigned char>(c)))
         {
             return false;
         }
@@ -29,7 +32,7 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
     const std::string base_key = USER_BASE_INFO + uid_str;
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(std::stoi(uid_str));
-    if (!user_info)
+    if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         return;
@@ -42,7 +45,7 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
         RedisMgr::GetInstance()->Set(base_key, cache_body);
     }
 
-    AppendChatUserProfileToJsonValue(profile, rtvalue, false, true);
+    AppendChatUserProfileToJsonValue(profile, rtvalue, true);
 }
 
 void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
@@ -55,12 +58,12 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
     {
         ChatUserProfileDto profile;
         DecodeChatUserProfileCache(info_str, &profile);
-        AppendChatUserProfileToJsonValue(profile, rtvalue, false, false);
+        AppendChatUserProfileToJsonValue(profile, rtvalue, true);
         return;
     }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(name);
-    if (!user_info)
+    if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         return;
@@ -73,17 +76,18 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
         RedisMgr::GetInstance()->Set(base_key, cache_body);
     }
 
-    AppendChatUserProfileToJsonValue(profile, rtvalue, true, false);
+    AppendChatUserProfileToJsonValue(profile, rtvalue, true);
 }
 
 bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>& userinfo)
 {
     std::string info_str;
-    if (RedisMgr::GetInstance()->Get(base_key, info_str))
+    const bool cache_hit = RedisMgr::GetInstance()->Get(base_key, info_str);
+    if (cache_hit)
     {
         ChatUserProfileDto profile;
         DecodeChatUserProfileCache(info_str, &profile);
-        if (!profile.user_id.empty())
+        if (user_support_modules::ShouldUseCachedProfile(cache_hit, profile.user_id.empty()))
         {
             FillUserInfoFromChatUserProfile(profile, *userinfo);
             return true;
@@ -91,7 +95,7 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
     }
 
     auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
-    if (!user_info)
+    if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         return false;
     }
@@ -108,7 +112,10 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
 
 bool GetFriendApplyInfo(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& list)
 {
-    return PostgresMgr::GetInstance()->GetApplyList(to_uid, list, 0, 10);
+    return PostgresMgr::GetInstance()->GetApplyList(to_uid,
+                                                    list,
+                                                    user_support_modules::FriendApplyOffset(),
+                                                    user_support_modules::FriendApplyLimit());
 }
 
 bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_list)

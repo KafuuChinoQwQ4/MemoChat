@@ -11,7 +11,7 @@
 #include <exec/task.hpp>
 #include <stdexec/execution.hpp>
 
-#include "runtime/AsioCoScheduler.h"
+#include "runtime/AsioCoScheduler.hpp"
 
 #include <boost/asio.hpp>
 

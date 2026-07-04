@@ -5,21 +5,23 @@
 #endif
 #endif
 
-#include "../../common/WinsockCompat.h"
+#include "../../common/WinsockCompat.hpp"
 
-#include "GateDomainServer.h"
+#include "GateDomainServer.hpp"
 
-#include "CServer.h"
-#include "ConfigMgr.h"
-#include "GateGlobals.h"
-#include "GateWorkerPool.h"
-#include "LogicSystem.h"
-#include "SnowflakeUtil.h"
-#include "AsioIOServicePool.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "CServer.hpp"
+#include "ConfigMgr.hpp"
+#include "GateDomainRuntime.hpp"
+#include "GateGlobals.hpp"
+#include "GateWorkerPool.hpp"
+#include "LogicSystem.hpp"
+#include "SnowflakeUtil.hpp"
+#include "AsioIOServicePool.hpp"
+#include "auth/AuthSecret.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 #include <aws/core/Aws.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -58,6 +60,12 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
                                  }));
 
     memolog::LogInfo("gatedomain.start", service_name + " starting...");
+    auto chat_auth_secret = cfgMgr.GetValue("ChatAuth", "HmacSecret");
+    if (chat_auth_secret.empty())
+    {
+        chat_auth_secret = std::string(memochat::auth::kWellKnownDevHmacSecret);
+    }
+    memochat::auth::RequireNonDefaultChatAuthSecretInProduction(service_name, chat_auth_secret);
 
     // Register the domain route profile BEFORE the first LogicSystem::Instance().
     LogicSystem::ClearRouteProfileRegistrars();
@@ -78,15 +86,11 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
     }
 
     std::string port_str = cfgMgr[config_section]["Port"];
-    unsigned short port = port_str.empty() ? default_port : static_cast<unsigned short>(std::atoi(port_str.c_str()));
+    unsigned short port = SelectGateDomainListenPort(port_str, default_port);
 
-    unsigned int num_threads = std::thread::hardware_concurrency();
-    if (num_threads < 2)
-        num_threads = 4;
+    unsigned int num_threads = NormalizeGateDomainIoThreads(std::thread::hardware_concurrency());
     auto worker_threads_str = cfgMgr.GetValue(config_section, "WorkerThreads");
-    unsigned int worker_threads = worker_threads_str.empty() ? num_threads : std::atoi(worker_threads_str.c_str());
-    if (worker_threads < 1)
-        worker_threads = num_threads;
+    unsigned int worker_threads = SelectGateDomainWorkerThreads(worker_threads_str, num_threads);
 
     gateglobals::g_worker_threads = worker_threads;
     gateglobals::g_main_ioc = nullptr;
@@ -95,6 +99,7 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
     LogicSystem::GetInstance(); // build registry with the selected profile
 
     net::io_context ioc{static_cast<int>(num_threads)};
+    auto work_guard = boost::asio::make_work_guard(ioc);
     gateglobals::g_main_ioc = &ioc;
     std::make_shared<CServer>(ioc, port)->Start();
     memolog::LogInfo("service.start", service_name + " listening", {{"port", std::to_string(port)}});

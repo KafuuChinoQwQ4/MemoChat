@@ -55,37 +55,36 @@ class TelemetryInitParityTest(unittest.TestCase):
 
 
 class MediaDownloadOwnershipTest(unittest.TestCase):
-    """(2) Cross-owner downloads are audited but NOT blocked (chat/moments share
-    media; there is no share table, key is an unguessable UUIDv4 capability)."""
+    """(2) Media download uses owner/grant authorization; media_key is only a locator."""
 
     MEDIA = SERVER_CORE / "MediaService" / "domain" / "services" / "media" / "MediaService.cpp"
+    PERSISTENCE = SERVER_CORE / "MediaService" / "domain" / "services" / "media" / "MediaPersistence.cpp"
+    POSTGRES = SERVER_CORE / "GateShared" / "core" / "persistence" / "PostgresDao.cpp"
     DOC = SERVER_CORE / "docs" / "media-access-control.md"
 
-    def test_download_audits_cross_owner_access(self):
+    def test_download_rejects_cross_owner_without_grant(self):
         src = read(self.MEDIA)
         self.assertIn("HandleMediaDownload", src)
-        self.assertIn("owner_uid", src)
-        self.assertIn(
-            "media.download.cross_owner",
-            src,
-            "Owner mismatch on download must emit the cross_owner audit log.",
-        )
+        self.assertIn("MediaPersistence::Instance().CanReadAsset(asset, uid)", src)
+        self.assertIn("media.download.access_denied", src)
+        self.assertIn('"media access denied"', src)
+        self.assertNotIn("media.download.cross_owner", src)
 
-    def test_download_does_not_hard_reject_on_owner_mismatch(self):
-        """Guard against a regression to naive owner-only 403 that would break
-        receiving images. The owner-mismatch branch must not return an error."""
-        src = read(self.MEDIA)
-        match = re.search(r"if \(asset\.owner_uid != uid\)\s*\{(.*?)\}", src, re.DOTALL)
-        self.assertIsNotNone(match, "Expected the owner-mismatch audit branch.")
-        branch = match.group(1)
-        self.assertIn("media.download.cross_owner", branch)
-        self.assertNotIn("return", branch, "Owner mismatch must not block the download.")
+    def test_persistence_uses_explicit_media_grants(self):
+        persistence = read(self.PERSISTENCE)
+        postgres = read(self.POSTGRES)
+        self.assertIn("asset.owner_uid == uid", persistence)
+        self.assertIn("HasMediaAccess(asset.media_id, uid)", persistence)
+        self.assertIn("chat_media_access_grant", postgres)
+        self.assertIn("revoked_at_ms = 0", postgres)
 
     def test_threat_model_documented(self):
         self.assertTrue(self.DOC.is_file(), "docs/media-access-control.md must exist.")
         doc = read(self.DOC)
         self.assertIn("UUIDv4", doc)
         self.assertIn("owner_uid", doc)
+        self.assertIn("chat_media_access_grant", doc)
+        self.assertNotIn("服务仍会允许下载并记录跨属主审计", doc)
 
 
 class R18SourceRelocationTest(unittest.TestCase):
@@ -93,7 +92,7 @@ class R18SourceRelocationTest(unittest.TestCase):
 
     OLD_DIR = SERVER_CORE / "common" / "r18"
     NEW_CPP = SERVER_CORE / "R18Service" / "domain" / "services" / "r18" / "R18SourceService.cpp"
-    NEW_H = SERVER_CORE / "R18Service" / "domain" / "services" / "r18" / "R18SourceService.h"
+    NEW_H = SERVER_CORE / "R18Service" / "domain" / "services" / "r18" / "R18SourceService.hpp"
     R18_CMAKE = SERVER_CORE / "R18Service" / "CMakeLists.txt"
 
     def test_old_common_location_removed(self):
@@ -101,7 +100,7 @@ class R18SourceRelocationTest(unittest.TestCase):
             (self.OLD_DIR / "R18SourceService.cpp").exists(),
             "R18SourceService.cpp must no longer live under common/r18.",
         )
-        self.assertFalse((self.OLD_DIR / "R18SourceService.h").exists())
+        self.assertFalse((self.OLD_DIR / "R18SourceService.hpp").exists())
 
     def test_new_service_location_present(self):
         self.assertTrue(self.NEW_CPP.is_file())
@@ -128,7 +127,7 @@ class SharedUserTokenValidatorTest(unittest.TestCase):
     """(4) The utoken_<uid> Redis validation lives in ONE shared validator;
     services delegate instead of each re-implementing it."""
 
-    VALIDATOR_H = SERVER_CORE / "GateShared" / "core" / "support" / "UserTokenValidator.h"
+    VALIDATOR_H = SERVER_CORE / "GateShared" / "core" / "support" / "UserTokenValidator.hpp"
     VALIDATOR_CPP = SERVER_CORE / "GateShared" / "core" / "support" / "UserTokenValidator.cpp"
     INFRA_CMAKE = SERVER_CORE / "GateShared" / "core" / "CMakeLists.txt"
 
@@ -163,7 +162,7 @@ class HmacSecretManagementTest(unittest.TestCase):
     """(6) Dev HMAC secret is overridable by env and flagged at startup; every ini
     shipping the dev secret documents the override so new services can't ship it silently."""
 
-    AUTH_SECRET_H = SERVER_CORE / "common" / "auth" / "AuthSecret.h"
+    AUTH_SECRET_H = SERVER_CORE / "common" / "auth" / "AuthSecret.hpp"
     SIGN_SITE = SERVER_CORE / "AccountShared" / "core" / "support" / "AuthLoginSupport.cpp"
     DOC = SERVER_CORE / "docs" / "secret-management.md"
     DEV_SECRET = "memochat-dev-chat-secret"
@@ -202,9 +201,9 @@ class GroupResponseFormatterTest(unittest.TestCase):
     """(7) Response/JSON building extracted from the 1758-line GroupMessageService;
     the public IGroupMessageService surface is preserved."""
 
-    FORMATTER_H = SERVER_CORE / "ChatServer" / "domain" / "message" / "GroupResponseFormatter.h"
+    FORMATTER_H = SERVER_CORE / "ChatServer" / "domain" / "message" / "GroupResponseFormatter.hpp"
     FORMATTER_CPP = SERVER_CORE / "ChatServer" / "domain" / "message" / "GroupResponseFormatter.cpp"
-    SERVICE_H = SERVER_CORE / "ChatServer" / "domain" / "message" / "GroupMessageService.h"
+    SERVICE_H = SERVER_CORE / "ChatServer" / "domain" / "message" / "GroupMessageService.hpp"
     CHAT_CMAKE = SERVER_CORE / "ChatServer" / "CMakeLists.txt"
 
     def test_formatter_files_exist(self):
@@ -223,8 +222,8 @@ class GroupResponseFormatterTest(unittest.TestCase):
 class ChatServerHelperDedupTest(unittest.TestCase):
     """(8) Duplicated DAO/message helpers consolidated into shared headers."""
 
-    DAO_UTIL = SERVER_CORE / "ChatServer" / "persistence" / "PostgresDaoUtil.h"
-    MSG_UTIL = SERVER_CORE / "ChatServer" / "domain" / "message" / "MessageServiceUtil.h"
+    DAO_UTIL = SERVER_CORE / "ChatServer" / "persistence" / "PostgresDaoUtil.hpp"
+    MSG_UTIL = SERVER_CORE / "ChatServer" / "domain" / "message" / "MessageServiceUtil.hpp"
     DAO_GROUPS = SERVER_CORE / "ChatServer" / "persistence" / "PostgresDaoGroups.cpp"
     DAO_DIALOGS = SERVER_CORE / "ChatServer" / "persistence" / "PostgresDaoDialogs.cpp"
 
@@ -246,7 +245,7 @@ class ChatServerHelperDedupTest(unittest.TestCase):
                 self.BUILD_PREVIEW_DEF.search(src),
                 f"{path.name} must use the shared BuildPreviewText, not define its own.",
             )
-            self.assertIn("PostgresDaoUtil.h", src)
+            self.assertIn("PostgresDaoUtil.hpp", src)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
-#include "S3MediaStorage.h"
+#include "S3MediaStorage.hpp"
 
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
@@ -15,16 +15,88 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
+#include <initializer_list>
 #include <sstream>
+#include <utility>
+
+import memochat.media.s3_storage_algorithms;
 
 namespace
 {
+
+namespace s3_modules = memochat::media::s3_storage::modules;
 
 std::string GetEnvOrDefault(const char* key, const char* fallback = "")
 {
     const char* val = std::getenv(key);
     return val ? std::string(val) : std::string(fallback);
+}
+
+std::string TrimAscii(std::string value)
+{
+    auto is_space = [](unsigned char c)
+    {
+        return std::isspace(c) != 0;
+    };
+    value.erase(value.begin(),
+                std::find_if(value.begin(),
+                             value.end(),
+                             [&](char c)
+                             {
+                                 return !is_space(static_cast<unsigned char>(c));
+                             }));
+    value.erase(std::find_if(value.rbegin(),
+                             value.rend(),
+                             [&](char c)
+                             {
+                                 return !is_space(static_cast<unsigned char>(c));
+                             })
+                    .base(),
+                value.end());
+    return value;
+}
+
+std::string LowerAscii(std::string value)
+{
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char c)
+                   {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return value;
+}
+
+bool IsFalseConfigValue(std::string value)
+{
+    value = LowerAscii(TrimAscii(std::move(value)));
+    return value == "false" || value == "0" || value == "no";
+}
+
+std::string FirstNonEmptyEnv(std::initializer_list<const char*> keys)
+{
+    for (const char* key : keys)
+    {
+        const std::string value = TrimAscii(GetEnvOrDefault(key));
+        if (!value.empty())
+        {
+            return value;
+        }
+    }
+    return {};
+}
+
+std::string ConfigCredentialOrEnv(std::string config_value, std::initializer_list<const char*> env_keys)
+{
+    config_value = TrimAscii(std::move(config_value));
+    if (!config_value.empty())
+    {
+        return config_value;
+    }
+    return FirstNonEmptyEnv(env_keys);
 }
 
 std::string BuildDateTag()
@@ -48,19 +120,19 @@ std::string SanitizeForS3(const std::string& name)
     safe.reserve(name.size());
     for (char c : name)
     {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.')
+        if (s3_modules::IsAllowedS3NameChar(static_cast<unsigned char>(c)))
         {
             safe.push_back(c);
         }
         else
         {
-            safe.push_back('_');
+            safe.push_back(s3_modules::SanitizedReplacementChar());
         }
     }
     if (safe.empty())
-        return "file.bin";
-    if (safe.size() > 96)
-        safe = safe.substr(safe.size() - 96);
+        return s3_modules::EmptyNameFallback();
+    if (s3_modules::ShouldTruncateSanitizedName(safe.size()))
+        safe = safe.substr(safe.size() - static_cast<std::size_t>(s3_modules::MaxSanitizedNameLength()));
     return safe;
 }
 
@@ -80,7 +152,7 @@ std::string TrimMediaType(const std::string& media_type)
 S3MediaStorage::S3MediaStorage()
 {
     auto minio = ConfigMgr::Inst()["MinIO"];
-    _region = minio["Region"].empty() ? "us-east-1" : minio["Region"];
+    _region = minio["Region"].empty() ? s3_modules::DefaultRegion() : minio["Region"];
     _public_url = minio["PublicUrl"];
     _bucket_avatar = minio["BucketAvatar"];
     _bucket_file = minio["BucketFile"];
@@ -89,11 +161,13 @@ S3MediaStorage::S3MediaStorage()
     _bucket_moments = minio["BucketMoments"];
     if (_bucket_moments.empty())
     {
-        _bucket_moments = "memochat-moments";
+        _bucket_moments = s3_modules::DefaultMomentsBucket();
     }
 
     const std::string enabled_str = minio["Enabled"];
-    _enabled = (enabled_str == "true" || enabled_str == "1");
+    _enabled = s3_modules::IsEnabledConfigValue(enabled_str == "true", enabled_str == "1");
+    const std::string allow_redirect = minio["AllowPublicRedirect"];
+    _allow_public_redirect = s3_modules::IsPublicRedirectAllowed(allow_redirect == "true", allow_redirect == "1");
 
     if (!_enabled)
     {
@@ -101,10 +175,22 @@ S3MediaStorage::S3MediaStorage()
         return;
     }
 
-    const std::string access_key =
-        minio["AccessKey"].empty() ? GetEnvOrDefault("MINIO_ACCESS_KEY") : minio["AccessKey"];
-    const std::string secret_key =
-        minio["SecretKey"].empty() ? GetEnvOrDefault("MINIO_SECRET_KEY") : minio["SecretKey"];
+    const std::string access_key = ConfigCredentialOrEnv(minio["AccessKey"],
+                                                         {
+                                                             "MEMOCHAT_MINIO_ACCESSKEY",
+                                                             "MEMOCHAT_MINIO_ACCESS_KEY",
+                                                             "MEMOCHAT_MINIO_ROOT_USER",
+                                                             "MINIO_ROOT_USER",
+                                                             "MINIO_ACCESS_KEY",
+                                                         });
+    const std::string secret_key = ConfigCredentialOrEnv(minio["SecretKey"],
+                                                         {
+                                                             "MEMOCHAT_MINIO_SECRETKEY",
+                                                             "MEMOCHAT_MINIO_SECRET_KEY",
+                                                             "MEMOCHAT_MINIO_ROOT_PASSWORD",
+                                                             "MINIO_ROOT_PASSWORD",
+                                                             "MINIO_SECRET_KEY",
+                                                         });
 
     if (access_key.empty() || secret_key.empty())
     {
@@ -116,8 +202,10 @@ S3MediaStorage::S3MediaStorage()
     Aws::Client::ClientConfiguration config;
     config.endpointOverride = minio["Endpoint"];
     config.region = _region;
-    config.scheme = Aws::Http::Scheme::HTTP;
-    config.verifySSL = false;
+    const std::string scheme = LowerAscii(TrimAscii(minio["Scheme"]));
+    const bool use_https = scheme != "http";
+    config.scheme = use_https ? Aws::Http::Scheme::HTTPS : Aws::Http::Scheme::HTTP;
+    config.verifySSL = use_https && !IsFalseConfigValue(minio["VerifySSL"]);
 
     Aws::Auth::AWSCredentials credentials(access_key, secret_key);
 
@@ -202,7 +290,7 @@ bool S3MediaStorage::StoreMergedFile(const std::string& media_type,
 
     const std::string date_tag = BuildDateTag();
     const std::string safe_name = SanitizeName(origin_file_name);
-    const std::string object_key = "assets/" + date_tag + "/" + media_key + "_" + safe_name;
+    const std::string object_key = s3_modules::AssetKeyPrefix() + date_tag + "/" + media_key + "_" + safe_name;
 
     std::ifstream ifs(merged_file, std::ios::binary);
     if (!ifs.is_open())
@@ -222,7 +310,7 @@ bool S3MediaStorage::StoreMergedFile(const std::string& media_type,
 
     Aws::S3::Model::PutObjectRequest put_request;
     put_request.WithBucket(aws_bucket).WithKey(aws_key).SetBody(std::make_shared<Aws::StringStream>(aws_data));
-    put_request.SetContentType("application/octet-stream");
+    put_request.SetContentType(s3_modules::DefaultObjectContentType());
 
     auto put_outcome = _s3_client->PutObject(put_request);
     if (!put_outcome.IsSuccess())
@@ -239,8 +327,7 @@ bool S3MediaStorage::StoreMergedFile(const std::string& media_type,
     out_storage_path = bucket + "/" + object_key;
 
     memolog::LogInfo("s3.store_merged.ok",
-                     "S3MediaStorage::StoreMergedFile succeeded, bucket=" + bucket + " object_key=" + object_key +
-                         " storage_path=" + out_storage_path + " media_type=" + media_type +
+                     "S3MediaStorage::StoreMergedFile succeeded, bucket=" + bucket + " media_type=" + media_type +
                          " size=" + std::to_string(data_str.size()));
     return true;
 }
@@ -248,7 +335,7 @@ bool S3MediaStorage::StoreMergedFile(const std::string& media_type,
 bool S3MediaStorage::StoragePathHasConfiguredBucketPrefix(const std::string& storage_path) const
 {
     const size_t slash = storage_path.find('/');
-    if (slash == std::string::npos || slash == 0)
+    if (!s3_modules::HasLeadingBucketSegment(slash != std::string::npos, slash))
     {
         return false;
     }
@@ -269,6 +356,8 @@ bool S3MediaStorage::ResolvePublicUrl(const std::string& storage_path,
                                       std::string& out_url) const
 {
     if (storage_path.empty())
+        return false;
+    if (!_allow_public_redirect)
         return false;
     if (_public_url.empty())
         return false;
@@ -303,7 +392,7 @@ bool S3MediaStorage::ReadObject(const std::string& storage_path,
                                 std::string& error_text)
 {
     out_data.clear();
-    out_content_type = "application/octet-stream";
+    out_content_type = s3_modules::DefaultObjectContentType();
 
     if (!_enabled || !_s3_client)
     {
@@ -323,14 +412,12 @@ bool S3MediaStorage::ReadObject(const std::string& storage_path,
     {
         if (!SelectBucket(media_type, "", bucket, error_text))
         {
-            error_text +=
-                " [ReadObject SelectBucket failed, media_type=" + media_type + ", storage_path=" + storage_path + "]";
+            error_text += " [ReadObject SelectBucket failed, media_type=" + media_type + "]";
             return false;
         }
     }
 
-    memolog::LogInfo("s3.read_object",
-                     "S3MediaStorage::ReadObject calling GetObject bucket=" + bucket + " key=" + path_for_bucket);
+    memolog::LogInfo("s3.read_object", "S3MediaStorage::ReadObject calling GetObject bucket=" + bucket);
 
     Aws::S3::Model::GetObjectRequest get_request;
     get_request.SetBucket(Aws::String(bucket));
@@ -340,8 +427,7 @@ bool S3MediaStorage::ReadObject(const std::string& storage_path,
     if (!get_outcome.IsSuccess())
     {
         const auto& err = get_outcome.GetError();
-        error_text = "S3 GetObject failed: bucket=" + bucket + " key=" + path_for_bucket +
-                     " err=" + std::string(err.GetMessage().c_str());
+        error_text = "S3 GetObject failed: bucket=" + bucket + " err=" + std::string(err.GetMessage().c_str());
         return false;
     }
 
@@ -358,8 +444,7 @@ bool S3MediaStorage::ReadObject(const std::string& storage_path,
     }
 
     memolog::LogInfo("s3.read_object.ok",
-                     "S3MediaStorage::ReadObject success, bucket=" + bucket + " key=" + path_for_bucket +
-                         " content_length=" + std::to_string(result.GetContentLength()) +
-                         " content_type=" + out_content_type);
+                     "S3MediaStorage::ReadObject success, bucket=" + bucket + " content_length=" +
+                         std::to_string(result.GetContentLength()) + " content_type=" + out_content_type);
     return true;
 }

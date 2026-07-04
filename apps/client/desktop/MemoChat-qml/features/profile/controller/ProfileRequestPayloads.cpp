@@ -32,11 +32,16 @@ bool validateProfile(const QString& nick, const QString& desc, QString* errorTex
     return true;
 }
 
-QJsonObject
-buildSaveProfilePayload(int uid, const QString& name, const QString& nick, const QString& desc, const QString& icon)
+QJsonObject buildSaveProfilePayload(int uid,
+                                    const QString& token,
+                                    const QString& name,
+                                    const QString& nick,
+                                    const QString& desc,
+                                    const QString& icon)
 {
     QJsonObject payload;
     payload["uid"] = uid;
+    payload["token"] = token;
     payload["name"] = name;
     payload["nick"] = nick.trimmed();
     payload["desc"] = desc.trimmed();

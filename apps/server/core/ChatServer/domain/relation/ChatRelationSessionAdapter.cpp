@@ -1,6 +1,6 @@
-#include "ChatRelationSessionAdapter.h"
+#include "ChatRelationSessionAdapter.hpp"
 
-#include "CSession.h"
+#include "CSession.hpp"
 
 namespace
 {

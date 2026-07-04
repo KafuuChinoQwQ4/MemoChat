@@ -6,10 +6,10 @@
 
 #include <gtest/gtest.h>
 
-#include "domain/ports/OnlineRouteResolver.h"
-#include "domain/ports/ISessionRegistry.h"
-#include "domain/ports/IOnlineRouteStore.h"
-#include "CSession.h"
+#include "domain/ports/OnlineRouteResolver.hpp"
+#include "domain/ports/ISessionRegistry.hpp"
+#include "domain/ports/IOnlineRouteStore.hpp"
+#include "CSession.hpp"
 
 #include <boost/asio.hpp>
 

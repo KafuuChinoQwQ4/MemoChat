@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $distro = if ($env:MEMOCHAT_WSL_DISTRO) { $env:MEMOCHAT_WSL_DISTRO } else { "archlinux" }
-$linuxProjectRoot = if ($env:MEMOCHAT_WSL_PROJECT_ROOT) { $env:MEMOCHAT_WSL_PROJECT_ROOT } else { "/root/code/MemoChat-Qml-Drogon-linux" }
+$linuxProjectRoot = if ($env:MEMOCHAT_WSL_PROJECT_ROOT) { $env:MEMOCHAT_WSL_PROJECT_ROOT } else { "/root/code/MemoChat" }
 $linuxEnvFile = if ($env:MEMOCHAT_LINUX_ENV_FILE) { $env:MEMOCHAT_LINUX_ENV_FILE } else { "/root/.memochat-linux-env" }
 $windowsProjectRoot = if ($env:MEMOCHAT_WINDOWS_PROJECT_ROOT) {
     $env:MEMOCHAT_WINDOWS_PROJECT_ROOT

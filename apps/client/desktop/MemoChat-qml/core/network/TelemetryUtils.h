@@ -3,6 +3,7 @@
 
 #include <QNetworkRequest>
 #include <QString>
+#include <QUrl>
 #include <QVariantMap>
 
 struct ClientTelemetryConfig
@@ -28,6 +29,7 @@ void applyTraceHeaders(QNetworkRequest& request,
                        QString* traceId = nullptr,
                        QString* requestId = nullptr,
                        QString* spanId = nullptr);
+QString redactedUrlForTelemetry(const QUrl& url);
 void exportZipkinSpan(const QString& name,
                       const QString& kind,
                       const QString& traceId,

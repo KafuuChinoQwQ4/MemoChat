@@ -5,20 +5,21 @@
 #endif
 #endif
 
-#include "../../common/WinsockCompat.h"
+#include "../../common/WinsockCompat.hpp"
 
-#include "CServer.h"
-#include "ConfigMgr.h"
-#include "GateGlobals.h"
-#include "GateRouteProfileRegistrar.h"
-#include "GateWorkerPool.h"
-#include "LogicSystem.h"
-#include "domain/AIHttpServiceRoutes.h"
-#include "AsioIOServicePool.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "AIGatewayRuntime.hpp"
+#include "CServer.hpp"
+#include "ConfigMgr.hpp"
+#include "GateGlobals.hpp"
+#include "GateRouteProfileRegistrar.hpp"
+#include "GateWorkerPool.hpp"
+#include "LogicSystem.hpp"
+#include "domain/AIHttpServiceRoutes.hpp"
+#include "AsioIOServicePool.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <cstdlib>
@@ -59,16 +60,11 @@ int main(int argc, char* argv[])
     LogicSystem::AddRouteProfileRegistrar(memochat::gate::profiles::RegisterAIGateway);
 
     std::string port_str = cfgMgr["AIGateway"]["Port"];
-    unsigned short gate_port =
-        port_str.empty() ? kDefaultAIGatewayPort : static_cast<unsigned short>(std::atoi(port_str.c_str()));
+    unsigned short gate_port = SelectAIGatewayListenPort(port_str, kDefaultAIGatewayPort);
 
-    unsigned int num_threads = std::thread::hardware_concurrency();
-    if (num_threads < 2)
-        num_threads = 4;
+    unsigned int num_threads = NormalizeAIGatewayIoThreads(std::thread::hardware_concurrency());
     auto worker_threads_str = cfgMgr.GetValue("AIGateway", "WorkerThreads");
-    unsigned int worker_threads = worker_threads_str.empty() ? num_threads : std::atoi(worker_threads_str.c_str());
-    if (worker_threads < 1)
-        worker_threads = num_threads;
+    unsigned int worker_threads = SelectAIGatewayWorkerThreads(worker_threads_str, num_threads);
 
     gateglobals::g_worker_threads = worker_threads;
     gateglobals::g_main_ioc = nullptr;
@@ -92,6 +88,12 @@ int main(int argc, char* argv[])
     AIHttpServiceRoutes::RegisterRoutes(*LogicSystem::GetInstance());
 
     net::io_context ioc{static_cast<int>(num_threads)};
+    // work_guard prevents ioc.run() from returning when the coroutine-based
+    // AcceptLoop hasn't yet posted its first async_accept to the io_context.
+    // GateDomainServer (used by all other split services) has this; its absence
+    // here caused CServer::AcceptLoop to never execute: port was LISTEN but
+    // every inbound connection silently hung with no HTTP response.
+    auto work_guard = boost::asio::make_work_guard(ioc);
     gateglobals::g_main_ioc = &ioc;
     std::make_shared<CServer>(ioc, gate_port)->Start();
     memolog::LogInfo("service.start", "AIGatewayServer listening", {{"port", std::to_string(gate_port)}});

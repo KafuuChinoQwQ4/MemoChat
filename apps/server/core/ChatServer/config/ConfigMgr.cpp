@@ -1,4 +1,4 @@
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
 std::string& ConfigMgr::ConfigPathStorage()
 {

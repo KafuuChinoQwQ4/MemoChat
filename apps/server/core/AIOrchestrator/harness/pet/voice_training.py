@@ -12,6 +12,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+MAX_REFERENCE_AUDIO_BYTES = 50 * 1024 * 1024
+ALLOWED_REFERENCE_AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aac"}
+
 
 @dataclass(frozen=True)
 class VoiceTrainingRequest:
@@ -88,6 +91,8 @@ class VoiceTrainingService:
         self._load_jobs()
 
     def create_job(self, request: VoiceTrainingRequest) -> VoiceTrainingJob:
+        if request.uid <= 0:
+            raise ValueError("uid is required")
         if not request.consent_confirmed:
             raise ValueError("voice training requires explicit consent_confirmed=true")
         if not request.reference_audio_path.strip():
@@ -98,7 +103,7 @@ class VoiceTrainingService:
         artifact_path = str(Path(self._artifact_root).joinpath(job_id))
         manifest_path = str(Path(artifact_path).joinpath("manifest.json"))
         persisted_audio_path, persistence = _persist_reference_audio(Path(artifact_path), request)
-        effective_reference_audio = persisted_audio_path or request.reference_audio_path
+        effective_reference_audio = persisted_audio_path
         audio_diagnostics = diagnose_reference_audio(effective_reference_audio)
         status, stage, progress, message = _initial_job_state(
             self._voice_clone_enabled,
@@ -111,7 +116,7 @@ class VoiceTrainingService:
             profile_id=request.profile_id,
             voice_name=request.voice_name,
             language=_language_code(request.language),
-            reference_audio_path=request.reference_audio_path,
+            reference_audio_path=_reference_audio_display_path(request.reference_audio_path),
             reference_audio_directory=request.reference_audio_directory,
             reference_audio_file=request.reference_audio_file,
             provider=request.provider,
@@ -132,7 +137,7 @@ class VoiceTrainingService:
                 "audio_persisted": bool(persisted_audio_path),
                 "training_started": False,
                 "manifest_persisted": False,
-                "reference_audio_original_path": request.reference_audio_path,
+                "reference_audio_original_path": _reference_audio_display_path(request.reference_audio_path),
                 "reference_audio_effective_path": effective_reference_audio,
                 "reference_audio_runtime_path": persisted_audio_path,
                 "gpt_sovits_reference_audio": persisted_audio_path or "",
@@ -160,20 +165,25 @@ class VoiceTrainingService:
         self._jobs[job_id] = job
         return job
 
-    def get_job(self, job_id: str) -> VoiceTrainingJob:
+    def get_job(self, job_id: str, uid: int) -> VoiceTrainingJob:
         job = self._jobs.get(job_id)
         if job is None:
             raise KeyError(f"voice training job not found: {job_id}")
+        if uid <= 0 or job.uid != uid:
+            raise KeyError(f"voice training job not found: {job_id}")
         return job
 
-    def list_jobs(self, uid: int = 0) -> list[VoiceTrainingJob]:
+    def list_jobs(self, uid: int) -> list[VoiceTrainingJob]:
+        if uid <= 0:
+            return []
         jobs = list(self._jobs.values())
-        if uid > 0:
-            jobs = [job for job in jobs if job.uid == uid]
+        jobs = [job for job in jobs if job.uid == uid]
         jobs.sort(key=lambda job: job.updated_at_ms, reverse=True)
         return jobs
 
     def latest_ready_reference_audio(self, uid: int = 0) -> str:
+        if uid <= 0:
+            return ""
         for job in self.list_jobs(uid=uid):
             diagnostics = dict(job.diagnostics or {})
             if job.status != "ready":
@@ -280,6 +290,8 @@ def _persist_reference_audio(artifact_dir: Path, request: VoiceTrainingRequest) 
             audio_bytes = base64.b64decode(upload, validate=True)
             if not audio_bytes:
                 raise ValueError("uploaded reference audio is empty")
+            if len(audio_bytes) > MAX_REFERENCE_AUDIO_BYTES:
+                raise ValueError("uploaded reference audio is too large")
             target_path.write_bytes(audio_bytes)
             diagnostics["reference_audio_persist_source"] = "client_upload"
             diagnostics["reference_audio_uploaded_size_bytes"] = len(audio_bytes)
@@ -289,12 +301,27 @@ def _persist_reference_audio(artifact_dir: Path, request: VoiceTrainingRequest) 
             return "", diagnostics
 
     source_path = Path(request.reference_audio_path)
-    if not source_path.is_file():
+    artifact_root = artifact_dir.parent
+    try:
+        resolved_source = source_path.resolve(strict=True)
+        resolved_root = artifact_root.resolve(strict=True)
+        resolved_source.relative_to(resolved_root)
+    except (OSError, ValueError):
+        diagnostics["reference_audio_persist_error"] = "reference audio path is outside voice training staging root"
+        return "", diagnostics
+
+    if resolved_source.suffix.lower() not in ALLOWED_REFERENCE_AUDIO_SUFFIXES:
+        diagnostics["reference_audio_persist_error"] = "reference audio file type is not allowed"
+        return "", diagnostics
+    if not resolved_source.is_file():
         diagnostics["reference_audio_persist_error"] = "reference audio path is not visible to the AI runtime"
+        return "", diagnostics
+    if resolved_source.stat().st_size > MAX_REFERENCE_AUDIO_BYTES:
+        diagnostics["reference_audio_persist_error"] = "reference audio file is too large"
         return "", diagnostics
 
     try:
-        shutil.copyfile(source_path, target_path)
+        shutil.copyfile(resolved_source, target_path)
         diagnostics["reference_audio_persist_source"] = "runtime_path_copy"
         diagnostics["reference_audio_uploaded_size_bytes"] = target_path.stat().st_size
         return str(target_path), diagnostics
@@ -307,10 +334,14 @@ def _safe_audio_file_name(value: Any) -> str:
     name = Path(str(value or "reference.wav")).name.strip() or "reference.wav"
     stem = Path(name).stem.strip() or "reference"
     suffix = Path(name).suffix.lower()
-    if suffix not in {".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aac"}:
+    if suffix not in ALLOWED_REFERENCE_AUDIO_SUFFIXES:
         suffix = ".wav"
     safe_stem = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in stem)
     return f"reference-{safe_stem[:80]}{suffix}"
+
+
+def _reference_audio_display_path(path: str) -> str:
+    return Path(str(path or "")).name
 
 
 def _initial_job_state(
