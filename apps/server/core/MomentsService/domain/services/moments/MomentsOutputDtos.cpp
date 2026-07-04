@@ -1,7 +1,9 @@
-#include "services/moments/MomentsOutputDtos.h"
+#include "services/moments/MomentsOutputDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
-#include "persistence/MomentTypes.h"
+#include "json/TypedJsonCodec.hpp"
+#include "persistence/MomentTypes.hpp"
+
+import memochat.moments.output_algorithms;
 
 #include <exception>
 
@@ -85,7 +87,7 @@ std::vector<std::string> ToMomentLikeNames(const std::vector<MomentLikeInfo>& li
     std::vector<std::string> names;
     for (const auto& like : likes)
     {
-        if (!like.user_nick.empty())
+        if (output::modules::ShouldKeepLikeName(like.user_nick.empty()))
         {
             names.push_back(like.user_nick);
         }
@@ -144,7 +146,7 @@ MomentOutputDto ToMomentOutputDto(const MomentInfo& moment,
     dto.user_nick = profile.user_nick;
     dto.user_icon = profile.user_icon;
 
-    if (content != nullptr)
+    if (output::modules::ShouldProjectContent(content != nullptr))
     {
         dto.items.reserve(content->items.size());
         for (const auto& item : content->items)
@@ -153,13 +155,13 @@ MomentOutputDto ToMomentOutputDto(const MomentInfo& moment,
         }
     }
 
-    if (likes != nullptr)
+    if (output::modules::ShouldProjectLikes(likes != nullptr))
     {
         dto.like_names = ToMomentLikeNames(*likes);
         dto.likes = ToMomentLikeOutputDtos(*likes);
     }
 
-    if (comments != nullptr)
+    if (output::modules::ShouldProjectComments(comments != nullptr))
     {
         dto.comments = ToMomentCommentOutputDtos(*comments);
     }

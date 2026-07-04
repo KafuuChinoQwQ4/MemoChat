@@ -1,5 +1,6 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
 #include "httpmgr.h"
 
 #include <QJsonArray>
@@ -7,6 +8,7 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QUrl>
+#include <QUrlQuery>
 
 namespace
 {
@@ -63,15 +65,21 @@ void AgentController::switchAgentSkillMode(const QString& mode)
 void AgentController::refreshModelList()
 {
     ensureUserScope();
+    if (_model_refresh_busy)
+    {
+        return;
+    }
     clearErrorState();
     setModelRefreshBusy(true);
-    ReqId reqId = ID_AI_MODEL_LIST;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ModelList, QString(), scopedUid());
 
-    HttpMgr::GetInstance()->GetHttpReq(QUrl(gate_url_prefix + "/ai/model/list"),
-                                       reqId,
-                                       Modules::LOGINMOD,
-                                       aiHttpModule());
+    QUrl url = agentApiUrl(QStringLiteral("/ai/model/list"));
+    QUrlQuery query;
+    addAuthToQuery(query);
+    url.setQuery(query);
+
+    HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey)
@@ -93,14 +101,12 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     payload["base_url"] = trimmedUrl;
     payload["api_key"] = trimmedKey;
     payload["adapter"] = QStringLiteral("openai_compatible");
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_MODEL_API_REGISTER;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister, QString(), scopedUid());
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/register"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/model/api/register")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::deleteApiProvider(const QString& providerId)
@@ -117,14 +123,12 @@ void AgentController::deleteApiProvider(const QString& providerId)
     setApiProviderBusy(true, "正在删除 API 模型...");
     QJsonObject payload;
     payload["provider_id"] = trimmedProviderId;
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_MODEL_API_DELETE;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete, QString(), scopedUid());
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/model/api/delete"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/model/api/delete")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::handleModelListRsp(ReqId id, const QString& res, ErrorCodes err)

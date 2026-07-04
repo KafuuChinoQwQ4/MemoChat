@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import unittest
 from pathlib import Path
@@ -194,8 +195,10 @@ class FakeMemoryPostgres:
         self.semantic_row = semantic_row
         self.episodic_rows = episodic_rows or []
         self.executes = []
+        self.fetches = []
 
     async def fetchall(self, query: str, *args):
+        self.fetches.append({"query": query, "args": args})
         if "FROM ai_message" in query:
             return list(self.rows)
         if "FROM ai_episodic_memory" in query:
@@ -227,6 +230,7 @@ class FakeToolExecutor:
         target_lang: str = "",
         requested_tools: list[str] | None = None,
         tool_arguments: dict[str, dict] | None = None,
+        skill: AgentSkill | None = None,
     ):
         return [ToolObservation(name="knowledge_search", source="builtin", output="doc")]
 
@@ -261,6 +265,7 @@ class ReactToolExecutor:
         target_lang: str = "",
         requested_tools: list[str] | None = None,
         tool_arguments: dict[str, dict] | None = None,
+        skill: AgentSkill | None = None,
     ):
         self.calls.append(plan_steps)
         if plan_steps and plan_steps[0].action == "web_search":
@@ -287,14 +292,13 @@ class MultiRoundReactToolExecutor:
         target_lang: str = "",
         requested_tools: list[str] | None = None,
         tool_arguments: dict[str, dict] | None = None,
+        skill: AgentSkill | None = None,
     ):
         self.calls.append([step.action for step in plan_steps])
         observations: list[ToolObservation] = []
         for step in plan_steps:
             if step.action == "web_search":
-                observations.append(
-                    ToolObservation(name="web_search", source="builtin", output="未找到相关结果。")
-                )
+                observations.append(ToolObservation(name="web_search", source="builtin", output="未找到相关结果。"))
             elif step.action == "knowledge_search":
                 self.knowledge_calls += 1
                 if self.knowledge_calls == 1:
@@ -322,6 +326,12 @@ class FakeLLM:
     async def stream(self, messages, prefer_backend="", model_name="", deployment_preference="any", **kwargs):
         yield LLMStreamChunk(content="ans", model="fake-model")
         yield LLMStreamChunk(content="wer", model="fake-model", is_final=True)
+
+
+class FailingStreamLLM(FakeLLM):
+    async def stream(self, messages, prefer_backend="", model_name="", deployment_preference="any", **kwargs):
+        raise RuntimeError("stream unavailable")
+        yield LLMStreamChunk(content="", model="")
 
 
 class RecordingLLM:
@@ -692,10 +702,82 @@ class HarnessStructureTests(unittest.TestCase):
             request,
             [PlanStep(action="mcp_tool", reason="test")],
             [spec],
+            AgentSkill(
+                name="mcp_operator",
+                display_name="MCP",
+                description="",
+                system_prompt="",
+                allow_mcp=True,
+                metadata={"tool_policy": {"allowed_tools": ["mcp_filesystem_delete_file"]}},
+            ),
         )
 
         self.assertTrue(service.has_blocking(results))
         self.assertEqual(results[0].name, "tool_confirmation")
+
+    def test_guardrail_blocks_mcp_tool_when_skill_does_not_allow_mcp(self):
+        service = GuardrailService()
+        request = SimpleNamespace(requested_tools=["mcp_filesystem_read_file"], tool_arguments={})
+        spec = ToolSpec(
+            name="mcp_filesystem_read_file",
+            display_name="Read File",
+            description="Read a file",
+            source="mcp",
+            permission="read",
+        )
+
+        results = service.check_tool_plan(
+            request,
+            [PlanStep(action="mcp_tool", reason="test")],
+            [spec],
+            AgentSkill(
+                name="general_chat",
+                display_name="General",
+                description="",
+                system_prompt="",
+                allow_mcp=False,
+            ),
+        )
+
+        self.assertTrue(service.has_blocking(results))
+        self.assertEqual(results[0].name, "mcp_tool_policy")
+
+    def test_guardrail_blocks_mcp_tool_outside_skill_allowlist(self):
+        service = GuardrailService()
+        request = SimpleNamespace(requested_tools=["mcp_filesystem_delete_file"], tool_arguments={})
+        spec = ToolSpec(
+            name="mcp_filesystem_delete_file",
+            display_name="Delete File",
+            description="Delete a file",
+            source="mcp",
+            permission="admin",
+            requires_confirmation=True,
+        )
+
+        results = service.check_tool_plan(
+            request,
+            [PlanStep(action="mcp_tool", reason="test")],
+            [spec],
+            AgentSkill(
+                name="mcp_operator",
+                display_name="MCP",
+                description="",
+                system_prompt="",
+                allow_mcp=True,
+                metadata={"tool_policy": {"allowed_tools": ["mcp_filesystem_read_file"]}},
+            ),
+        )
+
+        self.assertTrue(service.has_blocking(results))
+        self.assertEqual(results[0].name, "mcp_tool_policy")
+
+    def test_mcp_bridge_requires_server_tool_allowlist(self):
+        from tools.mcp_bridge import _is_mcp_tool_allowed
+
+        self.assertFalse(_is_mcp_tool_allowed("filesystem", "read_file", []))
+        self.assertTrue(_is_mcp_tool_allowed("filesystem", "read_file", ["read_file"]))
+        self.assertTrue(_is_mcp_tool_allowed("filesystem", "read_file", ["mcp_filesystem_read_file"]))
+        self.assertFalse(_is_mcp_tool_allowed("filesystem", "delete_file", ["mcp_filesystem_read_file"]))
 
     def test_guardrail_warns_on_thinking_markup(self):
         service = GuardrailService()
@@ -742,12 +824,16 @@ class HarnessStructureTests(unittest.TestCase):
             service._short_term_fetch_limit = 10
             service._short_term_token_budget = 70
 
-            history, summary = asyncio.run(service._load_short_term("session-1"))
+            history, summary = asyncio.run(service._load_short_term(7, "session-1"))
         finally:
             memory_service_module.PostgresClient = original_pg
 
         self.assertEqual(summary, "旧消息摘要")
         self.assertEqual([message.content.split()[0] for message in history], ["消息4", "消息5"])
+        short_term_fetch = next(item for item in fake_pg.fetches if "FROM ai_message" in item["query"])
+        self.assertIn("JOIN ai_session s ON s.session_id = m.session_id", short_term_fetch["query"])
+        self.assertIn("s.uid = $1", short_term_fetch["query"])
+        self.assertEqual(short_term_fetch["args"][:2], (7, "session-1"))
 
     def test_memory_service_writes_llm_extracted_long_term_memory(self):
         extracted = {
@@ -1299,6 +1385,34 @@ class HarnessStructureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             service.create_remote_task_placeholder("missing", {})
 
+    def test_agent_harness_stream_turn_keeps_shared_prepare_and_finish_seams(self):
+        run_source = inspect.getsource(AgentHarnessService.run_turn)
+        stream_source = inspect.getsource(AgentHarnessService.stream_turn)
+        prepare_source = inspect.getsource(AgentHarnessService._prepare_turn)
+
+        self.assertEqual(1, run_source.count("_prepare_turn("))
+        self.assertIn('await self._prepare_turn(request, "/agent/run")', run_source)
+        self.assertEqual(1, stream_source.count("_prepare_turn("))
+        self.assertIn('await self._prepare_turn(request, "/agent/run/stream")', stream_source)
+        self.assertIn("await self._turn_graph.run_prepare(request, route)", prepare_source)
+        self.assertIn("return self._prepared_from_graph_state(state)", prepare_source)
+
+        self.assertIn("await self._turn_graph.run_finish(", stream_source)
+        for duplicated_finish_step in (
+            "await self._finish_response(",
+            "self._guardrail_service.check_output(",
+            "self._memory_service.save_after_response(",
+            "self._semantic_cache.store(",
+        ):
+            with self.subTest(forbidden=duplicated_finish_step):
+                self.assertNotIn(duplicated_finish_step, stream_source)
+
+        self.assertEqual(1, stream_source.count("await self._trace_store.finish_run("))
+        failure_branch = stream_source[stream_source.index("except Exception as exc:") :]
+        self.assertIn('status="failed"', failure_branch)
+        self.assertIn("stream_failed=", failure_branch)
+        self.assertIn("_trace_events_payload(self._trace_store, prepared.trace.trace_id)", failure_branch)
+
 
 class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
     async def test_agent_turn_graph_reports_langgraph_backend(self):
@@ -1391,6 +1505,47 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("tool_execution", event_names)
         self.assertIn("model_completion", event_names)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
+
+    async def test_stream_turn_records_failed_stream_trace_and_final_payload(self):
+        service = AgentHarnessService(
+            planner=FakePlanner(),
+            llm_registry=FailingStreamLLM(),
+            tool_executor=FakeToolExecutor(),
+            memory_service=FakeMemory(),
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="",
+            content="根据知识库回答",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+        )
+
+        chunks = [payload async for payload in service.stream_turn(request)]
+        final = chunks[-1]
+        trace = service._trace_store.get_trace(final["trace_id"])
+        failed_events = [
+            event for event in trace.events if event.layer == "execution" and event.name == "model_completion"
+        ]
+
+        self.assertEqual(len(chunks), 1)
+        self.assertTrue(final["is_final"])
+        self.assertEqual(final["chunk"], "发生错误: stream unavailable")
+        self.assertEqual(final["total_tokens"], 0)
+        self.assertEqual(final["feedback_summary"], "stream_failed=stream unavailable")
+        self.assertEqual(trace.status, "failed")
+        self.assertEqual(trace.response_content, "stream unavailable")
+        self.assertEqual(trace.model, "")
+        self.assertEqual(len(failed_events), 1)
+        self.assertEqual(failed_events[0].status, "failed")
+        self.assertEqual(failed_events[0].summary, "RuntimeError")
 
     async def test_semantic_cache_hit_returns_without_sync_memory_extraction(self):
         memory = CacheHitMemory()
@@ -1742,6 +1897,35 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(resumed)
             self.assertEqual(resumed.status, "queued")
 
+    async def test_agent_task_service_rejects_cross_uid_task_operations(self):
+        with TemporaryDirectory() as storage:
+            service = AgentTaskService(
+                agent_service=SimpleNamespace(run_turn=None),
+                storage_dir=storage,
+                auto_run=False,
+            )
+            await service.startup()
+            task = await service.create_task(uid=7, title="Private task", content="Owner-only work")
+
+            self.assertIsNone(await service.get_task_for_uid(task.task_id, uid=99))
+            self.assertIsNone(await service.cancel_task(task.task_id, uid=99))
+            still_queued = await service.get_task(task.task_id)
+            self.assertIsNotNone(still_queued)
+            self.assertEqual(still_queued.status, "queued")
+
+            canceled = await service.cancel_task(task.task_id, uid=7)
+            self.assertIsNotNone(canceled)
+            self.assertEqual(canceled.status, "canceled")
+
+            self.assertIsNone(await service.resume_task(task.task_id, uid=99))
+            still_canceled = await service.get_task(task.task_id)
+            self.assertIsNotNone(still_canceled)
+            self.assertEqual(still_canceled.status, "canceled")
+
+            resumed = await service.resume_task(task.task_id, uid=7)
+            self.assertIsNotNone(resumed)
+            self.assertEqual(resumed.status, "queued")
+
     async def test_agent_task_service_dispatches_to_queue_and_consumes_task(self):
         with TemporaryDirectory() as storage:
             bus = FakeTaskBus()
@@ -2001,6 +2185,43 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ToolExecutorSearchTests(unittest.IsolatedAsyncioTestCase):
+    async def test_mcp_tool_outside_skill_allowlist_is_not_invoked(self):
+        class FakeMcpTool:
+            name = "mcp_filesystem_delete_file"
+            description = "delete"
+
+            def __init__(self):
+                self.calls = 0
+
+            async def ainvoke(self, payload):
+                self.calls += 1
+                return "deleted"
+
+        mcp_tool = FakeMcpTool()
+        executor = ToolExecutor.__new__(ToolExecutor)
+        executor._tool_registry = SimpleNamespace(get_tools=lambda: [mcp_tool])
+
+        observations = await executor.execute(
+            uid=1,
+            content="delete a file",
+            plan_steps=[PlanStep(action="mcp_tool", reason="test")],
+            requested_tools=[mcp_tool.name],
+            tool_arguments={mcp_tool.name: {"path": "a.txt", "confirmed": True}},
+            skill=AgentSkill(
+                name="mcp_operator",
+                display_name="MCP",
+                description="",
+                system_prompt="",
+                allow_mcp=True,
+                metadata={"tool_policy": {"allowed_tools": ["mcp_filesystem_read_file"]}},
+            ),
+        )
+
+        self.assertEqual(mcp_tool.calls, 0)
+        self.assertEqual(observations[0].name, mcp_tool.name)
+        self.assertEqual(observations[0].source, "mcp")
+        self.assertTrue(observations[0].metadata["blocked"])
+
     async def test_knowledge_search_invokes_knowledge_base_tool(self):
         class FakeKnowledgeTool:
             name = "knowledge_base_search"

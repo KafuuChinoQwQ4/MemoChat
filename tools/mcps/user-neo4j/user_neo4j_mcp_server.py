@@ -8,6 +8,7 @@ user-neo4j MCP Server
 
 import asyncio
 import json
+import os
 import sys
 from typing import Any
 
@@ -18,12 +19,32 @@ except ImportError:
     sys.exit(1)
 
 
-NEO4J_URI = "bolt://127.0.0.1:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "password"
-NEO4J_DATABASE = "neo4j"
+NEO4J_URI = os.environ.get("MEMOCHAT_NEO4J_URI", "bolt://127.0.0.1:7687")
+NEO4J_USER = os.environ.get("MEMOCHAT_NEO4J_USER", "neo4j")
+NEO4J_DATABASE = os.environ.get("MEMOCHAT_NEO4J_DATABASE", "neo4j")
 
 _driver = None
+
+
+def _required_env_first(names: tuple[str, ...]) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    raise RuntimeError("Missing required environment variable: one of " + ", ".join(names))
+
+
+def _neo4j_password() -> str:
+    return _required_env_first(("MEMOCHAT_NEO4J_PASSWORD", "MEMOCHAT_AI_NEO4J__PASSWORD"))
+
+
+def _redact_known_secrets(text: str) -> str:
+    redacted = text
+    for name in ("MEMOCHAT_NEO4J_PASSWORD", "MEMOCHAT_AI_NEO4J__PASSWORD"):
+        value = os.environ.get(name)
+        if value:
+            redacted = redacted.replace(value, "[REDACTED]")
+    return redacted
 
 
 async def get_driver():
@@ -31,7 +52,7 @@ async def get_driver():
     if _driver is None:
         _driver = AsyncGraphDatabase.driver(
             NEO4J_URI,
-            auth=(NEO4J_USER, NEO4J_PASSWORD),
+            auth=(NEO4J_USER, _neo4j_password()),
             max_connection_lifetime=3600,
         )
     return _driver
@@ -214,7 +235,11 @@ class MCPStdioServer:
                 text = json.dumps(result, ensure_ascii=False, indent=2)
             return {"content": [{"type": "text", "text": text}]}
         except Exception as e:
-            return {"content": [{"type": "text", "text": f"Neo4j 查询错误: {type(e).__name__}: {e}"}]}
+            return {
+                "content": [
+                    {"type": "text", "text": f"Neo4j 查询错误: {type(e).__name__}: {_redact_known_secrets(str(e))}"}
+                ]
+            }
 
     async def handle_message(self, msg: dict) -> None:
         method = msg.get("method")

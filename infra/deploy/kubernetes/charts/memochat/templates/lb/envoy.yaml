@@ -1,3 +1,4 @@
+{{- $envoyTlsSecretName := required "envoy.tls.secretName is required for the production Envoy LoadBalancer" .Values.envoy.tls.secretName -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,17 +13,30 @@ data:
           port_value: 9901
     static_resources:
       listeners:
-        - name: listener_http
+        - name: listener_https
           address:
             socket_address:
               address: 0.0.0.0
-              port_value: 80
+              port_value: 8443
           filter_chains:
-            - filters:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  common_tls_context:
+                    tls_certificates:
+                      - certificate_chain:
+                          filename: /etc/envoy/tls/tls.crt
+                        private_key:
+                          filename: /etc/envoy/tls/tls.key
+                    alpn_protocols:
+                      - h2
+                      - http/1.1
+              filters:
                 - name: envoy.filters.network.http_connection_manager
                   typed_config:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-                    stat_prefix: ingress_http
+                    stat_prefix: ingress_https
                     use_remote_address: true
                     generate_request_id: true
                     always_set_request_id_in_response: true
@@ -93,6 +107,32 @@ data:
                             - name: auth
                               match:
                                 path: /user_login
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: login_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: auth
+                              match:
+                                path: /auth/refresh
+                                headers:
+                                  - name: ":method"
+                                    exact_match: POST
+                              route:
+                                cluster: login_backend
+                                timeout: 60s
+                                retry_policy:
+                                  retry_on: connect-failure,reset,5xx,gateway-error
+                                  num_retries: 2
+                                  per_try_timeout: 15s
+                            - name: auth
+                              match:
+                                path: /auth/logout
                                 headers:
                                   - name: ":method"
                                     exact_match: POST
@@ -235,7 +275,17 @@ data:
               address: 0.0.0.0
               port_value: 8090
           filter_chains:
-            - filters:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  common_tls_context:
+                    tls_certificates:
+                      - certificate_chain:
+                          filename: /etc/envoy/tls/tls.crt
+                        private_key:
+                          filename: /etc/envoy/tls/tls.key
+              filters:
                 - name: envoy.filters.network.tcp_proxy
                   typed_config:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
@@ -250,7 +300,17 @@ data:
               address: 0.0.0.0
               port_value: 8091
           filter_chains:
-            - filters:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  common_tls_context:
+                    tls_certificates:
+                      - certificate_chain:
+                          filename: /etc/envoy/tls/tls.crt
+                        private_key:
+                          filename: /etc/envoy/tls/tls.key
+              filters:
                 - name: envoy.filters.network.tcp_proxy
                   typed_config:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
@@ -437,17 +497,14 @@ spec:
             - -c
             - /etc/envoy/envoy.yaml
           ports:
-            - name: http
-              containerPort: 80
+            - name: https
+              containerPort: 8443
               protocol: TCP
             - name: chat-tcp-1
               containerPort: 8090
               protocol: TCP
             - name: chat-tcp-2
               containerPort: 8091
-              protocol: TCP
-            - name: admin
-              containerPort: 9901
               protocol: TCP
           resources:
             requests:
@@ -458,24 +515,32 @@ spec:
               memory: 512Mi
           livenessProbe:
             httpGet:
+              host: 127.0.0.1
               path: /ready
-              port: admin
+              port: 9901
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:
+              host: 127.0.0.1
               path: /ready
-              port: admin
+              port: 9901
             initialDelaySeconds: 5
             periodSeconds: 10
           volumeMounts:
             - name: config
               mountPath: /etc/envoy/envoy.yaml
               subPath: envoy.yaml
+            - name: tls
+              mountPath: /etc/envoy/tls
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: envoy-lb-config
+        - name: tls
+          secret:
+            secretName: {{ $envoyTlsSecretName | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -488,9 +553,9 @@ spec:
     app: envoy-lb
     {{- include "memochat.selectorLabels" . | nindent 4 }}
   ports:
-    - name: http
-      port: 80
-      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 8443
       protocol: TCP
     - name: chat-tcp-1
       port: 8090

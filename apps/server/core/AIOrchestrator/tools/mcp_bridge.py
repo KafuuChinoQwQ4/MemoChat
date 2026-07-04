@@ -32,6 +32,7 @@ class MCPServerConfig:
     command: list[str]
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+    allowed_tools: list[str] = field(default_factory=list)
     enabled: bool = True
 
 
@@ -130,18 +131,31 @@ class MCPBridge:
             if list_resp and "result" in list_resp:
                 tools_meta = list_resp["result"].get("tools", [])
 
-            # 6. 为每个工具创建 LangChain wrapper
+            # 6. 为白名单内的工具创建 LangChain wrapper
+            registered_count = 0
+            skipped_tools: list[str] = []
             for t_meta in tools_meta:
+                raw_tool_name = str(t_meta.get("name") or "").strip()
+                if not _is_mcp_tool_allowed(srv_cfg.name, raw_tool_name, srv_cfg.allowed_tools):
+                    skipped_tools.append(raw_tool_name)
+                    continue
                 tool_inst = self._mcp_tool_to_langchain(t_meta, srv_cfg.name, proc)
                 self._tools.append(tool_inst)
+                registered_count += 1
                 logger.info(
                     "mcp.tool.registered",
                     server=srv_cfg.name,
-                    tool=t_meta.get("name"),
+                    tool=raw_tool_name,
                     description=t_meta.get("description", "")[:60],
                 )
 
-            logger.info("mcp.server.ready", name=srv_cfg.name, tools=len(tools_meta))
+            logger.info(
+                "mcp.server.ready",
+                name=srv_cfg.name,
+                tools=registered_count,
+                discovered=len(tools_meta),
+                skipped=len(skipped_tools),
+            )
 
         except Exception as e:
             logger.error("mcp.server.error", name=srv_cfg.name, error=str(e))
@@ -251,3 +265,16 @@ class MCPBridge:
         self._server_processes.clear()
         self._initialized = False
         logger.info("mcp.closed")
+
+
+def _mcp_wrapped_tool_name(server_name: str, tool_name: str) -> str:
+    return f"mcp_{server_name}_{tool_name}"
+
+
+def _is_mcp_tool_allowed(
+    server_name: str, tool_name: str, allowed_tools: list[str] | tuple[str, ...] | set[str]
+) -> bool:
+    normalized_allowed = {str(item or "").strip() for item in allowed_tools if str(item or "").strip()}
+    if not normalized_allowed or not tool_name:
+        return False
+    return tool_name in normalized_allowed or _mcp_wrapped_tool_name(server_name, tool_name) in normalized_allowed

@@ -4,6 +4,7 @@ list(APPEND MEMOCHAT_QML_FEATURE_SOURCES
     features/contact/controller/ContactRequestPayloads.cpp
     features/contact/model/ApplyRequestModel.cpp
     features/contact/model/FriendListModel.cpp
+    features/contact/model/FriendListModelOrdering.cpp
     features/contact/model/FriendListModelMutations.cpp
     features/contact/model/FriendListModelState.cpp
     features/contact/model/FriendListModelQueries.cpp

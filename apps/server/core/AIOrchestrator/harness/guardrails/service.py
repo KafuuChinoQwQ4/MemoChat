@@ -48,6 +48,7 @@ class GuardrailService:
         request: Any,
         plan_steps: list[PlanStep],
         tool_specs: Iterable[ToolSpec | dict[str, Any]] | None = None,
+        skill: AgentSkill | None = None,
     ) -> list[GuardrailResult]:
         requested_tools = list(getattr(request, "requested_tools", []) or [])
         tool_arguments = getattr(request, "tool_arguments", {}) or {}
@@ -94,6 +95,12 @@ class GuardrailService:
                 )
                 continue
 
+            if self._is_mcp_tool_request(tool_name, spec, plan_steps):
+                policy_result = self._check_mcp_tool_policy(skill, tool_name)
+                if policy_result is not None:
+                    results.append(policy_result)
+                    continue
+
             if spec.requires_confirmation and not self._is_confirmed(payload):
                 results.append(
                     GuardrailResult(
@@ -124,6 +131,59 @@ class GuardrailService:
             )
 
         return results
+
+    def _is_mcp_tool_request(self, tool_name: str, spec: ToolSpec | None, plan_steps: list[PlanStep]) -> bool:
+        return (
+            str(tool_name or "").startswith("mcp_")
+            or (spec is not None and spec.source == "mcp")
+            or any(step.action == "mcp_tool" for step in plan_steps)
+        )
+
+    def _check_mcp_tool_policy(self, skill: AgentSkill | None, tool_name: str) -> GuardrailResult | None:
+        if skill is None or not skill.allow_mcp:
+            return GuardrailResult(
+                name="mcp_tool_policy",
+                status="block",
+                message=f"MCP tool is not allowed by the selected skill: {tool_name}",
+                blocking=True,
+                metadata={"tool": tool_name, "skill": getattr(skill, "name", "") if skill else ""},
+            )
+
+        allowed_tools = self._skill_allowed_tools(skill)
+        if tool_name not in allowed_tools:
+            return GuardrailResult(
+                name="mcp_tool_policy",
+                status="block",
+                message=f"MCP tool is outside the selected skill allowlist: {tool_name}",
+                blocking=True,
+                metadata={"tool": tool_name, "skill": skill.name, "allowed_tools": sorted(allowed_tools)},
+            )
+        return None
+
+    def _skill_allowed_tools(self, skill: AgentSkill) -> set[str]:
+        metadata = skill.metadata if isinstance(skill.metadata, dict) else {}
+        allowed: set[str] = set()
+
+        def add_values(raw: Any) -> None:
+            if not isinstance(raw, (list, tuple, set)):
+                return
+            for item in raw:
+                text = str(item or "").strip()
+                if text:
+                    allowed.add(text)
+
+        add_values(metadata.get("allowed_tools"))
+        tool_policy = metadata.get("tool_policy", {})
+        if isinstance(tool_policy, dict):
+            add_values(tool_policy.get("allowed_tools"))
+        agent_spec = metadata.get("agent_spec", {})
+        if isinstance(agent_spec, dict):
+            add_values(agent_spec.get("allowed_tools"))
+            agent_tool_policy = agent_spec.get("tool_policy", {})
+            if isinstance(agent_tool_policy, dict):
+                add_values(agent_tool_policy.get("allowed_tools"))
+
+        return allowed
 
     def check_output(self, response_text: str, observations: list[ToolObservation]) -> list[GuardrailResult]:
         results: list[GuardrailResult] = []

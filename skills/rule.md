@@ -11,12 +11,13 @@
 - 保持实现简洁，优先复用现有模式和 helper；不要为任务范围外的抽象、兼容层或顺手重构显著增加代码量。
 - C++ 标准按目标分开：服务端 C++ 目标遵循 `MEMOCHAT_CXX_STANDARD`，当前为 C++26；Qt/QML 客户端和 MemoOps 目标遵循 `MEMOCHAT_QT_CXX_STANDARD`，当前为 C++23，Qt 版本以当前 CMake preset/cache 的 6.8.x kit 为准。
 - 写 C++ 时尽量靠近该目标当前工具链能稳定支持的最高标准，优先使用 modern C++ 和标准库特性；不要把服务端 C++26 / `-freflection` 假设带进 Qt 客户端目标。前缀严格写 `std::`，不要使用 `using namespace std`。
+- C++ 结构设计默认优先组合与依赖注入，只有稳定抽象接口、第三方/平台适配或确需运行时多态时才引入继承；服务端新逻辑尽量抽出窄 `*.cppm` 模块，优先承载纯算法、常量、DTO/schema 辅助与无重型依赖的边界，消费者用 `import` 调用；Qt/MOC、复杂第三方 ABI、运行时资源所有权和 I/O 胶水保留在普通 `.h/.cpp` 中。模块之间通过构造参数、函数参数或小接口注入依赖，避免新增全局单例和隐式跨模块状态。
 - 所有基础设施容器都在 Docker 中。
 - Docker 容器必须保持稳定的发布端口。
 - 项目工作必须使用 Docker 容器作为数据库、队列、对象存储、可观测性以及 AI/RAG 依赖。
 - 修改代码、检查 MCP 或查看数据库时，先查找相关 Docker 容器或已配置的 MCP 工具。
 - 新增或迁移的持久化测试统一放在仓库根 `tests/` 下，并按语言优先组织：C++ GTest 放 `tests/cpp/<主项目相对路径>/...`，Python pytest/unittest 放 `tests/python/<主项目相对路径>/...`，共享测试数据放 `tests/fixtures/...`。不要在 `apps/**/tests` 或其他业务模块内新增测试目录；历史服务内测试只能作为上下文读取，迁移时移动到上述结构。
-- 默认项目工作现在面向 WSL/Linux，路径为 `/root/code/MemoChat-Qml-Drogon-linux`。
+- 默认项目工作现在面向 WSL/Linux，路径为 `/root/code/MemoChat`。
 - Linux 依赖、缓存、模型以及大型生成产物优先下载到 `/data`。
 - Arch 原生 Docker 是默认运行时。Docker 绑定数据使用 `/data/docker-data/memochat`。
 - 仅在 Docker Desktop 迁移备份、旧版 Windows 脚本或明确的 Windows 客户端检查中使用 `D:`。

@@ -12,7 +12,9 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `EmbedLuaScripts.cmake` | 将 Lua 脚本嵌入为生成的 C++ `std::string_view` 头文件 |
 | `FindLive2DCubism.cmake` | 查找 Live2D Cubism SDK 的 CMake find 模块 |
 | `MemoChatFormatting.cmake` | 定义代码格式化（clang-format 等）的 CMake 目标 |
+| `MemoChatModules.cmake` | 定义 GNU C++ modules 的显式 CMI 构建与消费 helper |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

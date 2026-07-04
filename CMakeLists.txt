@@ -12,6 +12,7 @@ project(MemoChat LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(MemoChatFormatting)
+include(MemoChatModules)
 
 set(MEMOCHAT_CXX_STANDARD "26" CACHE STRING "C++ standard used by MemoChat targets")
 set_property(CACHE MEMOCHAT_CXX_STANDARD PROPERTY STRINGS 23 26)

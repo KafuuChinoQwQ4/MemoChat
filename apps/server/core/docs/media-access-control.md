@@ -1,37 +1,46 @@
 # 媒体访问控制威胁模型
 
-本文档记录 MediaService 媒体下载的访问控制设计与威胁模型,对应架构评审 finding ②
-(媒体下载越权)的纵深防御决策。
+本文档记录 MediaService 媒体下载的访问控制设计与威胁模型,对应安全审计中
+“媒体下载越权”的修复边界。
 
-## 当前模型:capability URL + 审计
+## 当前模型:认证用户 + owner/grant 授权
 
-媒体资源的访问控制建立在**不可猜测的 capability key** 之上,而非严格的属主校验:
+媒体资源下载不再把 `media_key` 当作访问能力令牌。`media_key` 仍使用 UUIDv4 生成,
+只作为不可枚举的对象定位符;真正的访问控制由登录 token 与数据库授权共同决定。
 
-- 每个媒体资产有一个 `media_key`,采用 **UUIDv4** 生成(122 位随机熵)。下载 URL 形如
-  `/media/download?asset=<media_key>`。UUIDv4 的不可枚举性是实际的访问门槛——不持有
-  该 key 的第三方无法构造有效下载请求。
-- `memo_media.chat_media_asset` 表记录每个资产的 `owner_uid`(上传者)。**但下载路径
-  不做 `owner_uid == 调用者 uid` 的硬校验**。
+- 下载必须提供有效 `uid/token`。
+- 旧版 `file=` 下载路径已禁用;下载必须使用 `asset=<media_key>` 并命中 active metadata。
+- `chat_media_asset.owner_uid == uid` 时允许下载。
+- `owner_uid != uid` 时,必须存在未撤销的 `chat_media_access_grant` 授权:单用户
+  `grantee_uid=<viewer>`、公开 `grantee_uid=0/grant_scope='public'`、好友
+  `grantee_uid=0/grant_scope='friends'` 或群聊 `grantee_uid=0/grant_scope='group:<id>'`。
+- 未授权跨属主下载返回 `media access denied`,并只记录 viewer uid、owner_uid 与 media_id。
+- 下载日志不得记录 `media_key`、`storage_path`、S3 object key 或本地绝对路径。
 
-### 为什么不做属主硬校验
+## Grant 发放
 
-聊天/朋友圈媒体本质是**共享**的:接收方用自己的 uid+token 下载发送方的图片,
-朋友圈图片对可见范围内所有人开放。`chat_media_asset` 中**没有**分享/授权表
-(share/grant table),只有 `owner_uid`。因此 `owner_uid != uid → 403` 会破坏
-最常见的合法场景(聊天收图、朋友圈看图)。
+`chat_media_access_grant` 是跨用户共享的唯一服务端授权来源。私聊上传写入对端 uid grant;
+朋友圈公开/好友可见上传写入 public/friends audience grant;群聊上传写入 `group:<id>` audience
+grant。下载时仍会校验登录 token,并在关系表可用时校验好友或群成员关系,不能依赖裸
+`media_key` 泄漏给客户端后自然可读。
 
-### 纵深防御:跨属主下载审计
+当前 owner 读取是隐式授权;显式 grant 用于跨属主读取,并支持通过 `revoked_at_ms` 撤销。
+拆分后的 media schema 如果没有好友或群成员投影表,friends/group audience 会保守拒绝,
+需要由关系服务同步成员投影或改为服务端签发的短期下载 token。
 
-下载时若 `asset.owner_uid != 调用者 uid`,服务**不拦截**,但发出结构化 WARN 审计日志
-(`media.download.cross_owner`,字段含 viewer uid、owner_uid、media_id、media_key),
-使跨属主访问可观测,而不破坏共享。
+## 纵深防御
 
-## 未来强化路径(非当前 bug)
+- JSON/base64 上传在 decode 前检查请求 body 和 encoded payload 长度。超出 simple JSON
+  上限的对象必须走分片上传。
+- 本地存储拒绝绝对路径、`..` 段和 canonical 后逃逸 upload root 的路径。
+- MinIO/S3 `PublicUrl` tokenless redirect 默认关闭。只有显式配置
+  `AllowPublicRedirect=true` 或 `1` 时,storage adapter 才会返回 public URL。
+- 下载响应设置 `X-Content-Type-Options: nosniff`、`Content-Disposition: attachment`
+  和保守 content type。
+- 存储后端错误只写服务端日志;客户端只收到通用 `file not found`。
 
-若未来需要严格授权,可选:
+## 剩余产品工作
 
-1. 引入 `media_grant` 表,记录 `(media_id, grantee_uid)` 或 `(media_id, scope)`,下载时校验。
-2. 签名下载凭证:对 `media_key|uid|exp` 做 HMAC,下载 URL 带签名,服务端验签 + 校验过期。
-
-这两者都是产品决策,需要客户端配合改造下载 URL 构造逻辑,不在 finding ② 范围内。
-当前 capability URL + 审计的组合对实验性平台是合理取舍。
+严格 owner/grant 模型会要求所有跨用户媒体展示路径同步发放 grant。私聊和朋友圈发布链路
+已经在上传时发放 grant;群聊和好友可见下载在拆分部署下还需要关系/成员投影,或由关系服务
+在消息持久化、群成员变更和动态可见性变更时补齐/撤销授权。

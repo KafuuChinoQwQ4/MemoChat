@@ -25,7 +25,7 @@ struct AppChatConnectionSnapshot
     int connectTimeoutMs = 1200;
     int backupDialDelayMs = 250;
     int totalLoginTimeoutMs = 5000;
-    int protocolVersion = 2;
+    int protocolVersion = 3;
 };
 
 struct AppChatConnectionDecision

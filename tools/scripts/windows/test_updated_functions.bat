@@ -1,5 +1,12 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+if defined MEMOCHAT_ROOT (
+    set "PROJECT_ROOT=%MEMOCHAT_ROOT%"
+) else (
+    pushd "%~dp0..\..\.." >nul
+    set "PROJECT_ROOT=%CD%"
+    popd >nul
+)
 
 echo Testing updated functions...
 echo.
@@ -13,7 +20,7 @@ call :print_chat_process_count
 echo.
 
 echo 3. Testing :print_file_stamp
-call :print_file_stamp "Test File" "D:\MemoChat-Qml\Memo_ops\runtime\services\GateServer\GateServer.exe"
+call :print_file_stamp "Test File" "%PROJECT_ROOT%\Memo_ops\runtime\services\GateServer\GateServer.exe"
 echo.
 
 echo All tests completed

@@ -163,7 +163,12 @@ void ProfileController::saveProfile(const QString& nick, const QString& desc)
                         setStatus(errorText.isEmpty() ? "头像上传失败" : errorText, true);
                         return;
                     }
-                    sendSaveProfile(snapshot.selfUid, snapshot.selfName, nick, desc, uploaded.remoteUrl);
+                    sendSaveProfile(snapshot.selfUid,
+                                    snapshot.uploadToken,
+                                    snapshot.selfName,
+                                    nick,
+                                    desc,
+                                    uploaded.remoteUrl);
                     setStatus("资料同步中...", false);
                 });
 
@@ -183,7 +188,12 @@ void ProfileController::saveProfile(const QString& nick, const QString& desc)
         return;
     }
 
-    sendSaveProfile(snapshot.selfUid, snapshot.selfName, nick, desc, iconForSave);
+    if (snapshot.uploadToken.trimmed().isEmpty())
+    {
+        setStatus("登录状态已过期，请重新登录", true);
+        return;
+    }
+    sendSaveProfile(snapshot.selfUid, snapshot.uploadToken, snapshot.selfName, nick, desc, iconForSave);
     setStatus("资料同步中...", false);
 }
 
@@ -203,6 +213,7 @@ bool ProfileController::validateProfile(const QString& nick, const QString& desc
 }
 
 void ProfileController::sendSaveProfile(int uid,
+                                        const QString& token,
                                         const QString& name,
                                         const QString& nick,
                                         const QString& desc,
@@ -213,7 +224,7 @@ void ProfileController::sendSaveProfile(int uid,
         return;
     }
 
-    const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(uid, name, nick, desc, icon);
+    const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(uid, token, name, nick, desc, icon);
 
     _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/user_update_profile"),
                                      payload,

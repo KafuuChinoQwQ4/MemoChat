@@ -1,6 +1,6 @@
-#include "GateRouteModules.h"
+#include "GateRouteModules.hpp"
 
-#include "LogicSystem.h"
+#include "LogicSystem.hpp"
 
 void R18HttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
 {

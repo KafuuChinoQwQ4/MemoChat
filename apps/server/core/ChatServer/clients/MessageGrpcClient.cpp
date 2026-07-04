@@ -1,82 +1,32 @@
-#include "MessageGrpcClient.h"
+#include "MessageGrpcClient.hpp"
 
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "logging/GrpcTrace.h"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "logging/GrpcTrace.hpp"
 
 #include <utility>
+
+import memochat.chat.message_grpc_client_algorithms;
+
+namespace message_grpc_modules = memochat::chat::message_grpc_client::modules;
 
 namespace
 {
 const char* PrivateCommandMethodName(MessageGrpcClient::PrivateCommandRpc rpc)
 {
-    switch (rpc)
-    {
-        case MessageGrpcClient::PrivateCommandRpc::SendTextChatMessage:
-            return "SendTextChatMessage";
-        case MessageGrpcClient::PrivateCommandRpc::ForwardPrivateMessage:
-            return "ForwardPrivateMessage";
-        case MessageGrpcClient::PrivateCommandRpc::PrivateReadAck:
-            return "PrivateReadAck";
-        case MessageGrpcClient::PrivateCommandRpc::EditPrivateMessage:
-            return "EditPrivateMessage";
-        case MessageGrpcClient::PrivateCommandRpc::RevokePrivateMessage:
-            return "RevokePrivateMessage";
-        case MessageGrpcClient::PrivateCommandRpc::PrivateHistory:
-            return "PrivateHistory";
-    }
-    return "unknown";
+    return message_grpc_modules::PrivateCommandMethodName(static_cast<int>(rpc));
 }
 
 const char* GroupCommandMethodName(MessageGrpcClient::GroupCommandRpc rpc)
 {
-    switch (rpc)
-    {
-        case MessageGrpcClient::GroupCommandRpc::CreateGroup:
-            return "CreateGroup";
-        case MessageGrpcClient::GroupCommandRpc::GetGroupList:
-            return "GetGroupList";
-        case MessageGrpcClient::GroupCommandRpc::InviteGroupMember:
-            return "InviteGroupMember";
-        case MessageGrpcClient::GroupCommandRpc::ApplyJoinGroup:
-            return "ApplyJoinGroup";
-        case MessageGrpcClient::GroupCommandRpc::ReviewGroupApply:
-            return "ReviewGroupApply";
-        case MessageGrpcClient::GroupCommandRpc::GroupChatMessage:
-            return "GroupChatMessage";
-        case MessageGrpcClient::GroupCommandRpc::GroupHistory:
-            return "GroupHistory";
-        case MessageGrpcClient::GroupCommandRpc::EditGroupMessage:
-            return "EditGroupMessage";
-        case MessageGrpcClient::GroupCommandRpc::RevokeGroupMessage:
-            return "RevokeGroupMessage";
-        case MessageGrpcClient::GroupCommandRpc::ForwardGroupMessage:
-            return "ForwardGroupMessage";
-        case MessageGrpcClient::GroupCommandRpc::GroupReadAck:
-            return "GroupReadAck";
-        case MessageGrpcClient::GroupCommandRpc::UpdateGroupAnnouncement:
-            return "UpdateGroupAnnouncement";
-        case MessageGrpcClient::GroupCommandRpc::UpdateGroupIcon:
-            return "UpdateGroupIcon";
-        case MessageGrpcClient::GroupCommandRpc::SetGroupAdmin:
-            return "SetGroupAdmin";
-        case MessageGrpcClient::GroupCommandRpc::MuteGroupMember:
-            return "MuteGroupMember";
-        case MessageGrpcClient::GroupCommandRpc::KickGroupMember:
-            return "KickGroupMember";
-        case MessageGrpcClient::GroupCommandRpc::QuitGroup:
-            return "QuitGroup";
-        case MessageGrpcClient::GroupCommandRpc::DissolveGroup:
-            return "DissolveGroup";
-    }
-    return "unknown";
+    return message_grpc_modules::GroupCommandMethodName(static_cast<int>(rpc));
 }
 
 void MarkRemoteError(memochat::json::JsonValue& out, const char* method_name, const std::string& error, int status_code)
 {
-    out["message_remote_method"] = method_name;
-    out["message_remote_error"] = error;
-    out["message_remote_status_code"] = status_code;
+    out[message_grpc_modules::RemoteMethodField()] = method_name;
+    out[message_grpc_modules::RemoteErrorField()] = error;
+    out[message_grpc_modules::RemoteStatusCodeField()] = status_code;
 }
 
 std::string CompactJson(const memochat::json::JsonValue& value)
@@ -89,24 +39,25 @@ std::string CompactJson(const memochat::json::JsonValue& value)
 std::string ErrorPayload(const char* method_name, const std::string& error, int status_code)
 {
     memochat::json::JsonValue payload(memochat::json::object_t{});
-    payload["error"] = ErrorCodes::RPCFailed;
-    payload["message_remote_method"] = method_name;
-    payload["message_remote_error"] = error;
-    payload["message_remote_status_code"] = status_code;
+    payload[message_grpc_modules::ErrorField()] = ErrorCodes::RPCFailed;
+    payload[message_grpc_modules::RemoteMethodField()] = method_name;
+    payload[message_grpc_modules::RemoteErrorField()] = error;
+    payload[message_grpc_modules::RemoteStatusCodeField()] = status_code;
     return CompactJson(payload);
 }
 
 void MergePayload(memochat::json::JsonValue& out, const std::string& payload_json, const char* method_name)
 {
-    if (payload_json.empty())
+    if (!message_grpc_modules::ShouldMergePayload(payload_json.empty()))
     {
         return;
     }
 
     memochat::json::JsonValue payload(memochat::json::object_t{});
-    if (!memochat::json::reader_parse(payload_json, payload) || !payload.isObject())
+    const bool parse_ok = memochat::json::reader_parse(payload_json, payload);
+    if (message_grpc_modules::ShouldReportInvalidPayload(parse_ok, payload.isObject()))
     {
-        MarkRemoteError(out, method_name, "invalid message payload json", ErrorCodes::RPCFailed);
+        MarkRemoteError(out, method_name, message_grpc_modules::InvalidPayloadJsonMessage(), ErrorCodes::RPCFailed);
         return;
     }
 
@@ -271,10 +222,10 @@ MessageCommandResult MessageGrpcClient::DissolveGroup(const MessageCommandReques
 
 void MessageGrpcClient::CallGroupQuery(int uid, memochat::json::JsonValue& out)
 {
-    const char* method_name = "BuildGroupList";
-    if (!_group_stub)
+    const char* method_name = message_grpc_modules::BuildGroupListMethod();
+    if (message_grpc_modules::ShouldReportMissingStub(_group_stub != nullptr))
     {
-        MarkRemoteError(out, method_name, "group message grpc stub is not configured", ErrorCodes::RPCFailed);
+        MarkRemoteError(out, method_name, message_grpc_modules::GroupStubNotConfiguredMessage(), ErrorCodes::RPCFailed);
         return;
     }
 
@@ -287,14 +238,14 @@ void MessageGrpcClient::CallGroupQuery(int uid, memochat::json::JsonValue& out)
     context.set_deadline(std::chrono::system_clock::now() + _timeout);
 
     const auto status = _group_stub->BuildGroupList(&context, request, &response);
-    if (!status.ok())
+    if (message_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         MarkRemoteError(out, method_name, status.error_message(), static_cast<int>(status.error_code()));
         return;
     }
-    if (response.error() != ErrorCodes::Success)
+    if (message_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
-        out["message_remote_error_code"] = response.error();
+        out[message_grpc_modules::RemoteErrorCodeField()] = response.error();
     }
     MergePayload(out, response.payload_json(), method_name);
 }
@@ -302,10 +253,11 @@ void MessageGrpcClient::CallGroupQuery(int uid, memochat::json::JsonValue& out)
 MessageCommandResult MessageGrpcClient::CallPrivateCommand(PrivateCommandRpc rpc, const MessageCommandRequest& request)
 {
     const char* method_name = PrivateCommandMethodName(rpc);
-    if (!_private_stub)
+    if (message_grpc_modules::ShouldReportMissingStub(_private_stub != nullptr))
     {
-        return {request.request_msg_id,
-                ErrorPayload(method_name, "private message grpc stub is not configured", ErrorCodes::RPCFailed)};
+        return {
+            request.request_msg_id,
+            ErrorPayload(method_name, message_grpc_modules::PrivateStubNotConfiguredMessage(), ErrorCodes::RPCFailed)};
     }
 
     auto grpc_request = BuildGrpcCommandRequest(request);
@@ -337,15 +289,15 @@ MessageCommandResult MessageGrpcClient::CallPrivateCommand(PrivateCommandRpc rpc
             break;
     }
 
-    if (!status.ok())
+    if (message_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         return {request.request_msg_id,
                 ErrorPayload(method_name, status.error_message(), static_cast<int>(status.error_code()))};
     }
-    if (response.error() != ErrorCodes::Success)
+    if (message_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
         return {static_cast<short>(response.tcp_msg_id()),
-                ErrorPayload(method_name, "private message grpc business error", response.error())};
+                ErrorPayload(method_name, message_grpc_modules::PrivateBusinessErrorMessage(), response.error())};
     }
     return {static_cast<short>(response.tcp_msg_id()), response.payload_json()};
 }
@@ -353,10 +305,11 @@ MessageCommandResult MessageGrpcClient::CallPrivateCommand(PrivateCommandRpc rpc
 MessageCommandResult MessageGrpcClient::CallGroupCommand(GroupCommandRpc rpc, const MessageCommandRequest& request)
 {
     const char* method_name = GroupCommandMethodName(rpc);
-    if (!_group_stub)
+    if (message_grpc_modules::ShouldReportMissingStub(_group_stub != nullptr))
     {
-        return {request.request_msg_id,
-                ErrorPayload(method_name, "group message grpc stub is not configured", ErrorCodes::RPCFailed)};
+        return {
+            request.request_msg_id,
+            ErrorPayload(method_name, message_grpc_modules::GroupStubNotConfiguredMessage(), ErrorCodes::RPCFailed)};
     }
 
     auto grpc_request = BuildGrpcCommandRequest(request);
@@ -424,15 +377,15 @@ MessageCommandResult MessageGrpcClient::CallGroupCommand(GroupCommandRpc rpc, co
             break;
     }
 
-    if (!status.ok())
+    if (message_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         return {request.request_msg_id,
                 ErrorPayload(method_name, status.error_message(), static_cast<int>(status.error_code()))};
     }
-    if (response.error() != ErrorCodes::Success)
+    if (message_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
         return {static_cast<short>(response.tcp_msg_id()),
-                ErrorPayload(method_name, "group message grpc business error", response.error())};
+                ErrorPayload(method_name, message_grpc_modules::GroupBusinessErrorMessage(), response.error())};
     }
     return {static_cast<short>(response.tcp_msg_id()), response.payload_json()};
 }

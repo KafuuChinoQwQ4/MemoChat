@@ -1,0 +1,137 @@
+export module memochat.r18.source_service_algorithms;
+
+// Distinct nested namespace (source_service) so these helpers do not collide
+// with memochat::r18::modules exported by memochat.r18.source_algorithms, which
+// the same production TU (R18SourceService.cpp) also imports.
+export namespace memochat::r18::source_service::modules
+{
+unsigned long long ZipMagicMinSize()
+{
+    return 4;
+}
+
+bool IsZipMagic(char first, char second, unsigned long long size)
+{
+    return size >= ZipMagicMinSize() && first == 'P' && second == 'K';
+}
+
+int NormalizeSearchPage(int page)
+{
+    return page < 1 ? 1 : page;
+}
+
+int PreviewChapterCount()
+{
+    return 3;
+}
+
+int PreviewPageCount()
+{
+    return 5;
+}
+
+unsigned long long ManifestProbeWindow()
+{
+    return 4096;
+}
+
+bool MatchesJsSourceProbe(bool has_class, bool has_comic_source, bool has_search)
+{
+    return has_class && (has_comic_source || has_search);
+}
+
+const char* GateShellPrefix()
+{
+    return "gateserver";
+}
+
+const char* MockSourceId()
+{
+    return "mock";
+}
+
+const char* NativeFormat()
+{
+    return "native";
+}
+
+const char* NativeZipFormat()
+{
+    return "native-zip";
+}
+
+const char* SourceJsFormat()
+{
+    return "source-js";
+}
+
+const char* OkStatus()
+{
+    return "ok";
+}
+
+const char* StagedStatus()
+{
+    return "staged";
+}
+
+const char* StagedJsStatus()
+{
+    return "staged-js";
+}
+
+const char* DefaultVersion()
+{
+    return "0.0.0";
+}
+
+const char* JmSourceVersion()
+{
+    return "2.0.16";
+}
+
+const char* PicacgSourceVersion()
+{
+    return "2.2.1";
+}
+
+const char* InvalidPackagePayloadMessage()
+{
+    return "plugin package must be a zip file or JavaScript source";
+}
+
+const char* InvalidManifestMessage()
+{
+    return "manifest_json is invalid";
+}
+
+const char* SourceIdEmptyMessage()
+{
+    return "source id is empty";
+}
+
+const char* ReservedSourceIdMessage()
+{
+    return "source id is reserved for a built-in adapter";
+}
+
+const char* CreateDirFailedMessage()
+{
+    return "failed to create source directory";
+}
+
+const char* PersistFailedMessage()
+{
+    return "failed to persist source package";
+}
+
+const char* SourceNotFoundMessage()
+{
+    return "source not found";
+}
+
+const char* CannotDeleteBuiltinMessage()
+{
+    return "cannot delete a built-in source";
+}
+} // namespace memochat::r18::source_service::modules

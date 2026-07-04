@@ -1,0 +1,4 @@
+CREATE SCHEMA IF NOT EXISTS memo;
+
+ALTER TABLE IF EXISTS memo."user"
+    ADD COLUMN IF NOT EXISTS password_hash text NOT NULL DEFAULT '';

@@ -1,6 +1,8 @@
-#include "AuthLoginCacheProfileDto.h"
+#include "AuthLoginCacheProfileDto.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.account.auth_login_cache_profile_algorithms;
 
 namespace gateauthsupport
 {
@@ -9,7 +11,6 @@ AuthLoginCacheProfileDto ToLoginCacheProfileDto(const UserInfo& user_info)
 {
     AuthLoginCacheProfileDto dto;
     dto.uid = user_info.uid;
-    dto.pwd = user_info.pwd;
     dto.name = user_info.name;
     dto.email = user_info.email;
     dto.user_id = user_info.user_id;
@@ -23,7 +24,6 @@ AuthLoginCacheProfileDto ToLoginCacheProfileDto(const UserInfo& user_info)
 void ApplyLoginCacheProfileDto(const AuthLoginCacheProfileDto& dto, UserInfo& user_info)
 {
     user_info.uid = dto.uid;
-    user_info.pwd = dto.pwd;
     user_info.name = dto.name;
     user_info.email = dto.email;
     user_info.user_id = dto.user_id;
@@ -44,7 +44,8 @@ bool DecodeLoginCacheProfile(std::string_view body, AuthLoginCacheProfileDto* ou
     {
         return false;
     }
-    return out != nullptr && out->uid > 0 && !out->pwd.empty();
+    return memochat::account::auth_login_cache_profile::modules::HasDecodeOutput(out != nullptr) &&
+           memochat::account::auth_login_cache_profile::modules::HasValidCacheProfileIdentity(out->uid);
 }
 
 bool DecodeLoginCacheProfile(std::string_view body, UserInfo* out, std::string* error_out)

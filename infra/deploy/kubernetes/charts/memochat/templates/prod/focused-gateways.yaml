@@ -28,6 +28,10 @@ spec:
           image: "{{ $image.repository }}:{{ $image.tag }}"
           imagePullPolicy: {{ $image.pullPolicy }}
           env:
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_REQUIRE_PROD_SECRETS
+              value: "1"
             - name: TARGET_BIN
               value: /app/{{ $svc.target }}
             - name: RUN_WITH_CONFIG_ARG

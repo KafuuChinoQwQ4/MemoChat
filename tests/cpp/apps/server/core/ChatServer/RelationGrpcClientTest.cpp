@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "ChatRelationInternalGrpcService.h"
-#include "RelationGrpcClient.h"
-#include "const.h"
+#include "ChatRelationInternalGrpcService.hpp"
+#include "RelationGrpcClient.hpp"
+#include "const.hpp"
 
 #include <chrono>
 #include <cstdlib>

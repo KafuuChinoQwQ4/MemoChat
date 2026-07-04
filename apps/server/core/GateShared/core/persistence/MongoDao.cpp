@@ -1,9 +1,9 @@
-#include "MongoDao.h"
+#include "MongoDao.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
 #include <iostream>
+#include <utility>
 
 #include <bsoncxx/builder/basic/array.hpp>
 #include <bsoncxx/builder/basic/document.hpp>
@@ -13,6 +13,10 @@
 #include <mongocxx/exception/exception.hpp>
 #include <mongocxx/instance.hpp>
 #include <mongocxx/options/replace.hpp>
+
+import memochat.gate.mongo_dao_algorithms;
+
+namespace mongo_dao_modules = memochat::gate::mongo_dao::modules;
 
 namespace
 {
@@ -29,15 +33,7 @@ mongocxx::instance& MongoInstance()
 
 bool ParseBool(const std::string& raw)
 {
-    std::string normalized = raw;
-    std::transform(normalized.begin(),
-                   normalized.end(),
-                   normalized.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
-    return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on";
+    return mongo_dao_modules::ParseBoolText(raw.c_str());
 }
 
 std::string GetString(const bsoncxx::document::view& view, const char* key, const std::string& default_value = "")
@@ -98,14 +94,14 @@ MongoDao::~MongoDao()
 
 bool MongoDao::Enabled() const
 {
-    return enabled_ && init_ok_ && pool_ != nullptr;
+    return mongo_dao_modules::IsEnabled(enabled_, init_ok_, pool_ != nullptr);
 }
 
 bool MongoDao::Init()
 {
     auto& cfg = ConfigMgr::Inst();
     enabled_ = ParseBool(cfg.GetValue("Mongo", "Enabled"));
-    if (!enabled_)
+    if (!mongo_dao_modules::ShouldInitializeMongo(enabled_))
     {
         std::cerr << "[MongoDao] MongoDB not enabled, Moments content will not be stored" << std::endl;
         return false;
@@ -114,15 +110,15 @@ bool MongoDao::Init()
     uri_ = cfg.GetValue("Mongo", "Uri");
     database_name_ = cfg.GetValue("Mongo", "Database");
     moments_collection_name_ = cfg.GetValue("Mongo", "MomentsCollection");
-    if (uri_.empty() || database_name_.empty())
+    if (!mongo_dao_modules::HasRequiredConfig(uri_.empty(), database_name_.empty()))
     {
         std::cerr << "[MongoDao] Mongo config missing Uri or Database" << std::endl;
         enabled_ = false;
         return false;
     }
-    if (moments_collection_name_.empty())
+    if (mongo_dao_modules::ShouldUseDefaultMomentsCollection(moments_collection_name_.empty()))
     {
-        moments_collection_name_ = "moments_content";
+        moments_collection_name_ = mongo_dao_modules::DefaultMomentsCollection();
     }
 
     try
@@ -142,7 +138,7 @@ bool MongoDao::Init()
 
 bool MongoDao::EnsureIndexes()
 {
-    if (!pool_)
+    if (!mongo_dao_modules::CanEnsureIndexes(pool_ != nullptr))
     {
         return false;
     }
@@ -169,7 +165,7 @@ bool MongoDao::EnsureIndexes()
 
 bool MongoDao::InsertMomentContent(const MomentContentInfo& content)
 {
-    if (!Enabled() || content.moment_id <= 0)
+    if (!mongo_dao_modules::CanAccessMomentContent(Enabled(), content.moment_id))
     {
         return false;
     }
@@ -229,7 +225,7 @@ bool MongoDao::InsertMomentContent(const MomentContentInfo& content)
 
 bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content)
 {
-    if (!Enabled() || moment_id <= 0)
+    if (!mongo_dao_modules::CanAccessMomentContent(Enabled(), moment_id))
     {
         return false;
     }
@@ -283,7 +279,7 @@ bool MongoDao::GetMomentContent(int64_t moment_id, MomentContentInfo& content)
 
 bool MongoDao::DeleteMomentContent(int64_t moment_id)
 {
-    if (!Enabled() || moment_id <= 0)
+    if (!mongo_dao_modules::CanAccessMomentContent(Enabled(), moment_id))
     {
         return false;
     }

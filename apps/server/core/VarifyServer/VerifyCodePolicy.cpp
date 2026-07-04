@@ -1,10 +1,12 @@
-#include "VerifyCodePolicy.h"
+#include "VerifyCodePolicy.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <random>
 #include <regex>
 #include <string_view>
+
+import memochat.varify.verify_code_algorithms;
 
 namespace varifyservice
 {
@@ -17,22 +19,10 @@ std::string BuildVerifyCodeKey(const std::string& email)
 bool IsSyntheticLoadtestEmail(const std::string& email)
 {
     constexpr std::string_view suffix = "@loadtest.local";
-    if (email.size() < suffix.size())
-    {
-        return false;
-    }
-
-    const auto start = email.size() - suffix.size();
-    for (std::size_t i = 0; i < suffix.size(); ++i)
-    {
-        const auto lhs = static_cast<unsigned char>(email[start + i]);
-        const auto rhs = static_cast<unsigned char>(suffix[i]);
-        if (std::tolower(lhs) != std::tolower(rhs))
-        {
-            return false;
-        }
-    }
-    return true;
+    return memochat::varify::modules::EndsWithAsciiCaseInsensitive(email.data(),
+                                                                   email.size(),
+                                                                   suffix.data(),
+                                                                   suffix.size());
 }
 
 bool IsValidVerifyEmail(const std::string& email)
@@ -43,10 +33,8 @@ bool IsValidVerifyEmail(const std::string& email)
 
 std::string GenerateNumericVerifyCode(int length)
 {
-    if (length <= 0 || length > kMaxVerifyCodeLength)
-    {
-        length = kDefaultVerifyCodeLength;
-    }
+    length =
+        memochat::varify::modules::NormalizeVerifyCodeLength(length, kDefaultVerifyCodeLength, kMaxVerifyCodeLength);
 
     static thread_local std::mt19937 rng(std::random_device{}());
     std::uniform_int_distribution<int> digit_dist(0, 9);

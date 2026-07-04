@@ -101,6 +101,23 @@ TEST(AuthViewModelTest, LoginCredentialCacheJsonIsFeatureOwnedAndHasDedicatedSig
     EXPECT_EQ(cacheChangedCount, 1);
 }
 
+TEST(AuthViewModelTest, LoginCredentialCacheJsonSanitizesPersistedPasswords)
+{
+    CredentialCacheGuard credentialGuard;
+    QSettings settings = AuthCredentialStoreDetail::makeAuthSettings();
+    settings.beginGroup(QString::fromLatin1(AuthCredentialStoreDetail::kLoginCredentialSettingsGroup));
+    settings.setValue(QString::fromLatin1(AuthCredentialStoreDetail::kLoginCredentialCacheKey),
+                      QStringLiteral(R"([{"email":"old@example.com","password":"old-pw"}])"));
+    settings.endGroup();
+    settings.sync();
+
+    AuthViewModel viewModel(nullptr);
+    const QString cache = viewModel.loginCredentialCacheJson();
+    EXPECT_TRUE(cache.contains(QStringLiteral("old@example.com")));
+    EXPECT_FALSE(cache.contains(QStringLiteral("password")));
+    EXPECT_FALSE(cache.contains(QStringLiteral("old-pw")));
+}
+
 TEST(AuthViewModelTest, TipBusyAndSuccessStateRemainSelfContained)
 {
     AuthViewModel viewModel(nullptr);
@@ -205,6 +222,9 @@ TEST(AuthViewModelTest, InvokableCommandsUseCommandPortAndLocalCredentialStore)
     savedEmail = viewModel.loginCredentialCacheJson();
     EXPECT_TRUE(savedEmail.contains(QStringLiteral("saved@example.com")));
     EXPECT_TRUE(savedEmail.contains(QStringLiteral("login@example.com")));
+    EXPECT_FALSE(savedEmail.contains(QStringLiteral("password")));
+    EXPECT_FALSE(savedEmail.contains(QStringLiteral("pw")));
+    EXPECT_FALSE(savedEmail.contains(QStringLiteral("login-pw")));
     EXPECT_GE(cacheChangedCount, 2);
     EXPECT_EQ(loginEmail, QStringLiteral("login@example.com"));
     EXPECT_EQ(loginPassword, QStringLiteral("login-pw"));

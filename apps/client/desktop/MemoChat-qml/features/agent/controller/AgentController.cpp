@@ -1,13 +1,16 @@
 #include "AgentController.h"
+#include "ClientGateway.h"
 #include "AgentGameClient.h"
 #include "AgentMessageModel.h"
 #include "AgentStreamClient.h"
 #include "httpmgr.h"
+#include "usermgr.h"
 
 #include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUrlQuery>
 #include <optional>
 
 AgentController::AgentController(ClientGateway* gateway, QObject* parent)
@@ -39,6 +42,59 @@ AgentController::AgentController(ClientGateway* gateway, QObject* parent)
 
 AgentController::~AgentController()
 {
+}
+
+ReqId AgentController::nextAgentHttpRequestId()
+{
+    constexpr int kFirstAgentHttpRequestId = 2000000;
+    constexpr int kLastAgentHttpRequestId = 2100000;
+    if (_next_agent_http_request_id < kFirstAgentHttpRequestId ||
+        _next_agent_http_request_id >= kLastAgentHttpRequestId)
+    {
+        _next_agent_http_request_id = kFirstAgentHttpRequestId;
+    }
+    return static_cast<ReqId>(_next_agent_http_request_id++);
+}
+
+QString AgentController::currentAuthToken() const
+{
+    return _gateway && _gateway->userMgr() ? _gateway->userMgr()->GetToken() : QString();
+}
+
+void AgentController::addAuthToPayload(QJsonObject& payload) const
+{
+    if (!payload.contains(QStringLiteral("uid")))
+    {
+        const int uid = currentUid();
+        if (uid > 0)
+        {
+            payload[QStringLiteral("uid")] = uid;
+        }
+    }
+
+    const QString token = currentAuthToken().trimmed();
+    if (!token.isEmpty())
+    {
+        payload[QStringLiteral("token")] = token;
+    }
+}
+
+void AgentController::addAuthToQuery(QUrlQuery& query) const
+{
+    if (!query.hasQueryItem(QStringLiteral("uid")))
+    {
+        const int uid = currentUid();
+        if (uid > 0)
+        {
+            query.addQueryItem(QStringLiteral("uid"), QString::number(uid));
+        }
+    }
+
+    const QString token = currentAuthToken().trimmed();
+    if (!token.isEmpty() && !query.hasQueryItem(QStringLiteral("token")))
+    {
+        query.addQueryItem(QStringLiteral("token"), token);
+    }
 }
 
 void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod)

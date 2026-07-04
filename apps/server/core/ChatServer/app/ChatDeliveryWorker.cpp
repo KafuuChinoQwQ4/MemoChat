@@ -1,15 +1,15 @@
-#include "ChatRuntime.h"
-#include "ConfigMgr.h"
-#include "LogicSystem.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "SnowflakeUtil.h"
-#include "cluster/ChatClusterDiscovery.h"
-#include "const.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "ChatRuntime.hpp"
+#include "ConfigMgr.hpp"
+#include "LogicSystem.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "SnowflakeUtil.hpp"
+#include "cluster/ChatClusterDiscovery.hpp"
+#include "const.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -20,6 +20,10 @@
 #include <stdexcept>
 #include <string>
 
+import memochat.chat.delivery_worker_runtime_algorithms;
+
+namespace delivery_worker_modules = memochat::chat::delivery_worker::modules;
+
 namespace
 {
 std::string ParseConfigPath(int argc, char** argv)
@@ -27,22 +31,22 @@ std::string ParseConfigPath(int argc, char** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
-        if (arg == "--config")
+        if (delivery_worker_modules::IsConfigFlag(arg.data(), arg.size()))
         {
-            if (i + 1 >= argc)
+            if (delivery_worker_modules::ShouldRejectMissingConfigValue(i + 1 < argc))
             {
-                throw std::runtime_error("missing value for --config");
+                throw std::runtime_error(delivery_worker_modules::MissingConfigValueMessage());
             }
             return argv[++i];
         }
-        throw std::runtime_error("unknown argument: " + arg);
+        throw std::runtime_error(std::string(delivery_worker_modules::UnknownArgumentPrefix()) + arg);
     }
     return "";
 }
 
 void SetInstanceNameEnv(const std::string& instance_name)
 {
-    if (instance_name.empty())
+    if (!delivery_worker_modules::ShouldSetInstanceName(instance_name.empty()))
     {
         return;
     }
@@ -57,8 +61,10 @@ void InitSnowflake(ConfigMgr& cfg)
 {
     const auto datacenter_id_str = cfg.GetValue("Snowflake", "DatacenterId");
     const auto worker_id_str = cfg.GetValue("Snowflake", "WorkerId");
-    const int64_t datacenter_id = datacenter_id_str.empty() ? 1 : std::stoll(datacenter_id_str);
-    const int64_t worker_id = worker_id_str.empty() ? 1 : std::stoll(worker_id_str);
+    const int64_t datacenter_id = datacenter_id_str.empty() ? delivery_worker_modules::DefaultSnowflakeDatacenterId()
+                                                            : std::stoll(datacenter_id_str);
+    const int64_t worker_id =
+        worker_id_str.empty() ? delivery_worker_modules::DefaultSnowflakeWorkerId() : std::stoll(worker_id_str);
     SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
 }
 } // namespace
@@ -75,9 +81,9 @@ int main(int argc, char** argv)
             {
                 return cfg.GetValue(section, key);
             });
-        if (worker_name.empty())
+        if (delivery_worker_modules::ShouldRejectEmptyWorkerName(worker_name.empty()))
         {
-            throw std::runtime_error("chat delivery worker node name is empty");
+            throw std::runtime_error(delivery_worker_modules::EmptyWorkerNameMessage());
         }
         SetInstanceNameEnv(worker_name);
 
@@ -93,8 +99,8 @@ int main(int argc, char** argv)
             {
                 return cfg.GetValue(section, key);
             });
-        memolog::Logger::Init("ChatDeliveryWorker", log_cfg);
-        memolog::Telemetry::Init("ChatDeliveryWorker", telemetry_cfg);
+        memolog::Logger::Init(delivery_worker_modules::LoggerName(), log_cfg);
+        memolog::Telemetry::Init(delivery_worker_modules::LoggerName(), telemetry_cfg);
 
         const auto storage_init_start = std::chrono::steady_clock::now();
         PostgresMgr::GetInstance();
@@ -119,7 +125,8 @@ int main(int argc, char** argv)
         memolog::LogInfo(
             "delivery_worker.start",
             "ChatDeliveryWorker started",
-            {{"name", worker_name}, {"worker_enabled", memochat::chatruntime::IsWorkerEnabled() ? "true" : "false"}});
+            {{"name", worker_name},
+             {"worker_enabled", delivery_worker_modules::WorkerEnabledText(memochat::chatruntime::IsWorkerEnabled())}});
 
         boost::asio::io_context io_context;
         boost::asio::signal_set signals(io_context

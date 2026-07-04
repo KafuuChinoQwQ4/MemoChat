@@ -3,12 +3,12 @@
 #include <thread>
 #include <boost/asio.hpp>
 #include <grpcpp/grpcpp.h>
-#include "AIServiceImpl.h"
-#include "ConfigMgr.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/TelemetryConfig.h"
-#include "logging/Telemetry.h"
+#include "AIServiceImpl.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TelemetryConfig.hpp"
+#include "logging/Telemetry.hpp"
 
 void RunServer()
 {

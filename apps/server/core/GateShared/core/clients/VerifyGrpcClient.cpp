@@ -1,5 +1,5 @@
-#include "VerifyGrpcClient.h"
-#include "const.h"
+#include "VerifyGrpcClient.hpp"
+#include "const.hpp"
 
 VerifyGrpcClient::VerifyGrpcClient()
 {

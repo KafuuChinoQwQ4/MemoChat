@@ -2,6 +2,24 @@ service:
   host: "0.0.0.0"
   port: 8096
 
+security:
+  enforce_internal_auth: true
+  internal_auth_header: "X-MemoChat-AI-Internal-Key"
+  internal_api_key_env: "MEMOCHAT_AI_INTERNAL_API_KEY"
+  internal_api_key: ""
+  provider_admin_auth_header: "X-MemoChat-AI-Provider-Admin-Key"
+  provider_admin_key_env: "MEMOCHAT_AI_PROVIDER_ADMIN_KEY"
+  provider_admin_key: ""
+  trusted_client_hosts: []
+  unauthenticated_paths:
+    - "/health"
+    - "/ready"
+    - "/metrics"
+  cors_allow_origins:
+    - "http://127.0.0.1"
+    - "http://localhost"
+  cors_allow_origin_regex: "^https?://(127\\.0\\.0\\.1|localhost)(:\\d+)?$"
+
 llm:
   default_backend: "deepseek"
   default_model: "deepseek-chat"
@@ -117,7 +135,7 @@ agent_queue:
     host: "127.0.0.1"
     port: 5672
     username: "memochat"
-    password: "123456"
+    password: ""
     vhost: "/"
     exchange: "memochat.direct"
     dlx_exchange: "memochat.dlx"
@@ -141,7 +159,7 @@ semantic_cache:
     host: "127.0.0.1"
     port: 6379
     username: ""
-    password: "123456"
+    password: ""
     db: 0
     ssl: false
     socket_timeout_sec: 2.0
@@ -171,7 +189,7 @@ neo4j:
   host: "127.0.0.1"
   port: 7687
   username: "neo4j"
-  password: "password"
+  password: ""
   database: "neo4j"
   vector_dimension: 384
   enabled: true  # Docker 中运行: docker compose -f docker-compose.yml up -d
@@ -219,12 +237,14 @@ mcp:
     - name: filesystem
       command: ["npx", "-y", "@modelcontextprotocol/server-filesystem"]
       args: ["/path/to/allowed"]
+      allowed_tools: []
       enabled: false
     - name: github
       command: ["npx", "-y", "@modelcontextprotocol/server-github"]
       args: []
       env:
         GITHUB_TOKEN: ""
+      allowed_tools: []
       enabled: false
 
 harness:
@@ -389,7 +409,7 @@ postgres:
   host: "127.0.0.1"
   port: 15432
   user: "memochat"
-  password: "123456"
+  password: ""
   database: "memo_pg"
   min_pool_size: 2
   max_pool_size: 10

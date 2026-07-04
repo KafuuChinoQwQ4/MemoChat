@@ -17,7 +17,8 @@ datasources:
     jsonData:
       httpMode: POST
       organization: memochat
-      token: my-super-secret-admin-token
+    secureJsonData:
+      token: ${MEMOCHAT_INFLUXDB_ADMIN_TOKEN}
     editable: false
   - name: Loki
     uid: loki

@@ -1,6 +1,8 @@
-#include "AuthPublicDtos.h"
+#include "AuthPublicDtos.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.account.auth_public_dto_algorithms;
 
 #include <exception>
 
@@ -133,10 +135,30 @@ AuthLoginRequestDto AuthLoginRequestFromJsonValue(const memochat::json::JsonValu
     return request;
 }
 
+AuthRefreshRequestDto AuthRefreshRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    AuthRefreshRequestDto request;
+    request.refresh_token = memochat::json::glaze_safe_get<std::string>(root, "refresh_token", "");
+    request.client_ver = memochat::json::glaze_safe_get<std::string>(root, "client_ver", "");
+    return request;
+}
+
+AuthLogoutRequestDto AuthLogoutRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    AuthLogoutRequestDto request;
+    request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
+    request.refresh_token = memochat::json::glaze_safe_get<std::string>(root, "refresh_token", "");
+    request.client_ver = memochat::json::glaze_safe_get<std::string>(root, "client_ver", "");
+    request.all_devices = memochat::json::glaze_safe_get<bool>(root, "all_devices", false);
+    return request;
+}
+
 ProfileUpdateRequestDto ProfileUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ProfileUpdateRequestDto request;
     request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     request.name = memochat::json::glaze_safe_get<std::string>(root, "name", "");
     request.nick = memochat::json::glaze_safe_get<std::string>(root, "nick", "");
     request.desc = memochat::json::glaze_safe_get<std::string>(root, "desc", "");
@@ -153,13 +175,18 @@ GetUserInfoRequestDto GetUserInfoRequestFromJsonValue(const memochat::json::Json
 
 bool HasAuthEmailRequiredFields(const memochat::json::JsonValue& root)
 {
-    return memochat::json::glaze_has_key(root, "email");
+    return memochat::account::auth_public::modules::HasAuthEmailRequiredShape(
+        memochat::json::glaze_has_key(root, "email"));
 }
 
 bool HasProfileUpdateRequiredFields(const memochat::json::JsonValue& root)
 {
-    return memochat::json::glaze_has_key(root, "uid") && memochat::json::glaze_has_key(root, "nick") &&
-           memochat::json::glaze_has_key(root, "desc") && memochat::json::glaze_has_key(root, "icon");
+    return memochat::account::auth_public::modules::HasProfileUpdateRequiredShape(
+        memochat::json::glaze_has_key(root, "uid"),
+        memochat::json::glaze_has_key(root, "token"),
+        memochat::json::glaze_has_key(root, "nick"),
+        memochat::json::glaze_has_key(root, "desc"),
+        memochat::json::glaze_has_key(root, "icon"));
 }
 
 bool DecodeAuthEmailRequest(std::string_view body,
@@ -194,6 +221,22 @@ bool DecodeAuthLoginRequest(std::string_view body,
     return DecodeAuthPublicRequest(body, out, parsed_root, error_out, AuthLoginRequestFromJsonValue);
 }
 
+bool DecodeAuthRefreshRequest(std::string_view body,
+                              AuthRefreshRequestDto* out,
+                              memochat::json::JsonValue* parsed_root,
+                              std::string* error_out)
+{
+    return DecodeAuthPublicRequest(body, out, parsed_root, error_out, AuthRefreshRequestFromJsonValue);
+}
+
+bool DecodeAuthLogoutRequest(std::string_view body,
+                             AuthLogoutRequestDto* out,
+                             memochat::json::JsonValue* parsed_root,
+                             std::string* error_out)
+{
+    return DecodeAuthPublicRequest(body, out, parsed_root, error_out, AuthLogoutRequestFromJsonValue);
+}
+
 bool DecodeProfileUpdateRequest(std::string_view body,
                                 ProfileUpdateRequestDto* out,
                                 memochat::json::JsonValue* parsed_root,
@@ -226,6 +269,11 @@ memochat::json::JsonValue ProfileUpdateResponseToJsonValue(const ProfileUpdateRe
 }
 
 memochat::json::JsonValue UserInfoResponseToJsonValue(const UserInfoResponseDto& response)
+{
+    return TypedJsonToJsonValue(response);
+}
+
+memochat::json::JsonValue AuthLogoutResponseToJsonValue(const AuthLogoutResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }

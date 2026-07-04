@@ -6,6 +6,7 @@
 
 | 子目录 | 作用概括 |
 | --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 媒体核心层 C++ module 接口 |
 | [`storage/`](storage/_TREE.md) | 媒体存储抽象与 S3/对象存储实现 |
 | [`support/`](support/_TREE.md) | HTTP/2 媒体传输等支撑组件 |
 

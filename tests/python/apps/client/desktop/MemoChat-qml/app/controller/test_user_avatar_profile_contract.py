@@ -115,17 +115,21 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("inline bool looksLikeMediaKey", icon_utils)
         self.assertIn("inline QString mediaKeyDownloadUrl", icon_utils)
         self.assertIn('QStringLiteral("/media/download?asset=") + mediaKey', icon_utils)
-        self.assertIn("return mediaKeyDownloadUrl(icon);", icon_utils)
-        self.assertIn("return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));", icon_utils)
+        # media-key branch now guards against empty prefix before returning URL
+        self.assertIn("mediaKeyDownloadUrl(icon)", icon_utils)
+        self.assertIn("kDefaultIcon : keyUrl", icon_utils)
+        # normalizeRelativeMediaDownloadUrl now checks for empty prefix before auth-appending
+        self.assertIn("return attachMediaDownloadAuth(full);", icon_utils)
         self.assertIn("inline QString normalizeLocalMediaDownloadUrl", icon_utils)
         self.assertIn("normalized.setPort(parsedBase.port(-1));", icon_utils)
         self.assertNotIn("parsed.setPort(8080)", icon_utils)
         self.assertNotIn("port == 80 || port == 8443", icon_utils)
 
     def test_gate_login_cache_hit_refreshes_database_profile_before_ticket_issue(self):
-        support_h = read(ACCOUNT_CORE / "support/AuthLoginSupport.h")
+        support_h = read(ACCOUNT_CORE / "support/AuthLoginSupport.hpp")
         support_cpp = read(ACCOUNT_CORE / "support/AuthLoginSupport.cpp")
         h1_auth_service = read(ACCOUNT_DOMAIN / "services/auth/AuthService.cpp")
+        auth_route_module = read(ACCOUNT_DOMAIN / "modules/auth/AuthRouteModule.cpp")
         h3 = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")
 
         self.assertIn("bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo);", support_h)
@@ -135,7 +139,10 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         self.assertIn("CacheLoginProfile(email, userInfo);", refresh)
 
         self.assertIn("gateauthsupport::RefreshLoginProfileFromDb(email, userInfo);", h1_auth_service)
-        self.assertIn("AuthService::HandleUserLogin", h3)
+        self.assertIn("RegisterLogin(registry)", h3)
+        self.assertIn("H3RouteAdapter::Dispatch(connection, SharedRouteRegistry())", h3)
+        self.assertIn("AuthRouteModule::RegisterLoginRoutes", auth_route_module)
+        self.assertIn("AuthService::Instance().HandleUserLogin", auth_route_module)
 
 
 if __name__ == "__main__":

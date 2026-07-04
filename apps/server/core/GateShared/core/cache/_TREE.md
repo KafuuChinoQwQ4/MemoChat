@@ -2,6 +2,12 @@
 
 > GateShared 的 Redis 缓存层：连接管理与批量管线操作。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | Redis 缓存层的 C++ module 接口分组 |
+
 ## 文件
 
 | 文件 | 作用概括 |

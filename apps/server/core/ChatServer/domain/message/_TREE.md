@@ -2,11 +2,17 @@
 
 > 消息领域：私聊与群聊消息服务、内部消息 gRPC、投递载荷与响应格式化，以及通过工厂装配消息命令服务。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 消息领域的 C++ module 接口分组 |
+
 ## 文件
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `ChatMessageInternalGrpcService.cpp` | 内部消息 gRPC 服务实现 |
+| `ChatMessageInternalGrpcService.cpp` | 内部消息 gRPC 服务实现，导入轻量算法 module 处理错误消息、缺依赖 guard 和 tcp message id 转换。 |
 | `ChatMessageInternalGrpcService.h` | 内部消息 gRPC 服务声明 |
 | `GroupMessageService.cpp` | 群聊消息服务实现 |
 | `GroupMessageService.h` | 群聊消息服务声明 |

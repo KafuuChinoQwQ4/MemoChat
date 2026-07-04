@@ -1,5 +1,5 @@
-#include "GateRouteModules.h"
-#include "LogicSystem.h"
+#include "GateRouteModules.hpp"
+#include "LogicSystem.hpp"
 
 void AuthHttpService::RegisterRoutes(LogicSystem& logic)
 {

@@ -1,8 +1,8 @@
-#include "routing/RouteRegistry.h"
+#include "routing/RouteRegistry.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <utility>
+
+import memochat.gate.routing_algorithms;
 
 namespace memochat::gate::routing
 {
@@ -39,13 +39,7 @@ bool RouteRegistry::Dispatch(const GateRequest& request, GateResponse& response)
 
 std::string RouteRegistry::NormalizeMethod(std::string method)
 {
-    std::transform(method.begin(),
-                   method.end(),
-                   method.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::toupper(ch));
-                   });
+    modules::NormalizeMethodAscii(method.data(), method.size());
     return method;
 }
 
@@ -56,17 +50,7 @@ std::string RouteRegistry::RouteKey(const std::string& method, const std::string
 
 bool RouteRegistry::MatchesRoutePrefix(const std::string& path, const std::string& prefix)
 {
-    if (path == prefix)
-    {
-        return true;
-    }
-    if (path.size() <= prefix.size() || path.rfind(prefix, 0) != 0)
-    {
-        return false;
-    }
-
-    const char next = path[prefix.size()];
-    return next == '/' || next == '?';
+    return modules::MatchesRoutePrefix(path.data(), path.size(), prefix.data(), prefix.size());
 }
 
 } // namespace memochat::gate::routing

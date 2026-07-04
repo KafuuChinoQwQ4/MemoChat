@@ -23,6 +23,11 @@ SESSION_AUTH_LOGIN_RESPONSE = APP_DIR / "session/SessionAuthCoordinatorLoginResp
 SESSION_CHAT_ENTRY = APP_DIR / "session/SessionChatEntryCoordinator.cpp"
 CONNECTION_COORDINATOR = APP_DIR / "connection/AppChatConnectionCoordinator.cpp"
 CONNECTION_COORDINATOR_HEADER = APP_DIR / "connection/AppChatConnectionCoordinator.h"
+CONNECTION_POLICY = APP_DIR / "connection/AppChatConnectionPolicy.cpp"
+CONNECTION_POLICY_HEADER = APP_DIR / "connection/AppChatConnectionPolicy.h"
+CONNECTION_STATE_HEADER = APP_DIR / "connection/AppControllerConnectionState.h"
+APP_COORDINATORS_HEADER = APP_DIR / "coordinators/AppCoordinators.h"
+GLOBAL_HEADER = REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/common/global.h"
 
 
 def read(path: Path) -> str:
@@ -243,6 +248,43 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
             body,
         )
         self.assertNotIn("_app.", body)
+
+    def test_chat_login_contract_uses_v3_login_ticket_only(self):
+        coordinator_header = read(CONNECTION_COORDINATOR_HEADER)
+        coordinator_source = read(CONNECTION_COORDINATOR)
+        policy_header = read(CONNECTION_POLICY_HEADER)
+        policy_source = read(CONNECTION_POLICY)
+        login_response = read(SESSION_AUTH_LOGIN_RESPONSE)
+        connection_state = read(CONNECTION_STATE_HEADER)
+        coordinators = read(APP_COORDINATORS_HEADER)
+        global_header = read(GLOBAL_HEADER)
+        on_connect = extract_cpp_function(
+            coordinator_source,
+            "void AppChatConnectionCoordinator::onTcpConnectFinished",
+        )
+
+        for text, label in (
+            (coordinator_header, "coordinator snapshot"),
+            (policy_header, "policy snapshot"),
+            (connection_state, "controller connection state"),
+            (coordinators, "coordinator state"),
+            (global_header, "ServerInfo"),
+        ):
+            with self.subTest(default_owner=label):
+                expected_default = "ProtocolVersion = 3" if label == "ServerInfo" else "protocolVersion = 3"
+                self.assertIn(expected_default, text)
+
+        self.assertIn("snapshot.protocolVersion != 3 || snapshot.loginTicket.trimmed().isEmpty()", on_connect)
+        self.assertIn('obj["protocol_version"] = 3;', on_connect)
+        self.assertIn('obj["login_ticket"] = snapshot.loginTicket;', on_connect)
+        self.assertNotIn('obj["uid"]', on_connect)
+        self.assertNotIn('obj["token"]', on_connect)
+
+        self.assertIn("invalidChatTicket", policy_source)
+        self.assertIn("snapshot.protocolVersion != 3 || snapshot.loginTicket.trimmed().isEmpty()", policy_source)
+        self.assertNotIn("missingCredential", policy_source)
+        self.assertIn("toInt(3)", login_response)
+        self.assertNotIn("toInt(2)", login_response)
 
 
 if __name__ == "__main__":

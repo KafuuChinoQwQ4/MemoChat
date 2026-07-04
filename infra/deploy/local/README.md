@@ -96,7 +96,7 @@ curl -fsS http://127.0.0.1:8088/metrics
 
 ## Envoy Gateway Check
 
-The default local architecture now uses `memochat-envoy-gateway` for both the HTTP edge on host port `80` and the HTTPS/HTTP3 edge on host port `8443`. It proxies to the host GateServer instances on `8080` and `8084`, publishes Envoy admin stats on container port `9901`, and writes JSON access logs to the Envoy log mount under `/data/docker-data/memochat/envoy/logs`.
+The default local architecture now uses `memochat-envoy-gateway` for both the HTTP edge on host port `80` and the HTTPS/HTTP3 edge on host port `8443`. It proxies to the host GateServer instances on `8080` and `8084`, keeps Envoy admin on `127.0.0.1:9901` inside the Envoy container, and writes JSON access logs to the Envoy log mount under `/data/docker-data/memochat/envoy/logs`.
 
 Validate the local gateway wiring after changing `infra/deploy/local/docker-compose.yml` or `infra/deploy/local/compose/envoy.yaml`:
 
@@ -151,7 +151,7 @@ tools\scripts\full_flow_test.ps1
 
 ## Envoy Metrics Check
 
-Envoy admin and Prometheus stats stay inside the Docker network. `memochat-envoy-gateway` exposes admin port `9901` in the container only, and Prometheus scrapes `/stats/prometheus` through the `envoy_gateway` job.
+Envoy admin stays bound to loopback inside the Envoy container. It is not published on the host, and the default Prometheus config does not scrape `memochat-envoy-gateway:9901` from the shared Docker network. Use container-local probes for admin readiness or stats; add a dedicated authenticated sidecar/exporter before enabling scrape-based metrics.
 
 ```powershell
 tools\scripts\test_envoy_metrics.ps1
@@ -160,9 +160,8 @@ tools\scripts\test_envoy_metrics.ps1
 For manual checks:
 
 ```powershell
-docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-envoy-gateway:9901/ready
-docker run --rm --network memochat_default curlimages/curl:8.10.1 -fsS http://memochat-envoy-gateway:9901/stats/prometheus
-Invoke-WebRequest "http://127.0.0.1:9090/api/v1/query?query=envoy_server_live%7Bjob%3D%22envoy_gateway%22%7D" -UseBasicParsing
+docker exec memochat-envoy-gateway sh -ec "wget -qO- http://127.0.0.1:9901/ready"
+docker exec memochat-envoy-gateway sh -ec "wget -qO- http://127.0.0.1:9901/stats/prometheus | head"
 ```
 
 ## Envoy Upstream Routing Check

@@ -1,12 +1,12 @@
-#include "routing/RouteSchemaCatalog.h"
+#include "routing/RouteSchemaCatalog.hpp"
 
-#include "modules/ai/AIRouteModule.h"
-#include "modules/auth/AuthRouteModule.h"
-#include "modules/call/CallRouteModule.h"
-#include "modules/media/MediaRouteModule.h"
-#include "modules/moments/MomentsRouteModule.h"
-#include "modules/profile/ProfileRouteModule.h"
-#include "modules/r18/R18RouteModule.h"
+#include "modules/ai/AIRouteModule.hpp"
+#include "modules/auth/AuthRouteModule.hpp"
+#include "modules/call/CallRouteModule.hpp"
+#include "modules/media/MediaRouteModule.hpp"
+#include "modules/moments/MomentsRouteModule.hpp"
+#include "modules/profile/ProfileRouteModule.hpp"
+#include "modules/r18/R18RouteModule.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,6 +1,8 @@
-#include "modules/profile/ProfileRouteModule.h"
+#include "modules/profile/ProfileRouteModule.hpp"
 
-#include "AuthPublicDtos.h"
+#include "AuthPublicDtos.hpp"
+
+import memochat.account.profile_route_schema_algorithms;
 
 namespace memochat::gate::modules::profile
 {
@@ -11,17 +13,17 @@ std::vector<memochat::gate::routing::RouteSchemaDescriptor> ProfileRouteModule::
 
     return {
         MakeRouteSchema<gateauthsupport::ProfileUpdateRequestDto, gateauthsupport::ProfileUpdateResponseDto>(
-            "POST",
-            "/user_update_profile",
-            "profile.user.update",
-            "ProfileUpdateRequestDto",
-            "ProfileUpdateResponseDto"),
+            memochat::account::profile_route_schema::modules::PostMethod(),
+            memochat::account::profile_route_schema::modules::UpdateProfilePath(),
+            memochat::account::profile_route_schema::modules::UpdateProfileRouteName(),
+            memochat::account::profile_route_schema::modules::UpdateProfileRequestTypeName(),
+            memochat::account::profile_route_schema::modules::UpdateProfileResponseTypeName()),
         MakeRouteSchema<gateauthsupport::GetUserInfoRequestDto, gateauthsupport::UserInfoResponseDto>(
-            "POST",
-            "/get_user_info",
-            "profile.user.info",
-            "GetUserInfoRequestDto",
-            "UserInfoResponseDto"),
+            memochat::account::profile_route_schema::modules::PostMethod(),
+            memochat::account::profile_route_schema::modules::GetUserInfoPath(),
+            memochat::account::profile_route_schema::modules::GetUserInfoRouteName(),
+            memochat::account::profile_route_schema::modules::GetUserInfoRequestTypeName(),
+            memochat::account::profile_route_schema::modules::UserInfoResponseTypeName()),
     };
 }
 

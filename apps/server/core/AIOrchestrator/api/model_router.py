@@ -2,8 +2,10 @@
 模型列表 API 路由
 """
 
-from config import settings
-from fastapi import APIRouter
+import hmac
+
+from config import resolve_provider_admin_key, settings
+from fastapi import APIRouter, HTTPException, Request
 from harness import HarnessContainer
 from observability.metrics import ai_metrics
 from schemas.api import (
@@ -17,6 +19,13 @@ from schemas.api import (
 )
 
 router = APIRouter()
+
+
+def _require_provider_admin(request: Request) -> None:
+    expected = resolve_provider_admin_key(settings.security)
+    supplied = request.headers.get(settings.security.provider_admin_auth_header, "")
+    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=403, detail="provider admin auth required")
 
 
 @router.get("", response_model=ListModelsRsp)
@@ -77,7 +86,8 @@ async def list_models():
 
 
 @router.post("/api-provider", response_model=RegisterApiProviderRsp)
-async def register_api_provider(req: RegisterApiProviderReq):
+async def register_api_provider(req: RegisterApiProviderReq, request: Request):
+    _require_provider_admin(request)
     container = HarnessContainer.get_instance()
     try:
         endpoint = await container.llm_registry.register_api_provider(
@@ -120,7 +130,8 @@ async def register_api_provider(req: RegisterApiProviderReq):
 
 
 @router.post("/api-provider/delete", response_model=DeleteApiProviderRsp)
-async def delete_api_provider(req: DeleteApiProviderReq):
+async def delete_api_provider(req: DeleteApiProviderReq, request: Request):
+    _require_provider_admin(request)
     container = HarnessContainer.get_instance()
     try:
         deleted = container.llm_registry.delete_api_provider(req.provider_id)

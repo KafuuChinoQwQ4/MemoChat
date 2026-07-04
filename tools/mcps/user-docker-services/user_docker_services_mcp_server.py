@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import base64
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -24,14 +25,28 @@ ENDPOINTS = {
     "cadvisor": "http://127.0.0.1:8088",
 }
 
-AUTH = {
-    "grafana": ("admin", "admin"),
-    "rabbitmq": ("memochat", "123456"),
+AUTH_ENV = {
+    "grafana": ("MEMOCHAT_GRAFANA_ADMIN_USER", "MEMOCHAT_GRAFANA_ADMIN_PASSWORD"),
+    "rabbitmq": ("MEMOCHAT_RABBITMQ_USER", "MEMOCHAT_RABBITMQ_PASSWORD"),
 }
 
-INFLUX_TOKEN = "my-super-secret-admin-token"
 INFLUX_ORG = "memochat"
 INFLUX_BUCKET = "metrics"
+
+MINIO_ACCESS_KEY_ENV = (
+    "MEMOCHAT_MINIO_ROOT_USER",
+    "MEMOCHAT_MINIO_ACCESSKEY",
+    "MEMOCHAT_MINIO_ACCESS_KEY",
+    "MINIO_ROOT_USER",
+    "MINIO_ACCESS_KEY",
+)
+MINIO_SECRET_KEY_ENV = (
+    "MEMOCHAT_MINIO_ROOT_PASSWORD",
+    "MEMOCHAT_MINIO_SECRETKEY",
+    "MEMOCHAT_MINIO_SECRET_KEY",
+    "MINIO_ROOT_PASSWORD",
+    "MINIO_SECRET_KEY",
+)
 
 TOOLS = {
     "minio_list_buckets": {
@@ -140,6 +155,33 @@ def _text_response(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}]}
 
 
+def _required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if value:
+        return value
+    raise RuntimeError(f"Missing required environment variable: {name}")
+
+
+def _required_env_first(names: tuple[str, ...]) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    raise RuntimeError("Missing required environment variable: one of " + ", ".join(names))
+
+
+def _basic_auth_for(service: str) -> tuple[str, str] | None:
+    env_names = AUTH_ENV.get(service)
+    if env_names is None:
+        return None
+    user_env, password_env = env_names
+    return _required_env(user_env), _required_env(password_env)
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _http_json(
     service: str,
     path: str,
@@ -158,8 +200,9 @@ def _http_json(
     if body is not None:
         data = json.dumps(body).encode("utf-8") if not isinstance(body, (bytes, bytearray)) else body
         request_headers.setdefault("Content-Type", "application/json")
-    if service in AUTH:
-        user, password = AUTH[service]
+    auth = _basic_auth_for(service)
+    if auth is not None:
+        user, password = auth
         token = base64.b64encode(f"{user}:{password}".encode()).decode()
         request_headers["Authorization"] = f"Basic {token}"
     req = urllib.request.Request(url, data=data, headers=request_headers, method=method)
@@ -174,7 +217,12 @@ def _http_json(
 def _minio_client():
     if Minio is None:
         raise RuntimeError("Python package 'minio' is not installed")
-    return Minio("127.0.0.1:9000", access_key="memochat_admin", secret_key="MinioPass2026!", secure=False)
+    return Minio(
+        os.environ.get("MEMOCHAT_MINIO_ENDPOINT", "127.0.0.1:9000"),
+        access_key=_required_env_first(MINIO_ACCESS_KEY_ENV),
+        secret_key=_required_env_first(MINIO_SECRET_KEY_ENV),
+        secure=_truthy_env("MEMOCHAT_MINIO_SECURE"),
+    )
 
 
 def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -239,7 +287,7 @@ def call_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
         )
     if name == "influx_query":
         headers = {
-            "Authorization": f"Token {INFLUX_TOKEN}",
+            "Authorization": f"Token {_required_env('MEMOCHAT_INFLUXDB_ADMIN_TOKEN')}",
             "Accept": "application/csv",
             "Content-Type": "application/vnd.flux",
         }

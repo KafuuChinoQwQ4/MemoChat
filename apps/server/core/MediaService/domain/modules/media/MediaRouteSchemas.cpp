@@ -1,6 +1,8 @@
-#include "modules/media/MediaRouteModule.h"
+#include "modules/media/MediaRouteModule.hpp"
 
-#include "services/media/MediaPublicDtos.h"
+#include "services/media/MediaPublicDtos.hpp"
+
+import memochat.media.route_schema_algorithms;
 
 namespace memochat::gate::modules::media
 {
@@ -8,32 +10,33 @@ namespace memochat::gate::modules::media
 std::vector<memochat::gate::routing::RouteSchemaDescriptor> MediaRouteModule::RouteSchemas()
 {
     using memochat::gate::routing::MakeRouteSchema;
+    namespace modules = memochat::media::route_schema::modules;
 
     return {
         MakeRouteSchema<memochat::media::MediaUploadInitRequestDto, memochat::media::MediaUploadInitResponseDto>(
-            "POST",
-            "/upload_media_init",
-            "media.upload.init",
-            "MediaUploadInitRequestDto",
-            "MediaUploadInitResponseDto"),
+            modules::PostMethod(),
+            modules::UploadInitPath(),
+            modules::UploadInitRouteName(),
+            modules::UploadInitRequestTypeName(),
+            modules::UploadInitResponseTypeName()),
         MakeRouteSchema<memochat::media::MediaUploadChunkJsonRequestDto, memochat::media::MediaUploadChunkResponseDto>(
-            "POST",
-            "/upload_media_chunk",
-            "media.upload.chunk_json",
-            "MediaUploadChunkJsonRequestDto",
-            "MediaUploadChunkResponseDto"),
+            modules::PostMethod(),
+            modules::UploadChunkJsonPath(),
+            modules::UploadChunkJsonRouteName(),
+            modules::UploadChunkJsonRequestTypeName(),
+            modules::UploadChunkJsonResponseTypeName()),
         MakeRouteSchema<memochat::media::MediaUploadCompleteRequestDto, memochat::media::MediaUploadAssetResponseDto>(
-            "POST",
-            "/upload_media_complete",
-            "media.upload.complete",
-            "MediaUploadCompleteRequestDto",
-            "MediaUploadAssetResponseDto"),
+            modules::PostMethod(),
+            modules::UploadCompletePath(),
+            modules::UploadCompleteRouteName(),
+            modules::UploadCompleteRequestTypeName(),
+            modules::UploadAssetResponseTypeName()),
         MakeRouteSchema<memochat::media::MediaUploadSimpleRequestDto, memochat::media::MediaUploadAssetResponseDto>(
-            "POST",
-            "/upload_media",
-            "media.upload.simple",
-            "MediaUploadSimpleRequestDto",
-            "MediaUploadAssetResponseDto"),
+            modules::PostMethod(),
+            modules::UploadSimplePath(),
+            modules::UploadSimpleRouteName(),
+            modules::UploadSimpleRequestTypeName(),
+            modules::UploadAssetResponseTypeName()),
     };
 }
 

@@ -139,7 +139,8 @@ void AuthViewModel::clearTip()
 
 void AuthViewModel::saveLoginCredential(const QString& email, const QString& password)
 {
-    _credentialStore.saveLoginCredential(email, password);
+    Q_UNUSED(password)
+    _credentialStore.saveLoginCredential(email, QString());
     syncLoginCredentialCacheJson(_credentialStore.credentialCacheJson());
 }
 

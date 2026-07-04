@@ -219,14 +219,27 @@ class PetRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("manifest_path", job)
         self.assertTrue(job["diagnostics"]["manifest_persisted"])
 
-        detail = await self.client.get(f"/pet/voice-training/jobs/{job['job_id']}")
+        detail = await self.client.get(f"/pet/voice-training/jobs/{job['job_id']}", params={"uid": 7})
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.json()["job"]["job_id"], job["job_id"])
         self.assertEqual(detail.json()["job"]["manifest_path"], job["manifest_path"])
 
+        missing_uid_detail = await self.client.get(f"/pet/voice-training/jobs/{job['job_id']}")
+        self.assertEqual(missing_uid_detail.status_code, 400)
+
+        wrong_uid_detail = await self.client.get(f"/pet/voice-training/jobs/{job['job_id']}", params={"uid": 99})
+        self.assertEqual(wrong_uid_detail.status_code, 404)
+
         listing = await self.client.get("/pet/voice-training/jobs", params={"uid": 7})
         self.assertEqual(listing.status_code, 200)
         self.assertEqual([item["job_id"] for item in listing.json()["jobs"]], [job["job_id"]])
+
+        wrong_uid_listing = await self.client.get("/pet/voice-training/jobs", params={"uid": 99})
+        self.assertEqual(wrong_uid_listing.status_code, 200)
+        self.assertEqual(wrong_uid_listing.json()["jobs"], [])
+
+        missing_uid_listing = await self.client.get("/pet/voice-training/jobs")
+        self.assertEqual(missing_uid_listing.status_code, 400)
 
     async def test_diagnostics_routes_report_voice_and_vision_readiness(self):
         response = await self.client.get("/pet/diagnostics")

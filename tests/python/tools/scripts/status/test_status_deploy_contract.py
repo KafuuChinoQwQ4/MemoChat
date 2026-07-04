@@ -225,6 +225,33 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn("set -Eeuo pipefail", source)
         self.assertIn('exec "${client_args[@]}"', source)
 
+    def test_linux_runtime_scripts_generate_and_share_ai_internal_key_for_local_launches(self):
+        start = read(START_SERVICES_SCRIPT)
+        full_stack = read(RUN_FULL_STACK_SCRIPT)
+        ai_compose = read(AI_DOCKER_COMPOSE)
+
+        for label, source in (("start", start), ("full_stack", full_stack)):
+            with self.subTest(script=label):
+                self.assertIn("ensure_ai_internal_api_key()", source)
+                self.assertIn('if [[ -n "${MEMOCHAT_AI_INTERNAL_API_KEY:-}" ]]', source)
+                self.assertIn("openssl rand -hex 32", source)
+                self.assertIn("/proc/sys/kernel/random/uuid", source)
+                self.assertIn('export MEMOCHAT_AI_INTERNAL_API_KEY="$generated"', source)
+                self.assertNotIn("MEMOCHAT_AI_INTERNAL_API_KEY=memochat", source)
+
+        self.assertIn('MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}"', start)
+        self.assertIn("ensure_ai_internal_api_key\nexport_minio_runtime_credentials", start)
+        self.assertIn(
+            'AI_VOICE_WAIT_SECONDS="${MEMOCHAT_AI_VOICE_WAIT_SECONDS:-$AI_VOICE_WAIT_SECONDS}"\nensure_ai_internal_api_key',
+            full_stack,
+        )
+        self.assertLess(start.index("ensure_ai_internal_api_key"), start.index("export_minio_runtime_credentials"))
+        self.assertLess(
+            full_stack.index("ensure_ai_internal_api_key"),
+            full_stack.index('docker compose -f "$AI_COMPOSE_FILE" up -d --build'),
+        )
+        self.assertIn("MEMOCHAT_AI_INTERNAL_API_KEY=${MEMOCHAT_AI_INTERNAL_API_KEY:-}", ai_compose)
+
     def test_linux_start_requires_gpt_sovits_by_default(self):
         source = read(START_SERVICES_SCRIPT)
 
@@ -588,7 +615,7 @@ class StatusDeployContractTests(unittest.TestCase):
         stop = read(REPO_ROOT / "tools/scripts/status/stop-all-services.sh")
         rows = topology_rows()
 
-        self.assertEqual(17, len(rows))
+        self.assertEqual(15, len(rows))
 
         by_dir = {row["runtime_dir"]: row for row in rows}
         expected = {
@@ -602,19 +629,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "8090 50055",
                 "8190",
                 "../../artifacts/logs/services/chatserver1",
-                "ChatServer",
-                "memochat",
-            ),
-            "chatserver2": (
-                "chat",
-                "ChatServer",
-                "ChatServer/chatserver2.ini",
-                "ChatServer-2",
-                "8091",
-                "8191",
-                "8091 50056",
-                "8191",
-                "../../artifacts/logs/services/chatserver2",
                 "ChatServer",
                 "memochat",
             ),
@@ -800,19 +814,6 @@ class StatusDeployContractTests(unittest.TestCase):
                 "VarifyServer1",
                 "memochat",
             ),
-            "VarifyServer2": (
-                "varify",
-                "VarifyServer",
-                "VarifyServer/varify2.ini",
-                "VarifyServer-2",
-                "48083",
-                "",
-                "48083 8087",
-                "",
-                "../../artifacts/logs/services/VarifyServer2",
-                "VarifyServer2",
-                "memochat",
-            ),
         }
 
         self.assertEqual(set(expected), set(by_dir))
@@ -899,9 +900,7 @@ class StatusDeployContractTests(unittest.TestCase):
                 "ChatMessageService-1",
                 "ChatRelationServiceWorker-1",
                 "ChatRelationQueryService-1",
-                "ChatServer-2",
                 "ChatServer-1",
-                "VarifyServer-2",
                 "VarifyServer-1",
             ],
             topology_array_values("MEMOCHAT_STOP_PID_ORDER"),

@@ -1,15 +1,15 @@
-﻿#include "CSession.h"
-#include "CServer.h"
+﻿#include "CSession.hpp"
+#include "CServer.hpp"
 #include <iostream>
 #include <sstream>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 
 #include <limits>
-#include "LogicSystem.h"
-#include "RedisMgr.h"
-#include "ConfigMgr.h"
-#include "UserMgr.h"
-#include "runtime/AsioCoScheduler.h" // memochat::runtime::IoContextScheduler
+#include "LogicSystem.hpp"
+#include "RedisMgr.hpp"
+#include "ConfigMgr.hpp"
+#include "UserMgr.hpp"
+#include "runtime/AsioCoScheduler.hpp" // memochat::runtime::IoContextScheduler
 
 #include <exec/asio/use_sender.hpp>
 #include <exec/start_detached.hpp>

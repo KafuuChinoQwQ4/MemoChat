@@ -1,9 +1,34 @@
-#include "modules/ai/AIRouteModule.h"
+#include "modules/ai/AIRouteModule.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
+
+namespace memochat::tests::ai::route_schema
+{
+const char* PostMethod();
+const char* RegisterApiProviderPath();
+const char* RegisterApiProviderRouteName();
+const char* RegisterApiProviderRequestTypeName();
+const char* RegisterApiProviderResponseTypeName();
+const char* DeleteApiProviderPath();
+const char* DeleteApiProviderRouteName();
+const char* DeleteApiProviderRequestTypeName();
+const char* DeleteApiProviderResponseTypeName();
+const char* KbUploadPath();
+const char* KbUploadRouteName();
+const char* KbUploadRequestTypeName();
+const char* KbUploadResponseTypeName();
+const char* KbSearchPath();
+const char* KbSearchRouteName();
+const char* KbSearchRequestTypeName();
+const char* KbSearchResponseTypeName();
+const char* KbDeletePath();
+const char* KbDeleteRouteName();
+const char* KbDeleteRequestTypeName();
+const char* SimpleResponseTypeName();
+} // namespace memochat::tests::ai::route_schema
 
 namespace
 {
@@ -87,35 +112,35 @@ TEST(AIRouteSchemaTest, ListsOnlyStableAIGatewayMapperRoutes)
     const auto schemas = memochat::gate::modules::ai::AIRouteModule::RouteSchemas();
 
     ASSERT_EQ(schemas.size(), 5U);
-    EXPECT_EQ(schemas[0].name, "ai.model.api.register");
-    EXPECT_EQ(schemas[0].method, "POST");
-    EXPECT_EQ(schemas[0].path, "/ai/model/api/register");
-    EXPECT_EQ(schemas[0].request.type_name, "AIRegisterApiProviderRequestDto");
-    EXPECT_EQ(schemas[0].response.type_name, "AIRegisterApiProviderResponseDto");
+    EXPECT_EQ(schemas[0].name, memochat::tests::ai::route_schema::RegisterApiProviderRouteName());
+    EXPECT_EQ(schemas[0].method, memochat::tests::ai::route_schema::PostMethod());
+    EXPECT_EQ(schemas[0].path, memochat::tests::ai::route_schema::RegisterApiProviderPath());
+    EXPECT_EQ(schemas[0].request.type_name, memochat::tests::ai::route_schema::RegisterApiProviderRequestTypeName());
+    EXPECT_EQ(schemas[0].response.type_name, memochat::tests::ai::route_schema::RegisterApiProviderResponseTypeName());
 
-    EXPECT_EQ(schemas[1].name, "ai.model.api.delete");
-    EXPECT_EQ(schemas[1].method, "POST");
-    EXPECT_EQ(schemas[1].path, "/ai/model/api/delete");
-    EXPECT_EQ(schemas[1].request.type_name, "AIDeleteApiProviderRequestDto");
-    EXPECT_EQ(schemas[1].response.type_name, "AIDeleteApiProviderResponseDto");
+    EXPECT_EQ(schemas[1].name, memochat::tests::ai::route_schema::DeleteApiProviderRouteName());
+    EXPECT_EQ(schemas[1].method, memochat::tests::ai::route_schema::PostMethod());
+    EXPECT_EQ(schemas[1].path, memochat::tests::ai::route_schema::DeleteApiProviderPath());
+    EXPECT_EQ(schemas[1].request.type_name, memochat::tests::ai::route_schema::DeleteApiProviderRequestTypeName());
+    EXPECT_EQ(schemas[1].response.type_name, memochat::tests::ai::route_schema::DeleteApiProviderResponseTypeName());
 
-    EXPECT_EQ(schemas[2].name, "ai.kb.upload");
-    EXPECT_EQ(schemas[2].method, "POST");
-    EXPECT_EQ(schemas[2].path, "/ai/kb/upload");
-    EXPECT_EQ(schemas[2].request.type_name, "AIKbUploadRequestDto");
-    EXPECT_EQ(schemas[2].response.type_name, "AIKbUploadResponseDto");
+    EXPECT_EQ(schemas[2].name, memochat::tests::ai::route_schema::KbUploadRouteName());
+    EXPECT_EQ(schemas[2].method, memochat::tests::ai::route_schema::PostMethod());
+    EXPECT_EQ(schemas[2].path, memochat::tests::ai::route_schema::KbUploadPath());
+    EXPECT_EQ(schemas[2].request.type_name, memochat::tests::ai::route_schema::KbUploadRequestTypeName());
+    EXPECT_EQ(schemas[2].response.type_name, memochat::tests::ai::route_schema::KbUploadResponseTypeName());
 
-    EXPECT_EQ(schemas[3].name, "ai.kb.search");
-    EXPECT_EQ(schemas[3].method, "POST");
-    EXPECT_EQ(schemas[3].path, "/ai/kb/search");
-    EXPECT_EQ(schemas[3].request.type_name, "AIKbSearchRequestDto");
-    EXPECT_EQ(schemas[3].response.type_name, "AIKbSearchResponseDto");
+    EXPECT_EQ(schemas[3].name, memochat::tests::ai::route_schema::KbSearchRouteName());
+    EXPECT_EQ(schemas[3].method, memochat::tests::ai::route_schema::PostMethod());
+    EXPECT_EQ(schemas[3].path, memochat::tests::ai::route_schema::KbSearchPath());
+    EXPECT_EQ(schemas[3].request.type_name, memochat::tests::ai::route_schema::KbSearchRequestTypeName());
+    EXPECT_EQ(schemas[3].response.type_name, memochat::tests::ai::route_schema::KbSearchResponseTypeName());
 
-    EXPECT_EQ(schemas[4].name, "ai.kb.delete");
-    EXPECT_EQ(schemas[4].method, "POST");
-    EXPECT_EQ(schemas[4].path, "/ai/kb/delete");
-    EXPECT_EQ(schemas[4].request.type_name, "AIKbDeleteRequestDto");
-    EXPECT_EQ(schemas[4].response.type_name, "AISimpleResponseDto");
+    EXPECT_EQ(schemas[4].name, memochat::tests::ai::route_schema::KbDeleteRouteName());
+    EXPECT_EQ(schemas[4].method, memochat::tests::ai::route_schema::PostMethod());
+    EXPECT_EQ(schemas[4].path, memochat::tests::ai::route_schema::KbDeletePath());
+    EXPECT_EQ(schemas[4].request.type_name, memochat::tests::ai::route_schema::KbDeleteRequestTypeName());
+    EXPECT_EQ(schemas[4].response.type_name, memochat::tests::ai::route_schema::SimpleResponseTypeName());
 }
 
 TEST(AIRouteSchemaTest, BuildsFieldInventoriesFromAIGatewayDtos)

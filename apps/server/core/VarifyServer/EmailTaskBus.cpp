@@ -1,16 +1,18 @@
-#include "EmailTaskBus.h"
-#include "EmailDeliveryTaskCodec.h"
-#include "EmailSender.h"
-#include "VarifyServiceImpl.h"
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
+#include "EmailTaskBus.hpp"
+#include "EmailDeliveryTaskCodec.hpp"
+#include "EmailSender.hpp"
+#include "VarifyServiceImpl.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
+
+import memochat.varify.email_task_bus_algorithms;
 
 #ifndef MEMOCHAT_ENABLE_RABBITMQ
 #define MEMOCHAT_ENABLE_RABBITMQ 0
 #endif
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include "../common/WinsockCompat.h"
+#include "../common/WinsockCompat.hpp"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
@@ -38,6 +40,7 @@ std::string BytesToString(amqp_bytes_t bytes)
 
 namespace varifyservice
 {
+namespace email_task_bus_modules = memochat::varify::email_task_bus::modules;
 
 EmailTaskBus::EmailTaskBus()
     : connection_(nullptr)
@@ -53,37 +56,34 @@ EmailTaskBus::EmailTaskBus()
     config_password_ = cfg["RabbitMQ"]["Password"];
     config_vhost_ = cfg["RabbitMQ"]["VHost"];
     if (config_vhost_.empty())
-        config_vhost_ = "/";
+        config_vhost_ = email_task_bus_modules::DefaultVHost();
     config_exchange_direct_ = cfg["RabbitMQ"]["ExchangeDirect"];
     if (config_exchange_direct_.empty())
-        config_exchange_direct_ = "memochat.direct";
+        config_exchange_direct_ = email_task_bus_modules::DefaultDirectExchange();
     config_exchange_dlx_ = cfg["RabbitMQ"]["ExchangeDlx"];
     if (config_exchange_dlx_.empty())
-        config_exchange_dlx_ = "memochat.dlx";
+        config_exchange_dlx_ = email_task_bus_modules::DefaultDlxExchange();
     config_verify_delivery_routing_key_ = cfg["RabbitMQ"]["VerifyDeliveryRoutingKey"];
     if (config_verify_delivery_routing_key_.empty())
-        config_verify_delivery_routing_key_ = "verify.email.delivery";
+        config_verify_delivery_routing_key_ = email_task_bus_modules::DefaultVerifyDeliveryRoutingKey();
     config_queue_ = cfg["RabbitMQ"]["VerifyDeliveryQueue"];
     if (config_queue_.empty())
-        config_queue_ = "verify.email.delivery.q";
+        config_queue_ = email_task_bus_modules::DefaultVerifyDeliveryQueue();
     config_retry_queue_ = cfg["RabbitMQ"]["VerifyDeliveryRetryQueue"];
     if (config_retry_queue_.empty())
-        config_retry_queue_ = "verify.email.delivery.retry.q";
+        config_retry_queue_ = email_task_bus_modules::DefaultVerifyDeliveryRetryQueue();
     config_dlq_queue_ = cfg["RabbitMQ"]["VerifyDeliveryDlqQueue"];
     if (config_dlq_queue_.empty())
-        config_dlq_queue_ = "verify.email.delivery.dlq.q";
+        config_dlq_queue_ = email_task_bus_modules::DefaultVerifyDeliveryDlqQueue();
     config_retry_routing_key_ = cfg["RabbitMQ"]["RetryRoutingKey"];
     if (config_retry_routing_key_.empty())
-        config_retry_routing_key_ = "verify.email.delivery.retry";
+        config_retry_routing_key_ = email_task_bus_modules::DefaultRetryRoutingKey();
     config_dlq_routing_key_ = cfg["RabbitMQ"]["DlqRoutingKey"];
     if (config_dlq_routing_key_.empty())
-        config_dlq_routing_key_ = "verify.email.delivery.dlq";
-    config_retry_delay_ms_ = std::atoi(cfg["RabbitMQ"]["RetryDelayMs"].c_str());
-    if (config_retry_delay_ms_ <= 0)
-        config_retry_delay_ms_ = 5000;
-    config_max_retries_ = std::atoi(cfg["RabbitMQ"]["MaxRetries"].c_str());
-    if (config_max_retries_ <= 0)
-        config_max_retries_ = 5;
+        config_dlq_routing_key_ = email_task_bus_modules::DefaultDlqRoutingKey();
+    config_retry_delay_ms_ =
+        email_task_bus_modules::NormalizeRetryDelayMs(std::atoi(cfg["RabbitMQ"]["RetryDelayMs"].c_str()));
+    config_max_retries_ = email_task_bus_modules::NormalizeMaxRetries(std::atoi(cfg["RabbitMQ"]["MaxRetries"].c_str()));
 
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::string err;
@@ -496,14 +496,15 @@ void EmailTaskBus::WorkerLoop(EmailSender* /*sender*/)
                                  {{"email", task.email},
                                   {"retry", std::to_string(task.retry_count)},
                                   {"max_retries", std::to_string(config_max_retries_)}});
-                if (task.retry_count < config_max_retries_)
+                if (email_task_bus_modules::ShouldRetryTask(task.retry_count, config_max_retries_))
                 {
-                    std::string body = SerializeEmailTask(
-                        EmailDeliveryTaskPayload{task.email, task.code, task.trace_id, task.retry_count + 1});
+                    const int next_retry = email_task_bus_modules::NextRetryCount(task.retry_count);
+                    std::string body =
+                        SerializeEmailTask(EmailDeliveryTaskPayload{task.email, task.code, task.trace_id, next_retry});
                     PublishToQueue(config_exchange_direct_, config_retry_routing_key_, body);
                     memolog::LogInfo("varify.emailtaskbus.requeued",
                                      "task requeued for retry",
-                                     {{"email", task.email}, {"retry", std::to_string(task.retry_count + 1)}});
+                                     {{"email", task.email}, {"retry", std::to_string(next_retry)}});
                 }
                 else
                 {

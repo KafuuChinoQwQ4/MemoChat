@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "json/GlazeCompat.h"
-#include "persistence/MomentTypes.h"
-#include "reflection/StdReflectionIntrospection.h"
-#include "services/moments/MomentsOutputDtos.h"
-#include "services/moments/MomentsPublicDtos.h"
+#include "json/GlazeCompat.hpp"
+#include "persistence/MomentTypes.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
+#include "services/moments/MomentsOutputDtos.hpp"
+#include "services/moments/MomentsPublicDtos.hpp"
 
 #include <array>
 #include <string>

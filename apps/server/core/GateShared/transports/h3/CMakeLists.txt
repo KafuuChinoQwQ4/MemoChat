@@ -8,13 +8,13 @@ project(GateServerHttp3 LANGUAGES CXX)
 
 add_library(GateServerHttp3 STATIC
     listener/GateHttp3Listener.cpp
-    listener/GateHttp3Listener.h
+    listener/GateHttp3Listener.hpp
     listener/GateHttp3Connection.cpp
-    listener/GateHttp3Connection.h
+    listener/GateHttp3Connection.hpp
     listener/GateHttp3JsonSupport.cpp
-    listener/GateHttp3JsonSupport.h
+    listener/GateHttp3JsonSupport.hpp
     legacy_routes/GateHttp3ServiceRoutes.cpp
-    legacy_routes/GateHttp3ServiceRoutes.h
+    legacy_routes/GateHttp3ServiceRoutes.hpp
     adapters/h3/H3RouteAdapter.cpp
 )
 
@@ -28,7 +28,7 @@ target_include_directories(GateServerHttp3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../common
 )
 
-# MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.h)
+# MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.hpp)
 # Environment variables: VCPKG_INSTALLED_DIR (defined via CMake cache)
 target_include_directories(GateServerHttp3 PRIVATE
     "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include"
@@ -40,6 +40,19 @@ target_link_libraries(GateServerHttp3 PUBLIC
     GateServerCore
     memochat_boost_stubs
 )
+
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(GateServerHttp3
+        MODULES
+            memochat.gate.h3_legacy_route_algorithms=legacy_routes/cxx_modules/H3LegacyRoute.cppm
+            memochat.gate.h3_route_adapter_algorithms=adapters/h3/cxx_modules/H3RouteAdapter.cppm
+            memochat.gate.h3_json_support_algorithms=listener/cxx_modules/GateHttp3JsonSupport.cppm
+        CONSUMER_SOURCES
+            legacy_routes/GateHttp3ServiceRoutes.cpp
+            adapters/h3/H3RouteAdapter.cpp
+            listener/GateHttp3JsonSupport.cpp
+    )
+endif()
 
 # HTTP/3 specific libraries
 if(MEMOCHAT_ENABLE_HTTP3)

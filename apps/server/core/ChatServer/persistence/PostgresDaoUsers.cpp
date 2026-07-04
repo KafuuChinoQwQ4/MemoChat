@@ -1,51 +1,29 @@
-#include "PostgresDao.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
-#include "SnowflakeUtil.h"
+#include "PostgresDao.hpp"
+#include "auth/PasswordHasher.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
+#include "SnowflakeUtil.hpp"
 #include <pqxx/pqxx>
 #include <set>
 #include <algorithm>
-#include <cctype>
 #include <unordered_map>
 #include <stdexcept>
 #include <sstream>
+
+import memochat.chat.postgres_dao_users_algorithms;
+
+namespace postgres_dao_users_modules = memochat::chat::persistence::postgres_dao_users::modules;
 
 namespace
 {
 bool IsValidUserPublicId(const std::string& user_id)
 {
-    if (user_id.size() != 10 || user_id[0] != 'u')
-    {
-        return false;
-    }
-    if (user_id[1] < '1' || user_id[1] > '9')
-    {
-        return false;
-    }
-    for (size_t i = 2; i < user_id.size(); ++i)
-    {
-        if (!std::isdigit(static_cast<unsigned char>(user_id[i])))
-        {
-            return false;
-        }
-    }
-    return true;
+    return postgres_dao_users_modules::IsValidUserPublicIdShape(user_id.c_str(), static_cast<int>(user_id.size()));
 }
 
 std::string GenerateUserPublicId()
 {
     return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'u');
-}
-
-std::string DecodeLegacyXorPwd(const std::string& input)
-{
-    unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
-    std::string decoded = input;
-    for (size_t i = 0; i < decoded.size(); ++i)
-    {
-        decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
-    }
-    return decoded;
 }
 } // namespace
 int PostgresDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
@@ -54,6 +32,12 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
     {
         try
         {
+            std::string password_hash;
+            if (!memochat::auth::HashPassword(pwd, password_hash))
+            {
+                return -1;
+            }
+
             pqxx::connection conn(account_connection_string_);
             pqxx::work txn(conn);
             const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
@@ -84,12 +68,12 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
                 return -1;
             }
 
-            txn.exec_params0("INSERT INTO \"user\"(uid, name, email, pwd, nick, icon, user_id) "
-                             "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            txn.exec_params0("INSERT INTO \"user\"(uid, name, email, pwd, password_hash, nick, icon, user_id) "
+                             "VALUES ($1, $2, $3, '', $4, $5, $6, $7)",
                              new_id,
                              name,
                              email,
-                             pwd,
+                             password_hash,
                              name,
                              "",
                              user_public_id);
@@ -102,42 +86,8 @@ int PostgresDao::RegUser(const std::string& name, const std::string& email, cons
             return -1;
         }
     }
-    auto con = pool_->getConnection();
-    try
-    {
-        if (con == nullptr)
-        {
-            return false;
-        }
-
-        std::unique_ptr<sql::PreparedStatement> stmt(con->_con->prepareStatement("CALL reg_user(?,?,?,@result)"));
-
-        stmt->setString(1, name);
-        stmt->setString(2, email);
-        stmt->setString(3, pwd);
-
-        stmt->execute();
-
-        std::unique_ptr<sql::Statement> stmtResult(con->_con->createStatement());
-        std::unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
-        if (res->next())
-        {
-            int result = res->getInt("result");
-            std::cout << "Result: " << result << std::endl;
-            pool_->returnConnection(std::move(con));
-            return result;
-        }
-        pool_->returnConnection(std::move(con));
-        return -1;
-    }
-    catch (sql::SQLException& e)
-    {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what();
-        std::cerr << " (legacy SQL error code: " << e.getErrorCode();
-        std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-        return -1;
-    }
+    std::cerr << "ChatServer account registration requires PostgreSQL password hashing" << std::endl;
+    return -1;
 }
 
 bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
@@ -202,9 +152,17 @@ bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
     {
         try
         {
+            std::string password_hash;
+            if (!memochat::auth::HashPassword(newpwd, password_hash))
+            {
+                return false;
+            }
+
             pqxx::connection conn(account_connection_string_);
             pqxx::work txn(conn);
-            const auto updated = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE email = $2", newpwd, email);
+            const auto updated = txn.exec_params("UPDATE \"user\" SET password_hash = $1, pwd = '' WHERE email = $2",
+                                                 password_hash,
+                                                 email);
             txn.commit();
             return updated.affected_rows() > 0;
         }
@@ -214,34 +172,8 @@ bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
             return false;
         }
     }
-    auto con = pool_->getConnection();
-    try
-    {
-        if (con == nullptr)
-        {
-            return false;
-        }
-
-        std::unique_ptr<sql::PreparedStatement> pstmt(
-            con->_con->prepareStatement("UPDATE user SET pwd = ? WHERE email = ?"));
-
-        pstmt->setString(2, email);
-        pstmt->setString(1, newpwd);
-
-        int updateCount = pstmt->executeUpdate();
-
-        std::cout << "Updated rows: " << updateCount << std::endl;
-        pool_->returnConnection(std::move(con));
-        return true;
-    }
-    catch (sql::SQLException& e)
-    {
-        pool_->returnConnection(std::move(con));
-        std::cerr << "SQLException: " << e.what();
-        std::cerr << " (legacy SQL error code: " << e.getErrorCode();
-        std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-        return false;
-    }
+    std::cerr << "ChatServer password update requires PostgreSQL password hashing for email " << email << std::endl;
+    return false;
 }
 
 bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo)
@@ -252,22 +184,19 @@ bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, User
         {
             pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
-            const auto rows = txn.exec_params("SELECT uid, name, email, pwd, user_id, nick, icon, \"desc\", sex "
-                                              "FROM \"user\" WHERE name = $1 LIMIT 1",
-                                              name);
+            const auto rows =
+                txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
+                                "FROM \"user\" WHERE name = $1 LIMIT 1",
+                                name);
             if (rows.empty())
             {
                 return false;
             }
             const auto& row = rows[0];
-            const std::string origin_pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
-            if (pwd != origin_pwd)
+            const std::string password_hash = row["password_hash"].is_null() ? "" : row["password_hash"].c_str();
+            if (!memochat::auth::VerifyPassword(password_hash, pwd))
             {
-                const auto decoded_pwd = DecodeLegacyXorPwd(pwd);
-                if (decoded_pwd != origin_pwd)
-                {
-                    return false;
-                }
+                return false;
             }
 
             userInfo.name = row["name"].is_null() ? "" : row["name"].c_str();
@@ -278,7 +207,7 @@ bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, User
             userInfo.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
             userInfo.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
             userInfo.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
-            userInfo.pwd = origin_pwd;
+            userInfo.pwd.clear();
             return true;
         }
         catch (const std::exception& e)
@@ -287,49 +216,11 @@ bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, User
             return false;
         }
     }
-    auto con = pool_->getConnection();
-    if (con == nullptr)
-    {
-        return false;
-    }
-
-    Defer defer(
-        [this, &con]()
-        {
-            pool_->returnConnection(std::move(con));
-        });
-
-    try
-    {
-        std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE name = ?"));
-        pstmt->setString(1, name);
-
-        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-        if (!res->next())
-        {
-            return false;
-        }
-
-        const std::string origin_pwd = res->getString("pwd");
-        if (pwd != origin_pwd)
-        {
-            return false;
-        }
-
-        userInfo.name = name;
-        userInfo.email = res->getString("email");
-        userInfo.uid = res->getInt("uid");
-        userInfo.user_id = res->isNull("user_id") ? "" : res->getString("user_id");
-        userInfo.pwd = origin_pwd;
-        return true;
-    }
-    catch (sql::SQLException& e)
-    {
-        std::cerr << "SQLException: " << e.what();
-        std::cerr << " (legacy SQL error code: " << e.getErrorCode();
-        std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
-        return false;
-    }
+    (void) name;
+    (void) pwd;
+    (void) userInfo;
+    std::cerr << "ChatServer password verification requires PostgreSQL password_hash" << std::endl;
+    return false;
 }
 
 bool PostgresDao::AddFriendApply(const int& from, const int& to)
@@ -950,7 +841,7 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(int uid)
         {
             pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
-            const auto rows = txn.exec_params("SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
+            const auto rows = txn.exec_params("SELECT email, name, nick, \"desc\", sex, icon, user_id, uid "
                                               "FROM \"user\" WHERE uid = $1 LIMIT 1",
                                               uid);
             if (rows.empty())
@@ -960,7 +851,6 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(int uid)
 
             const auto& row = rows[0];
             auto user_ptr = std::make_shared<UserInfo>();
-            user_ptr->pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
             user_ptr->email = row["email"].is_null() ? "" : row["email"].c_str();
             user_ptr->name = row["name"].is_null() ? "" : row["name"].c_str();
             user_ptr->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
@@ -1001,7 +891,6 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(int uid)
         while (res->next())
         {
             user_ptr.reset(new UserInfo);
-            user_ptr->pwd = res->getString("pwd");
             user_ptr->email = res->getString("email");
             user_ptr->name = res->getString("name");
             user_ptr->nick = res->getString("nick");
@@ -1031,7 +920,7 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(std::string name)
         {
             pqxx::connection conn(account_connection_string_);
             pqxx::read_transaction txn(conn);
-            const auto rows = txn.exec_params("SELECT pwd, email, name, nick, \"desc\", sex, icon, user_id, uid "
+            const auto rows = txn.exec_params("SELECT email, name, nick, \"desc\", sex, icon, user_id, uid "
                                               "FROM \"user\" WHERE name = $1 LIMIT 1",
                                               name);
             if (rows.empty())
@@ -1041,7 +930,6 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(std::string name)
 
             const auto& row = rows[0];
             auto user_ptr = std::make_shared<UserInfo>();
-            user_ptr->pwd = row["pwd"].is_null() ? "" : row["pwd"].c_str();
             user_ptr->email = row["email"].is_null() ? "" : row["email"].c_str();
             user_ptr->name = row["name"].is_null() ? "" : row["name"].c_str();
             user_ptr->nick = row["nick"].is_null() ? "" : row["nick"].c_str();
@@ -1082,7 +970,6 @@ std::shared_ptr<UserInfo> PostgresDao::GetUser(std::string name)
         while (res->next())
         {
             user_ptr.reset(new UserInfo);
-            user_ptr->pwd = res->getString("pwd");
             user_ptr->email = res->getString("email");
             user_ptr->name = res->getString("name");
             user_ptr->nick = res->getString("nick");
@@ -1124,7 +1011,7 @@ bool PostgresDao::GetUidByUserId(const std::string& user_id, int& uid)
                 return false;
             }
             uid = rows[0]["uid"].as<int>();
-            return uid > 0;
+            return postgres_dao_users_modules::HasPositiveUid(uid);
         }
         catch (const std::exception& e)
         {
@@ -1156,7 +1043,7 @@ bool PostgresDao::GetUidByUserId(const std::string& user_id, int& uid)
             return false;
         }
         uid = res->getInt("uid");
-        return uid > 0;
+        return postgres_dao_users_modules::HasPositiveUid(uid);
     }
     catch (sql::SQLException& e)
     {

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "RelationGrpcServiceAdapter.h"
-#include "RelationServiceFactory.h"
+#include "RelationGrpcServiceAdapter.hpp"
+#include "RelationServiceFactory.hpp"
 
 #include <memory>
 #include <stdexcept>

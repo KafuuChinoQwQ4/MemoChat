@@ -70,7 +70,7 @@ bool postJson(const QUrl& url, const QJsonObject& payload, QJsonObject* response
     const QByteArray body = reply->readAll();
     QVariantMap spanAttrs;
     spanAttrs.insert("http.method", QStringLiteral("POST"));
-    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("http.url", redactedUrlForTelemetry(url));
     spanAttrs.insert("module", QStringLiteral("media"));
     spanAttrs.insert("request.id", requestId);
     spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
@@ -171,7 +171,7 @@ bool postBinary(const QUrl& url,
     const QByteArray body = reply->readAll();
     QVariantMap spanAttrs;
     spanAttrs.insert("http.method", QStringLiteral("POST"));
-    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("http.url", redactedUrlForTelemetry(url));
     spanAttrs.insert("module", QStringLiteral("media"));
     spanAttrs.insert("request.id", requestId);
     spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
@@ -263,7 +263,7 @@ bool getJson(const QUrl& url, QJsonObject* responseObj, QString* errorText)
     const QByteArray body = reply->readAll();
     QVariantMap spanAttrs;
     spanAttrs.insert("http.method", QStringLiteral("GET"));
-    spanAttrs.insert("http.url", url.toString());
+    spanAttrs.insert("http.url", redactedUrlForTelemetry(url));
     spanAttrs.insert("module", QStringLiteral("media"));
     spanAttrs.insert("request.id", requestId);
     spanAttrs.insert("http.status_code", reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());

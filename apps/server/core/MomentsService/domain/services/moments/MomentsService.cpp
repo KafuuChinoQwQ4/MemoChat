@@ -1,14 +1,15 @@
-#include "services/moments/MomentsService.h"
+#include "services/moments/MomentsService.hpp"
 
-#include "MongoMgr.h"
-#include "PostgresMgr.h"
-#include "clients/MomentsRelationClient.h"
-#include "ConfigMgr.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "logging/Logger.h"
-#include "services/moments/MomentsOutputDtos.h"
-#include "services/moments/MomentsPublicDtos.h"
+#include "MongoMgr.hpp"
+#include "clients/MomentsRelationClient.hpp"
+#include "ConfigMgr.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "logging/Logger.hpp"
+#include "services/moments/MomentsOutputDtos.hpp"
+#include "services/moments/MomentsPersistence.hpp"
+#include "services/moments/MomentsPublicDtos.hpp"
+#include "support/UserTokenValidator.hpp"
 
 #include <chrono>
 #include <functional>
@@ -17,6 +18,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+import memochat.moments.service_algorithms;
 
 namespace memochat::gate::services::moments
 {
@@ -34,30 +37,38 @@ MomentsRelationClient& RelationClient()
     static MomentsRelationClient client = []
     {
         std::string endpoint = ConfigMgr::Inst()["RelationQueryService"]["Endpoint"];
-        if (endpoint.empty())
+        if (memochat::moments::service::modules::ShouldUseDefaultRelationEndpoint(endpoint.empty()))
         {
-            endpoint = "127.0.0.1:50090";
+            endpoint = memochat::moments::service::modules::DefaultRelationQueryEndpoint();
         }
         return MomentsRelationClient(endpoint);
     }();
     return client;
 }
 
+// Composition-local Meyers singleton — GetInstance() does not belong here;
+// the concrete adapter owns all PostgresMgr interaction.
+IMomentsPersistence& Persistence()
+{
+    static MomentsPersistence instance;
+    return instance;
+}
+
 // Visibility check that doesn't touch the friend tables locally (they live in
 // memo_pg, not the moments DB). Public + own are allowed directly; friends-only
 // is resolved via the relation service. Mirrors the semantics of the retired
-// PostgresDao::CanViewMoment.
+// local DAO visibility check.
 bool CanViewMomentRemote(int viewer_uid, const MomentInfo& moment)
 {
-    if (viewer_uid <= 0 || moment.uid <= 0)
+    if (!memochat::moments::service::modules::HasValidViewerAndAuthor(viewer_uid, moment.uid))
     {
         return false;
     }
-    if (viewer_uid == moment.uid || moment.visibility == 0)
+    if (memochat::moments::service::modules::CanViewWithoutRelationCheck(viewer_uid, moment.uid, moment.visibility))
     {
         return true;
     }
-    if (moment.visibility != 1)
+    if (memochat::moments::service::modules::ShouldRejectNonFriendsVisibility(moment.visibility))
     {
         return false;
     }
@@ -67,8 +78,8 @@ bool CanViewMomentRemote(int viewer_uid, const MomentInfo& moment)
 
 void WriteJson(memochat::gate::routing::GateResponse& response, const json::JsonValue& root)
 {
-    response.status = 200;
-    response.content_type = "application/json";
+    response.status = memochat::moments::service::modules::SuccessHttpStatus();
+    response.content_type = memochat::moments::service::modules::JsonContentType();
     response.body = json::glaze_stringify(root);
 }
 
@@ -94,15 +105,24 @@ bool HandleJsonRequest(const memochat::gate::routing::GateRequest& request,
 
 bool ValidateAuth(const json::JsonValue& src_root, json::JsonValue& root, int& uid)
 {
-    if (!json::isMember(src_root, "uid") || !json::isMember(src_root, "login_ticket"))
+    if (!memochat::moments::service::modules::HasRequiredAuthFields(
+            json::isMember(src_root, memochat::moments::service::modules::UidField()),
+            json::isMember(src_root, memochat::moments::service::modules::LoginTicketField())))
     {
         root["error"] = ErrorCodes::Error_Json;
         return false;
     }
-    uid = json::glaze_safe_get<int>(src_root, "uid", 0);
-    if (uid <= 0)
+    uid = json::glaze_safe_get<int>(src_root, memochat::moments::service::modules::UidField(), 0);
+    if (!memochat::moments::service::modules::HasValidUid(uid))
     {
         root["error"] = ErrorCodes::UidInvalid;
+        return false;
+    }
+    const std::string token =
+        json::glaze_safe_get<std::string>(src_root, memochat::moments::service::modules::LoginTicketField(), "");
+    if (!memochat::auth::ValidateUserToken(uid, token))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
         return false;
     }
     return true;
@@ -117,8 +137,8 @@ int64_t NowMs()
 MomentUserProfileDto BuildUserProfile(int uid)
 {
     MomentUserProfileDto profile;
-    UserInfo user_info;
-    if (PostgresMgr::GetInstance()->GetUserInfo(uid, user_info))
+    MomentUserProfileRow user_info;
+    if (Persistence().LoadUserProfile(uid, user_info))
     {
         profile.user_id = user_info.user_id;
         profile.user_name = user_info.name;
@@ -134,13 +154,45 @@ void FillCommentLikes(int viewer_uid, std::vector<MomentCommentInfo>& comments)
     {
         bool has_more = false;
         std::vector<MomentLikeInfo> likes;
-        if (PostgresMgr::GetInstance()->GetMomentCommentLikes(comment.id, 100, likes, has_more))
+        if (Persistence().LoadCommentLikes(comment.id,
+                                           memochat::moments::service::modules::CommentLikeFetchLimit(),
+                                           likes,
+                                           has_more))
         {
             comment.likes = std::move(likes);
             comment.like_count = static_cast<int>(comment.likes.size());
         }
-        comment.has_liked = PostgresMgr::GetInstance()->HasLikedMomentComment(comment.id, viewer_uid);
+        comment.has_liked = Persistence().HasCommentLike(comment.id, viewer_uid);
     }
+}
+
+bool LoadVisibleMoment(int viewer_uid, int64_t moment_id, MomentInfo& moment, json::JsonValue& root)
+{
+    if (!Persistence().LoadMoment(moment_id, moment))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+    if (!CanViewMomentRemote(viewer_uid, moment))
+    {
+        root["error"] = ErrorCodes::CallPermissionDenied;
+        return false;
+    }
+    return true;
+}
+
+bool LoadVisibleMomentForComment(int viewer_uid,
+                                 int64_t comment_id,
+                                 MomentCommentInfo& comment,
+                                 MomentInfo& moment,
+                                 json::JsonValue& root)
+{
+    if (!Persistence().LoadComment(comment_id, comment))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
+    return LoadVisibleMoment(viewer_uid, comment.moment_id, moment, root);
 }
 
 } // namespace
@@ -177,7 +229,7 @@ bool MomentsService::HandlePublish(const memochat::gate::routing::GateRequest& r
             moment.comment_count = 0;
 
             int64_t moment_id = 0;
-            if (!PostgresMgr::GetInstance()->AddMoment(moment, &moment_id))
+            if (!Persistence().CreateMoment(moment, &moment_id))
             {
                 root["error"] = ErrorCodes::RPCFailed;
                 return true;
@@ -190,7 +242,7 @@ bool MomentsService::HandlePublish(const memochat::gate::routing::GateRequest& r
 
             if (moment_id > 0 && !MongoMgr::GetInstance()->InsertMomentContent(content))
             {
-                PostgresMgr::GetInstance()->DeleteMoment(moment_id, uid);
+                Persistence().DeleteMoment(moment_id, uid);
                 root["error"] = ErrorCodes::RPCFailed;
                 memolog::LogError("gate.moments.publish",
                                   "failed to store moment content in MongoDB",
@@ -231,12 +283,12 @@ bool MomentsService::HandleList(const memochat::gate::routing::GateRequest& requ
             // friends-only) without the friend subquery, then drop friends-only
             // posts whose author isn't a friend of the viewer using the relation
             // service. Public and own posts are always kept.
-            if (!PostgresMgr::GetInstance()->GetMomentsFeedCandidates(uid,
-                                                                      request_dto.last_moment_id,
-                                                                      request_dto.limit,
-                                                                      request_dto.author_uid,
-                                                                      moments,
-                                                                      has_more))
+            if (!Persistence().LoadFeedCandidates(uid,
+                                                  request_dto.last_moment_id,
+                                                  request_dto.limit,
+                                                  request_dto.author_uid,
+                                                  moments,
+                                                  has_more))
             {
                 root["error"] = ErrorCodes::RPCFailed;
                 return true;
@@ -245,7 +297,7 @@ bool MomentsService::HandleList(const memochat::gate::routing::GateRequest& requ
             std::vector<int> friends_only_authors;
             for (const auto& moment : moments)
             {
-                if (moment.visibility == 1 && moment.uid != uid)
+                if (memochat::moments::service::modules::IsFriendsOnlyForeignMoment(moment.visibility, uid, moment.uid))
                 {
                     friends_only_authors.push_back(moment.uid);
                 }
@@ -261,12 +313,14 @@ bool MomentsService::HandleList(const memochat::gate::routing::GateRequest& requ
             for (const auto& moment : moments)
             {
                 // Drop friends-only posts from non-friends (own/public always kept).
-                if (moment.visibility == 1 && moment.uid != uid &&
+                if (memochat::moments::service::modules::IsFriendsOnlyForeignMoment(moment.visibility,
+                                                                                    uid,
+                                                                                    moment.uid) &&
                     visible_friend_authors.find(moment.uid) == visible_friend_authors.end())
                 {
                     continue;
                 }
-                const bool has_liked = PostgresMgr::GetInstance()->HasLikedMoment(moment.moment_id, uid);
+                const bool has_liked = Persistence().HasMomentLike(moment.moment_id, uid);
                 MomentContentInfo content;
                 MongoMgr::GetInstance()->GetMomentContent(moment.moment_id, content);
 
@@ -297,7 +351,7 @@ bool MomentsService::HandleDetail(const memochat::gate::routing::GateRequest& re
             const MomentIdRequestDto request_dto = MomentIdRequestFromJsonValue(src_root);
             const int64_t moment_id = request_dto.moment_id;
             memolog::LogInfo("gate.moments.detail", "moment_id=" + std::to_string(moment_id));
-            if (moment_id <= 0)
+            if (!memochat::moments::service::modules::HasValidMomentId(moment_id))
             {
                 root["error"] = ErrorCodes::Error_Json;
                 memolog::LogWarn("gate.moments.detail", "invalid moment_id");
@@ -305,7 +359,7 @@ bool MomentsService::HandleDetail(const memochat::gate::routing::GateRequest& re
             }
 
             MomentInfo moment;
-            if (!PostgresMgr::GetInstance()->GetMomentById(moment_id, moment))
+            if (!Persistence().LoadMoment(moment_id, moment))
             {
                 root["error"] = ErrorCodes::RPCFailed;
                 memolog::LogWarn("gate.moments.detail", "GetMomentById failed, moment_id=" + std::to_string(moment_id));
@@ -318,17 +372,24 @@ bool MomentsService::HandleDetail(const memochat::gate::routing::GateRequest& re
                 return true;
             }
 
-            const bool has_liked = PostgresMgr::GetInstance()->HasLikedMoment(moment_id, uid);
+            const bool has_liked = Persistence().HasMomentLike(moment_id, uid);
             MomentContentInfo content;
             MongoMgr::GetInstance()->GetMomentContent(moment_id, content);
 
             std::vector<MomentLikeInfo> likes;
             bool likes_has_more = false;
-            PostgresMgr::GetInstance()->GetMomentLikes(moment_id, 100, likes, likes_has_more);
+            Persistence().LoadMomentLikes(moment_id,
+                                          memochat::moments::service::modules::DetailLikeFetchLimit(),
+                                          likes,
+                                          likes_has_more);
 
             std::vector<MomentCommentInfo> comments;
             bool comments_has_more = false;
-            PostgresMgr::GetInstance()->GetMomentComments(moment_id, 0, 100, comments, comments_has_more);
+            Persistence().LoadComments(moment_id,
+                                       0,
+                                       memochat::moments::service::modules::DetailCommentFetchLimit(),
+                                       comments,
+                                       comments_has_more);
             FillCommentLikes(uid, comments);
             memolog::LogInfo("gate.moments.detail", "found comments=" + std::to_string(comments.size()));
 
@@ -354,13 +415,13 @@ bool MomentsService::HandleDelete(const memochat::gate::routing::GateRequest& re
 
                                  const MomentIdRequestDto request_dto = MomentIdRequestFromJsonValue(src_root);
                                  const int64_t moment_id = request_dto.moment_id;
-                                 if (moment_id <= 0)
+                                 if (!memochat::moments::service::modules::HasValidMomentId(moment_id))
                                  {
                                      root["error"] = ErrorCodes::Error_Json;
                                      return true;
                                  }
 
-                                 if (!PostgresMgr::GetInstance()->DeleteMoment(moment_id, uid))
+                                 if (!Persistence().DeleteMoment(moment_id, uid))
                                  {
                                      root["error"] = ErrorCodes::RPCFailed;
                                      return true;
@@ -386,14 +447,19 @@ bool MomentsService::HandleLike(const memochat::gate::routing::GateRequest& requ
             }
 
             const MomentLikeRequestDto request_dto = MomentLikeRequestFromJsonValue(src_root);
-            if (request_dto.moment_id <= 0)
+            if (!memochat::moments::service::modules::HasValidMomentId(request_dto.moment_id))
             {
                 root["error"] = ErrorCodes::Error_Json;
                 return true;
             }
 
-            const bool ok = request_dto.like ? PostgresMgr::GetInstance()->AddMomentLike(request_dto.moment_id, uid)
-                                             : PostgresMgr::GetInstance()->RemoveMomentLike(request_dto.moment_id, uid);
+            MomentInfo moment;
+            if (!LoadVisibleMoment(uid, request_dto.moment_id, moment, root))
+            {
+                return true;
+            }
+
+            const bool ok = Persistence().SetMomentLike(request_dto.moment_id, uid, request_dto.like);
 
             if (!ok)
             {
@@ -401,13 +467,11 @@ bool MomentsService::HandleLike(const memochat::gate::routing::GateRequest& requ
                 return true;
             }
 
-            MomentInfo moment;
-            PostgresMgr::GetInstance()->GetMomentById(request_dto.moment_id, moment);
-            root = ToJsonValue(
-                MomentLikeResponseDto{ErrorCodes::Success,
-                                      request_dto.moment_id,
-                                      PostgresMgr::GetInstance()->HasLikedMoment(request_dto.moment_id, uid),
-                                      moment.like_count});
+            Persistence().LoadMoment(request_dto.moment_id, moment);
+            root = ToJsonValue(MomentLikeResponseDto{ErrorCodes::Success,
+                                                     request_dto.moment_id,
+                                                     Persistence().HasMomentLike(request_dto.moment_id, uid),
+                                                     moment.like_count});
             return true;
         });
 }
@@ -430,37 +494,53 @@ bool MomentsService::HandleComment(const memochat::gate::routing::GateRequest& r
 
             if (request_dto.delete_mode)
             {
-                if (request_dto.comment_id <= 0)
+                if (!memochat::moments::service::modules::HasValidCommentId(request_dto.comment_id))
                 {
                     root["error"] = ErrorCodes::Error_Json;
                     return true;
                 }
-                const bool ok = PostgresMgr::GetInstance()->DeleteMomentComment(request_dto.comment_id, uid);
-                std::optional<int> comment_count;
+                MomentCommentInfo deleted_comment;
                 MomentInfo moment;
-                if (request_dto.moment_id > 0 &&
-                    PostgresMgr::GetInstance()->GetMomentById(request_dto.moment_id, moment))
+                if (!LoadVisibleMomentForComment(uid, request_dto.comment_id, deleted_comment, moment, root))
+                {
+                    return true;
+                }
+                if (request_dto.moment_id > 0 && request_dto.moment_id != deleted_comment.moment_id)
+                {
+                    root["error"] = ErrorCodes::Error_Json;
+                    return true;
+                }
+                const bool ok = Persistence().DeleteComment(request_dto.comment_id, uid);
+                std::optional<int> comment_count;
+                if (Persistence().LoadMoment(deleted_comment.moment_id, moment))
                 {
                     comment_count = moment.comment_count;
                 }
                 if (ok)
                 {
                     root = ToJsonValue(MomentCommentMutationResponseDto{ErrorCodes::Success,
-                                                                        request_dto.moment_id,
+                                                                        deleted_comment.moment_id,
                                                                         true,
                                                                         comment_count});
                     return true;
                 }
                 root = ToJsonValue(MomentCommentMutationResponseDto{ErrorCodes::RPCFailed,
-                                                                    request_dto.moment_id,
+                                                                    deleted_comment.moment_id,
                                                                     true,
                                                                     comment_count});
                 return true;
             }
 
-            if (request_dto.moment_id <= 0 || request_dto.content.empty())
+            if (!memochat::moments::service::modules::HasValidNewComment(request_dto.moment_id,
+                                                                         request_dto.content.empty()))
             {
                 root["error"] = ErrorCodes::Error_Json;
+                return true;
+            }
+
+            MomentInfo moment;
+            if (!LoadVisibleMoment(uid, request_dto.moment_id, moment, root))
+            {
                 return true;
             }
 
@@ -471,10 +551,9 @@ bool MomentsService::HandleComment(const memochat::gate::routing::GateRequest& r
             comment.reply_uid = request_dto.reply_uid;
             comment.created_at = NowMs();
 
-            const bool ok = PostgresMgr::GetInstance()->AddMomentComment(comment);
+            const bool ok = Persistence().AddComment(comment);
             std::optional<int> comment_count;
-            MomentInfo moment;
-            if (PostgresMgr::GetInstance()->GetMomentById(request_dto.moment_id, moment))
+            if (Persistence().LoadMoment(request_dto.moment_id, moment))
             {
                 comment_count = moment.comment_count;
             }
@@ -506,19 +585,25 @@ bool MomentsService::HandleCommentList(const memochat::gate::routing::GateReques
                                  const MomentCommentListRequestDto request_dto =
                                      MomentCommentListRequestFromJsonValue(src_root);
 
-                                 if (request_dto.moment_id <= 0)
+                                 if (!memochat::moments::service::modules::HasValidMomentId(request_dto.moment_id))
                                  {
                                      root["error"] = ErrorCodes::Error_Json;
                                      return true;
                                  }
 
+                                 MomentInfo moment;
+                                 if (!LoadVisibleMoment(uid, request_dto.moment_id, moment, root))
+                                 {
+                                     return true;
+                                 }
+
                                  std::vector<MomentCommentInfo> comments;
                                  bool has_more = false;
-                                 if (!PostgresMgr::GetInstance()->GetMomentComments(request_dto.moment_id,
-                                                                                    request_dto.last_comment_id,
-                                                                                    request_dto.limit,
-                                                                                    comments,
-                                                                                    has_more))
+                                 if (!Persistence().LoadComments(request_dto.moment_id,
+                                                                 request_dto.last_comment_id,
+                                                                 request_dto.limit,
+                                                                 comments,
+                                                                 has_more))
                                  {
                                      root["error"] = ErrorCodes::RPCFailed;
                                      return true;
@@ -526,8 +611,7 @@ bool MomentsService::HandleCommentList(const memochat::gate::routing::GateReques
                                  FillCommentLikes(uid, comments);
 
                                  std::optional<int> comment_count;
-                                 MomentInfo moment;
-                                 if (PostgresMgr::GetInstance()->GetMomentById(request_dto.moment_id, moment))
+                                 if (Persistence().LoadMoment(request_dto.moment_id, moment))
                                  {
                                      comment_count = moment.comment_count;
                                  }
@@ -556,15 +640,20 @@ bool MomentsService::HandleCommentLike(const memochat::gate::routing::GateReques
             }
 
             const MomentCommentLikeRequestDto request_dto = MomentCommentLikeRequestFromJsonValue(src_root);
-            if (request_dto.comment_id <= 0)
+            if (!memochat::moments::service::modules::HasValidCommentId(request_dto.comment_id))
             {
                 root["error"] = ErrorCodes::Error_Json;
                 return true;
             }
 
-            const bool ok = request_dto.like
-                                ? PostgresMgr::GetInstance()->AddMomentCommentLike(request_dto.comment_id, uid)
-                                : PostgresMgr::GetInstance()->RemoveMomentCommentLike(request_dto.comment_id, uid);
+            MomentCommentInfo comment;
+            MomentInfo moment;
+            if (!LoadVisibleMomentForComment(uid, request_dto.comment_id, comment, moment, root))
+            {
+                return true;
+            }
+
+            const bool ok = Persistence().SetCommentLike(request_dto.comment_id, uid, request_dto.like);
             if (!ok)
             {
                 root["error"] = ErrorCodes::RPCFailed;
@@ -573,15 +662,17 @@ bool MomentsService::HandleCommentLike(const memochat::gate::routing::GateReques
 
             std::vector<MomentLikeInfo> likes;
             bool has_more = false;
-            PostgresMgr::GetInstance()->GetMomentCommentLikes(request_dto.comment_id, 100, likes, has_more);
+            Persistence().LoadCommentLikes(request_dto.comment_id,
+                                           memochat::moments::service::modules::CommentLikeFetchLimit(),
+                                           likes,
+                                           has_more);
 
-            root = ToJsonValue(MomentCommentLikeResponseDto{
-                ErrorCodes::Success,
-                request_dto.comment_id,
-                PostgresMgr::GetInstance()->HasLikedMomentComment(request_dto.comment_id, uid),
-                static_cast<int>(likes.size()),
-                ToMomentLikeNames(likes),
-                ToMomentLikeOutputDtos(likes)});
+            root = ToJsonValue(MomentCommentLikeResponseDto{ErrorCodes::Success,
+                                                            request_dto.comment_id,
+                                                            Persistence().HasCommentLike(request_dto.comment_id, uid),
+                                                            static_cast<int>(likes.size()),
+                                                            ToMomentLikeNames(likes),
+                                                            ToMomentLikeOutputDtos(likes)});
             return true;
         });
 }

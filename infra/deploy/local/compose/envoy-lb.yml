@@ -6,7 +6,6 @@ services:
     ports:
       - "80:80"
       - "8090:8090"
-      - "8091:8091"
     volumes:
       - ./envoy-lb.yaml:/etc/envoy/envoy.yaml:ro
     entrypoint: ["envoy"]
@@ -25,7 +24,7 @@ services:
     container_name: memochat-gate-1
     environment:
       - GATESERVER_PORT=8080
-      - CLUSTER_NODES=chatserver1,chatserver2
+      - CLUSTER_NODES=chatserver1
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
@@ -36,7 +35,7 @@ services:
     container_name: memochat-gate-2
     environment:
       - GATESERVER_PORT=8080
-      - CLUSTER_NODES=chatserver1,chatserver2
+      - CLUSTER_NODES=chatserver1
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:
@@ -50,21 +49,7 @@ services:
       - TCP_PORT=8090
       - QUIC_PORT=8190
       - RPC_PORT=50055
-      - CLUSTER_NODES=chatserver1,chatserver2
-      - REDIS_HOST=memochat-redis
-      - POSTGRES_HOST=memochat-postgres
-    networks:
-      - memochat-net
-
-  chat-server-2:
-    image: memochat/chat-server:latest
-    container_name: memochat-chat-2
-    environment:
-      - SERVER_NAME=chatserver2
-      - TCP_PORT=8091
-      - QUIC_PORT=8191
-      - RPC_PORT=50056
-      - CLUSTER_NODES=chatserver1,chatserver2
+      - CLUSTER_NODES=chatserver1
       - REDIS_HOST=memochat-redis
       - POSTGRES_HOST=memochat-postgres
     networks:

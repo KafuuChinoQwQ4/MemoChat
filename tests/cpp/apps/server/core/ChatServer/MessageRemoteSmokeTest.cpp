@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
-#include "ConfigMgr.h"
-#include "MessageGrpcClient.h"
-#include "MessageGrpcServiceAdapter.h"
-#include "MessageServiceConfig.h"
-#include "MessageServiceFactory.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "ConfigMgr.hpp"
+#include "MessageGrpcClient.hpp"
+#include "MessageGrpcServiceAdapter.hpp"
+#include "MessageServiceConfig.hpp"
+#include "MessageServiceFactory.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <algorithm>
 #include <chrono>

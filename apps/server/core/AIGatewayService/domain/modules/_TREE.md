@@ -7,5 +7,6 @@
 | 子目录 | 作用概括 |
 | --- | --- |
 | [`ai/`](ai/_TREE.md) | AI 能力对应的路由模块实现。 |
+| [`cxx/`](cxx/_TREE.md) | AI 路由模块共享的 GNU C++ module interface 文件。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

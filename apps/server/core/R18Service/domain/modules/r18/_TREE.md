@@ -2,6 +2,12 @@
 
 > R18 路由模块：注册并实现 R18 相关 HTTP 路由。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | R18 路由 schema 的 C++ module 辅助代码 |
+
 ## 文件
 
 | 文件 | 作用概括 |

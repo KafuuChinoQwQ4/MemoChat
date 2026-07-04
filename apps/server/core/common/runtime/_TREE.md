@@ -2,6 +2,12 @@
 
 > 服务运行时基础设施：Etcd/INI 配置加载、IO 上下文线程池、io_context→stdexec 协程调度器与单例模板。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 公共运行时 C++ modules 接口单元集合。 |
+
 ## 文件
 
 | 文件 | 作用概括 |

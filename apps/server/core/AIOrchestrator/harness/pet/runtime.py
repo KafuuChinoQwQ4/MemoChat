@@ -120,7 +120,7 @@ class PetRuntime:
             observation=self._observations.get(session_id),
         )
 
-        runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata = self._voice_runtime_metadata(uid=session.uid)
         runtime_metadata["text_timeout_sec"] = self._config.pet_text_timeout_sec
         runtime_metadata.update(_request_runtime_metadata(metadata))
         visual_summary = _visual_summary_runtime_metadata(self._policy.visual_summary(session_id))
@@ -250,10 +250,10 @@ class PetRuntime:
             raise RuntimeError("desktop pet voice training is disabled by configuration")
         return self._voice_training.create_job(request)
 
-    def get_voice_training_job(self, job_id: str) -> VoiceTrainingJob:
-        return self._voice_training.get_job(job_id)
+    def get_voice_training_job(self, job_id: str, uid: int) -> VoiceTrainingJob:
+        return self._voice_training.get_job(job_id, uid)
 
-    def list_voice_training_jobs(self, uid: int = 0) -> list[VoiceTrainingJob]:
+    def list_voice_training_jobs(self, uid: int) -> list[VoiceTrainingJob]:
         return self._voice_training.list_jobs(uid)
 
     async def diagnostics(
@@ -325,7 +325,7 @@ class PetRuntime:
         if not speech_text:
             return
 
-        runtime_metadata = self._visual_voice_runtime_metadata(event_args, observation)
+        runtime_metadata = self._visual_voice_runtime_metadata(event_args, observation, uid=session.uid)
         provider = str(runtime_metadata.get("voice_provider") or "scripted")
         voice_name = str(runtime_metadata.get("voice_name") or provider or "deterministic")
         language = str(runtime_metadata.get("language") or "zh-CN")
@@ -477,8 +477,8 @@ class PetRuntime:
             payload = self._visual_voice_error_event_args(event_args, exc, provider, voice_name, language)
         await self._emit(session.session_id, turn_id=turn_id, **payload)
 
-    def _visual_voice_runtime_metadata(self, event_args: dict, observation: PetObservation) -> dict:
-        runtime_metadata = self._voice_runtime_metadata()
+    def _visual_voice_runtime_metadata(self, event_args: dict, observation: PetObservation, uid: int = 0) -> dict:
+        runtime_metadata = self._voice_runtime_metadata(uid=uid)
         runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
         language = (
             str(
@@ -605,9 +605,9 @@ class PetRuntime:
             self._voice_router.register("sovits", provider)
             self._voice_router.register("SoVITS", provider)
 
-    def _voice_runtime_metadata(self) -> dict:
+    def _voice_runtime_metadata(self, uid: int = 0) -> dict:
         provider = _normalize_provider(self._config.voice_provider)
-        reference_audio = self._configured_or_trained_reference_audio()
+        reference_audio = self._configured_or_trained_reference_audio(uid=uid)
         prompt_text = self._configured_or_trained_prompt_text(reference_audio)
         if provider in {"", "scripted", "deterministic"}:
             if not self._config.voice_sovits_base_url or not reference_audio:
@@ -625,11 +625,11 @@ class PetRuntime:
             "text_lang": self._config.voice_sovits_text_language,
         }
 
-    def _configured_or_trained_reference_audio(self) -> str:
+    def _configured_or_trained_reference_audio(self, uid: int = 0) -> str:
         configured = self._config.voice_sovits_reference_audio.strip()
         if configured:
             return configured
-        return self._voice_training.latest_ready_reference_audio()
+        return self._voice_training.latest_ready_reference_audio(uid=uid)
 
     def _configured_or_trained_prompt_text(self, reference_audio: str) -> str:
         configured = self._config.voice_sovits_prompt_text.strip()
@@ -650,7 +650,7 @@ class PetRuntime:
         if not speech_text:
             return
 
-        runtime_metadata = self._voice_runtime_metadata()
+        runtime_metadata = self._voice_runtime_metadata(uid=session.uid)
         runtime_metadata.update(_request_runtime_metadata(_observation_voice_metadata(observation)))
         language = (
             str(

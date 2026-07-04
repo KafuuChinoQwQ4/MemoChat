@@ -1,9 +1,8 @@
-#include "RelationServiceConfig.h"
+#include "RelationServiceConfig.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
-#include <cctype>
+import memochat.chat.config_algorithms;
 
 std::string RelationServiceConfig::RelationServiceBackend() const
 {
@@ -12,13 +11,7 @@ std::string RelationServiceConfig::RelationServiceBackend() const
     {
         return "inprocess";
     }
-    std::transform(backend.begin(),
-                   backend.end(),
-                   backend.begin(),
-                   [](unsigned char ch)
-                   {
-                       return static_cast<char>(std::tolower(ch));
-                   });
+    memochat::chat::config::modules::LowerAsciiInPlace(backend.data(), backend.size());
     return backend;
 }
 

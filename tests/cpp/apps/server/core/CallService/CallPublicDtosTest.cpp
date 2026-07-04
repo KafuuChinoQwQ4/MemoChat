@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "CallPublicDtos.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "CallPublicDtos.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>

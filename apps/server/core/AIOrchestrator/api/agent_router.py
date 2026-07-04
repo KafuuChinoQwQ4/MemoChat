@@ -734,27 +734,33 @@ async def list_tasks(uid: int, limit: int = 50):
 
 
 @router.get("/tasks/{task_id}", response_model=AgentTaskRsp)
-async def get_task(task_id: str):
+async def get_task(task_id: str, uid: int):
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="uid is required")
     container = HarnessContainer.get_instance()
-    task = await container.task_service.get_task(task_id)
+    task = await container.task_service.get_task_for_uid(task_id, uid)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     return AgentTaskRsp(code=0, message="ok", task=AgentTaskModel(**task.to_dict()))
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=AgentTaskRsp)
-async def cancel_task(task_id: str):
+async def cancel_task(task_id: str, uid: int):
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="uid is required")
     container = HarnessContainer.get_instance()
-    task = await container.task_service.cancel_task(task_id)
+    task = await container.task_service.cancel_task(task_id, uid)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     return AgentTaskRsp(code=0, message="ok", task=AgentTaskModel(**task.to_dict()))
 
 
 @router.post("/tasks/{task_id}/resume", response_model=AgentTaskRsp)
-async def resume_task(task_id: str):
+async def resume_task(task_id: str, uid: int):
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="uid is required")
     container = HarnessContainer.get_instance()
-    task = await container.task_service.resume_task(task_id)
+    task = await container.task_service.resume_task(task_id, uid)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     return AgentTaskRsp(code=0, message="ok", task=AgentTaskModel(**task.to_dict()))

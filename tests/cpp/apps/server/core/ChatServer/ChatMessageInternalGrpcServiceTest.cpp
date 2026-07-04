@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "ChatMessageInternalGrpcService.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "ChatMessageInternalGrpcService.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <functional>
 #include <string>

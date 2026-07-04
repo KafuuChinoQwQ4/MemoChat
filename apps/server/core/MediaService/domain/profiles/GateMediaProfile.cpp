@@ -1,6 +1,6 @@
-#include "GateRouteProfileRegistrar.h"
+#include "GateRouteProfileRegistrar.hpp"
 
-#include "modules/media/MediaRouteModule.h"
+#include "modules/media/MediaRouteModule.hpp"
 
 namespace memochat::gate::profiles
 {

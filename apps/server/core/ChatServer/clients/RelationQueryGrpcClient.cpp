@@ -1,31 +1,39 @@
-#include "RelationQueryGrpcClient.h"
+#include "RelationQueryGrpcClient.hpp"
 
-#include "const.h"
-#include "logging/GrpcTrace.h"
+#include "const.hpp"
+#include "logging/GrpcTrace.hpp"
 
 #include <utility>
+
+import memochat.chat.relation_query_grpc_client_algorithms;
+
+namespace relation_query_grpc_modules = memochat::chat::relation_query_grpc_client::modules;
 
 namespace
 {
 void MarkRemoteError(memochat::json::JsonValue& out, const char* method_name, const std::string& error, int status_code)
 {
-    out["error"] = ErrorCodes::RPCFailed;
-    out["relation_query_remote_method"] = method_name;
-    out["relation_query_remote_error"] = error;
-    out["relation_query_remote_status_code"] = status_code;
+    out[relation_query_grpc_modules::ErrorField()] = ErrorCodes::RPCFailed;
+    out[relation_query_grpc_modules::RemoteMethodField()] = method_name;
+    out[relation_query_grpc_modules::RemoteErrorField()] = error;
+    out[relation_query_grpc_modules::RemoteStatusCodeField()] = status_code;
 }
 
 void MergePayload(memochat::json::JsonValue& out, const std::string& payload_json, const char* method_name)
 {
-    if (payload_json.empty())
+    if (!relation_query_grpc_modules::ShouldMergePayload(payload_json.empty()))
     {
         return;
     }
 
     memochat::json::JsonValue payload(memochat::json::object_t{});
-    if (!memochat::json::reader_parse(payload_json, payload) || !payload.isObject())
+    const bool parse_ok = memochat::json::reader_parse(payload_json, payload);
+    if (relation_query_grpc_modules::ShouldReportInvalidPayload(parse_ok, payload.isObject()))
     {
-        MarkRemoteError(out, method_name, "invalid relation query payload json", ErrorCodes::RPCFailed);
+        MarkRemoteError(out,
+                        method_name,
+                        relation_query_grpc_modules::InvalidPayloadJsonMessage(),
+                        ErrorCodes::RPCFailed);
         return;
     }
 
@@ -63,20 +71,14 @@ void RelationQueryGrpcClient::BuildDialogListJson(int uid, memochat::json::JsonV
 
 void RelationQueryGrpcClient::Call(QueryRpc rpc, int uid, memochat::json::JsonValue& out)
 {
-    const char* method_name = "unknown";
-    switch (rpc)
-    {
-        case QueryRpc::AppendRelationBootstrap:
-            method_name = "AppendRelationBootstrap";
-            break;
-        case QueryRpc::BuildDialogList:
-            method_name = "BuildDialogList";
-            break;
-    }
+    const char* method_name = relation_query_grpc_modules::QueryMethodName(static_cast<int>(rpc));
 
-    if (!_stub)
+    if (relation_query_grpc_modules::ShouldReportMissingStub(_stub != nullptr))
     {
-        MarkRemoteError(out, method_name, "relation query grpc stub is not configured", ErrorCodes::RPCFailed);
+        MarkRemoteError(out,
+                        method_name,
+                        relation_query_grpc_modules::StubNotConfiguredMessage(),
+                        ErrorCodes::RPCFailed);
         return;
     }
 
@@ -99,14 +101,14 @@ void RelationQueryGrpcClient::Call(QueryRpc rpc, int uid, memochat::json::JsonVa
             break;
     }
 
-    if (!status.ok())
+    if (relation_query_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         MarkRemoteError(out, method_name, status.error_message(), static_cast<int>(status.error_code()));
         return;
     }
-    if (response.error() != ErrorCodes::Success)
+    if (relation_query_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
-        out["relation_query_remote_error_code"] = response.error();
+        out[relation_query_grpc_modules::RemoteErrorCodeField()] = response.error();
     }
 
     MergePayload(out, response.payload_json(), method_name);

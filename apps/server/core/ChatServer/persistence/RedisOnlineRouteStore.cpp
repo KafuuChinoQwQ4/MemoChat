@@ -1,16 +1,21 @@
-#include "RedisOnlineRouteStore.h"
+#include "RedisOnlineRouteStore.hpp"
 
-#include "CSession.h"
-#include "ConfigMgr.h"
-#include "RedisMgr.h"
-#include "cluster/ChatClusterDiscovery.h"
-#include "const.h"
+#include "ConfigMgr.hpp"
+#include "chat_lua_scripts.hpp"
+#include "OnlineRouteSessionSupport.hpp"
+#include "RedisMgr.hpp"
+#include "cluster/ChatClusterDiscovery.hpp"
+#include "const.hpp"
+
+import memochat.chat.online_route_store_algorithms;
 
 #include <algorithm>
 #include <vector>
 
 namespace
 {
+namespace online_route_modules = memochat::chat::persistence::online_route_store::modules;
+
 std::string TrimCopyRouteStore(const std::string& text)
 {
     const auto begin = text.find_first_not_of(" \t\r\n");
@@ -47,24 +52,63 @@ std::string RedisOnlineRouteStore::SelfServerName() const
 
 void RedisOnlineRouteStore::RepairOnlineRoute(int uid, const std::shared_ptr<CSession>& session)
 {
-    if (uid <= 0 || !session)
+    if (!online_route_modules::ShouldCheckRepairSession(uid, session != nullptr))
     {
         return;
     }
     const auto server_name = SelfServerName();
-    if (server_name.empty())
+    if (!online_route_modules::HasUsableServerName(server_name.empty()))
     {
         return;
     }
     const auto uid_str = std::to_string(uid);
-    RedisMgr::GetInstance()->Set(USERIPPREFIX + uid_str, server_name);
-    RedisMgr::GetInstance()->Set(USER_SESSION_PREFIX + uid_str, session->GetSessionId());
-    RedisMgr::GetInstance()->SAdd(ServerOnlineUsersKey(server_name), uid_str);
+    RepairOnlineRouteAtomic(uid_str, server_name, ExtractOnlineRouteSessionId(session));
+}
+
+bool RedisOnlineRouteStore::RepairOnlineRouteAtomic(const std::string& uid_str,
+                                                    const std::string& server_name,
+                                                    const std::string& session_id)
+{
+    const std::string kScript(memochat::chat::lua_scripts::krepair_online_route);
+
+    const auto key1 = std::string(USERIPPREFIX) + uid_str;
+    const auto key2 = std::string(USER_SESSION_PREFIX) + uid_str;
+    const auto key3 = ServerOnlineUsersKey(server_name);
+
+    auto* ctx = RedisMgr::GetInstance()->getRawConnection();
+    if (ctx == nullptr)
+    {
+        return false;
+    }
+
+    auto release = [&]()
+    {
+        RedisMgr::GetInstance()->returnConnection(ctx);
+    };
+
+    redisReply* reply = static_cast<redisReply*>(redisCommand(ctx,
+                                                              "EVAL %s 3 %s %s %s %s %s %s",
+                                                              kScript.c_str(),
+                                                              key1.c_str(),
+                                                              key2.c_str(),
+                                                              key3.c_str(),
+                                                              server_name.c_str(),
+                                                              session_id.c_str(),
+                                                              uid_str.c_str()));
+
+    if (reply == nullptr)
+    {
+        release();
+        return false;
+    }
+    freeReplyObject(reply);
+    release();
+    return true;
 }
 
 std::string RedisOnlineRouteStore::FindUserServer(int uid)
 {
-    if (uid <= 0)
+    if (!online_route_modules::ShouldReadUserRoute(uid))
     {
         return std::string();
     }
@@ -75,7 +119,7 @@ std::string RedisOnlineRouteStore::FindUserServer(int uid)
 
 std::string RedisOnlineRouteStore::ResolveServerFromOnlineSets(int uid)
 {
-    if (uid <= 0)
+    if (!online_route_modules::ShouldSearchOnlineSets(uid))
     {
         return std::string();
     }
@@ -85,7 +129,8 @@ std::string RedisOnlineRouteStore::ResolveServerFromOnlineSets(int uid)
     {
         std::vector<std::string> online_uids;
         RedisMgr::GetInstance()->SMembers(ServerOnlineUsersKey(server_name), online_uids);
-        if (std::find(online_uids.begin(), online_uids.end(), uid_str) != online_uids.end())
+        if (online_route_modules::ShouldUseOnlineSetHit(std::find(online_uids.begin(), online_uids.end(), uid_str) !=
+                                                        online_uids.end()))
         {
             return server_name;
         }
@@ -95,7 +140,7 @@ std::string RedisOnlineRouteStore::ResolveServerFromOnlineSets(int uid)
 
 void RedisOnlineRouteStore::SetUserServer(int uid, const std::string& server_name)
 {
-    if (uid <= 0 || server_name.empty())
+    if (!online_route_modules::ShouldWriteUserRoute(uid, server_name.empty()))
     {
         return;
     }
@@ -104,7 +149,7 @@ void RedisOnlineRouteStore::SetUserServer(int uid, const std::string& server_nam
 
 void RedisOnlineRouteStore::ClearTrackedOnlineRoute(int uid, const std::string& server_name)
 {
-    if (uid <= 0 || server_name.empty())
+    if (!online_route_modules::ShouldClearTrackedRoute(uid, server_name.empty()))
     {
         return;
     }

@@ -1,7 +1,14 @@
-#include "GateWorkerPool.h"
+#include "GateWorkerPool.hpp"
+
+import memochat.gate.worker_pool_algorithms;
+
+namespace worker_pool_modules = memochat::gate::worker_pool::modules;
 
 GateWorkerPool::GateWorkerPool(std::size_t num_threads)
-    : _pool(num_threads == 0 ? std::thread::hardware_concurrency() : num_threads)
+    : _pool(static_cast<std::size_t>(
+          worker_pool_modules::SelectWorkerThreadCount(num_threads == 0,
+                                                       std::thread::hardware_concurrency(),
+                                                       static_cast<unsigned long long>(num_threads))))
 {
 }
 
@@ -9,7 +16,7 @@ GateWorkerPool::~GateWorkerPool()
 {
     try
     {
-        if (!_stopped)
+        if (worker_pool_modules::ShouldJoinWorkerPool(_stopped))
         {
             _pool.join();
         }
@@ -21,8 +28,10 @@ GateWorkerPool::~GateWorkerPool()
 
 void GateWorkerPool::Stop()
 {
-    if (_stopped)
+    if (!worker_pool_modules::ShouldStopWorkerPool(_stopped))
+    {
         return;
+    }
     _stopped = true;
     _pool.join();
 }

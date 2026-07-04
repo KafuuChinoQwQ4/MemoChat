@@ -1,17 +1,16 @@
-#include "PostgresDao.h"
-#include "PostgresDaoUtil.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
+#include "PostgresDao.hpp"
+#include "PostgresDaoUtil.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
 #include <pqxx/pqxx>
-#include <algorithm>
 #include <chrono>
 #include <stdexcept>
 #include <sstream>
 
-namespace
-{
-constexpr int64_t kMessageRevokeWindowMsPostgresDao = 5 * 60 * 1000;
-} // namespace
+import memochat.chat.postgres_dao_private_messages_algorithms;
+
+namespace postgres_dao_private_messages_modules = memochat::chat::persistence::postgres_dao_private_messages::modules;
+
 bool PostgresDao::SavePrivateMessage(const PrivateMessageInfo& msg)
 {
     if (use_postgres_)
@@ -103,7 +102,7 @@ bool PostgresDao::GetUndeliveredPrivateMessages(const int& to_uid,
                                                 std::vector<std::shared_ptr<PrivateMessageInfo>>& messages)
 {
     messages.clear();
-    if (to_uid <= 0 || limit <= 0)
+    if (!postgres_dao_private_messages_modules::CanReadUndeliveredPrivateMessages(to_uid, limit))
     {
         return false;
     }
@@ -224,13 +223,13 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
 {
     has_more = false;
     messages.clear();
-    if (uid <= 0 || peer_uid <= 0 || limit <= 0)
+    if (!postgres_dao_private_messages_modules::CanReadPrivateHistory(uid, peer_uid, limit))
     {
         return false;
     }
 
-    const int conv_min = std::min(uid, peer_uid);
-    const int conv_max = std::max(uid, peer_uid);
+    const int conv_min = postgres_dao_private_messages_modules::ConversationUidMin(uid, peer_uid);
+    const int conv_max = postgres_dao_private_messages_modules::ConversationUidMax(uid, peer_uid);
 
     if (use_postgres_)
     {
@@ -238,9 +237,9 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            const int final_limit = limit + 1;
+            const int final_limit = postgres_dao_private_messages_modules::SelectHistoryFetchLimit(limit);
             pqxx::result rows;
-            if (before_ts > 0 && !before_msg_id.empty())
+            if (postgres_dao_private_messages_modules::ShouldApplyHistoryTieBreaker(before_ts, before_msg_id.empty()))
             {
                 rows = txn.exec_params(
                     "SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
@@ -255,7 +254,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
                     before_msg_id,
                     final_limit);
             }
-            else if (before_ts > 0)
+            else if (postgres_dao_private_messages_modules::ShouldApplyTimestampCursor(before_ts))
             {
                 rows = txn.exec_params(
                     "SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
@@ -297,7 +296,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
                 messages.push_back(one);
             }
 
-            if (static_cast<int>(messages.size()) > limit)
+            if (postgres_dao_private_messages_modules::HasOverflowPage(static_cast<int>(messages.size()), limit))
             {
                 has_more = true;
                 messages.resize(limit);
@@ -326,7 +325,8 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
     try
     {
         std::unique_ptr<sql::PreparedStatement> pstmt;
-        if (before_ts > 0 && !before_msg_id.empty())
+        const int final_limit = postgres_dao_private_messages_modules::SelectHistoryFetchLimit(limit);
+        if (postgres_dao_private_messages_modules::ShouldApplyHistoryTieBreaker(before_ts, before_msg_id.empty()))
         {
             pstmt.reset(con->_con->prepareStatement(
                 "SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
@@ -339,9 +339,9 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
             pstmt->setInt64(3, before_ts);
             pstmt->setInt64(4, before_ts);
             pstmt->setString(5, before_msg_id);
-            pstmt->setInt(6, limit + 1);
+            pstmt->setInt(6, final_limit);
         }
-        else if (before_ts > 0)
+        else if (postgres_dao_private_messages_modules::ShouldApplyTimestampCursor(before_ts))
         {
             pstmt.reset(con->_con->prepareStatement(
                 "SELECT msg_id, conv_uid_min, conv_uid_max, from_uid, to_uid, content, "
@@ -351,7 +351,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
             pstmt->setInt(1, conv_min);
             pstmt->setInt(2, conv_max);
             pstmt->setInt64(3, before_ts);
-            pstmt->setInt(4, limit + 1);
+            pstmt->setInt(4, final_limit);
         }
         else
         {
@@ -362,7 +362,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
                 "ORDER BY created_at DESC, msg_id DESC LIMIT ?"));
             pstmt->setInt(1, conv_min);
             pstmt->setInt(2, conv_max);
-            pstmt->setInt(3, limit + 1);
+            pstmt->setInt(3, final_limit);
         }
 
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
@@ -384,7 +384,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
             messages.push_back(one);
         }
 
-        if (static_cast<int>(messages.size()) > limit)
+        if (postgres_dao_private_messages_modules::HasOverflowPage(static_cast<int>(messages.size()), limit))
         {
             has_more = true;
             messages.resize(limit);
@@ -403,7 +403,7 @@ bool PostgresDao::GetPrivateHistory(const int& uid,
 bool PostgresDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message)
 {
     message = nullptr;
-    if (msg_id.empty())
+    if (!postgres_dao_private_messages_modules::CanFindPrivateMessage(msg_id.empty()))
     {
         return false;
     }
@@ -671,11 +671,11 @@ bool PostgresDao::UpdatePrivateMessageContent(const int& uid,
                                               const std::string& content,
                                               int64_t edited_at_ms)
 {
-    if (uid <= 0 || peer_uid <= 0 || msg_id.empty() || content.empty())
+    if (!postgres_dao_private_messages_modules::CanUpdatePrivateMessage(uid, peer_uid, msg_id.empty(), content.empty()))
     {
         return false;
     }
-    if (edited_at_ms <= 0)
+    if (postgres_dao_private_messages_modules::ShouldUseFallbackTimestamp(edited_at_ms))
     {
         edited_at_ms = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -690,9 +690,13 @@ bool PostgresDao::UpdatePrivateMessageContent(const int& uid,
             {
                 return false;
             }
-            const int conv_min = std::min(uid, peer_uid);
-            const int conv_max = std::max(uid, peer_uid);
-            if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+            const int conv_min = postgres_dao_private_messages_modules::ConversationUidMin(uid, peer_uid);
+            const int conv_max = postgres_dao_private_messages_modules::ConversationUidMax(uid, peer_uid);
+            if (!postgres_dao_private_messages_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                                              message->conv_uid_max,
+                                                                              message->from_uid,
+                                                                              uid,
+                                                                              peer_uid))
             {
                 return false;
             }
@@ -735,9 +739,13 @@ bool PostgresDao::UpdatePrivateMessageContent(const int& uid,
         {
             return false;
         }
-        const int conv_min = std::min(uid, peer_uid);
-        const int conv_max = std::max(uid, peer_uid);
-        if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid)
+        const int conv_min = postgres_dao_private_messages_modules::ConversationUidMin(uid, peer_uid);
+        const int conv_max = postgres_dao_private_messages_modules::ConversationUidMax(uid, peer_uid);
+        if (!postgres_dao_private_messages_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                                          message->conv_uid_max,
+                                                                          message->from_uid,
+                                                                          uid,
+                                                                          peer_uid))
         {
             return false;
         }
@@ -766,11 +774,11 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
                                        const std::string& msg_id,
                                        int64_t deleted_at_ms)
 {
-    if (uid <= 0 || peer_uid <= 0 || msg_id.empty())
+    if (!postgres_dao_private_messages_modules::CanRequestPrivateMessageRevoke(uid, peer_uid, msg_id.empty()))
     {
         return false;
     }
-    if (deleted_at_ms <= 0)
+    if (postgres_dao_private_messages_modules::ShouldUseFallbackTimestamp(deleted_at_ms))
     {
         deleted_at_ms = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -785,11 +793,20 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
             {
                 return false;
             }
-            const int conv_min = std::min(uid, peer_uid);
-            const int conv_max = std::max(uid, peer_uid);
-            if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
-                message->deleted_at_ms > 0 || message->created_at <= 0 ||
-                deleted_at_ms - message->created_at > kMessageRevokeWindowMsPostgresDao)
+            const int conv_min = postgres_dao_private_messages_modules::ConversationUidMin(uid, peer_uid);
+            const int conv_max = postgres_dao_private_messages_modules::ConversationUidMax(uid, peer_uid);
+            const long long revoke_window_ms = postgres_dao_private_messages_modules::MessageRevokeWindowMs();
+            const bool owner_matches =
+                postgres_dao_private_messages_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                                             message->conv_uid_max,
+                                                                             message->from_uid,
+                                                                             uid,
+                                                                             peer_uid);
+            if (!postgres_dao_private_messages_modules::CanRevokePrivateMessage(owner_matches,
+                                                                                message->deleted_at_ms,
+                                                                                message->created_at,
+                                                                                deleted_at_ms,
+                                                                                revoke_window_ms))
             {
                 return false;
             }
@@ -805,7 +822,7 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
                 conv_min,
                 conv_max,
                 uid,
-                deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
+                postgres_dao_private_messages_modules::RevokeWindowStart(deleted_at_ms, revoke_window_ms));
             txn.commit();
             return updated.affected_rows() > 0;
         }
@@ -834,11 +851,19 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
         {
             return false;
         }
-        const int conv_min = std::min(uid, peer_uid);
-        const int conv_max = std::max(uid, peer_uid);
-        if (message->conv_uid_min != conv_min || message->conv_uid_max != conv_max || message->from_uid != uid ||
-            message->deleted_at_ms > 0 || message->created_at <= 0 ||
-            deleted_at_ms - message->created_at > kMessageRevokeWindowMsPostgresDao)
+        const int conv_min = postgres_dao_private_messages_modules::ConversationUidMin(uid, peer_uid);
+        const int conv_max = postgres_dao_private_messages_modules::ConversationUidMax(uid, peer_uid);
+        const long long revoke_window_ms = postgres_dao_private_messages_modules::MessageRevokeWindowMs();
+        const bool owner_matches = postgres_dao_private_messages_modules::IsPrivateMessageOwner(message->conv_uid_min,
+                                                                                                message->conv_uid_max,
+                                                                                                message->from_uid,
+                                                                                                uid,
+                                                                                                peer_uid);
+        if (!postgres_dao_private_messages_modules::CanRevokePrivateMessage(owner_matches,
+                                                                            message->deleted_at_ms,
+                                                                            message->created_at,
+                                                                            deleted_at_ms,
+                                                                            revoke_window_ms))
         {
             return false;
         }
@@ -852,7 +877,7 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
         pstmt->setInt(3, conv_min);
         pstmt->setInt(4, conv_max);
         pstmt->setInt(5, uid);
-        pstmt->setInt64(6, deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
+        pstmt->setInt64(6, postgres_dao_private_messages_modules::RevokeWindowStart(deleted_at_ms, revoke_window_ms));
         return pstmt->executeUpdate() > 0;
     }
     catch (sql::SQLException& e)
@@ -866,12 +891,12 @@ bool PostgresDao::RevokePrivateMessage(const int& uid,
 
 bool PostgresDao::UpsertPrivateReadState(const int& uid, const int& peer_uid, const int64_t& read_ts)
 {
-    if (uid <= 0 || peer_uid <= 0)
+    if (!postgres_dao_private_messages_modules::CanUpsertPrivateReadState(uid, peer_uid))
     {
         return false;
     }
     int64_t normalized_read_ts = read_ts;
-    if (normalized_read_ts <= 0)
+    if (postgres_dao_private_messages_modules::ShouldUseFallbackTimestamp(normalized_read_ts))
     {
         normalized_read_ts = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())

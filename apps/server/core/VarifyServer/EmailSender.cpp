@@ -1,9 +1,9 @@
-#include "EmailSender.h"
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
+#include "EmailSender.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
 
 #ifdef _WIN32
-#include "../common/WinsockCompat.h"
+#include "../common/WinsockCompat.hpp"
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,6 +23,10 @@
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+import memochat.varify.email_sender_algorithms;
+
+namespace email_sender_modules = memochat::varify::email_sender::modules;
 
 namespace
 {
@@ -121,7 +125,7 @@ bool recv_line(SocketType sock, std::string& line)
 
 bool parse_smtp_status_line(const std::string& line, int* code, bool* more_lines)
 {
-    if (!code || !more_lines || line.size() < 3)
+    if (!code || !more_lines || !email_sender_modules::HasStatusCodePrefix(line.size()))
         return false;
 
     try
@@ -133,7 +137,7 @@ bool parse_smtp_status_line(const std::string& line, int* code, bool* more_lines
         return false;
     }
 
-    *more_lines = line.size() > 3 && line[3] == '-';
+    *more_lines = email_sender_modules::IsMultilineReply(line.size(), line.size() > 3 ? line[3] : '\0');
     return true;
 }
 
@@ -149,7 +153,7 @@ bool expect_code(SocketType sock, int expected_code)
         int code = 0;
         if (!parse_smtp_status_line(line, &code, &more_lines))
             return false;
-        if (code != expected_code)
+        if (!email_sender_modules::IsExpectedStatusCode(code, expected_code))
             return false;
     } while (more_lines);
 
@@ -177,7 +181,7 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
     std::string pass = cfg["Email"]["SMTPPass"];
     std::string from = cfg["Email"]["From"];
 
-    int port = 465;
+    int port = email_sender_modules::DefaultSmtpPort();
     if (!port_str.empty())
     {
         try
@@ -189,7 +193,43 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
         }
     }
 
-    bool use_ssl = (port == 465);
+    bool use_ssl = email_sender_modules::ShouldUseImplicitSsl(port);
+
+    if (host.empty() || user.empty() || pass.empty() || from.empty())
+    {
+        std::vector<std::string> missing_fields;
+        if (host.empty())
+        {
+            missing_fields.emplace_back("SMTPHost");
+        }
+        if (user.empty())
+        {
+            missing_fields.emplace_back("SMTPUser");
+        }
+        if (pass.empty())
+        {
+            missing_fields.emplace_back("SMTPPass");
+        }
+        if (from.empty())
+        {
+            missing_fields.emplace_back("From");
+        }
+
+        std::ostringstream missing;
+        for (std::size_t index = 0; index < missing_fields.size(); ++index)
+        {
+            if (index != 0)
+            {
+                missing << ",";
+            }
+            missing << missing_fields[index];
+        }
+
+        memolog::LogError("varify.email.config_missing",
+                          "SMTP config missing required fields",
+                          {{"missing_fields", missing.str()}});
+        return false;
+    }
 
     memolog::LogInfo("varify.email.send_start",
                      "sending email",
@@ -329,7 +369,7 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
                 int code = 0;
                 if (!parse_smtp_status_line(line, &code, &more_lines))
                     return false;
-                if (code != expected_code)
+                if (!email_sender_modules::IsExpectedStatusCode(code, expected_code))
                     return false;
             } while (more_lines);
 

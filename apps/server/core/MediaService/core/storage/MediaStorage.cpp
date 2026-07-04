@@ -1,7 +1,7 @@
-#include "MediaStorage.h"
-#include "S3MediaStorage.h"
+#include "MediaStorage.hpp"
+#include "S3MediaStorage.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -12,8 +12,13 @@
 #include <unordered_map>
 #include <vector>
 
+import memochat.media.config_algorithms;
+import memochat.media.local_storage_algorithms;
+
 namespace
 {
+namespace local_modules = memochat::media::local_storage::modules;
+
 std::filesystem::path ResolveUploadsRoot()
 {
     const auto root = ConfigMgr::Inst().GetValue("Media", "RootPath");
@@ -21,12 +26,53 @@ std::filesystem::path ResolveUploadsRoot()
     {
         return std::filesystem::path(root);
     }
-    return std::filesystem::current_path() / "uploads";
+    return std::filesystem::current_path() / local_modules::DefaultUploadsDirName();
 }
 
 bool LooksLikeHttpUrl(const std::string& value)
 {
-    return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0;
+    return local_modules::LooksLikeHttpUrl(value.rfind("http://", 0) == 0, value.rfind("https://", 0) == 0);
+}
+
+bool HasParentTraversalSegment(const std::filesystem::path& path)
+{
+    for (const auto& part : path)
+    {
+        if (local_modules::IsParentTraversalSegment(part == ".."))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::filesystem::path CanonicalOrNormal(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    std::filesystem::path resolved = std::filesystem::weakly_canonical(path, ec);
+    if (!ec)
+    {
+        return resolved.lexically_normal();
+    }
+
+    ec.clear();
+    resolved = std::filesystem::absolute(path, ec);
+    if (!ec)
+    {
+        return resolved.lexically_normal();
+    }
+    return path.lexically_normal();
+}
+
+bool IsPathInsideRoot(const std::filesystem::path& candidate, const std::filesystem::path& root)
+{
+    std::error_code ec;
+    const std::filesystem::path relative = std::filesystem::relative(candidate, root, ec);
+    if (ec || relative.empty() || relative.is_absolute())
+    {
+        return false;
+    }
+    return !HasParentTraversalSegment(relative);
 }
 
 std::string GuessContentTypeLocal(const std::string& fileName, const std::string& mimeHint)
@@ -45,18 +91,12 @@ std::string GuessContentTypeLocal(const std::string& fileName, const std::string
     if (pos != std::string::npos)
     {
         std::string ext = fileName.substr(pos);
-        std::transform(ext.begin(),
-                       ext.end(),
-                       ext.begin(),
-                       [](unsigned char c)
-                       {
-                           return static_cast<char>(std::tolower(c));
-                       });
+        memochat::media::modules::LowerAsciiInPlace(ext.data(), ext.size());
         auto it = extMap.find(ext);
         if (it != extMap.end())
             return it->second;
     }
-    return "application/octet-stream";
+    return local_modules::DefaultContentType();
 }
 
 std::string BuildDateTag()
@@ -81,22 +121,22 @@ std::string SanitizeFileNameForStorage(const std::string& file_name)
     safe.reserve(file_name.size());
     for (char c : file_name)
     {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.')
+        if (local_modules::IsAllowedStorageNameChar(static_cast<unsigned char>(c)))
         {
             safe.push_back(c);
         }
         else
         {
-            safe.push_back('_');
+            safe.push_back(local_modules::SanitizedReplacementChar());
         }
     }
     if (safe.empty())
     {
-        return "file.bin";
+        return local_modules::EmptyNameFallback();
     }
-    if (safe.size() > 96)
+    if (local_modules::ShouldTruncateSanitizedName(safe.size()))
     {
-        safe = safe.substr(safe.size() - 96);
+        safe = safe.substr(safe.size() - static_cast<std::size_t>(local_modules::MaxSanitizedNameLength()));
     }
     return safe;
 }
@@ -106,6 +146,8 @@ LocalMediaStorage::LocalMediaStorage(const std::filesystem::path& uploads_root)
 {
     _uploads_root = uploads_root.empty() ? ResolveUploadsRoot() : uploads_root;
     _public_base_url = ConfigMgr::Inst().GetValue("Media", "PublicBaseUrl");
+    const std::string allow_redirect = ConfigMgr::Inst().GetValue("Media", "AllowPublicRedirect");
+    _allow_public_redirect = local_modules::IsPublicRedirectAllowed(allow_redirect == "true", allow_redirect == "1");
 }
 
 bool LocalMediaStorage::StoreMergedFile(const std::string& media_type,
@@ -176,20 +218,34 @@ bool LocalMediaStorage::ResolveReadPath(const std::string& storage_path, std::fi
     std::filesystem::path path(storage_path);
     if (path.is_absolute())
     {
-        out_path = path;
+        return false;
     }
-    else
+
+    if (HasParentTraversalSegment(path))
     {
-        const auto storage_str = path.generic_string();
-        if (storage_str.rfind("uploads/", 0) == 0)
+        return false;
+    }
+
+    std::filesystem::path relative_path = path;
+    const auto storage_str = path.generic_string();
+    const std::string uploads_prefix = local_modules::UploadsPathPrefix();
+    if (storage_str.rfind(uploads_prefix, 0) == 0)
+    {
+        relative_path = std::filesystem::path(storage_str.substr(uploads_prefix.size()));
+        if (relative_path.empty() || HasParentTraversalSegment(relative_path))
         {
-            out_path = _uploads_root.parent_path() / path;
-        }
-        else
-        {
-            out_path = _uploads_root / path;
+            return false;
         }
     }
+
+    const std::filesystem::path root = CanonicalOrNormal(_uploads_root);
+    const std::filesystem::path candidate = CanonicalOrNormal(_uploads_root / relative_path);
+    if (!IsPathInsideRoot(candidate, root))
+    {
+        return false;
+    }
+
+    out_path = candidate;
     return true;
 }
 
@@ -199,6 +255,11 @@ bool LocalMediaStorage::ResolvePublicUrl(const std::string& storage_path,
 {
     (void) media_type;
     if (storage_path.empty())
+    {
+        return false;
+    }
+
+    if (!_allow_public_redirect)
     {
         return false;
     }
@@ -241,14 +302,14 @@ bool LocalMediaStorage::ReadObject(const std::string& storage_path,
     }
     if (!std::filesystem::exists(full_path))
     {
-        error_text = "file does not exist: " + full_path.string();
+        error_text = "file does not exist";
         return false;
     }
 
     std::ifstream ifs(full_path, std::ios::binary);
     if (!ifs)
     {
-        error_text = "failed to open file: " + full_path.string();
+        error_text = "failed to open file";
         return false;
     }
     out_data.assign(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
@@ -267,16 +328,10 @@ IMediaStorage& GetMediaStorage()
     if (!inited)
     {
         provider = ConfigMgr::Inst().GetValue("Media", "StorageProvider");
-        std::transform(provider.begin(),
-                       provider.end(),
-                       provider.begin(),
-                       [](unsigned char c)
-                       {
-                           return static_cast<char>(std::tolower(c));
-                       });
+        memochat::media::modules::LowerAsciiInPlace(provider.data(), provider.size());
         inited = true;
     }
-    if (provider == "s3" || provider == "minio")
+    if (local_modules::IsS3Provider(provider == "s3", provider == "minio"))
     {
         return s3_instance;
     }

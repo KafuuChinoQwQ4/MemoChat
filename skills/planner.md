@@ -52,9 +52,9 @@ description: Use when creating reusable MemoChat automation plans under .ai/<nam
 
 ## MemoChat 默认值
 
-- 仓库根目录：`/root/code/MemoChat-Qml-Drogon-linux`。
+- 仓库根目录：`/root/code/MemoChat`。
 - 默认 WSL 发行版名：`archlinux`。
-- 旧版 Windows 检出目录：`D:\MemoChat-Qml-Drogon`。
+- 旧版 Windows 检出目录：`D:\MemoChat`。
 - Linux 下载和大型生成资产：优先使用 `/data`。
 - `archlinux` Docker 绑定数据：`/data/docker-data/memochat`。
 - Windows Docker Desktop 数据和旧版 Windows 产物仅可在迁移/fallback 工作中使用 `D:`。

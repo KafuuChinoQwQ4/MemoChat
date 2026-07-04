@@ -233,11 +233,29 @@ TEST(MediaPendingAttachmentRunnerTest, SuccessRemovesAndAdvances)
     EXPECT_EQ(harness.advanceCount, 1);
     EXPECT_EQ(harness.lastRequest.uid, 42);
     EXPECT_EQ(harness.lastRequest.token, QStringLiteral("token"));
+    ASSERT_EQ(harness.lastRequest.grantUids.size(), 1);
+    EXPECT_EQ(harness.lastRequest.grantUids.first(), 300);
+    EXPECT_EQ(harness.lastRequest.grantGroupId, 0);
     EXPECT_EQ(harness.lastDestination.selfUid, 42);
     EXPECT_EQ(harness.lastDestination.dialogUid, 100);
     EXPECT_EQ(harness.lastDestination.currentDialogUid, 100);
     ASSERT_FALSE(harness.inProgressValues.isEmpty());
     EXPECT_TRUE(harness.inProgressValues.last());
+}
+
+TEST(MediaPendingAttachmentRunnerTest, GroupChatUploadGrantsGroupAudience)
+{
+    RunnerHarness harness;
+    harness.setCurrent(QStringLiteral("group-att"));
+    harness.snapshot.chatUid = 0;
+    harness.snapshot.groupId = 9001;
+
+    const MediaPendingAttachmentProcessResult result = MediaPendingAttachmentRunner::processNext(harness.port());
+
+    EXPECT_TRUE(result.processedAttachment);
+    EXPECT_EQ(harness.uploadCount, 1);
+    EXPECT_TRUE(harness.lastRequest.grantUids.isEmpty());
+    EXPECT_EQ(harness.lastRequest.grantGroupId, 9001);
 }
 
 TEST(MediaPendingAttachmentRunnerTest, LastItemClearsProgressAndUploadState)

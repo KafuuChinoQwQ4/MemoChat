@@ -1,8 +1,8 @@
-#include "CServer.h"
+#include "CServer.hpp"
 #include <iostream>
-#include "HttpConnection.h"
-#include "AsioIOServicePool.h"
-#include "runtime/AsioCoScheduler.h" // memochat::runtime::IoContextScheduler
+#include "HttpConnection.hpp"
+#include "AsioIOServicePool.hpp"
+#include "runtime/AsioCoScheduler.hpp" // memochat::runtime::IoContextScheduler
 
 #include <exec/asio/use_sender.hpp>
 #include <exec/start_detached.hpp>

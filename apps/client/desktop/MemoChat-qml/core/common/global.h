@@ -13,8 +13,6 @@
 
 extern std::function<void(QWidget*)> repolish;
 
-extern std::function<QString(QString)> xorString;
-
 enum ReqId
 {
     ID_GET_VARIFY_CODE = 1001,
@@ -206,6 +204,7 @@ struct ServerInfo
     QString Port;
     QString Token;
     QString LoginTicket;
+    QString RefreshToken;
     QString ServerName;
     QVector<ChatEndpoint> Endpoints;
     ChatTransportKind PreferredTransport = ChatTransportKind::Tcp;
@@ -213,8 +212,8 @@ struct ServerInfo
     int ConnectTimeoutMs = 1200;
     int BackupDialDelayMs = 250;
     int TotalLoginTimeoutMs = 5000;
-    int ProtocolVersion = 2;
-    int Uid;
+    int ProtocolVersion = 3;
+    int Uid = 0;
 };
 
 enum class ChatRole

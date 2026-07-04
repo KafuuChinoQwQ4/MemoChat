@@ -1,5 +1,5 @@
-#include "routing/RouteSchema.h"
-#include "routing/RouteSchemaCatalog.h"
+#include "routing/RouteSchema.hpp"
+#include "routing/RouteSchemaCatalog.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,6 +1,15 @@
-#include "RelationGrpcServiceAdapter.h"
+#include "RelationGrpcServiceAdapter.hpp"
 
 #include <utility>
+
+import memochat.chat.relation_grpc_service_adapter_algorithms;
+
+namespace relation_service_adapter_modules = memochat::chat::relation_grpc_service_adapter::modules;
+
+static_assert(relation_service_adapter_modules::RelationQueryForwardCount() == 2U);
+static_assert(relation_service_adapter_modules::RelationCommandForwardCount() == 8U);
+static_assert(relation_service_adapter_modules::TotalRelationForwardCount() == 10U);
+static_assert(relation_service_adapter_modules::UsesDefaultRelationAdapterTimeout(2000LL));
 
 RelationGrpcServiceAdapter::RelationGrpcServiceAdapter(const std::string& endpoint, std::chrono::milliseconds timeout)
     : _client(endpoint, timeout)

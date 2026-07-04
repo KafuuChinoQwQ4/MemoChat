@@ -1,34 +1,16 @@
-#include "RabbitMqConfig.h"
+#include "RabbitMqConfig.hpp"
 
-#include "ConfigMgr.h"
+#include "ConfigMgr.hpp"
 
-#include <algorithm>
-
-namespace
-{
-int ParseIntOr(const std::string& raw, int fallback)
-{
-    if (raw.empty())
-    {
-        return fallback;
-    }
-    try
-    {
-        return std::stoi(raw);
-    }
-    catch (...)
-    {
-        return fallback;
-    }
-}
-} // namespace
+import memochat.chat.messaging_config_algorithms;
 
 RabbitMqConfig LoadRabbitMqConfig()
 {
     auto& cfg = ConfigMgr::Inst();
     RabbitMqConfig config;
     config.host = cfg.GetValue("RabbitMQ", "Host");
-    config.port = ParseIntOr(cfg.GetValue("RabbitMQ", "Port"), config.port);
+    const auto port = cfg.GetValue("RabbitMQ", "Port");
+    config.port = memochat::chat::messaging::modules::ParseIntOr(port.data(), port.size(), config.port);
     config.username = cfg.GetValue("RabbitMQ", "Username");
     config.password = cfg.GetValue("RabbitMQ", "Password");
     const auto vhost = cfg.GetValue("RabbitMQ", "VHost");
@@ -36,7 +18,12 @@ RabbitMqConfig LoadRabbitMqConfig()
     {
         config.vhost = vhost;
     }
-    config.prefetch_count = std::max(1, ParseIntOr(cfg.GetValue("RabbitMQ", "PrefetchCount"), config.prefetch_count));
+    const auto prefetch_count = cfg.GetValue("RabbitMQ", "PrefetchCount");
+    config.prefetch_count = memochat::chat::messaging::modules::AtLeast(
+        memochat::chat::messaging::modules::ParseIntOr(prefetch_count.data(),
+                                                       prefetch_count.size(),
+                                                       config.prefetch_count),
+        1);
     const auto exchange_direct = cfg.GetValue("RabbitMQ", "ExchangeDirect");
     if (!exchange_direct.empty())
     {
@@ -47,7 +34,13 @@ RabbitMqConfig LoadRabbitMqConfig()
     {
         config.exchange_dlx = exchange_dlx;
     }
-    config.retry_delay_ms = std::max(100, ParseIntOr(cfg.GetValue("RabbitMQ", "RetryDelayMs"), config.retry_delay_ms));
-    config.max_retries = std::max(1, ParseIntOr(cfg.GetValue("RabbitMQ", "MaxRetries"), config.max_retries));
+    const auto retry_delay = cfg.GetValue("RabbitMQ", "RetryDelayMs");
+    config.retry_delay_ms = memochat::chat::messaging::modules::AtLeast(
+        memochat::chat::messaging::modules::ParseIntOr(retry_delay.data(), retry_delay.size(), config.retry_delay_ms),
+        100);
+    const auto max_retries = cfg.GetValue("RabbitMQ", "MaxRetries");
+    config.max_retries = memochat::chat::messaging::modules::AtLeast(
+        memochat::chat::messaging::modules::ParseIntOr(max_retries.data(), max_retries.size(), config.max_retries),
+        1);
     return config;
 }

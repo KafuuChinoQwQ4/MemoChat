@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QVariantList>
 #include <QUrl>
+#include <QUrlQuery>
 #include "global.h"
 #include "AgentMessageModel.h"
 #include "AgentRequestTracker.h"
@@ -265,7 +266,11 @@ private:
     void handleGameNetworkError(const QString& op, const QString& errorText, int uid);
     void handleGameFormatError(const QString& op, int uid);
     int currentUid() const;
+    QString currentAuthToken() const;
+    void addAuthToPayload(QJsonObject& payload) const;
+    void addAuthToQuery(QUrlQuery& query) const;
     int scopedUid();
+    ReqId nextAgentHttpRequestId();
     void ensureUserScope();
     void resetUserScopedRuntime();
     void setCurrentGeneratingMsgId(const QString& msgId);
@@ -310,6 +315,7 @@ private:
     QVariantList _trace_events;
     QVariantList _trace_observations;
     AgentRequestTracker _pending_requests;
+    int _next_agent_http_request_id = 2000000;
 
     AgentStreamClient* _streamClient = nullptr;
     AgentGameClient* _gameClient = nullptr;

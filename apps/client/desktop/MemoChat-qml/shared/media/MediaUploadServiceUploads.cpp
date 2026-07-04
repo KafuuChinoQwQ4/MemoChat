@@ -8,6 +8,45 @@
 
 namespace MediaUploadServicePrivate
 {
+namespace
+{
+
+void appendGrantFields(QJsonObject& payload,
+                       const QList<int>& grantUids,
+                       qint64 grantGroupId,
+                       bool grantPublic,
+                       bool grantFriends)
+{
+    if (!grantUids.isEmpty())
+    {
+        QJsonArray grantees;
+        for (int uid : grantUids)
+        {
+            if (uid > 0)
+            {
+                grantees.append(uid);
+            }
+        }
+        if (!grantees.isEmpty())
+        {
+            payload["grant_uids"] = grantees;
+        }
+    }
+    if (grantGroupId > 0)
+    {
+        payload["grant_group_id"] = grantGroupId;
+    }
+    if (grantPublic)
+    {
+        payload["grant_public"] = true;
+    }
+    if (grantFriends)
+    {
+        payload["grant_friends"] = true;
+    }
+}
+
+} // namespace
 
 bool uploadAvatarFile(QFile& file,
                       const QFileInfo& fileInfo,
@@ -15,6 +54,10 @@ bool uploadAvatarFile(QFile& file,
                       const QString& mimeType,
                       int uid,
                       const QString& token,
+                      const QList<int>& grantUids,
+                      qint64 grantGroupId,
+                      bool grantPublic,
+                      bool grantFriends,
                       UploadedMediaInfo* outInfo,
                       QString* errorText,
                       const MediaUploadService::UploadProgressCallback& progress)
@@ -50,6 +93,7 @@ bool uploadAvatarFile(QFile& file,
     uploadPayload["file_name"] = fileInfo.fileName();
     uploadPayload["mime"] = mimeType;
     uploadPayload["data_base64"] = QString::fromLatin1(binary.toBase64());
+    appendGrantFields(uploadPayload, grantUids, grantGroupId, grantPublic, grantFriends);
 
     QJsonObject uploadRsp;
     if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media")), uploadPayload, &uploadRsp, errorText))
@@ -79,6 +123,10 @@ bool uploadChunkedFile(QFile& file,
                        const ClientMediaConfig& mediaCfg,
                        int uid,
                        const QString& token,
+                       const QList<int>& grantUids,
+                       qint64 grantGroupId,
+                       bool grantPublic,
+                       bool grantFriends,
                        UploadedMediaInfo* outInfo,
                        QString* errorText,
                        const MediaUploadService::UploadProgressCallback& progress)
@@ -97,6 +145,7 @@ bool uploadChunkedFile(QFile& file,
     initPayload["mime"] = mimeType;
     initPayload["file_size"] = static_cast<qint64>(fileSize);
     initPayload["chunk_size"] = requestedChunkSize;
+    appendGrantFields(initPayload, grantUids, grantGroupId, grantPublic, grantFriends);
 
     QJsonObject initRsp;
     if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_init")), initPayload, &initRsp, errorText))

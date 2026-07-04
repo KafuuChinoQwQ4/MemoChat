@@ -1,13 +1,13 @@
-#include "VarifyServer.h"
+#include "VarifyServer.hpp"
 
-#include "VarifyServiceImpl.h"
-#include "VarifyRedisMgr.h"
-#include "EmailTaskBus.h"
-#include "ConfigMgr.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "VarifyServiceImpl.hpp"
+#include "VarifyRedisMgr.hpp"
+#include "EmailTaskBus.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 
 #include <iostream>
 #include <memory>
@@ -18,6 +18,8 @@
 #include <boost/beast.hpp>
 #include <grpcpp/grpcpp.h>
 
+import memochat.varify.server_runtime_algorithms;
+
 namespace net = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -26,8 +28,7 @@ using tcp = net::ip::tcp;
 
 namespace
 {
-
-constexpr int DEFAULT_HEALTH_PORT = 8081;
+namespace varify_runtime_modules = memochat::varify::server::modules;
 
 void RunHealthServer(int port)
 {
@@ -60,14 +61,14 @@ void RunHealthServer(int port)
             }
 
             std::string target = std::string(req.target());
-            bool is_health = (target == "/healthz");
-            bool is_ready = (target == "/readyz");
+            const bool is_health = varify_runtime_modules::IsHealthPath(target.data(), target.size());
+            const bool is_ready = varify_runtime_modules::IsReadinessPath(target.data(), target.size());
 
-            if (!is_health && !is_ready)
+            if (varify_runtime_modules::ShouldReplyNotFound(is_health, is_ready))
             {
                 http::response<http::string_body> res{boost::beast::http::status::not_found, req.version()};
-                res.set(http::field::content_type, "text/plain");
-                res.body() = "not found";
+                res.set(http::field::content_type, varify_runtime_modules::TextContentType());
+                res.body() = varify_runtime_modules::NotFoundBody();
                 res.prepare_payload();
                 beast::error_code ec2;
                 http::write(socket, res, ec2);
@@ -79,20 +80,20 @@ void RunHealthServer(int port)
             bool redis_ok = varifyservice::VarifyRedisMgr::Instance().Ping();
 
             http::response<http::string_body> res{boost::beast::http::status::ok, req.version()};
-            res.set(http::field::content_type, "application/json");
+            res.set(http::field::content_type, varify_runtime_modules::JsonContentType());
 
-            if (is_ready && !redis_ok)
+            if (varify_runtime_modules::ShouldReportRedisDown(is_ready, redis_ok))
             {
                 res.result(http::status::service_unavailable);
-                res.body() = R"({"status":"unhealthy","reason":"redis_down","service":"VarifyServer"})";
+                res.body() = varify_runtime_modules::RedisDownBody();
             }
             else if (is_ready)
             {
-                res.body() = R"({"status":"ready","service":"VarifyServer"})";
+                res.body() = varify_runtime_modules::ReadyBody();
             }
             else
             {
-                res.body() = R"({"status":"ok","service":"VarifyServer"})";
+                res.body() = varify_runtime_modules::HealthBody();
             }
 
             res.prepare_payload();
@@ -173,8 +174,8 @@ int main(int argc, char** argv)
         std::string port = cfg["VarifyServer"]["Port"];
         std::string health_port_str = cfg["VarifyServer"]["HealthPort"];
 
-        int health_port = DEFAULT_HEALTH_PORT;
-        if (!health_port_str.empty())
+        int health_port = varify_runtime_modules::DefaultHealthPort();
+        if (varify_runtime_modules::ShouldUseConfiguredHealthPort(health_port_str.empty()))
         {
             try
             {

@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "ChatMessageInternalGrpcService.h"
-#include "MessageGrpcServiceAdapter.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "transport/CSession.h"
+#include "ChatMessageInternalGrpcService.hpp"
+#include "MessageGrpcServiceAdapter.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "transport/CSession.hpp"
 
 #include <chrono>
 #include <functional>

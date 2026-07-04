@@ -184,7 +184,7 @@ async def main():
     print()
 
     # 加载测试账号
-    accounts_csv = "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv"
+    accounts_csv = "D:/MemoChat/Memo_ops/artifacts/loadtest/runtime/accounts/accounts.local.csv"
     accounts = load_test_accounts(accounts_csv)
 
     if not accounts:
@@ -244,7 +244,7 @@ async def main():
         print(f"    P99:  {r.percentile(99):.2f}")
 
     # 保存结果到 JSON
-    report_path = "D:/MemoChat-Qml-Drogon/Memo_ops/artifacts/loadtest/runtime/reports/http_benchmark.json"
+    report_path = "D:/MemoChat/Memo_ops/artifacts/loadtest/runtime/reports/http_benchmark.json"
     import os
 
     os.makedirs(os.path.dirname(report_path), exist_ok=True)

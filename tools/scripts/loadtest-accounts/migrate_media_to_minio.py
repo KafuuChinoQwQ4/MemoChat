@@ -41,11 +41,8 @@ OPS_CONFIG = REPO_ROOT / "Memo_ops/config/opsserver.yaml"
 UPLOADS_ROOT = REPO_ROOT / "Memo_ops/runtime/services/GateServer/uploads"
 LOG_DIR = REPO_ROOT / "Memo_ops/artifacts/logs/media-migration"
 
-# MinIO settings (matches config.ini [MinIO] section)
-MINIO_ENDPOINT = "127.0.0.1:9000"
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "memochat_admin")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "MinioPass2026!")
-MINIO_PUBLIC_URL = "http://127.0.0.1:9000"
+MINIO_ENDPOINT = os.environ.get("MEMOCHAT_MINIO_ENDPOINT", os.environ.get("MINIO_ENDPOINT", "127.0.0.1:9000"))
+MINIO_PUBLIC_URL = os.environ.get("MEMOCHAT_MINIO_PUBLIC_URL", "http://127.0.0.1:9000")
 
 BUCKETS = {
     "avatar": "memochat-avatar",
@@ -146,11 +143,42 @@ def sanitize_key(key: str) -> str:
 # ---------------------------------------------------------------------------
 # MinIO client
 # ---------------------------------------------------------------------------
+def env_first(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def env_first_required(names: tuple[str, ...]) -> str:
+    value = env_first(names)
+    if value:
+        return value
+    raise RuntimeError("Missing required environment variable: one of " + ", ".join(names))
+
+
 def get_minio_client():
     return Minio(
         MINIO_ENDPOINT,
-        access_key=MINIO_ACCESS_KEY,
-        secret_key=MINIO_SECRET_KEY,
+        access_key=env_first_required(
+            (
+                "MEMOCHAT_MINIO_ROOT_USER",
+                "MEMOCHAT_MINIO_ACCESSKEY",
+                "MEMOCHAT_MINIO_ACCESS_KEY",
+                "MINIO_ROOT_USER",
+                "MINIO_ACCESS_KEY",
+            )
+        ),
+        secret_key=env_first_required(
+            (
+                "MEMOCHAT_MINIO_ROOT_PASSWORD",
+                "MEMOCHAT_MINIO_SECRETKEY",
+                "MEMOCHAT_MINIO_SECRET_KEY",
+                "MINIO_ROOT_PASSWORD",
+                "MINIO_SECRET_KEY",
+            )
+        ),
         secure=False,
     )
 

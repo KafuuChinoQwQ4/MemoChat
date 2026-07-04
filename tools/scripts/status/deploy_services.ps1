@@ -10,10 +10,8 @@ $services = @(
     @{ Name = 'GateServer1'; Exe = 'GateServer.exe'; SourceExe = 'GateServer.exe'; Config = Join-Path $sourceRoot 'GateServer\config.ini' },
     @{ Name = 'GateServer2'; Exe = 'GateServer.exe'; SourceExe = 'GateServer.exe'; Config = Join-Path $sourceRoot 'GateServer\gate2.ini' },
     @{ Name = 'chatserver1'; Exe = 'ChatServer.exe'; SourceExe = 'ChatServer.exe'; Config = Join-Path $sourceRoot 'ChatServer\chatserver1.ini' },
-    @{ Name = 'chatserver2'; Exe = 'ChatServer.exe'; SourceExe = 'ChatServer.exe'; Config = Join-Path $sourceRoot 'ChatServer\chatserver2.ini' },
     @{ Name = 'AIServer'; Exe = 'AIServer.exe'; SourceExe = 'AIServer.exe'; Config = Join-Path $sourceRoot 'AIServer\config.ini' },
-    @{ Name = 'VarifyServer1'; Exe = 'VarifyServer.exe'; SourceExe = 'VarifyServer.exe'; Config = Join-Path $sourceRoot 'VarifyServer\config.ini' },
-    @{ Name = 'VarifyServer2'; Exe = 'VarifyServer.exe'; SourceExe = 'VarifyServer.exe'; Config = Join-Path $sourceRoot 'VarifyServer\varify2.ini' }
+    @{ Name = 'VarifyServer1'; Exe = 'VarifyServer.exe'; SourceExe = 'VarifyServer.exe'; Config = Join-Path $sourceRoot 'VarifyServer\config.ini' }
 )
 
 $clientApps = @(
@@ -106,15 +104,11 @@ $required = @(
     'GateServer1\GateServer.exe',
     'GateServer2\GateServer.exe',
     'VarifyServer1\VarifyServer.exe',
-    'VarifyServer2\VarifyServer.exe',
     'chatserver1\ChatServer.exe',
-    'chatserver2\ChatServer.exe',
     'GateServer1\config.ini',
     'GateServer2\config.ini',
     'VarifyServer1\config.ini',
-    'VarifyServer2\config.ini',
-    'chatserver1\config.ini',
-    'chatserver2\config.ini'
+    'chatserver1\config.ini'
 )
 
 $missing = @()
@@ -132,4 +126,3 @@ if ($missing.Count -gt 0) {
 }
 
 Write-Host "[SUCCESS] Runtime services deployed to $runtimeDir"
-

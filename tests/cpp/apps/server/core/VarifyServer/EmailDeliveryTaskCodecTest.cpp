@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "EmailDeliveryTaskCodec.h"
+#include "EmailDeliveryTaskCodec.hpp"
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 
 TEST(EmailDeliveryTaskCodecTest, SerializesEmailTaskAsJsonObject)
 {

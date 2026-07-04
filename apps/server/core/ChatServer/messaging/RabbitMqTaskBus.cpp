@@ -1,17 +1,21 @@
-#include "RabbitMqTaskBus.h"
+#include "RabbitMqTaskBus.hpp"
 
-#include "ChatRuntime.h"
-#include "logging/Logger.h"
+#include "ChatRuntime.hpp"
+#include "logging/Logger.hpp"
 
 #include <chrono>
 #include <memory>
+
+import memochat.chat.rabbitmq_task_bus_algorithms;
+
+namespace rabbit_task_modules = memochat::chat::messaging::rabbitmq_task_bus::modules;
 
 #ifndef MEMOCHAT_ENABLE_RABBITMQ
 #define MEMOCHAT_ENABLE_RABBITMQ 0
 #endif
 
 #if MEMOCHAT_ENABLE_RABBITMQ
-#include "WinsockCompat.h"
+#include "WinsockCompat.hpp"
 #include <rabbitmq-c/amqp.h>
 #include <rabbitmq-c/framing.h>
 #include <rabbitmq-c/tcp_socket.h>
@@ -27,13 +31,13 @@ std::string BytesToString(amqp_bytes_t bytes)
 
 bool RpcReplyOk(amqp_rpc_reply_t reply, std::string* error)
 {
-    if (reply.reply_type == AMQP_RESPONSE_NORMAL)
+    if (!rabbit_task_modules::ShouldRejectRpcReply(reply.reply_type == AMQP_RESPONSE_NORMAL))
     {
         return true;
     }
     if (error)
     {
-        *error = "amqp_rpc_reply_failed";
+        *error = rabbit_task_modules::AmqpRpcReplyFailedError();
     }
     return false;
 }
@@ -43,9 +47,9 @@ bool RpcReplyOk(amqp_rpc_reply_t reply, std::string* error)
 bool RabbitMqTaskBus::BuildAvailable()
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
-    return true;
+    return rabbit_task_modules::BuildAvailable(true);
 #else
-    return false;
+    return rabbit_task_modules::BuildAvailable(false);
 #endif
 }
 
@@ -72,7 +76,7 @@ bool RabbitMqTaskBus::Publish(const TaskEnvelope& task, std::string* error)
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::lock_guard<std::mutex> guard(_mutex);
-    if (!_connection && !Connect(error))
+    if (rabbit_task_modules::ShouldReconnect(_connection == nullptr) && !Connect(error))
     {
         return false;
     }
@@ -81,7 +85,7 @@ bool RabbitMqTaskBus::Publish(const TaskEnvelope& task, std::string* error)
     (void) task;
     if (error)
     {
-        *error = "rabbitmq_build_disabled";
+        *error = rabbit_task_modules::RabbitMqBuildDisabledError();
     }
     return false;
 #endif
@@ -91,7 +95,7 @@ bool RabbitMqTaskBus::ConsumeOnce(const std::vector<std::string>& routing_keys, 
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::lock_guard<std::mutex> guard(_mutex);
-    if (!_connection && !Connect(error))
+    if (rabbit_task_modules::ShouldReconnect(_connection == nullptr) && !Connect(error))
     {
         return false;
     }
@@ -139,7 +143,7 @@ bool RabbitMqTaskBus::ConsumeOnce(const std::vector<std::string>& routing_keys, 
     (void) task;
     if (error)
     {
-        *error = "rabbitmq_build_disabled";
+        *error = rabbit_task_modules::RabbitMqBuildDisabledError();
     }
     return false;
 #endif
@@ -149,7 +153,7 @@ void RabbitMqTaskBus::AckLastConsumed()
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::lock_guard<std::mutex> guard(_mutex);
-    if (_connection && _last_envelope)
+    if (rabbit_task_modules::ShouldAckLastConsumed(_connection != nullptr, _last_envelope != nullptr))
     {
         auto* envelope = static_cast<amqp_envelope_t*>(_last_envelope);
         amqp_basic_ack(_connection, 1, envelope->delivery_tag, false);
@@ -162,14 +166,14 @@ void RabbitMqTaskBus::NackLastConsumed(const std::string& error)
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::lock_guard<std::mutex> guard(_mutex);
-    if (!_connection || !_last_envelope)
+    if (!rabbit_task_modules::ShouldNackLastConsumed(_connection != nullptr, _last_envelope != nullptr))
     {
         return;
     }
     TaskEnvelope envelope = _last_consumed.envelope;
     envelope.retry_count += 1;
     std::string publish_error;
-    if (envelope.retry_count > envelope.max_retries)
+    if (rabbit_task_modules::ShouldRouteToDeadLetter(envelope.retry_count, envelope.max_retries))
     {
         PublishSerialized(_config.exchange_dlx,
                           DlqRoutingKeyFor(envelope.routing_key),
@@ -202,11 +206,11 @@ void RabbitMqTaskBus::NackLastConsumed(const std::string& error)
 bool RabbitMqTaskBus::Connect(std::string* error)
 {
 #if MEMOCHAT_ENABLE_RABBITMQ
-    if (!_config.valid())
+    if (rabbit_task_modules::ShouldRejectInvalidConfig(_config.valid()))
     {
         if (error)
         {
-            *error = "rabbitmq_invalid_config";
+            *error = rabbit_task_modules::RabbitMqInvalidConfigError();
         }
         return false;
     }
@@ -217,7 +221,7 @@ bool RabbitMqTaskBus::Connect(std::string* error)
     {
         if (error)
         {
-            *error = "rabbitmq_socket_create_failed";
+            *error = rabbit_task_modules::RabbitMqSocketCreateFailedError();
         }
         Close();
         return false;
@@ -226,7 +230,7 @@ bool RabbitMqTaskBus::Connect(std::string* error)
     {
         if (error)
         {
-            *error = "rabbitmq_socket_open_failed";
+            *error = rabbit_task_modules::RabbitMqSocketOpenFailedError();
         }
         Close();
         return false;
@@ -352,7 +356,7 @@ bool RabbitMqTaskBus::EnsureTopology(std::string* error)
             return false;
         }
 
-        const auto dlq_queue_name = queue_name + ".dlq";
+        const auto dlq_queue_name = queue_name + rabbit_task_modules::DlqSuffix();
         amqp_queue_declare(_connection, 1, amqp_cstring_bytes(dlq_queue_name.c_str()), 0, 1, 0, 0, amqp_empty_table);
         if (!RpcReplyOk(amqp_get_rpc_reply(_connection), error))
         {
@@ -384,8 +388,8 @@ bool RabbitMqTaskBus::PublishSerialized(const std::string& exchange,
 #if MEMOCHAT_ENABLE_RABBITMQ
     amqp_basic_properties_t props;
     props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;
-    props.content_type = amqp_cstring_bytes("application/json");
-    props.delivery_mode = 2;
+    props.content_type = amqp_cstring_bytes(rabbit_task_modules::ContentTypeJson());
+    props.delivery_mode = rabbit_task_modules::PersistentDeliveryMode();
     const auto status = amqp_basic_publish(_connection,
                                            1,
                                            amqp_cstring_bytes(exchange.c_str()),
@@ -394,11 +398,11 @@ bool RabbitMqTaskBus::PublishSerialized(const std::string& exchange,
                                            0,
                                            &props,
                                            amqp_cstring_bytes(payload.c_str()));
-    if (status != AMQP_STATUS_OK)
+    if (rabbit_task_modules::ShouldRejectPublishResult(status == AMQP_STATUS_OK))
     {
         if (error)
         {
-            *error = "rabbitmq_publish_failed";
+            *error = rabbit_task_modules::RabbitMqPublishFailedError();
         }
         return false;
     }
@@ -409,7 +413,7 @@ bool RabbitMqTaskBus::PublishSerialized(const std::string& exchange,
     (void) payload;
     if (error)
     {
-        *error = "rabbitmq_build_disabled";
+        *error = rabbit_task_modules::RabbitMqBuildDisabledError();
     }
     return false;
 #endif
@@ -417,17 +421,17 @@ bool RabbitMqTaskBus::PublishSerialized(const std::string& exchange,
 
 std::string RabbitMqTaskBus::QueueNameForRoutingKey(const std::string& routing_key) const
 {
-    return routing_key + ".q";
+    return routing_key + rabbit_task_modules::QueueSuffix();
 }
 
 std::string RabbitMqTaskBus::RetryQueueNameForRoutingKey(const std::string& routing_key) const
 {
-    return QueueNameForRoutingKey(routing_key) + ".retry";
+    return QueueNameForRoutingKey(routing_key) + rabbit_task_modules::RetryQueueSuffix();
 }
 
 std::string RabbitMqTaskBus::DlqRoutingKeyFor(const std::string& routing_key) const
 {
-    return routing_key + ".dlq";
+    return routing_key + rabbit_task_modules::DlqSuffix();
 }
 
 void RabbitMqTaskBus::ClearLastConsumed()

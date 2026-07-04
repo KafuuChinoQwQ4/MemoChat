@@ -1,22 +1,20 @@
-#include "PostgresDao.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
+#include "PostgresDao.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
 #include <pqxx/pqxx>
-#include <algorithm>
 #include <stdexcept>
 #include <sstream>
 
-namespace
-{
-constexpr int64_t kPermDeleteMessages = 1LL << 1;
-constexpr int64_t kMessageRevokeWindowMsPostgresDao = 5 * 60 * 1000;
-} // namespace
+import memochat.chat.postgres_dao_group_messages_algorithms;
+
+namespace postgres_dao_group_messages_modules = memochat::chat::persistence::postgres_dao_group_messages::modules;
+
 bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
                                    int64_t* out_server_msg_id,
                                    int64_t* out_group_seq,
                                    int64_t assigned_group_seq)
 {
-    if (msg.msg_id.empty() || msg.group_id <= 0 || msg.from_uid <= 0)
+    if (!postgres_dao_group_messages_modules::CanSaveGroupMessage(msg.msg_id.empty(), msg.group_id, msg.from_uid))
     {
         return false;
     }
@@ -44,16 +42,13 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
             }
 
             int64_t next_group_seq = assigned_group_seq;
-            if (next_group_seq <= 0)
+            if (postgres_dao_group_messages_modules::ShouldLoadNextGroupSeq(next_group_seq))
             {
                 const auto seq_rows = txn.exec_params(
                     "SELECT COALESCE(MAX(group_seq), 0) + 1 AS next_seq FROM chat_group_msg WHERE group_id = $1",
                     msg.group_id);
                 next_group_seq = seq_rows.empty() ? 1 : seq_rows[0]["next_seq"].as<int64_t>();
-                if (next_group_seq <= 0)
-                {
-                    next_group_seq = 1;
-                }
+                next_group_seq = postgres_dao_group_messages_modules::NormalizeNextGroupSeq(next_group_seq);
             }
 
             const auto insert_rows = txn.exec_params(
@@ -85,7 +80,9 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
 
             const auto server_msg_id = insert_rows[0]["server_msg_id"].as<int64_t>();
             next_group_seq = insert_rows[0]["group_seq"].as<int64_t>();
-            if (!msg.file_name.empty() || !msg.mime.empty() || msg.size > 0)
+            if (postgres_dao_group_messages_modules::ShouldWriteGroupMessageExt(msg.file_name.empty(),
+                                                                                msg.mime.empty(),
+                                                                                msg.size))
             {
                 txn.exec_params0("INSERT INTO chat_group_msg_ext(msg_id, file_name, mime, size) VALUES($1,$2,$3,$4) "
                                  "ON CONFLICT (msg_id) DO UPDATE SET file_name = EXCLUDED.file_name, mime = "
@@ -140,7 +137,7 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
             }
         }
         int64_t next_group_seq = assigned_group_seq;
-        if (next_group_seq <= 0)
+        if (postgres_dao_group_messages_modules::ShouldLoadNextGroupSeq(next_group_seq))
         {
             std::unique_ptr<sql::PreparedStatement> seq_stmt(
                 con->_con->prepareStatement("SELECT COALESCE(MAX(group_seq), 0) + 1 AS next_seq "
@@ -153,10 +150,7 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
                 return false;
             }
             next_group_seq = seq_res->getInt64("next_seq");
-            if (next_group_seq <= 0)
-            {
-                next_group_seq = 1;
-            }
+            next_group_seq = postgres_dao_group_messages_modules::NormalizeNextGroupSeq(next_group_seq);
         }
 
         std::unique_ptr<sql::PreparedStatement> ins_msg(con->_con->prepareStatement(
@@ -202,7 +196,9 @@ bool PostgresDao::SaveGroupMessage(const GroupMessageInfo& msg,
             }
         }
 
-        if (!msg.file_name.empty() || !msg.mime.empty() || msg.size > 0)
+        if (postgres_dao_group_messages_modules::ShouldWriteGroupMessageExt(msg.file_name.empty(),
+                                                                            msg.mime.empty(),
+                                                                            msg.size))
         {
             std::unique_ptr<sql::PreparedStatement> up_ext(con->_con->prepareStatement(
                 "REPLACE INTO chat_group_msg_ext(msg_id, file_name, mime, size) VALUES(?,?,?,?)"));
@@ -243,11 +239,14 @@ bool PostgresDao::UpdateGroupMessageContent(const int64_t& group_id,
                                             const std::string& content,
                                             int64_t edited_at_ms)
 {
-    if (group_id <= 0 || operator_uid <= 0 || msg_id.empty() || content.empty())
+    if (!postgres_dao_group_messages_modules::CanUpdateGroupMessage(group_id,
+                                                                    operator_uid,
+                                                                    msg_id.empty(),
+                                                                    content.empty()))
     {
         return false;
     }
-    if (edited_at_ms <= 0)
+    if (postgres_dao_group_messages_modules::ShouldUseFallbackTimestamp(edited_at_ms))
     {
         edited_at_ms = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -269,7 +268,14 @@ bool PostgresDao::UpdateGroupMessageContent(const int64_t& group_id,
                 return false;
             }
             const int from_uid = rows[0]["from_uid"].as<int>();
-            if (from_uid != operator_uid && !HasGroupPermission(group_id, operator_uid, kPermDeleteMessages))
+            const bool has_delete_permission =
+                from_uid != operator_uid &&
+                HasGroupPermission(group_id,
+                                   operator_uid,
+                                   postgres_dao_group_messages_modules::DeleteMessagesPermissionBit());
+            if (!postgres_dao_group_messages_modules::CanOperatorEditGroupMessage(from_uid,
+                                                                                  operator_uid,
+                                                                                  has_delete_permission))
             {
                 txn.abort();
                 return false;
@@ -322,12 +328,16 @@ bool PostgresDao::UpdateGroupMessageContent(const int64_t& group_id,
         }
         const int from_uid = res->getInt("from_uid");
 
-        if (from_uid != operator_uid)
+        const bool has_delete_permission =
+            from_uid != operator_uid &&
+            HasGroupPermission(group_id,
+                               operator_uid,
+                               postgres_dao_group_messages_modules::DeleteMessagesPermissionBit());
+        if (!postgres_dao_group_messages_modules::CanOperatorEditGroupMessage(from_uid,
+                                                                              operator_uid,
+                                                                              has_delete_permission))
         {
-            if (!HasGroupPermission(group_id, operator_uid, kPermDeleteMessages))
-            {
-                return false;
-            }
+            return false;
         }
 
         con->_con->setAutoCommit(false);
@@ -370,11 +380,11 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
                                      const std::string& msg_id,
                                      int64_t deleted_at_ms)
 {
-    if (group_id <= 0 || operator_uid <= 0 || msg_id.empty())
+    if (!postgres_dao_group_messages_modules::CanRequestGroupMessageRevoke(group_id, operator_uid, msg_id.empty()))
     {
         return false;
     }
-    if (deleted_at_ms <= 0)
+    if (postgres_dao_group_messages_modules::ShouldUseFallbackTimestamp(deleted_at_ms))
     {
         deleted_at_ms = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -400,8 +410,13 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
             const int64_t created_at = rows[0]["created_at"].as<int64_t>();
             const int64_t existing_deleted_at_ms =
                 rows[0]["deleted_at_ms"].is_null() ? 0 : rows[0]["deleted_at_ms"].as<int64_t>();
-            if (from_uid != operator_uid || existing_deleted_at_ms > 0 || created_at <= 0 ||
-                deleted_at_ms - created_at > kMessageRevokeWindowMsPostgresDao)
+            const long long revoke_window_ms = postgres_dao_group_messages_modules::MessageRevokeWindowMs();
+            if (!postgres_dao_group_messages_modules::CanRevokeGroupMessage(from_uid,
+                                                                            operator_uid,
+                                                                            existing_deleted_at_ms,
+                                                                            created_at,
+                                                                            deleted_at_ms,
+                                                                            revoke_window_ms))
             {
                 txn.abort();
                 return false;
@@ -415,7 +430,7 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
                 group_id,
                 msg_id,
                 operator_uid,
-                deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
+                postgres_dao_group_messages_modules::RevokeWindowStart(deleted_at_ms, revoke_window_ms));
             if (updated.affected_rows() <= 0)
             {
                 txn.abort();
@@ -459,8 +474,13 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
         const int64_t created_at = res->getInt64("created_at");
         const int64_t existing_deleted_at_ms = res->getInt64("deleted_at_ms");
 
-        if (from_uid != operator_uid || existing_deleted_at_ms > 0 || created_at <= 0 ||
-            deleted_at_ms - created_at > kMessageRevokeWindowMsPostgresDao)
+        const long long revoke_window_ms = postgres_dao_group_messages_modules::MessageRevokeWindowMs();
+        if (!postgres_dao_group_messages_modules::CanRevokeGroupMessage(from_uid,
+                                                                        operator_uid,
+                                                                        existing_deleted_at_ms,
+                                                                        created_at,
+                                                                        deleted_at_ms,
+                                                                        revoke_window_ms))
         {
             return false;
         }
@@ -474,7 +494,7 @@ bool PostgresDao::RevokeGroupMessage(const int64_t& group_id,
         up->setInt64(2, group_id);
         up->setString(3, msg_id);
         up->setInt(4, operator_uid);
-        up->setInt64(5, deleted_at_ms - kMessageRevokeWindowMsPostgresDao);
+        up->setInt64(5, postgres_dao_group_messages_modules::RevokeWindowStart(deleted_at_ms, revoke_window_ms));
         if (up->executeUpdate() <= 0)
         {
             con->_con->rollback();
@@ -518,9 +538,10 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
         {
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
-            const int final_limit = std::max(1, std::min(limit, 50));
+            const int final_limit = postgres_dao_group_messages_modules::ClampHistoryLimit(limit);
+            const int fetch_limit = postgres_dao_group_messages_modules::SelectHistoryFetchLimit(final_limit);
             pqxx::result rows;
-            if (before_seq > 0)
+            if (postgres_dao_group_messages_modules::ShouldApplyGroupSeqCursor(before_seq))
             {
                 rows = txn.exec_params(
                     "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
@@ -533,9 +554,9 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
                     group_id,
                     before_seq,
-                    final_limit + 1);
+                    fetch_limit);
             }
-            else if (before_ts > 0)
+            else if (postgres_dao_group_messages_modules::ShouldApplyTimestampCursor(before_seq, before_ts))
             {
                 rows = txn.exec_params(
                     "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
@@ -548,7 +569,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $3",
                     group_id,
                     before_ts,
-                    final_limit + 1);
+                    fetch_limit);
             }
             else
             {
@@ -561,7 +582,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                     "LEFT JOIN chat_group_msg_ext e ON m.msg_id = e.msg_id "
                     "WHERE m.group_id = $1 ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT $2",
                     group_id,
-                    final_limit + 1);
+                    fetch_limit);
             }
 
             for (const auto& row : rows)
@@ -588,7 +609,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                 // replaces the former LEFT JOIN "user").
                 messages.push_back(info);
             }
-            if (static_cast<int>(messages.size()) > final_limit)
+            if (postgres_dao_group_messages_modules::HasOverflowPage(static_cast<int>(messages.size()), final_limit))
             {
                 has_more = true;
                 messages.resize(final_limit);
@@ -640,9 +661,10 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
 
     try
     {
-        const int final_limit = std::max(1, std::min(limit, 50));
+        const int final_limit = postgres_dao_group_messages_modules::ClampHistoryLimit(limit);
+        const int fetch_limit = postgres_dao_group_messages_modules::SelectHistoryFetchLimit(final_limit);
         std::unique_ptr<sql::PreparedStatement> pstmt;
-        if (before_seq > 0)
+        if (postgres_dao_group_messages_modules::ShouldApplyGroupSeqCursor(before_seq))
         {
             pstmt.reset(con->_con->prepareStatement(
                 "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
@@ -655,9 +677,9 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                 "WHERE m.group_id = ? AND m.group_seq < ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
             pstmt->setInt64(1, group_id);
             pstmt->setInt64(2, before_seq);
-            pstmt->setInt(3, final_limit + 1);
+            pstmt->setInt(3, fetch_limit);
         }
-        else if (before_ts > 0)
+        else if (postgres_dao_group_messages_modules::ShouldApplyTimestampCursor(before_seq, before_ts))
         {
             pstmt.reset(con->_con->prepareStatement(
                 "SELECT m.msg_id, m.server_msg_id, m.group_seq, m.group_id, m.from_uid, m.msg_type, m.content, "
@@ -670,7 +692,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                 "WHERE m.group_id = ? AND m.created_at < ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
             pstmt->setInt64(1, group_id);
             pstmt->setInt64(2, before_ts);
-            pstmt->setInt(3, final_limit + 1);
+            pstmt->setInt(3, fetch_limit);
         }
         else
         {
@@ -684,7 +706,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
                 "LEFT JOIN user u ON m.from_uid = u.uid "
                 "WHERE m.group_id = ? ORDER BY m.group_seq DESC, m.server_msg_id DESC LIMIT ?"));
             pstmt->setInt64(1, group_id);
-            pstmt->setInt(2, final_limit + 1);
+            pstmt->setInt(2, fetch_limit);
         }
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         while (res->next())
@@ -712,7 +734,7 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
             info->from_icon = res->isNull("from_icon") ? "" : res->getString("from_icon");
             messages.push_back(info);
         }
-        if (static_cast<int>(messages.size()) > final_limit)
+        if (postgres_dao_group_messages_modules::HasOverflowPage(static_cast<int>(messages.size()), final_limit))
         {
             has_more = true;
             messages.resize(final_limit);
@@ -733,7 +755,7 @@ bool PostgresDao::GetGroupMessageByMsgId(const int64_t& group_id,
                                          std::shared_ptr<GroupMessageInfo>& message)
 {
     message = nullptr;
-    if (group_id <= 0 || msg_id.empty())
+    if (!postgres_dao_group_messages_modules::CanFindGroupMessage(group_id, msg_id.empty()))
     {
         return false;
     }

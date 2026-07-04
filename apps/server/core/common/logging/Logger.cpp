@@ -1,10 +1,10 @@
-#include "logging/Logger.h"
+#include "logging/Logger.hpp"
 
-#include "logging/Redaction.h"
-#include "logging/Telemetry.h"
-#include "logging/TraceContext.h"
+#include "logging/Redaction.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TraceContext.hpp"
 
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
@@ -15,8 +15,9 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <set>
 #include <vector>
+
+import memochat.logging.logger_algorithms;
 
 namespace memolog
 {
@@ -76,7 +77,7 @@ std::string NowIso8601()
 
 std::string NormalizeDir(std::string dir)
 {
-    if (dir.empty())
+    if (memochat::logging::logger_modules::ShouldUseDefaultLogDir(dir.empty()))
     {
         return "./logs";
     }
@@ -85,9 +86,7 @@ std::string NormalizeDir(std::string dir)
 
 bool IsTopLevelField(const std::string& key)
 {
-    static const std::set<std::string> known =
-        {"service_instance", "module", "peer_service", "error_code", "error_type", "duration_ms", "uid", "session_id"};
-    return known.find(key) != known.end();
+    return memochat::logging::logger_modules::IsTopLevelFieldName(key.data(), key.size());
 }
 
 } // namespace

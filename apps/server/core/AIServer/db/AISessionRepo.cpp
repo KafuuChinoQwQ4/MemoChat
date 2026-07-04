@@ -1,7 +1,7 @@
-#include "db/AISessionRepo.h"
-#include "ConfigMgr.h"
-#include "db/PqxxCompat.h"
-#include "logging/Logger.h"
+#include "db/AISessionRepo.hpp"
+#include "ConfigMgr.hpp"
+#include "db/PqxxCompat.hpp"
+#include "logging/Logger.hpp"
 #include <pqxx/pqxx>
 #include <pqxx/transaction.hxx>
 #include <boost/uuid/uuid.hpp>
@@ -12,13 +12,18 @@
 #include <mutex>
 #include <sstream>
 
+import memochat.ai.repository_algorithms;
+
 namespace
 {
+namespace repository_modules = memochat::ai::repository::modules;
 
 pqxx::connection* GetPgConn()
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto schema = cfg["Postgres"]["Schema"].empty() ? "public" : cfg["Postgres"]["Schema"];
+    const auto schema = repository_modules::ShouldUseDefaultSchema(cfg["Postgres"]["Schema"].empty())
+                            ? repository_modules::DefaultPostgresSchema()
+                            : cfg["Postgres"]["Schema"];
     std::ostringstream conn_str;
     conn_str << "host=" << cfg["Postgres"]["Host"] << " port=" << cfg["Postgres"]["Port"]
              << " user=" << cfg["Postgres"]["User"] << " password=" << cfg["Postgres"]["Passwd"]
@@ -73,7 +78,7 @@ std::string AISessionRepo::Create(int32_t uid, const std::string& model_type, co
                ON CONFLICT (session_id) DO NOTHING)",
             session_id,
             uid,
-            "",
+            repository_modules::DefaultSessionTitle(),
             model_type,
             model_name,
             now,
@@ -89,7 +94,7 @@ std::string AISessionRepo::Create(int32_t uid, const std::string& model_type, co
     return session_id;
 }
 
-bool AISessionRepo::SoftDelete(const std::string& session_id)
+bool AISessionRepo::SoftDelete(int32_t uid, const std::string& session_id)
 {
     int64_t now =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -98,17 +103,20 @@ bool AISessionRepo::SoftDelete(const std::string& session_id)
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
-        auto r = tx.exec_params(R"(UPDATE ai_session SET deleted_at = $1 WHERE session_id = $2 AND deleted_at IS NULL)",
+        auto r = tx.exec_params(R"(UPDATE ai_session
+                                    SET deleted_at = $1
+                                    WHERE uid = $2 AND session_id = $3 AND deleted_at IS NULL)",
                                 now,
+                                uid,
                                 session_id);
         tx.commit();
-        return r.affected_rows() > 0;
+        return repository_modules::HasAffectedRows(static_cast<unsigned long long>(r.affected_rows()));
     }
     catch (const std::exception& e)
     {
         memolog::LogError("ai_session.delete.failed",
                           "pg_update_error",
-                          {{"session_id", session_id}, {"error", e.what()}});
+                          {{"uid", std::to_string(uid)}, {"session_id", session_id}, {"error", e.what()}});
         return false;
     }
 }
@@ -131,7 +139,7 @@ bool AISessionRepo::UpdateTitle(int32_t uid, const std::string& session_id, cons
             uid,
             session_id);
         tx.commit();
-        return r.affected_rows() > 0;
+        return repository_modules::HasAffectedRows(static_cast<unsigned long long>(r.affected_rows()));
     }
     catch (const std::exception& e)
     {
@@ -142,7 +150,7 @@ bool AISessionRepo::UpdateTitle(int32_t uid, const std::string& session_id, cons
     }
 }
 
-std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& session_id)
+std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(int32_t uid, const std::string& session_id)
 {
     try
     {
@@ -150,10 +158,11 @@ std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& 
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
             R"(SELECT session_id, title, model_type, model_name, created_at, updated_at
-               FROM ai_session WHERE session_id = $1 AND deleted_at IS NULL)",
+               FROM ai_session WHERE uid = $1 AND session_id = $2 AND deleted_at IS NULL)",
+            uid,
             session_id);
         tx.commit();
-        if (r.empty())
+        if (repository_modules::ShouldReturnNoSession(r.empty()))
             return nullptr;
 
         const auto& row = r[0];
@@ -170,7 +179,7 @@ std::unique_ptr<ai::AISessionInfo> AISessionRepo::GetSession(const std::string& 
     {
         memolog::LogError("ai_session.get.failed",
                           "pg_select_error",
-                          {{"session_id", session_id}, {"error", e.what()}});
+                          {{"uid", std::to_string(uid)}, {"session_id", session_id}, {"error", e.what()}});
         return nullptr;
     }
 }
@@ -225,18 +234,29 @@ bool AISessionRepo::SaveMessage(const std::string& session_id,
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
-        tx.exec_params(
+        auto r = tx.exec_params(
             R"(INSERT INTO ai_message (msg_id, session_id, role, content, tokens_used, model_name, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7))",
+               SELECT $1, s.session_id, $3, $4, $5, $6, $7
+               FROM ai_session s
+               WHERE s.session_id = $2 AND s.uid = $8 AND s.deleted_at IS NULL)",
             msg_id,
             session_id,
             role,
             content,
             tokens_used,
             model_name,
-            now);
+            now,
+            uid);
+        if (!repository_modules::HasAffectedRows(static_cast<unsigned long long>(r.affected_rows())))
+        {
+            tx.commit();
+            return false;
+        }
 
-        tx.exec_params(R"(UPDATE ai_session SET updated_at = $1 WHERE session_id = $2)", now, session_id);
+        tx.exec_params(R"(UPDATE ai_session SET updated_at = $1 WHERE uid = $2 AND session_id = $3)",
+                       now,
+                       uid,
+                       session_id);
         tx.commit();
         return true;
     }
@@ -244,12 +264,12 @@ bool AISessionRepo::SaveMessage(const std::string& session_id,
     {
         memolog::LogError("ai_message.save.failed",
                           "pg_insert_error",
-                          {{"session_id", session_id}, {"error", e.what()}});
+                          {{"uid", std::to_string(uid)}, {"session_id", session_id}, {"error", e.what()}});
         return false;
     }
 }
 
-std::vector<ai::AIMessage> AISessionRepo::GetMessages(const std::string& session_id, int limit, int offset)
+std::vector<ai::AIMessage> AISessionRepo::GetMessages(int32_t uid, const std::string& session_id, int limit, int offset)
 {
     std::vector<ai::AIMessage> result;
     try
@@ -257,9 +277,12 @@ std::vector<ai::AIMessage> AISessionRepo::GetMessages(const std::string& session
         std::lock_guard<std::mutex> lock(_impl->mutex);
         pqxx::work tx(*_impl->conn);
         auto r = tx.exec_params(
-            R"(SELECT msg_id, role, content, created_at
-               FROM ai_message WHERE session_id = $1 AND deleted_at IS NULL
-               ORDER BY created_at ASC LIMIT $2 OFFSET $3)",
+            R"(SELECT m.msg_id, m.role, m.content, m.created_at
+               FROM ai_message m
+               JOIN ai_session s ON s.session_id = m.session_id
+               WHERE s.uid = $1 AND m.session_id = $2 AND s.deleted_at IS NULL AND m.deleted_at IS NULL
+               ORDER BY m.created_at ASC LIMIT $3 OFFSET $4)",
+            uid,
             session_id,
             limit,
             offset);
@@ -278,7 +301,7 @@ std::vector<ai::AIMessage> AISessionRepo::GetMessages(const std::string& session
     {
         memolog::LogError("ai_message.get.failed",
                           "pg_select_error",
-                          {{"session_id", session_id}, {"error", e.what()}});
+                          {{"uid", std::to_string(uid)}, {"session_id", session_id}, {"error", e.what()}});
     }
     return result;
 }

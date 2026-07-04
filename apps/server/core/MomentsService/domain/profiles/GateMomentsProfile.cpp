@@ -1,6 +1,6 @@
-#include "GateRouteProfileRegistrar.h"
+#include "GateRouteProfileRegistrar.hpp"
 
-#include "modules/moments/MomentsRouteModule.h"
+#include "modules/moments/MomentsRouteModule.hpp"
 
 namespace memochat::gate::profiles
 {

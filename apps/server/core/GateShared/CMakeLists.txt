@@ -25,11 +25,40 @@ add_library(GateRuntimeCore STATIC
     HttpConnection.cpp
     LogicSystem.cpp
     app/GateDomainServer.cpp
+    app/GateDomainRuntime.cpp
+    app/GateDomainRuntime.hpp
     adapters/h1/H1RouteAdapter.cpp
     modules/health/HealthRouteModule.cpp
     routing/RouteRegistry.cpp
 )
 memochat_configure_gate_app_lib(GateRuntimeCore)
+if(MEMOCHAT_ENABLE_GNU_MODULES)
+    memochat_enable_gnu_modules(GateRuntimeCore
+        MODULES
+            memochat.gate.domain_runtime_algorithms=modules/cxx_modules/GateDomainRuntime.cppm
+            memochat.gate.health_route_algorithms=modules/cxx_modules/HealthRoute.cppm
+            memochat.gate.h1_route_adapter_algorithms=adapters/h1/cxx_modules/H1RouteAdapter.cppm
+            memochat.gate.http_json_support_algorithms=modules/cxx_modules/GateHttpJsonSupport.cppm
+            memochat.gate.module_probe=modules/cxx_modules/GateModuleProbe.cppm
+            memochat.gate.routing_algorithms=modules/cxx_modules/GateRouting.cppm
+            memochat.gate.worker_pool_algorithms=modules/cxx_modules/GateWorkerPool.cppm
+        PRIVATE_SOURCES
+            modules/cxx_modules/GateModuleProbeConsumer.cpp
+        CONSUMER_SOURCES
+            adapters/h1/H1RouteAdapter.cpp
+            app/GateDomainRuntime.cpp
+            GateHttpJsonSupport.cpp
+            GateWorkerPool.cpp
+            LogicSystem.cpp
+            modules/health/HealthRouteModule.cpp
+            routing/RouteRegistry.cpp
+    )
+    if(MEMOCHAT_ENABLE_GNU_STD_MODULES AND MEMOCHAT_ENABLE_CPP26_REFLECTION)
+        # GCC 16 currently conflicts when -freflection consumers import a module that imports std
+        # after textual standard-library includes from the consumer's declaration header.
+        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/app/GateDomainRuntime.cpp" APPEND_STRING PROPERTY COMPILE_FLAGS " -fno-reflection")
+    endif()
+endif()
 
 # Compatibility aggregate for retired monolithic Gate paths and the legacy
 # transports. Focused services link GateRuntimeCore plus their own Gate<X>Domain
@@ -39,10 +68,10 @@ memochat_configure_gate_app_lib(GateRuntimeCore)
 add_library(GateAppCore STATIC
     profiles/GateFullProfile.cpp
     GateServerH1Routes.cpp
-    GateRouteModules.h
-    transports/h3/legacy_routes/GateHttp3ServiceRoutes.h
+    GateRouteModules.hpp
+    transports/h3/legacy_routes/GateHttp3ServiceRoutes.hpp
     CertUtil.cpp
-    CertUtil.h
+    CertUtil.hpp
 )
 memochat_configure_gate_app_lib(GateAppCore)
 target_link_libraries(GateAppCore PUBLIC

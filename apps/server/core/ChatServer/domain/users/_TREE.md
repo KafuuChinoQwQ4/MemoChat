@@ -2,13 +2,19 @@
 
 > 用户领域：在线用户管理器与用户支撑工具，维护连接用户的内存态与查询。
 
+## 子目录
+
+| 子目录 | 作用概括 |
+| --- | --- |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 用户领域的 C++ module 接口分组 |
+
 ## 文件
 
 | 文件 | 作用概括 |
 | --- | --- |
 | `ChatUserProfileDto.cpp` | 用户 profile/cache DTO 的 Glaze 编解码与响应字段投影实现 |
 | `ChatUserProfileDto.h` | 用户 profile/cache DTO 与 JSON 转换接口声明 |
-| `ChatUserSupport.cpp` | 用户支撑工具实现 |
+| `ChatUserSupport.cpp` | 用户支撑工具实现，导入轻量算法 module 处理数字、缓存和分页 guard |
 | `ChatUserSupport.h` | 用户支撑工具声明 |
 | `UserMgr.cpp` | 在线用户管理器实现 |
 | `UserMgr.h` | 在线用户管理器声明 |

@@ -1,29 +1,16 @@
-#include "services/media/MediaPublicDtos.h"
+#include "services/media/MediaPublicDtos.hpp"
 
-#include "json/GlazeCompat.h"
-#include "json/TypedJsonCodec.h"
+#include "json/GlazeCompat.hpp"
+#include "json/TypedJsonCodec.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <exception>
 #include <utility>
 
+import memochat.media.public_dto_algorithms;
+
 namespace
 {
-
-std::string LowercaseAscii(std::string_view value)
-{
-    std::string out(value);
-    std::transform(out.begin(),
-                   out.end(),
-                   out.begin(),
-                   [](unsigned char c)
-                   {
-                       return static_cast<char>(std::tolower(c));
-                   });
-    return out;
-}
-
 bool ParseJsonForMediaPublic(std::string_view body, memochat::json::JsonValue* out, std::string* error_out)
 {
     if (out == nullptr)
@@ -77,6 +64,38 @@ template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& va
     return root;
 }
 
+std::vector<int> NormalizeGrantUids(std::vector<int> values)
+{
+    values.erase(std::remove_if(values.begin(),
+                                values.end(),
+                                [](int uid)
+                                {
+                                    return uid <= 0;
+                                }),
+                 values.end());
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    return values;
+}
+
+std::vector<int> ParseGrantUids(const memochat::json::JsonValue& root)
+{
+    std::vector<int> values;
+    if (!memochat::json::isMember(root, "grant_uids") || !root["grant_uids"].isArray())
+    {
+        return values;
+    }
+    for (const auto& item : root["grant_uids"])
+    {
+        const int uid = item.asInt();
+        if (uid > 0)
+        {
+            values.push_back(uid);
+        }
+    }
+    return NormalizeGrantUids(std::move(values));
+}
+
 } // namespace
 
 namespace memochat::media
@@ -84,18 +103,28 @@ namespace memochat::media
 
 MediaUploadInitRequestDto NormalizeMediaUploadInitRequest(MediaUploadInitRequestDto request)
 {
-    if (request.media_type.empty())
+    if (public_dto::modules::ShouldUseDefaultMediaType(request.media_type.empty()))
     {
         request.media_type = "file";
+    }
+    request.grant_uids = NormalizeGrantUids(std::move(request.grant_uids));
+    if (request.grant_group_id < 0)
+    {
+        request.grant_group_id = 0;
     }
     return request;
 }
 
 MediaUploadSimpleRequestDto NormalizeMediaUploadSimpleRequest(MediaUploadSimpleRequestDto request)
 {
-    if (request.media_type.empty())
+    if (public_dto::modules::ShouldUseDefaultMediaType(request.media_type.empty()))
     {
         request.media_type = "file";
+    }
+    request.grant_uids = NormalizeGrantUids(std::move(request.grant_uids));
+    if (request.grant_group_id < 0)
+    {
+        request.grant_group_id = 0;
     }
     return request;
 }
@@ -122,6 +151,10 @@ bool DecodeMediaUploadInitRequest(std::string_view body, MediaUploadInitRequestD
     parsed.file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
     parsed.mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");
     parsed.file_size = memochat::json::glaze_safe_get<int64_t>(root, "file_size", 0LL);
+    parsed.grant_uids = ParseGrantUids(root);
+    parsed.grant_group_id = memochat::json::glaze_safe_get<int64_t>(root, "grant_group_id", 0LL);
+    parsed.grant_public = memochat::json::glaze_safe_get<bool>(root, "grant_public", false);
+    parsed.grant_friends = memochat::json::glaze_safe_get<bool>(root, "grant_friends", false);
     *out = NormalizeMediaUploadInitRequest(std::move(parsed));
     return true;
 }
@@ -194,6 +227,10 @@ bool DecodeMediaUploadSimpleRequest(std::string_view body, MediaUploadSimpleRequ
     parsed.file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
     parsed.mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");
     parsed.data_base64 = memochat::json::glaze_safe_get<std::string>(root, "data_base64", "");
+    parsed.grant_uids = ParseGrantUids(root);
+    parsed.grant_group_id = memochat::json::glaze_safe_get<int64_t>(root, "grant_group_id", 0LL);
+    parsed.grant_public = memochat::json::glaze_safe_get<bool>(root, "grant_public", false);
+    parsed.grant_friends = memochat::json::glaze_safe_get<bool>(root, "grant_friends", false);
     *out = NormalizeMediaUploadSimpleRequest(std::move(parsed));
     return true;
 }
@@ -220,7 +257,7 @@ memochat::json::JsonValue MediaUploadAssetResponseToJsonValue(const MediaUploadA
 
 bool IsJsonContentType(std::string_view content_type)
 {
-    return LowercaseAscii(content_type).find("application/json") != std::string::npos;
+    return public_dto::modules::ContainsApplicationJson(content_type.data(), content_type.size());
 }
 
 } // namespace memochat::media

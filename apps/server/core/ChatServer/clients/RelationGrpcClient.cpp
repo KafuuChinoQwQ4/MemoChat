@@ -1,54 +1,22 @@
-#include "RelationGrpcClient.h"
+#include "RelationGrpcClient.hpp"
 
-#include "const.h"
-#include "logging/GrpcTrace.h"
+#include "const.hpp"
+#include "logging/GrpcTrace.hpp"
 
 #include <utility>
 
+import memochat.chat.relation_grpc_client_algorithms;
+
+namespace relation_grpc_modules = memochat::chat::relation_grpc_client::modules;
+
 namespace
 {
-const char* QueryMethodName(RelationGrpcClient::QueryRpc rpc)
-{
-    switch (rpc)
-    {
-        case RelationGrpcClient::QueryRpc::AppendRelationBootstrap:
-            return "AppendRelationBootstrap";
-        case RelationGrpcClient::QueryRpc::BuildDialogList:
-            return "BuildDialogList";
-    }
-    return "unknown";
-}
-
-const char* CommandMethodName(RelationGrpcClient::CommandRpc rpc)
-{
-    switch (rpc)
-    {
-        case RelationGrpcClient::CommandRpc::SearchUser:
-            return "SearchUser";
-        case RelationGrpcClient::CommandRpc::AddFriendApply:
-            return "AddFriendApply";
-        case RelationGrpcClient::CommandRpc::AuthFriendApply:
-            return "AuthFriendApply";
-        case RelationGrpcClient::CommandRpc::DeleteFriend:
-            return "DeleteFriend";
-        case RelationGrpcClient::CommandRpc::GetDialogList:
-            return "GetDialogList";
-        case RelationGrpcClient::CommandRpc::SyncDraft:
-            return "SyncDraft";
-        case RelationGrpcClient::CommandRpc::PinDialog:
-            return "PinDialog";
-        case RelationGrpcClient::CommandRpc::FilterFriendUids:
-            return "FilterFriendUids";
-    }
-    return "unknown";
-}
-
 void MarkRemoteError(memochat::json::JsonValue& out, const char* method_name, const std::string& error, int status_code)
 {
-    out["error"] = ErrorCodes::RPCFailed;
-    out["relation_remote_method"] = method_name;
-    out["relation_remote_error"] = error;
-    out["relation_remote_status_code"] = status_code;
+    out[relation_grpc_modules::ErrorField()] = ErrorCodes::RPCFailed;
+    out[relation_grpc_modules::RemoteMethodField()] = method_name;
+    out[relation_grpc_modules::RemoteErrorField()] = error;
+    out[relation_grpc_modules::RemoteStatusCodeField()] = status_code;
 }
 
 std::string CompactJson(const memochat::json::JsonValue& value)
@@ -61,24 +29,25 @@ std::string CompactJson(const memochat::json::JsonValue& value)
 std::string ErrorPayload(const char* method_name, const std::string& error, int status_code)
 {
     memochat::json::JsonValue payload(memochat::json::object_t{});
-    payload["error"] = ErrorCodes::RPCFailed;
-    payload["relation_remote_method"] = method_name;
-    payload["relation_remote_error"] = error;
-    payload["relation_remote_status_code"] = status_code;
+    payload[relation_grpc_modules::ErrorField()] = ErrorCodes::RPCFailed;
+    payload[relation_grpc_modules::RemoteMethodField()] = method_name;
+    payload[relation_grpc_modules::RemoteErrorField()] = error;
+    payload[relation_grpc_modules::RemoteStatusCodeField()] = status_code;
     return CompactJson(payload);
 }
 
 void MergePayload(memochat::json::JsonValue& out, const std::string& payload_json, const char* method_name)
 {
-    if (payload_json.empty())
+    if (!relation_grpc_modules::ShouldMergePayload(payload_json.empty()))
     {
         return;
     }
 
     memochat::json::JsonValue payload(memochat::json::object_t{});
-    if (!memochat::json::reader_parse(payload_json, payload) || !payload.isObject())
+    const bool parse_ok = memochat::json::reader_parse(payload_json, payload);
+    if (relation_grpc_modules::ShouldReportInvalidPayload(parse_ok, payload.isObject()))
     {
-        MarkRemoteError(out, method_name, "invalid relation payload json", ErrorCodes::RPCFailed);
+        MarkRemoteError(out, method_name, relation_grpc_modules::InvalidPayloadJsonMessage(), ErrorCodes::RPCFailed);
         return;
     }
 
@@ -167,10 +136,10 @@ RelationCommandResult RelationGrpcClient::FilterFriendUids(const RelationCommand
 
 void RelationGrpcClient::CallQuery(QueryRpc rpc, int uid, memochat::json::JsonValue& out)
 {
-    const char* method_name = QueryMethodName(rpc);
-    if (!_stub)
+    const char* method_name = relation_grpc_modules::QueryMethodName(static_cast<int>(rpc));
+    if (relation_grpc_modules::ShouldReportMissingStub(_stub != nullptr))
     {
-        MarkRemoteError(out, method_name, "relation grpc stub is not configured", ErrorCodes::RPCFailed);
+        MarkRemoteError(out, method_name, relation_grpc_modules::StubNotConfiguredMessage(), ErrorCodes::RPCFailed);
         return;
     }
 
@@ -193,25 +162,25 @@ void RelationGrpcClient::CallQuery(QueryRpc rpc, int uid, memochat::json::JsonVa
             break;
     }
 
-    if (!status.ok())
+    if (relation_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         MarkRemoteError(out, method_name, status.error_message(), static_cast<int>(status.error_code()));
         return;
     }
-    if (response.error() != ErrorCodes::Success)
+    if (relation_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
-        out["relation_remote_error_code"] = response.error();
+        out[relation_grpc_modules::RemoteErrorCodeField()] = response.error();
     }
     MergePayload(out, response.payload_json(), method_name);
 }
 
 RelationCommandResult RelationGrpcClient::CallCommand(CommandRpc rpc, const RelationCommandRequest& request)
 {
-    const char* method_name = CommandMethodName(rpc);
-    if (!_stub)
+    const char* method_name = relation_grpc_modules::CommandMethodName(static_cast<int>(rpc));
+    if (relation_grpc_modules::ShouldReportMissingStub(_stub != nullptr))
     {
         return {request.request_msg_id,
-                ErrorPayload(method_name, "relation grpc stub is not configured", ErrorCodes::RPCFailed)};
+                ErrorPayload(method_name, relation_grpc_modules::StubNotConfiguredMessage(), ErrorCodes::RPCFailed)};
     }
 
     auto grpc_request = BuildGrpcCommandRequest(request);
@@ -249,15 +218,15 @@ RelationCommandResult RelationGrpcClient::CallCommand(CommandRpc rpc, const Rela
             break;
     }
 
-    if (!status.ok())
+    if (relation_grpc_modules::ShouldReportStatusError(status.ok()))
     {
         return {request.request_msg_id,
                 ErrorPayload(method_name, status.error_message(), static_cast<int>(status.error_code()))};
     }
-    if (response.error() != ErrorCodes::Success)
+    if (relation_grpc_modules::ShouldReportBusinessError(response.error(), ErrorCodes::Success))
     {
         return {static_cast<short>(response.tcp_msg_id()),
-                ErrorPayload(method_name, "relation grpc business error", response.error())};
+                ErrorPayload(method_name, relation_grpc_modules::BusinessErrorMessage(), response.error())};
     }
     return {static_cast<short>(response.tcp_msg_id()), response.payload_json()};
 }

@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "AuthLoginCacheProfileDto.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "AuthLoginCacheProfileDto.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>
@@ -10,7 +10,7 @@
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginCacheProfileDto>(
-    std::array<std::string_view, 9>{"uid", "pwd", "name", "email", "user_id", "nick", "icon", "desc", "sex"}));
+    std::array<std::string_view, 8>{"uid", "name", "email", "user_id", "nick", "icon", "desc", "sex"}));
 #endif
 
 namespace
@@ -33,7 +33,7 @@ gateauthsupport::UserInfo MakeUser()
 
 } // namespace
 
-TEST(AuthLoginCacheProfileDtoTest, EncodesCacheProfileWithExistingWireFieldNames)
+TEST(AuthLoginCacheProfileDtoTest, EncodesCacheProfileWithoutPasswordFields)
 {
     std::string body;
     ASSERT_TRUE(gateauthsupport::EncodeLoginCacheProfile(MakeUser(), &body));
@@ -41,7 +41,6 @@ TEST(AuthLoginCacheProfileDtoTest, EncodesCacheProfileWithExistingWireFieldNames
     memochat::json::JsonValue root;
     ASSERT_TRUE(memochat::json::glaze_parse(root, body));
     EXPECT_EQ(root["uid"].asInt(), 42);
-    EXPECT_EQ(root["pwd"].asString(), "secret");
     EXPECT_EQ(root["name"].asString(), "alice");
     EXPECT_EQ(root["email"].asString(), "alice@example.com");
     EXPECT_EQ(root["user_id"].asString(), "u-42");
@@ -49,17 +48,20 @@ TEST(AuthLoginCacheProfileDtoTest, EncodesCacheProfileWithExistingWireFieldNames
     EXPECT_EQ(root["icon"].asString(), "icon.png");
     EXPECT_EQ(root["desc"].asString(), "hello");
     EXPECT_EQ(root["sex"].asInt(), 2);
+    EXPECT_FALSE(root.isMember("pwd")) << body;
+    EXPECT_FALSE(root.isMember("password")) << body;
+    EXPECT_FALSE(root.isMember("password_hash")) << body;
 }
 
 TEST(AuthLoginCacheProfileDtoTest, DecodesFullCacheProfile)
 {
     gateauthsupport::UserInfo user;
     ASSERT_TRUE(gateauthsupport::DecodeLoginCacheProfile(
-        R"({"uid":7,"pwd":"pw","name":"bob","email":"bob@example.com","user_id":"u-7","nick":"B","icon":"i","desc":"d","sex":1})",
+        R"({"uid":7,"name":"bob","email":"bob@example.com","user_id":"u-7","nick":"B","icon":"i","desc":"d","sex":1})",
         &user));
 
     EXPECT_EQ(user.uid, 7);
-    EXPECT_EQ(user.pwd, "pw");
+    EXPECT_TRUE(user.pwd.empty());
     EXPECT_EQ(user.name, "bob");
     EXPECT_EQ(user.email, "bob@example.com");
     EXPECT_EQ(user.user_id, "u-7");
@@ -72,10 +74,10 @@ TEST(AuthLoginCacheProfileDtoTest, DecodesFullCacheProfile)
 TEST(AuthLoginCacheProfileDtoTest, DecodesMissingOptionalFieldsAsDefaults)
 {
     gateauthsupport::UserInfo user;
-    ASSERT_TRUE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7,"pwd":"pw"})", &user));
+    ASSERT_TRUE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7})", &user));
 
     EXPECT_EQ(user.uid, 7);
-    EXPECT_EQ(user.pwd, "pw");
+    EXPECT_TRUE(user.pwd.empty());
     EXPECT_TRUE(user.name.empty());
     EXPECT_TRUE(user.email.empty());
     EXPECT_TRUE(user.user_id.empty());
@@ -87,11 +89,9 @@ TEST(AuthLoginCacheProfileDtoTest, RejectsInvalidCacheProfile)
     gateauthsupport::UserInfo user;
 
     EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile("not-json", &user));
-    EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":0,"pwd":"pw"})", &user));
-    EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7,"pwd":""})", &user));
-    EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7})", &user));
-    EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7,"pwd":"pw"})",
-                                                          static_cast<gateauthsupport::UserInfo*>(nullptr)));
+    EXPECT_FALSE(gateauthsupport::DecodeLoginCacheProfile(R"({"uid":0})", &user));
+    EXPECT_FALSE(
+        gateauthsupport::DecodeLoginCacheProfile(R"({"uid":7})", static_cast<gateauthsupport::UserInfo*>(nullptr)));
 }
 
 TEST(AuthLoginCacheProfileDtoTest, ReportsNullEncodeOutput)

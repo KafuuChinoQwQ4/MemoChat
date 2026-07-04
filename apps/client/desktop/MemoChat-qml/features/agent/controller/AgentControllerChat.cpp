@@ -1,6 +1,7 @@
 #include "AgentController.h"
 
 #include "AgentMessageModel.h"
+#include "AgentNetworkRequestUtils.h"
 #include "ClientGateway.h"
 #include "httpmgr.h"
 #include "usermgr.h"
@@ -61,18 +62,16 @@ void AgentController::sendMessage(const QString& content)
     {
         payload["requested_tools"] = requestedTools;
     }
+    addAuthToPayload(payload);
 
     QString msgId = makeUuid();
-    ReqId reqId = ID_AI_CHAT;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId, uid);
     _model->appendAIMessage(msgId, _current_model_name);
     setCurrentGeneratingMsgId(msgId);
 
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/chat"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        aiHttpModule());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/chat")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
 void AgentController::summarizeChat(const QString& dialogUid, const QString& chatHistoryJson)
@@ -91,14 +90,12 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
     context["dialog"] = dialogUid;
     context["max_messages"] = 100;
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SMART;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Summary, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        QStringLiteral("ai-smart"));
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/smart")), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::suggestReply(const QString& dialogUid, const QString& chatHistoryJson)
@@ -117,14 +114,12 @@ void AgentController::suggestReply(const QString& dialogUid, const QString& chat
     context["dialog"] = dialogUid;
     context["format"] = "three_options";
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SMART;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Suggest, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        QStringLiteral("ai-smart"));
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/smart")), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::translateMessage(const QString& msgContent, const QString& targetLang)
@@ -150,14 +145,12 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
     QJsonObject context;
     context["source_lang"] = sourceLang.trimmed().isEmpty() ? QStringLiteral("自动检测") : sourceLang.trimmed();
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
+    addAuthToPayload(payload);
 
-    ReqId reqId = ID_AI_SMART;
+    ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Translate, QString(), uid);
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/ai/smart"),
-                                        payload,
-                                        reqId,
-                                        Modules::LOGINMOD,
-                                        QStringLiteral("ai-smart"));
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/smart")), payload, reqId, Modules::LOGINMOD, QStringLiteral("ai-smart"));
 }
 
 void AgentController::handleChatRsp(ReqId id, const QString& res, ErrorCodes err, const QString& msgId)

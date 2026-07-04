@@ -11,6 +11,7 @@ struct AppPendingLoginState
     int uid = 0;
     QString token;
     QString loginTicket;
+    QString refreshToken;
     QString traceId;
 };
 
@@ -24,7 +25,7 @@ struct AppChatEndpointState
     int connectTimeoutMs = 1200;
     int backupDialDelayMs = 250;
     int totalLoginTimeoutMs = 5000;
-    int protocolVersion = 2;
+    int protocolVersion = 3;
     qint64 loginStartedMs = 0;
     qint64 httpLoginFinishedMs = 0;
     qint64 connectStartedMs = 0;

@@ -93,6 +93,18 @@ void MomentsController::onLikeRsp(ReqId id, const QString& res, ErrorCodes err)
 
         if (pending.desiredLiked != pending.rollbackLiked)
         {
+            if (pending.retryCount >= kMaxLikeRetries)
+            {
+                // Retry limit reached: give up and roll back to the last known server state
+                // so the UI doesn't stay permanently out-of-sync.
+                qWarning() << "[MomentsController] like retry limit reached for momentId=" << momentId
+                           << ", rolling back UI";
+                _model->updateLiked(momentId, pending.rollbackLiked, pending.rollbackCount);
+                emit likeToggled(momentId, pending.rollbackLiked, pending.rollbackCount);
+                _pending_likes.erase(it);
+                return;
+            }
+            pending.retryCount++;
             const int desiredCount =
                 pending.desiredLiked ? pending.rollbackCount + 1 : qMax(0, pending.rollbackCount - 1);
             pending.desiredCount = desiredCount;

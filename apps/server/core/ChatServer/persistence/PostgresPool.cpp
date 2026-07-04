@@ -1,4 +1,8 @@
-#include "PostgresPool.h"
+#include "PostgresPool.hpp"
+
+import memochat.chat.postgres_pool_algorithms;
+
+namespace postgres_pool_modules = memochat::chat::persistence::postgres_pool::modules;
 
 PooledSqlConnection::PooledSqlConnection(sql::Connection* con, int64_t lasttime)
     : _con(con)
@@ -28,7 +32,7 @@ PostgresPool::PostgresPool(const std::string& url,
     , b_stop_(false)
     , _fail_count(0)
 {
-    for (int i = 0; i < poolSize_; ++i)
+    for (int i = 0; postgres_pool_modules::ShouldCreateInitialConnection(i, poolSize_); ++i)
     {
         try
         {
@@ -48,7 +52,7 @@ void PostgresPool::checkConnectionPro()
 bool PostgresPool::reconnect(long long timestamp)
 {
     std::lock_guard<std::mutex> guard(mutex_);
-    if (b_stop_)
+    if (!postgres_pool_modules::ShouldReconnect(b_stop_))
     {
         return false;
     }
@@ -64,16 +68,14 @@ void PostgresPool::checkConnection()
 std::unique_ptr<PooledSqlConnection> PostgresPool::getConnection()
 {
     std::unique_lock<std::mutex> lock(mutex_);
-    if (!cond_.wait_for(lock,
-                        std::chrono::seconds(5),
-                        [this]
-                        {
-                            return b_stop_ || !pool_.empty();
-                        }))
-    {
-        return nullptr;
-    }
-    if (b_stop_)
+    const bool wait_completed =
+        cond_.wait_for(lock,
+                       std::chrono::seconds(postgres_pool_modules::ConnectionWaitTimeoutSeconds()),
+                       [this]
+                       {
+                           return postgres_pool_modules::ShouldWakeForConnection(b_stop_, pool_.empty());
+                       });
+    if (postgres_pool_modules::ShouldReturnNullAfterWait(wait_completed, b_stop_))
     {
         return nullptr;
     }
@@ -84,12 +86,12 @@ std::unique_ptr<PooledSqlConnection> PostgresPool::getConnection()
 
 void PostgresPool::returnConnection(std::unique_ptr<PooledSqlConnection> con)
 {
-    if (!con)
+    if (!postgres_pool_modules::HasReturnedConnection(con != nullptr))
     {
         return;
     }
     std::lock_guard<std::mutex> lock(mutex_);
-    if (b_stop_)
+    if (!postgres_pool_modules::ShouldAcceptReturnedConnection(b_stop_))
     {
         return;
     }

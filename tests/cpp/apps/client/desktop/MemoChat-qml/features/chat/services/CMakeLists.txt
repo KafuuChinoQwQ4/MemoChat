@@ -28,6 +28,7 @@ add_executable(dialog_list_service_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListEntryBuilder.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListService.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelState.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -71,6 +72,7 @@ add_executable(chat_dialog_list_response_service_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelState.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -271,6 +273,7 @@ if(EXISTS "${PRIVATE_CHAT_SEND_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_SEND_
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+        ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.h
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -278,6 +281,7 @@ if(EXISTS "${PRIVATE_CHAT_SEND_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_SEND_
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/cache/ChatCacheMessageCodec.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/cache/PrivateChatCacheStore.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+        ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.h
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -341,6 +345,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_HI
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/cache/ChatCacheMessageCodec.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/cache/PrivateChatCacheStore.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+        ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.h
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -399,6 +404,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_REQUEST_SERVICE_SOURCE}" AND EXISTS "${PRIVATE
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+        ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.h
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
@@ -464,6 +470,7 @@ if(EXISTS "${PRIVATE_CHAT_EVENT_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_EVEN
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/cache/PrivateChatCacheStore.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/userdata.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
+        ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.h
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp

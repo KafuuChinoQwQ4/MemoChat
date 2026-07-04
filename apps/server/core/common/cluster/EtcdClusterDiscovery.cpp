@@ -1,4 +1,4 @@
-#include "cluster/EtcdClusterDiscovery.h"
+#include "cluster/EtcdClusterDiscovery.hpp"
 
 #include <algorithm>
 #include <cctype>

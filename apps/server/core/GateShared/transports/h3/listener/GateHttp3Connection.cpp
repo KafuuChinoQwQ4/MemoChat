@@ -1,7 +1,7 @@
-#include "GateHttp3Connection.h"
-#include "LogicSystem.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "GateHttp3Connection.hpp"
+#include "LogicSystem.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <sstream>
 

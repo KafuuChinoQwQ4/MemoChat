@@ -24,151 +24,151 @@ EXPECTED_GROUPS = {
         "ChatRelationServiceWorker.cpp",
         "ChatServer.cpp",
         "ChatRuntime.cpp",
-        "ChatRuntime.h",
+        "ChatRuntime.hpp",
         "ChatServerCore.cpp",
     },
     "transport": {
         "CServer.cpp",
-        "CServer.h",
+        "CServer.hpp",
         "CSession.cpp",
-        "CSession.h",
+        "CSession.hpp",
         "ChatIngressCoordinator.cpp",
-        "ChatIngressCoordinator.h",
+        "ChatIngressCoordinator.hpp",
         "ChatServiceImpl.cpp",
-        "ChatServiceImpl.h",
+        "ChatServiceImpl.hpp",
         "MsgNode.cpp",
-        "MsgNode.h",
+        "MsgNode.hpp",
         "QuicChatServer.cpp",
-        "QuicChatServer.h",
+        "QuicChatServer.hpp",
         "QuicSession.cpp",
-        "QuicSession.h",
+        "QuicSession.hpp",
     },
     "domain": {
         "delivery/ChatDeliveryRuntime.cpp",
-        "delivery/ChatDeliveryRuntime.h",
+        "delivery/ChatDeliveryRuntime.hpp",
         "delivery/TaskDispatcher.cpp",
-        "delivery/TaskDispatcher.h",
+        "delivery/TaskDispatcher.hpp",
         "message/GroupMessageService.cpp",
-        "message/GroupMessageService.h",
+        "message/GroupMessageService.hpp",
         "message/ChatMessageInternalGrpcService.cpp",
-        "message/ChatMessageInternalGrpcService.h",
+        "message/ChatMessageInternalGrpcService.hpp",
         "message/MessageDeliveryService.cpp",
-        "message/MessageDeliveryService.h",
+        "message/MessageDeliveryService.hpp",
         "message/MessageServiceFactory.cpp",
-        "message/MessageServiceFactory.h",
+        "message/MessageServiceFactory.hpp",
         "message/PrivateMessageService.cpp",
-        "message/PrivateMessageService.h",
+        "message/PrivateMessageService.hpp",
         "orchestration/ChatHandlerRegistrars.cpp",
-        "orchestration/ChatHandlerRegistrars.h",
+        "orchestration/ChatHandlerRegistrars.hpp",
         "orchestration/ChatRuntimeComposition.cpp",
-        "orchestration/ChatRuntimeComposition.h",
+        "orchestration/ChatRuntimeComposition.hpp",
         "orchestration/LogicSystem.cpp",
-        "orchestration/LogicSystem.h",
+        "orchestration/LogicSystem.hpp",
         "relation/ChatRelationInternalGrpcService.cpp",
-        "relation/ChatRelationInternalGrpcService.h",
+        "relation/ChatRelationInternalGrpcService.hpp",
         "relation/ChatRelationSessionAdapter.cpp",
-        "relation/ChatRelationSessionAdapter.h",
+        "relation/ChatRelationSessionAdapter.hpp",
         "relation/ChatRelationService.cpp",
-        "relation/ChatRelationService.h",
+        "relation/ChatRelationService.hpp",
         "relation/RelationServiceFactory.cpp",
-        "relation/RelationServiceFactory.h",
-        "ports/IRelationSessionService.h",
+        "relation/RelationServiceFactory.hpp",
+        "ports/IRelationSessionService.hpp",
         "session/ChatSessionService.cpp",
-        "session/ChatSessionService.h",
+        "session/ChatSessionService.hpp",
         "users/ChatUserSupport.cpp",
-        "users/ChatUserSupport.h",
+        "users/ChatUserSupport.hpp",
         "users/UserMgr.cpp",
-        "users/UserMgr.h",
+        "users/UserMgr.hpp",
     },
     "persistence": {
         "ChatOutboxService.cpp",
-        "ChatOutboxService.h",
+        "ChatOutboxService.hpp",
         "ChatSessionRepository.cpp",
-        "ChatSessionRepository.h",
+        "ChatSessionRepository.hpp",
         "DistLock.cpp",
-        "DistLock.h",
+        "DistLock.hpp",
         "MongoDao.cpp",
-        "MongoDao.h",
+        "MongoDao.hpp",
         "MongoMgr.cpp",
-        "MongoMgr.h",
+        "MongoMgr.hpp",
         "PostgresDao.cpp",
-        "PostgresDao.h",
+        "PostgresDao.hpp",
         "PostgresDaoDialogs.cpp",
         "PostgresDaoGroupMessages.cpp",
         "PostgresDaoGroups.cpp",
         "PostgresDaoPrivateMessages.cpp",
         "PostgresDaoUsers.cpp",
         "PostgresMgr.cpp",
-        "PostgresMgr.h",
+        "PostgresMgr.hpp",
         "PostgresPool.cpp",
-        "PostgresPool.h",
+        "PostgresPool.hpp",
         "ChatMessageRepository.cpp",
-        "ChatMessageRepository.h",
+        "ChatMessageRepository.hpp",
         "ChatRelationRepository.cpp",
-        "ChatRelationRepository.h",
+        "ChatRelationRepository.hpp",
         "RedisRelationBootstrapCache.cpp",
-        "RedisRelationBootstrapCache.h",
+        "RedisRelationBootstrapCache.hpp",
         "RedisOnlineRouteStore.cpp",
-        "RedisOnlineRouteStore.h",
+        "RedisOnlineRouteStore.hpp",
         "RedisMgr.cpp",
-        "RedisMgr.h",
+        "RedisMgr.hpp",
     },
     "messaging": {
         "AsyncEventDispatcher.cpp",
-        "AsyncEventDispatcher.h",
+        "AsyncEventDispatcher.hpp",
         "ChatAsyncEvent.cpp",
-        "ChatAsyncEvent.h",
+        "ChatAsyncEvent.hpp",
         "ChatTaskEnvelope.cpp",
-        "ChatTaskEnvelope.h",
-        "IAsyncEventBus.h",
-        "IAsyncTaskBus.h",
+        "ChatTaskEnvelope.hpp",
+        "IAsyncEventBus.hpp",
+        "IAsyncTaskBus.hpp",
         "InlineTaskBus.cpp",
-        "InlineTaskBus.h",
+        "InlineTaskBus.hpp",
         "KafkaAsyncEventBus.cpp",
-        "KafkaAsyncEventBus.h",
+        "KafkaAsyncEventBus.hpp",
         "KafkaConfig.cpp",
-        "KafkaConfig.h",
+        "KafkaConfig.hpp",
         "RabbitMqConfig.cpp",
-        "RabbitMqConfig.h",
+        "RabbitMqConfig.hpp",
         "RabbitMqTaskBus.cpp",
-        "RabbitMqTaskBus.h",
+        "RabbitMqTaskBus.hpp",
         "RedisAsyncEventBus.cpp",
-        "RedisAsyncEventBus.h",
+        "RedisAsyncEventBus.hpp",
     },
     "clients": {
         "ChatGrpcClient.cpp",
-        "ChatGrpcClient.h",
+        "ChatGrpcClient.hpp",
         "MessageGrpcClient.cpp",
-        "MessageGrpcClient.h",
+        "MessageGrpcClient.hpp",
         "MessageGrpcServiceAdapter.cpp",
-        "MessageGrpcServiceAdapter.h",
+        "MessageGrpcServiceAdapter.hpp",
         "RelationGrpcClient.cpp",
-        "RelationGrpcClient.h",
+        "RelationGrpcClient.hpp",
         "RelationGrpcServiceAdapter.cpp",
-        "RelationGrpcServiceAdapter.h",
+        "RelationGrpcServiceAdapter.hpp",
         "RelationQueryGrpcClient.cpp",
-        "RelationQueryGrpcClient.h",
+        "RelationQueryGrpcClient.hpp",
         "RelationQueryServiceFactory.cpp",
-        "RelationQueryServiceFactory.h",
+        "RelationQueryServiceFactory.hpp",
     },
     "config": {
         "ChatSessionConfig.cpp",
-        "ChatSessionConfig.h",
+        "ChatSessionConfig.hpp",
         "ConfigMgr.cpp",
-        "ConfigMgr.h",
+        "ConfigMgr.hpp",
         "MessageServiceConfig.cpp",
-        "MessageServiceConfig.h",
+        "MessageServiceConfig.hpp",
         "RelationQueryServiceConfig.cpp",
-        "RelationQueryServiceConfig.h",
+        "RelationQueryServiceConfig.hpp",
         "RelationServiceConfig.cpp",
-        "RelationServiceConfig.h",
+        "RelationServiceConfig.hpp",
     },
     "infrastructure": {
         "AsioIOServicePool.cpp",
-        "AsioIOServicePool.h",
-        "Singleton.h",
-        "const.h",
-        "data.h",
+        "AsioIOServicePool.hpp",
+        "Singleton.hpp",
+        "const.hpp",
+        "data.hpp",
     },
 }
 
@@ -331,8 +331,23 @@ def text_between(text: str, start_marker: str, end_marker: str) -> str:
     return text[start:end]
 
 
+def extract_function(source: str, signature: str) -> str:
+    start = source.index(signature)
+    open_brace = source.index("{", start)
+    depth = 0
+    for index in range(open_brace, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"Function body not found for {signature}")
+
+
 def logic_header_source() -> str:
-    return (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
+    return (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.hpp").read_text(encoding="utf-8")
 
 
 def logic_source() -> str:
@@ -340,7 +355,7 @@ def logic_source() -> str:
 
 
 def runtime_composition_header() -> str:
-    return (DOMAIN_ORCHESTRATION_DIR / "ChatRuntimeComposition.h").read_text(encoding="utf-8")
+    return (DOMAIN_ORCHESTRATION_DIR / "ChatRuntimeComposition.hpp").read_text(encoding="utf-8")
 
 
 def runtime_composition_source() -> str:
@@ -444,8 +459,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertTrue(worker_source.is_file(), "ChatDeliveryWorker source is missing")
 
         worker = worker_source.read_text(encoding="utf-8")
-        self.assertIn('memolog::Logger::Init("ChatDeliveryWorker"', worker)
-        self.assertIn('memolog::Telemetry::Init("ChatDeliveryWorker"', worker)
+        self.assertIn("memolog::Logger::Init(delivery_worker_modules::LoggerName(), log_cfg)", worker)
+        self.assertIn("memolog::Telemetry::Init(delivery_worker_modules::LoggerName(), telemetry_cfg)", worker)
         self.assertIn("LogicSystem::GetInstance()", worker)
         self.assertNotIn("ChatIngressCoordinator", worker)
         self.assertNotIn("grpc::ServerBuilder", worker)
@@ -539,8 +554,8 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            'memolog::Logger::Init("ChatRelationQueryService"',
-            'memolog::Telemetry::Init("ChatRelationQueryService"',
+            "memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg)",
+            "memolog::Telemetry::Init(relation_query_service_modules::LoggerName(), telemetry_cfg)",
             "ChatRelationInternalGrpcService",
             "ChatRelationService",
             "ChatRelationRepository",
@@ -548,8 +563,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "grpc::ServerBuilder",
             "builder.RegisterService(&relation_grpc_service)",
             "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
-            'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Host", "127.0.0.1")',
-            'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Port", "50090")',
+            'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Host", relation_query_service_modules::DefaultRpcHost())',
+            'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Port", relation_query_service_modules::DefaultRpcPort())',
         ):
             self.assertIn(token, source)
         self.assertNotIn("ChatIngressCoordinator", source)
@@ -635,8 +650,8 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            'memolog::Logger::Init("ChatRelationServiceWorker"',
-            'memolog::Telemetry::Init("ChatRelationServiceWorker"',
+            "memolog::Logger::Init(relation_service_worker_modules::LoggerName(), log_cfg)",
+            "memolog::Telemetry::Init(relation_service_worker_modules::LoggerName(), telemetry_cfg)",
             "ChatRelationInternalGrpcService",
             "ChatRelationService",
             "ChatRelationRepository",
@@ -644,8 +659,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "grpc::ServerBuilder",
             "builder.RegisterService(&relation_grpc_service)",
             "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
-            'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Host", "127.0.0.1")',
-            'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Port", "50091")',
+            'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Host", relation_service_worker_modules::DefaultRpcHost())',
+            'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Port", relation_service_worker_modules::DefaultRpcPort())',
         ):
             self.assertIn(token, source)
         self.assertNotIn("ChatIngressCoordinator", source)
@@ -731,8 +746,8 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            'memolog::Logger::Init("ChatMessageService"',
-            'memolog::Telemetry::Init("ChatMessageService"',
+            "memolog::Logger::Init(message_service_modules::LoggerName(), log_cfg)",
+            "memolog::Telemetry::Init(message_service_modules::LoggerName(), telemetry_cfg)",
             "ChatMessageInternalGrpcService",
             "PrivateMessageService",
             "GroupMessageService",
@@ -745,8 +760,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "static_cast<chatinternal::ChatPrivateMessageInternalService::Service*>(&message_grpc_service)",
             "static_cast<chatinternal::ChatGroupMessageInternalService::Service*>(&message_grpc_service)",
             "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
-            'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Host", "127.0.0.1")',
-            'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Port", "50092")',
+            'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Host", message_service_modules::DefaultRpcHost())',
+            'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Port", message_service_modules::DefaultRpcPort())',
         ):
             self.assertIn(token, source)
         self.assertNotIn("ChatIngressCoordinator", source)
@@ -876,15 +891,15 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertEqual([], unexpected)
 
     def test_delivery_task_publishing_uses_named_domain_port(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IDeliveryTaskPublisher.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IDeliveryTaskPublisher.hpp"
         self.assertTrue(port_header.is_file(), "delivery task publisher port header is missing")
 
         port_source = port_header.read_text(encoding="utf-8")
         self.assertIn("class IDeliveryTaskPublisher", port_source)
         self.assertIn("virtual bool PublishDeliveryTask", port_source)
 
-        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IDeliveryTaskPublisher.h", delivery_header)
+        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IDeliveryTaskPublisher.hpp", delivery_header)
         self.assertIn(
             "explicit MessageDeliveryService(IDeliveryTaskPublisher* task_publisher = nullptr", delivery_header
         )
@@ -895,21 +910,21 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_task_publisher->PublishDeliveryTask", delivery_source)
         self.assertNotIn("_publish_task(", delivery_source)
 
-        dispatcher_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IDeliveryTaskPublisher.h", dispatcher_header)
+        dispatcher_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IDeliveryTaskPublisher.hpp", dispatcher_header)
         self.assertRegex(dispatcher_header, r"class\s+TaskDispatcher\s*:\s*public\s+IDeliveryTaskPublisher")
         self.assertIn("PublishDeliveryTask", dispatcher_header)
 
     def test_async_event_publishing_uses_named_domain_port(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IEventPublisher.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IEventPublisher.hpp"
         self.assertTrue(port_header.is_file(), "async event publisher port header is missing")
 
         port_source = port_header.read_text(encoding="utf-8")
         self.assertIn("class IEventPublisher", port_source)
         self.assertRegex(port_source, r"virtual\s+bool\s+PublishEvent")
 
-        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IEventPublisher.h", dispatcher_header)
+        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IEventPublisher.hpp", dispatcher_header)
         self.assertRegex(dispatcher_header, r"class\s+AsyncEventDispatcher\s*:\s*public\s+IEventPublisher")
         self.assertIn("PublishEvent", dispatcher_header)
         self.assertIn("PublishAsyncEvent", dispatcher_header)
@@ -925,13 +940,13 @@ class ChatServerStructureTests(unittest.TestCase):
         )
 
     def test_async_event_dispatcher_uses_repository_ports_for_data_ownership(self):
-        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
+        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.hpp").read_text(encoding="utf-8")
         dispatcher_source = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp").read_text(encoding="utf-8")
         composition_source = runtime_composition_source()
 
         for token in (
-            "ports/IMessageRepository.h",
-            "ports/IRelationRepository.h",
+            "ports/IMessageRepository.hpp",
+            "ports/IRelationRepository.hpp",
             "IMessageRepository* message_repository",
             "IRelationRepository* relation_repository",
             "IMessageRepository* _message_repository",
@@ -950,10 +965,10 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, dispatcher_source)
 
         forbidden_tokens = (
-            '#include "PostgresMgr.h"',
-            '#include "MongoMgr.h"',
-            '#include "ChatMessageRepository.h"',
-            '#include "ChatRelationRepository.h"',
+            '#include "PostgresMgr.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "ChatMessageRepository.hpp"',
+            '#include "ChatRelationRepository.hpp"',
             "PostgresMgr::GetInstance()->SavePrivateMessage",
             "MongoMgr::GetInstance()->SavePrivateMessage",
             "PostgresMgr::GetInstance()->SaveGroupMessage",
@@ -978,15 +993,15 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_relation_repository.get()", async_dispatcher_wiring)
 
     def test_async_event_dispatcher_uses_route_and_cache_ports(self):
-        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
+        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.hpp").read_text(encoding="utf-8")
         dispatcher_source = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp").read_text(encoding="utf-8")
-        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.hpp").read_text(encoding="utf-8")
         composition_source = runtime_composition_source()
 
         for token in (
-            "ports/ISessionRegistry.h",
-            "ports/IOnlineRouteStore.h",
-            "ports/IRelationBootstrapCache.h",
+            "ports/ISessionRegistry.hpp",
+            "ports/IOnlineRouteStore.hpp",
+            "ports/IRelationBootstrapCache.hpp",
             "ISessionRegistry* session_registry",
             "IOnlineRouteStore* online_route_store",
             "IRelationBootstrapCache* relation_bootstrap_cache",
@@ -1010,7 +1025,7 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, resolver_source)
 
         for token in (
-            "ports/OnlineRouteResolver.h",
+            "ports/OnlineRouteResolver.hpp",
             "relation_bootstrap_cache->Invalidate",
             "ResolveOnlineRoute(uid, _session_registry, _online_route_store)",
             "ResolveOnlineRoute(to_uid, _session_registry, _online_route_store)",
@@ -1019,9 +1034,9 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, dispatcher_source)
 
         forbidden_tokens = (
-            '#include "ConfigMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "UserMgr.h"',
+            '#include "ConfigMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "UserMgr.hpp"',
             "ConfigMgr::Inst()",
             "RedisMgr::GetInstance()",
             "UserMgr::GetInstance()",
@@ -1048,7 +1063,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_relation_bootstrap_cache.get()", async_dispatcher_wiring)
 
     def test_delivery_worker_lifecycle_uses_chat_delivery_runtime(self):
-        runtime_header_path = DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.h"
+        runtime_header_path = DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.hpp"
         runtime_source_path = DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.cpp"
         self.assertTrue(runtime_header_path.is_file(), "ChatDeliveryRuntime header is missing")
         self.assertTrue(runtime_source_path.is_file(), "ChatDeliveryRuntime source is missing")
@@ -1062,7 +1077,8 @@ class ChatServerStructureTests(unittest.TestCase):
 
         runtime_source = runtime_source_path.read_text(encoding="utf-8")
         self.assertIn("std::thread(&ChatDeliveryRuntime::RunLoop", runtime_source)
-        self.assertIn("_stop_requested.store(true", runtime_source)
+        self.assertIn("delivery_runtime_modules::StopRequestedWhenStarting()", runtime_source)
+        self.assertIn("delivery_runtime_modules::StopRequestedWhenStopping()", runtime_source)
         self.assertIn("_event_worker_thread.joinable()", runtime_source)
         self.assertIn("_task_worker_thread.joinable()", runtime_source)
 
@@ -1086,7 +1102,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::thread(&LogicSystem::DealTasks", logic_source())
 
     def test_delivery_gateway_uses_named_domain_port(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IDeliveryGateway.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IDeliveryGateway.hpp"
         self.assertTrue(port_header.is_file(), "delivery gateway port header is missing")
 
         port_source = port_header.read_text(encoding="utf-8")
@@ -1094,21 +1110,21 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertRegex(port_source, r"virtual\s+void\s+PushPayload")
         self.assertRegex(port_source, r"virtual\s+bool\s+TryPushPayload")
 
-        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IDeliveryGateway.h", delivery_header)
+        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IDeliveryGateway.hpp", delivery_header)
         self.assertRegex(delivery_header, r"class\s+MessageDeliveryService\s*:\s*public\s+IDeliveryGateway")
         self.assertIn("void PushPayload", delivery_header)
         self.assertIn("bool TryPushPayload", delivery_header)
 
-        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IDeliveryGateway.h", dispatcher_header)
+        dispatcher_header = (CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IDeliveryGateway.hpp", dispatcher_header)
         self.assertIn("IDeliveryGateway* delivery_gateway", dispatcher_header)
         self.assertIn("IDeliveryGateway* _delivery_gateway", dispatcher_header)
         self.assertNotIn("PushGroupPayloadFn", dispatcher_header)
         self.assertNotIn("_push_group_payload", dispatcher_header)
 
-        task_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IDeliveryGateway.h", task_header)
+        task_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IDeliveryGateway.hpp", task_header)
         self.assertIn("IDeliveryGateway* delivery_gateway", task_header)
         self.assertIn("IDeliveryGateway* _delivery_gateway", task_header)
         self.assertNotIn("DeliveryTaskHandler", task_header)
@@ -1137,15 +1153,15 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("MessageDelivery().TryPushPayload", wiring_block)
 
     def test_outbox_repair_uses_named_domain_port(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IOutboxRepairScheduler.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IOutboxRepairScheduler.hpp"
         self.assertTrue(port_header.is_file(), "outbox repair scheduler port header is missing")
 
         port_source = port_header.read_text(encoding="utf-8")
         self.assertIn("class IOutboxRepairScheduler", port_source)
         self.assertRegex(port_source, r"virtual\s+bool\s+ExpediteOutboxRepair")
 
-        task_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IOutboxRepairScheduler.h", task_header)
+        task_header = (DOMAIN_DELIVERY_DIR / "TaskDispatcher.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IOutboxRepairScheduler.hpp", task_header)
         self.assertIn("IOutboxRepairScheduler* outbox_repair_scheduler", task_header)
         self.assertIn("IOutboxRepairScheduler* _outbox_repair_scheduler", task_header)
         self.assertNotIn("OutboxRepairHandler", task_header)
@@ -1155,8 +1171,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_outbox_repair_scheduler->ExpediteOutboxRepair(outbox_id)", task_source)
         self.assertNotIn("_outbox_repair_handler(", task_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IOutboxRepairScheduler.h", logic_header)
+        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IOutboxRepairScheduler.hpp", logic_header)
         self.assertRegex(
             logic_header,
             r"class\s+LogicSystem\s*:\s*public\s+Singleton<LogicSystem>\s*,\s*public\s+IOutboxRepairScheduler",
@@ -1173,9 +1189,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("return ExpediteOutboxRepair(outbox_id);", wiring_block)
 
     def test_delivery_route_uses_session_and_online_route_ports(self):
-        session_port = CHATSERVER_DIR / "domain" / "ports" / "ISessionRegistry.h"
-        route_port = CHATSERVER_DIR / "domain" / "ports" / "IOnlineRouteStore.h"
-        route_adapter = CHATSERVER_DIR / "persistence" / "RedisOnlineRouteStore.h"
+        session_port = CHATSERVER_DIR / "domain" / "ports" / "ISessionRegistry.hpp"
+        route_port = CHATSERVER_DIR / "domain" / "ports" / "IOnlineRouteStore.hpp"
+        route_adapter = CHATSERVER_DIR / "persistence" / "RedisOnlineRouteStore.hpp"
         self.assertTrue(session_port.is_file(), "session registry port header is missing")
         self.assertTrue(route_port.is_file(), "online route store port header is missing")
         self.assertTrue(route_adapter.is_file(), "redis online route store adapter header is missing")
@@ -1195,8 +1211,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertRegex(route_port_source, r"virtual\s+void\s+SetUserServer")
         self.assertRegex(route_port_source, r"virtual\s+void\s+ClearTrackedOnlineRoute")
 
-        usermgr_header = (DOMAIN_USERS_DIR / "UserMgr.h").read_text(encoding="utf-8")
-        self.assertIn("ports/ISessionRegistry.h", usermgr_header)
+        usermgr_header = (DOMAIN_USERS_DIR / "UserMgr.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/ISessionRegistry.hpp", usermgr_header)
         self.assertRegex(
             usermgr_header, r"class\s+UserMgr\s*:\s*public\s+Singleton<UserMgr>\s*,\s*public\s+ISessionRegistry"
         )
@@ -1205,25 +1221,25 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("void UnbindSession(int uid, const std::string& session_id) override", usermgr_header)
 
         route_adapter_source = route_adapter.read_text(encoding="utf-8")
-        self.assertIn("ports/IOnlineRouteStore.h", route_adapter_source)
+        self.assertIn("ports/IOnlineRouteStore.hpp", route_adapter_source)
         self.assertRegex(route_adapter_source, r"class\s+RedisOnlineRouteStore\s*:\s*public\s+IOnlineRouteStore")
 
-        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/ISessionRegistry.h", delivery_header)
-        self.assertIn("ports/IOnlineRouteStore.h", delivery_header)
+        delivery_header = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/ISessionRegistry.hpp", delivery_header)
+        self.assertIn("ports/IOnlineRouteStore.hpp", delivery_header)
         self.assertIn("ISessionRegistry* session_registry", delivery_header)
         self.assertIn("IOnlineRouteStore* online_route_store", delivery_header)
         self.assertIn("ISessionRegistry* _session_registry", delivery_header)
         self.assertIn("IOnlineRouteStore* _online_route_store", delivery_header)
 
         delivery_source = (DOMAIN_MESSAGE_DIR / "MessageDeliveryService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "UserMgr.h"', delivery_source)
-        self.assertNotIn('#include "RedisMgr.h"', delivery_source)
+        self.assertNotIn('#include "UserMgr.hpp"', delivery_source)
+        self.assertNotIn('#include "RedisMgr.hpp"', delivery_source)
         # Online-route resolution is shared via the OnlineRouteResolver seam; the
         # session/route-store port calls live there, reached through the resolver.
-        self.assertIn("ports/OnlineRouteResolver.h", delivery_source)
+        self.assertIn("ports/OnlineRouteResolver.hpp", delivery_source)
         self.assertIn("ResolveOnlineRoute(uid, _session_registry, _online_route_store)", delivery_source)
-        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.hpp").read_text(encoding="utf-8")
         self.assertIn("session_registry->FindSession(uid)", resolver_source)
         self.assertIn("online_route_store->RepairOnlineRoute", resolver_source)
         self.assertIn("online_route_store->FindUserServer", resolver_source)
@@ -1238,7 +1254,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IOnlineRouteStore> _online_route_store", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "RedisOnlineRouteStore.h"', composition_source)
+        self.assertIn('#include "RedisOnlineRouteStore.hpp"', composition_source)
         self.assertIn("_online_route_store = std::make_unique<RedisOnlineRouteStore>()", composition_source)
         delivery_wiring = text_between(
             composition_source,
@@ -1249,12 +1265,12 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_online_route_store.get()", delivery_wiring)
 
     def test_chat_session_service_uses_session_and_online_route_ports(self):
-        session_header = (DOMAIN_SESSION_DIR / "ChatSessionService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/ISessionRegistry.h", session_header)
-        self.assertIn("ports/IOnlineRouteStore.h", session_header)
-        self.assertIn("ports/IRelationQueryService.h", session_header)
-        self.assertIn("ports/IRelationRepository.h", session_header)
-        self.assertNotIn("ports/IRelationService.h", session_header)
+        session_header = (DOMAIN_SESSION_DIR / "ChatSessionService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/ISessionRegistry.hpp", session_header)
+        self.assertIn("ports/IOnlineRouteStore.hpp", session_header)
+        self.assertIn("ports/IRelationQueryService.hpp", session_header)
+        self.assertIn("ports/IRelationRepository.hpp", session_header)
+        self.assertNotIn("ports/IRelationService.hpp", session_header)
         compact_session_header = " ".join(session_header.split())
         self.assertIn("ChatSessionService(LogicSystem& logic,", compact_session_header)
         self.assertIn("ISessionRegistry* session_registry", compact_session_header)
@@ -1267,14 +1283,25 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("IRelationRepository* _relation_repository", session_header)
 
         session_source = (DOMAIN_SESSION_DIR / "ChatSessionService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "UserMgr.h"', session_source)
+        self.assertNotIn('#include "UserMgr.hpp"', session_source)
         self.assertNotIn("RepairOnlineRouteStateLocal", session_source)
         self.assertIn("_session_registry->BindSession(uid, session)", session_source)
         self.assertIn("_session_registry->FindSession(uid)", session_source)
         self.assertIn("_online_route_store->RepairOnlineRoute(uid, session)", session_source)
         self.assertIn("_online_route_store->FindUserServer(uid)", session_source)
         self.assertIn("_online_route_store->SelfServerName()", session_source)
-        self.assertIn("_relation_query_service->AppendRelationBootstrapJson(uid, rtvalue)", session_source)
+        login_handler = text_between(
+            session_source,
+            "void ChatSessionService::HandleLogin",
+            "void ChatSessionService::HandleRelationBootstrap",
+        )
+        bootstrap_handler = text_between(
+            session_source,
+            "void ChatSessionService::HandleRelationBootstrap",
+            "void ChatSessionService::HandleHeartbeat",
+        )
+        self.assertNotIn("_relation_query_service->AppendRelationBootstrapJson", login_handler)
+        self.assertIn("_relation_query_service->AppendRelationBootstrapJson(uid, rtvalue)", bootstrap_handler)
         self.assertNotIn("_logic.AppendRelationBootstrapJson", session_source)
         self.assertNotIn("UserMgr::GetInstance()->SetUserSession", session_source)
         self.assertNotIn("UserMgr::GetInstance()->GetSession", session_source)
@@ -1297,11 +1324,11 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_relation_repository.get()", constructor_block)
 
     def test_chat_session_service_uses_session_config_and_repository_ports(self):
-        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IChatSessionConfig.h"
-        repo_port_path = CHATSERVER_DIR / "domain" / "ports" / "IChatSessionRepository.h"
-        config_adapter_header_path = CHATSERVER_DIR / "config" / "ChatSessionConfig.h"
+        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IChatSessionConfig.hpp"
+        repo_port_path = CHATSERVER_DIR / "domain" / "ports" / "IChatSessionRepository.hpp"
+        config_adapter_header_path = CHATSERVER_DIR / "config" / "ChatSessionConfig.hpp"
         config_adapter_source_path = CHATSERVER_DIR / "config" / "ChatSessionConfig.cpp"
-        repo_adapter_header_path = CHATSERVER_DIR / "persistence" / "ChatSessionRepository.h"
+        repo_adapter_header_path = CHATSERVER_DIR / "persistence" / "ChatSessionRepository.hpp"
         repo_adapter_source_path = CHATSERVER_DIR / "persistence" / "ChatSessionRepository.cpp"
         for path, label in (
             (config_port_path, "session config port header"),
@@ -1327,34 +1354,35 @@ class ChatServerStructureTests(unittest.TestCase):
         repo_port = repo_port_path.read_text(encoding="utf-8")
         self.assertIn("class IChatSessionRepository", repo_port)
         for method in (
-            "GetLegacyToken",
             "AcquireDuplicateLoginLock",
             "ReleaseDuplicateLoginLock",
             "GetUndeliveredPrivateMessages",
         ):
             self.assertIn(method, repo_port)
+        self.assertNotIn("GetLegacyToken", repo_port)
 
         config_adapter_header = config_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IChatSessionConfig.h", config_adapter_header)
+        self.assertIn("ports/IChatSessionConfig.hpp", config_adapter_header)
         self.assertRegex(config_adapter_header, r"class\s+ChatSessionConfig\s*:\s*public\s+IChatSessionConfig")
         config_adapter_source = config_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "ConfigMgr.h"', config_adapter_source)
+        self.assertIn('#include "ConfigMgr.hpp"', config_adapter_source)
         self.assertIn("ConfigMgr::Inst()", config_adapter_source)
 
         repo_adapter_header = repo_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IChatSessionRepository.h", repo_adapter_header)
+        self.assertIn("ports/IChatSessionRepository.hpp", repo_adapter_header)
         self.assertRegex(repo_adapter_header, r"class\s+ChatSessionRepository\s*:\s*public\s+IChatSessionRepository")
         repo_adapter_source = repo_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "PostgresMgr.h"', repo_adapter_source)
-        self.assertIn('#include "RedisMgr.h"', repo_adapter_source)
-        self.assertIn("RedisMgr::GetInstance()->Get", repo_adapter_source)
+        self.assertIn('#include "PostgresMgr.hpp"', repo_adapter_source)
+        self.assertIn('#include "RedisMgr.hpp"', repo_adapter_source)
+        self.assertIn("DuplicateLoginLockKey", repo_adapter_source)
+        self.assertIn("ShouldQueryUndeliveredPrivateMessages", repo_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->acquireLock", repo_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->releaseLock", repo_adapter_source)
         self.assertIn("PostgresMgr::GetInstance()->GetUndeliveredPrivateMessages", repo_adapter_source)
 
-        session_header = (DOMAIN_SESSION_DIR / "ChatSessionService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IChatSessionConfig.h", session_header)
-        self.assertIn("ports/IChatSessionRepository.h", session_header)
+        session_header = (DOMAIN_SESSION_DIR / "ChatSessionService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IChatSessionConfig.hpp", session_header)
+        self.assertIn("ports/IChatSessionRepository.hpp", session_header)
         compact_session_header = " ".join(session_header.split())
         self.assertIn("IChatSessionConfig* session_config", compact_session_header)
         self.assertIn("IChatSessionRepository* session_repository", compact_session_header)
@@ -1363,10 +1391,10 @@ class ChatServerStructureTests(unittest.TestCase):
 
         session_source = (DOMAIN_SESSION_DIR / "ChatSessionService.cpp").read_text(encoding="utf-8")
         for forbidden in (
-            '#include "ConfigMgr.h"',
-            '#include "MongoMgr.h"',
-            '#include "PostgresMgr.h"',
-            '#include "RedisMgr.h"',
+            '#include "ConfigMgr.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "PostgresMgr.hpp"',
+            '#include "RedisMgr.hpp"',
             "ConfigMgr::Inst()",
             "PostgresMgr::GetInstance()",
             "MongoMgr::GetInstance()",
@@ -1382,12 +1410,12 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertRegex(session_source, rf"_session_config\s*->\s*{method}")
         for method in (
-            "GetLegacyToken",
             "AcquireDuplicateLoginLock",
             "ReleaseDuplicateLoginLock",
             "GetUndeliveredPrivateMessages",
         ):
             self.assertRegex(session_source, rf"_session_repository\s*->\s*{method}")
+        self.assertNotIn("GetLegacyToken", session_source)
 
         cmake = read_cmake()
         self.assertIn("config/ChatSessionConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
@@ -1404,8 +1432,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IChatSessionRepository> _session_repository", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "ChatSessionConfig.h"', composition_source)
-        self.assertIn('#include "ChatSessionRepository.h"', composition_source)
+        self.assertIn('#include "ChatSessionConfig.hpp"', composition_source)
+        self.assertIn('#include "ChatSessionRepository.hpp"', composition_source)
         constructor_block = text_between(
             composition_source,
             "_online_route_store = std::make_unique<RedisOnlineRouteStore>()",
@@ -1416,11 +1444,43 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_session_config.get()", constructor_block)
         self.assertIn("_session_repository.get()", constructor_block)
 
+    def test_chat_login_accepts_only_v3_login_ticket_contract(self):
+        session_source = (DOMAIN_SESSION_DIR / "ChatSessionService.cpp").read_text(encoding="utf-8")
+        login_handler = text_between(
+            session_source,
+            "void ChatSessionService::HandleLogin",
+            "void ChatSessionService::HandleRelationBootstrap",
+        )
+
+        self.assertNotIn('#include "ChatUserSupport.hpp"', session_source)
+        self.assertIn('rtvalue["protocol_version"] = 3;', login_handler)
+        self.assertIn("protocol_version != 3", login_handler)
+        self.assertIn('root.get("login_ticket", "").asString()', login_handler)
+        self.assertIn("DecodeAndVerifyTicket", login_handler)
+        self.assertIn("ticket_claims.protocol_version != 3", login_handler)
+        self.assertIn('const std::string relation_bootstrap_mode = "explicit_pull"', login_handler)
+
+        for forbidden in (
+            "GetLegacyToken",
+            'root, "token"',
+            'root, "uid"',
+            "token_value",
+            "USERTOKENPREFIX",
+            "USER_BASE_INFO",
+            "protocol_version < 3",
+            "protocol_version >= 3",
+            'rtvalue["protocol_version"] = 2',
+            "_relation_query_service->AppendRelationBootstrapJson",
+            "chatusersupport::GetBaseInfo",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, login_handler)
+
     def test_private_message_service_uses_session_and_online_route_ports(self):
-        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/ISessionRegistry.h", private_header)
-        self.assertIn("ports/IOnlineRouteStore.h", private_header)
-        self.assertIn("ports/IRelationRepository.h", private_header)
+        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/ISessionRegistry.hpp", private_header)
+        self.assertIn("ports/IOnlineRouteStore.hpp", private_header)
+        self.assertIn("ports/IRelationRepository.hpp", private_header)
         compact_private_header = " ".join(private_header.split())
         self.assertIn("PrivateMessageService(ISessionRegistry* session_registry,", compact_private_header)
         self.assertIn("ISessionRegistry* session_registry", compact_private_header)
@@ -1431,10 +1491,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("IRelationRepository* _relation_repository", private_header)
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "RedisMgr.h"', private_source)
-        self.assertNotIn('#include "UserMgr.h"', private_source)
-        self.assertNotIn('#include "ConfigMgr.h"', private_source)
-        self.assertNotIn('#include "cluster/ChatClusterDiscovery.h"', private_source)
+        self.assertNotIn('#include "RedisMgr.hpp"', private_source)
+        self.assertNotIn('#include "UserMgr.hpp"', private_source)
+        self.assertNotIn('#include "ConfigMgr.hpp"', private_source)
+        self.assertNotIn('#include "cluster/ChatClusterDiscovery.hpp"', private_source)
         self.assertNotIn("TrimCopyLocal", private_source)
         self.assertNotIn("ServerOnlineUsersKeyLocal", private_source)
         self.assertNotIn("KnownChatServerNamesLocal", private_source)
@@ -1444,9 +1504,9 @@ class ChatServerStructureTests(unittest.TestCase):
 
         # Online-route resolution is shared via the OnlineRouteResolver seam; the
         # session/route-store port calls live there, reached through the resolver.
-        self.assertIn("ports/OnlineRouteResolver.h", private_source)
+        self.assertIn("ports/OnlineRouteResolver.hpp", private_source)
         self.assertIn("ResolveOnlineRoute(peer_uid, _session_registry, _online_route_store)", private_source)
-        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.h").read_text(encoding="utf-8")
+        resolver_source = (CHATSERVER_DIR / "domain" / "ports" / "OnlineRouteResolver.hpp").read_text(encoding="utf-8")
         self.assertIn("session_registry->FindSession(uid)", resolver_source)
         self.assertIn("online_route_store->RepairOnlineRoute(uid, session)", resolver_source)
         self.assertIn("online_route_store->FindUserServer(uid)", resolver_source)
@@ -1472,8 +1532,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_online_route_store.get()", constructor_block)
 
     def test_private_message_service_uses_message_repository_port(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IMessageRepository.h"
-        adapter_header = CHATSERVER_DIR / "persistence" / "ChatMessageRepository.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IMessageRepository.hpp"
+        adapter_header = CHATSERVER_DIR / "persistence" / "ChatMessageRepository.hpp"
         adapter_source_path = CHATSERVER_DIR / "persistence" / "ChatMessageRepository.cpp"
         self.assertTrue(port_header.is_file(), "message repository port header is missing")
         self.assertTrue(adapter_header.is_file(), "message repository adapter header is missing")
@@ -1493,30 +1553,30 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(method, port_source)
 
         adapter_header_source = adapter_header.read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageRepository.h", adapter_header_source)
+        self.assertIn("ports/IMessageRepository.hpp", adapter_header_source)
         self.assertRegex(
             adapter_header_source,
             r"class\s+ChatMessageRepository\s*:\s*public\s+IMessageRepository",
         )
 
         adapter_source = adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "PostgresMgr.h"', adapter_source)
-        self.assertIn('#include "MongoMgr.h"', adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->SavePrivateMessage", adapter_source)
-        self.assertIn("MongoMgr::GetInstance()->SavePrivateMessage", adapter_source)
-        self.assertRegex(adapter_source, r"MongoMgr::GetInstance\(\)\s*->GetPrivateHistory")
-        self.assertRegex(adapter_source, r"PostgresMgr::GetInstance\(\)\s*->GetPrivateHistory")
+        self.assertIn('#include "PostgresMgr.hpp"', adapter_source)
+        self.assertIn('#include "MongoMgr.hpp"', adapter_source)
+        self.assertIn("WritePrimaryAndMirrorToMongo", adapter_source)
+        self.assertIn("ReadMongoThenPostgres", adapter_source)
+        self.assertIn("ShouldFallbackToPostgres", adapter_source)
+        self.assertIn("ShouldLogMongoWriteFailure", adapter_source)
 
-        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageRepository.h", private_header)
+        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IMessageRepository.hpp", private_header)
         self.assertIn("IMessageRepository* message_repository", private_header)
         self.assertIn("IMessageRepository* _message_repository", private_header)
         self.assertIn("IRelationRepository* relation_repository", private_header)
         self.assertIn("IRelationRepository* _relation_repository", private_header)
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "PostgresMgr.h"', private_source)
-        self.assertNotIn('#include "MongoMgr.h"', private_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', private_source)
+        self.assertNotIn('#include "MongoMgr.hpp"', private_source)
         self.assertNotIn("PostgresMgr::GetInstance()->SavePrivateMessage", private_source)
         self.assertNotIn("MongoMgr::GetInstance()->SavePrivateMessage", private_source)
         self.assertNotIn("PostgresMgr::GetInstance()->GetPrivateHistory", private_source)
@@ -1535,7 +1595,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IMessageRepository> _message_repository", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "ChatMessageRepository.h"', composition_source)
+        self.assertIn('#include "ChatMessageRepository.hpp"', composition_source)
         constructor_block = text_between(
             composition_source,
             "_message_repository = std::make_unique<ChatMessageRepository>()",
@@ -1550,7 +1610,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_message_repository.get()", service_wiring_block)
 
     def test_group_message_service_uses_message_repository_for_message_persistence(self):
-        port_source = (CHATSERVER_DIR / "domain" / "ports" / "IMessageRepository.h").read_text(encoding="utf-8")
+        port_source = (CHATSERVER_DIR / "domain" / "ports" / "IMessageRepository.hpp").read_text(encoding="utf-8")
         for method in (
             "SaveGroupMessage",
             "FindGroupMessageByClientId",
@@ -1561,7 +1621,9 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertIn(method, port_source)
 
-        adapter_header_source = (CHATSERVER_DIR / "persistence" / "ChatMessageRepository.h").read_text(encoding="utf-8")
+        adapter_header_source = (CHATSERVER_DIR / "persistence" / "ChatMessageRepository.hpp").read_text(
+            encoding="utf-8"
+        )
         for method in (
             "SaveGroupMessage",
             "FindGroupMessageByClientId",
@@ -1573,15 +1635,13 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(method, adapter_header_source)
 
         adapter_source = (CHATSERVER_DIR / "persistence" / "ChatMessageRepository.cpp").read_text(encoding="utf-8")
-        self.assertIn("PostgresMgr::GetInstance()->SaveGroupMessage", adapter_source)
-        self.assertIn("MongoMgr::GetInstance()->SaveGroupMessage", adapter_source)
-        self.assertRegex(adapter_source, r"MongoMgr::GetInstance\(\)\s*->GetGroupHistory")
-        self.assertRegex(adapter_source, r"PostgresMgr::GetInstance\(\)\s*->GetGroupHistory")
-        self.assertRegex(adapter_source, r"MongoMgr::GetInstance\(\)\s*->GetGroupMessageByMsgId")
-        self.assertRegex(adapter_source, r"PostgresMgr::GetInstance\(\)\s*->GetGroupMessageByMsgId")
+        self.assertIn("WritePrimaryAndMirrorToMongo", adapter_source)
+        self.assertIn("ReadMongoThenPostgres", adapter_source)
+        self.assertIn("SaveGroupMessage dual-write", adapter_source)
+        self.assertIn("GetGroupMessageByMsgId", adapter_source)
 
-        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageRepository.h", group_header)
+        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IMessageRepository.hpp", group_header)
         self.assertIn("IMessageRepository* message_repository", group_header)
         self.assertIn("IMessageRepository* _message_repository", group_header)
 
@@ -1618,7 +1678,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_message_repository.get()", constructor_block)
 
     def test_chat_relation_service_uses_relation_repository_for_relation_persistence(self):
-        port_header = CHATSERVER_DIR / "domain" / "ports" / "IRelationRepository.h"
+        port_header = CHATSERVER_DIR / "domain" / "ports" / "IRelationRepository.hpp"
         self.assertTrue(port_header.is_file(), "relation repository port header is missing")
         port_source = port_header.read_text(encoding="utf-8")
         for method in (
@@ -1643,34 +1703,33 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertIn(method, port_source)
 
-        adapter_header_path = CHATSERVER_DIR / "persistence" / "ChatRelationRepository.h"
+        adapter_header_path = CHATSERVER_DIR / "persistence" / "ChatRelationRepository.hpp"
         adapter_source_path = CHATSERVER_DIR / "persistence" / "ChatRelationRepository.cpp"
         self.assertTrue(adapter_header_path.is_file(), "relation repository adapter header is missing")
         self.assertTrue(adapter_source_path.is_file(), "relation repository adapter source is missing")
 
         adapter_header_source = adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationRepository.h", adapter_header_source)
+        self.assertIn("ports/IRelationRepository.hpp", adapter_header_source)
         self.assertRegex(
             adapter_header_source,
             r"class\s+ChatRelationRepository\s*:\s*public\s+IRelationRepository",
         )
 
         adapter_source = adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "PostgresMgr.h"', adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->GetUidByUserId", adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->RefreshDialogsForOwner", adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->GetDialogMetaByOwner", adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->AddFriendApply", adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->DeleteFriend", adapter_source)
-        self.assertIn("PostgresMgr::GetInstance()->UpsertDialogPinned", adapter_source)
+        self.assertIn('#include "PostgresMgr.hpp"', adapter_source)
+        self.assertIn("import memochat.chat.relation_repository_algorithms", adapter_source)
+        self.assertIn("ShouldQueryPrivateFriendship", adapter_source)
+        self.assertIn("ShouldFilterFriendUids", adapter_source)
+        self.assertIn("ShouldQueryGroupMembership", adapter_source)
+        self.assertNotIn("ForwardingSurfaceCount", adapter_source)
 
-        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationRepository.h", relation_header)
+        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationRepository.hpp", relation_header)
         self.assertIn("ChatRelationService(IRelationRepository* relation_repository", relation_header)
         self.assertIn("IRelationRepository* _relation_repository", relation_header)
 
         relation_source = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "PostgresMgr.h"', relation_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', relation_source)
         self.assertIn("_relation_repository->GetUidByUserId", relation_source)
         self.assertIn("_relation_repository->RefreshDialogsForOwner", relation_source)
         self.assertIn("_relation_repository->GetDialogMetaByOwner", relation_source)
@@ -1717,7 +1776,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IRelationRepository> _relation_repository", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "ChatRelationRepository.h"', composition_source)
+        self.assertIn('#include "ChatRelationRepository.hpp"', composition_source)
         constructor_block = text_between(
             composition_source,
             "_relation_repository = std::make_unique<ChatRelationRepository>()",
@@ -1731,8 +1790,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_relation_repository.get()", constructor_block)
 
     def test_chat_relation_service_uses_cache_delivery_task_and_event_ports(self):
-        cache_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationBootstrapCache.h"
-        cache_adapter_header_path = CHATSERVER_DIR / "persistence" / "RedisRelationBootstrapCache.h"
+        cache_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationBootstrapCache.hpp"
+        cache_adapter_header_path = CHATSERVER_DIR / "persistence" / "RedisRelationBootstrapCache.hpp"
         cache_adapter_source_path = CHATSERVER_DIR / "persistence" / "RedisRelationBootstrapCache.cpp"
         self.assertTrue(cache_port_path.is_file(), "relation bootstrap cache port header is missing")
         self.assertTrue(cache_adapter_header_path.is_file(), "redis relation bootstrap cache adapter header is missing")
@@ -1745,32 +1804,28 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertRegex(cache_port, r"virtual\s+void\s+Invalidate")
 
         cache_adapter_header = cache_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationBootstrapCache.h", cache_adapter_header)
+        self.assertIn("ports/IRelationBootstrapCache.hpp", cache_adapter_header)
         self.assertRegex(
             cache_adapter_header,
             r"class\s+RedisRelationBootstrapCache\s*:\s*public\s+IRelationBootstrapCache",
         )
 
         cache_adapter_source = cache_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "ConfigMgr.h"', cache_adapter_source)
-        self.assertIn('#include "RedisMgr.h"', cache_adapter_source)
+        self.assertIn('#include "ConfigMgr.hpp"', cache_adapter_source)
+        self.assertIn('#include "RedisMgr.hpp"', cache_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->Get", cache_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->SetEx", cache_adapter_source)
         self.assertIn("RedisMgr::GetInstance()->Del", cache_adapter_source)
-        self.assertIn("kRelationBootstrapCacheSchemaVersion = 2", cache_adapter_source)
+        self.assertIn("cache_modules::SchemaVersion()", cache_adapter_source)
         self.assertIn('std::string("relation_bootstrap_v")', cache_adapter_source)
-        self.assertIn(
-            'cached.get("schema_version", 0).asInt() == kRelationBootstrapCacheSchemaVersion', cache_adapter_source
-        )
-        self.assertIn(
-            'versioned_payload["schema_version"] = kRelationBootstrapCacheSchemaVersion', cache_adapter_source
-        )
+        self.assertIn("cache_modules::IsCurrentSchemaVersion", cache_adapter_source)
+        self.assertIn('versioned_payload["schema_version"] = cache_modules::SchemaVersion()', cache_adapter_source)
 
-        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationBootstrapCache.h", relation_header)
-        self.assertIn("ports/IDeliveryGateway.h", relation_header)
-        self.assertIn("ports/IDeliveryTaskPublisher.h", relation_header)
-        self.assertIn("ports/IEventPublisher.h", relation_header)
+        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationBootstrapCache.hpp", relation_header)
+        self.assertIn("ports/IDeliveryGateway.hpp", relation_header)
+        self.assertIn("ports/IDeliveryTaskPublisher.hpp", relation_header)
+        self.assertIn("ports/IEventPublisher.hpp", relation_header)
         compact_relation_header = " ".join(relation_header.split())
         self.assertIn("ChatRelationService(IRelationRepository* relation_repository,", compact_relation_header)
         self.assertIn("IRelationBootstrapCache* relation_bootstrap_cache", compact_relation_header)
@@ -1785,11 +1840,11 @@ class ChatServerStructureTests(unittest.TestCase):
 
         relation_source = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp").read_text(encoding="utf-8")
         for forbidden in (
-            '#include "ConfigMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "UserMgr.h"',
-            '#include "LogicSystem.h"',
-            '#include "MessageDeliveryService.h"',
+            '#include "ConfigMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "UserMgr.hpp"',
+            '#include "LogicSystem.hpp"',
+            '#include "MessageDeliveryService.hpp"',
             "ConfigMgr::Inst",
             "RedisMgr::GetInstance()",
             "_logic.",
@@ -1815,7 +1870,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IRelationBootstrapCache> _relation_bootstrap_cache", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "RedisRelationBootstrapCache.h"', composition_source)
+        self.assertIn('#include "RedisRelationBootstrapCache.hpp"', composition_source)
         self.assertIn("_relation_bootstrap_cache = std::make_unique<RedisRelationBootstrapCache>()", composition_source)
         constructor_block = text_between(
             composition_source,
@@ -1835,11 +1890,11 @@ class ChatServerStructureTests(unittest.TestCase):
             "bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>& userinfo)",
         )
         self.assertIn("DecodeChatUserProfileCache(info_str, &profile);", support_body)
-        self.assertIn("if (!profile.user_id.empty())", support_body)
+        self.assertIn("user_support_modules::ShouldUseCachedProfile(cache_hit, profile.user_id.empty())", support_body)
         self.assertIn("FillUserInfoFromChatUserProfile(profile, *userinfo);", support_body)
         self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", support_body)
         self.assertLess(
-            support_body.index("if (!profile.user_id.empty())"),
+            support_body.index("user_support_modules::ShouldUseCachedProfile(cache_hit, profile.user_id.empty())"),
             support_body.index("PostgresMgr::GetInstance()->GetUser(uid)"),
         )
 
@@ -1851,12 +1906,28 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("if (userinfo->user_id.empty())", transport_body)
         self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", transport_body)
         self.assertIn('redis_root["user_id"] = userinfo->user_id;', transport_body)
+
+        constructor_block = text_between(
+            runtime_composition_source(),
+            "_chat_relation_service = CreateRelationService",
+            "_chat_relation_session_service = std::make_unique<ChatRelationSessionAdapter>",
+        )
         self.assertIn("_message_delivery_service.get()", constructor_block)
         self.assertIn("_task_dispatcher.get()", constructor_block)
         self.assertIn("_async_event_dispatcher.get()", constructor_block)
 
+    def test_user_lookup_by_name_projects_icon_for_avatar_surfaces(self):
+        user_support = (CHATSERVER_DIR / "domain/users/ChatUserSupport.cpp").read_text(encoding="utf-8")
+        body = extract_function(
+            user_support,
+            "void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)",
+        )
+
+        self.assertEqual(body.count("AppendChatUserProfileToJsonValue(profile, rtvalue, true);"), 2)
+        self.assertNotIn("AppendChatUserProfileToJsonValue(profile, rtvalue, false);", body)
+
     def test_chat_relation_service_has_ingress_facing_service_contract(self):
-        relation_query_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationQueryService.h"
+        relation_query_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationQueryService.hpp"
         self.assertTrue(relation_query_port_path.is_file(), "relation query service contract header is missing")
         relation_query_port = relation_query_port_path.read_text(encoding="utf-8")
         self.assertIn("class IRelationQueryService", relation_query_port)
@@ -1864,7 +1935,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("AppendRelationBootstrapJson", relation_query_port)
         self.assertIn("BuildDialogListJson", relation_query_port)
 
-        relation_command_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationCommandService.h"
+        relation_command_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationCommandService.hpp"
         self.assertTrue(relation_command_port_path.is_file(), "relation command service contract header is missing")
         relation_command_port = relation_command_port_path.read_text(encoding="utf-8")
         for token in (
@@ -1892,14 +1963,14 @@ class ChatServerStructureTests(unittest.TestCase):
                 rf"virtual\s+RelationCommandResult\s+{re.escape(method)}\(const\s+RelationCommandRequest&\s+request\)",
             )
 
-        relation_service_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationService.h"
-        relation_session_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationSessionService.h"
+        relation_service_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationService.hpp"
+        relation_session_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationSessionService.hpp"
         self.assertTrue(relation_service_port_path.is_file(), "relation service contract header is missing")
         self.assertTrue(relation_session_port_path.is_file(), "relation session service contract header is missing")
 
         relation_service_port = relation_service_port_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationQueryService.h", relation_service_port)
-        self.assertIn("ports/IRelationCommandService.h", relation_service_port)
+        self.assertIn("ports/IRelationQueryService.hpp", relation_service_port)
+        self.assertIn("ports/IRelationCommandService.hpp", relation_service_port)
         self.assertRegex(
             relation_service_port,
             r"class\s+IRelationService\s*:\s*public\s+IRelationQueryService\s*,\s*public\s+IRelationCommandService",
@@ -1922,9 +1993,9 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertRegex(relation_session_port, rf"virtual\s+void\s+{re.escape(method)}")
 
-        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationService.h", relation_header)
-        self.assertIn("ports/IRelationCommandService.h", relation_header)
+        relation_header = (DOMAIN_RELATION_DIR / "ChatRelationService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationService.hpp", relation_header)
+        self.assertIn("ports/IRelationCommandService.hpp", relation_header)
         self.assertRegex(relation_header, r"class\s+ChatRelationService\s*:\s*public\s+IRelationService")
         self.assertIn("AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override", relation_header)
         self.assertIn("BuildDialogListJson(int uid, memochat::json::JsonValue& out) override", relation_header)
@@ -1945,11 +2016,11 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("CSession", relation_header)
 
         relation_source = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "CSession.h"', relation_source)
+        self.assertNotIn('#include "CSession.hpp"', relation_source)
         self.assertNotIn("SendRelationCommandResult", relation_source)
 
-        relation_session_header = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationSessionService.h", relation_session_header)
+        relation_session_header = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationSessionService.hpp", relation_session_header)
         self.assertRegex(
             relation_session_header,
             r"class\s+ChatRelationSessionAdapter\s+final\s*:\s*public\s+IRelationSessionService",
@@ -1967,7 +2038,7 @@ class ChatServerStructureTests(unittest.TestCase):
             "_relation_service->PinDialog(BuildRelationCommandRequest(session, msg_id, msg_data))",
             relation_session_adapter,
         )
-        self.assertIn('#include "CSession.h"', relation_session_adapter)
+        self.assertIn('#include "CSession.hpp"', relation_session_adapter)
         self.assertIn("ChatRelationSessionAdapter::HandleSearchUser", relation_session_adapter)
         self.assertNotIn("ChatRelationService::HandleSearchUser", relation_session_adapter)
 
@@ -1980,12 +2051,12 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("SendRelationCommandResult(session, PinDialog(", relation_source)
 
     def test_relation_service_remote_backend_has_full_command_grpc_adapter(self):
-        client_header_path = CHATSERVER_DIR / "clients" / "RelationGrpcClient.h"
+        client_header_path = CHATSERVER_DIR / "clients" / "RelationGrpcClient.hpp"
         client_source_path = CHATSERVER_DIR / "clients" / "RelationGrpcClient.cpp"
-        service_adapter_header_path = CHATSERVER_DIR / "clients" / "RelationGrpcServiceAdapter.h"
+        service_adapter_header_path = CHATSERVER_DIR / "clients" / "RelationGrpcServiceAdapter.hpp"
         service_adapter_source_path = CHATSERVER_DIR / "clients" / "RelationGrpcServiceAdapter.cpp"
         factory_source_path = DOMAIN_RELATION_DIR / "RelationServiceFactory.cpp"
-        grpc_header_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.h"
+        grpc_header_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.hpp"
         grpc_source_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.cpp"
         proto_path = COMMON_PROTO_DIR / "chat_internal.proto"
         test_cmake_path = REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "ChatServer" / "CMakeLists.txt"
@@ -2010,7 +2081,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertRegex(proto, r"message\s+JsonPayloadResponse\s*{[^}]*int32\s+tcp_msg_id\s*=\s*2\s*;", re.S)
 
         grpc_header = grpc_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationService.h", grpc_header)
+        self.assertIn("ports/IRelationService.hpp", grpc_header)
         self.assertIn("IRelationService* relation_service", grpc_header)
         for method in (
             "SearchUser",
@@ -2042,9 +2113,9 @@ class ChatServerStructureTests(unittest.TestCase):
 
         client_header = client_header_path.read_text(encoding="utf-8")
         self.assertIn("common/proto/chat_internal.grpc.pb.h", client_header)
-        self.assertIn("ports/IRelationQueryService.h", client_header)
-        self.assertIn("ports/IRelationCommandService.h", client_header)
-        self.assertNotIn("ports/IRelationService.h", client_header)
+        self.assertIn("ports/IRelationQueryService.hpp", client_header)
+        self.assertIn("ports/IRelationCommandService.hpp", client_header)
+        self.assertNotIn("ports/IRelationService.hpp", client_header)
         self.assertRegex(
             client_header,
             r"class\s+RelationGrpcClient\s+final\s*:\s*public\s+IRelationQueryService\s*,\s*public\s+IRelationCommandService",
@@ -2056,12 +2127,12 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_stub->SearchUser", client_source)
         self.assertIn("CallCommand", client_source)
         self.assertIn("CallQuery", client_source)
-        self.assertIn("relation_remote_error", client_source)
-        self.assertNotIn('#include "transport/CSession.h"', client_source)
+        self.assertIn("relation_grpc_modules::RemoteErrorField()", client_source)
+        self.assertNotIn('#include "transport/CSession.hpp"', client_source)
 
         service_adapter_header = service_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn('#include "RelationGrpcClient.h"', service_adapter_header)
-        self.assertIn("ports/IRelationService.h", service_adapter_header)
+        self.assertIn('#include "RelationGrpcClient.hpp"', service_adapter_header)
+        self.assertIn("ports/IRelationService.hpp", service_adapter_header)
         self.assertRegex(
             service_adapter_header, r"class\s+RelationGrpcServiceAdapter\s+final\s*:\s*public\s+IRelationService"
         )
@@ -2071,13 +2142,13 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("void HandleSearchUser", service_adapter_header)
 
         service_adapter_source = service_adapter_source_path.read_text(encoding="utf-8")
-        self.assertNotIn('#include "transport/CSession.h"', service_adapter_source)
+        self.assertNotIn('#include "transport/CSession.hpp"', service_adapter_source)
         self.assertNotIn("BuildSessionCommandRequest(session, msg_id, msg_data)", service_adapter_source)
         self.assertNotIn("SendSessionCommandResult(session, SearchUser(", service_adapter_source)
         self.assertNotIn("session->Send(result.payload_json, result.response_msg_id)", service_adapter_source)
 
         factory_source = factory_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "RelationGrpcServiceAdapter.h"', factory_source)
+        self.assertIn('#include "RelationGrpcServiceAdapter.hpp"', factory_source)
         self.assertIn("std::make_unique<RelationGrpcServiceAdapter>", factory_source)
         self.assertNotIn("remote_backend_not_implemented", factory_source)
         self.assertIn("Relation service remote endpoint is empty", factory_source)
@@ -2114,8 +2185,8 @@ class ChatServerStructureTests(unittest.TestCase):
         )
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ports/IRelationSessionService.h"', registrar_source)
-        self.assertNotIn('#include "ChatRelationService.h"', registrar_source)
+        self.assertIn('#include "ports/IRelationSessionService.hpp"', registrar_source)
+        self.assertNotIn('#include "ChatRelationService.hpp"', registrar_source)
         self.assertIn("&IRelationSessionService::HandleSearchUser", registrar_source)
         self.assertIn("&IRelationSessionService::HandleAddFriendApply", registrar_source)
         self.assertIn("&IRelationSessionService::HandleAuthFriendApply", registrar_source)
@@ -2126,16 +2197,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("&ChatRelationService::", registrar_source)
 
     def test_relation_service_construction_is_hidden_behind_factory(self):
-        factory_header_path = DOMAIN_RELATION_DIR / "RelationServiceFactory.h"
+        factory_header_path = DOMAIN_RELATION_DIR / "RelationServiceFactory.hpp"
         factory_source_path = DOMAIN_RELATION_DIR / "RelationServiceFactory.cpp"
         self.assertTrue(factory_header_path.is_file(), "relation service factory header is missing")
         self.assertTrue(factory_source_path.is_file(), "relation service factory source is missing")
 
         factory_header = factory_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationService.h", factory_header)
-        self.assertIn("ports/IRelationRepository.h", factory_header)
-        self.assertIn("ports/IRelationBootstrapCache.h", factory_header)
-        self.assertIn("ports/IRelationServiceConfig.h", factory_header)
+        self.assertIn("ports/IRelationService.hpp", factory_header)
+        self.assertIn("ports/IRelationRepository.hpp", factory_header)
+        self.assertIn("ports/IRelationBootstrapCache.hpp", factory_header)
+        self.assertIn("ports/IRelationServiceConfig.hpp", factory_header)
         self.assertIn("std::unique_ptr<IRelationService> CreateInProcessRelationService", factory_header)
         self.assertIn("std::unique_ptr<IRelationService> CreateRelationService", factory_header)
         self.assertIn("const IRelationServiceConfig& relation_service_config", factory_header)
@@ -2146,20 +2217,20 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("IEventPublisher* event_publisher", factory_header)
 
         factory_source = factory_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "ChatRelationService.h"', factory_source)
-        self.assertIn('#include "logging/Logger.h"', factory_source)
+        self.assertIn('#include "ChatRelationService.hpp"', factory_source)
+        self.assertIn('#include "logging/Logger.hpp"', factory_source)
         self.assertIn("<stdexcept>", factory_source)
         self.assertIn("std::make_unique<ChatRelationService>", factory_source)
-        self.assertIn('#include "RelationGrpcServiceAdapter.h"', factory_source)
-        self.assertIn('backend == "inprocess"', factory_source)
-        self.assertIn('backend == "grpc" || backend == "remote"', factory_source)
+        self.assertIn('#include "RelationGrpcServiceAdapter.hpp"', factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsInProcessBackend", factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", factory_source)
         self.assertIn("relation_service_config.RelationServiceEndpoint()", factory_source)
         self.assertIn("std::make_unique<RelationGrpcServiceAdapter>", factory_source)
         self.assertIn("Relation service remote endpoint is empty", factory_source)
         self.assertNotIn("chat.relation_service.remote_backend_not_implemented", factory_source)
         self.assertIn("chat.relation_service.unsupported_backend", factory_source)
         self.assertIn('{"fallback_backend", "inprocess"}', factory_source)
-        self.assertNotIn('#include "LogicSystem.h"', factory_source)
+        self.assertNotIn('#include "LogicSystem.hpp"', factory_source)
 
         cmake = read_cmake()
         self.assertIn(
@@ -2167,16 +2238,16 @@ class ChatServerStructureTests(unittest.TestCase):
         )
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "RelationServiceFactory.h"', composition_source)
-        self.assertNotIn('#include "ChatRelationService.h"', composition_source)
+        self.assertIn('#include "RelationServiceFactory.hpp"', composition_source)
+        self.assertNotIn('#include "ChatRelationService.hpp"', composition_source)
         self.assertIn("CreateRelationService(*_relation_service_config", composition_source)
         before_handler_boundary = composition_source.split("CHATSERVER_LEGACY_LOGICSYSTEM_HANDLERS_BEGIN", 1)[0]
         self.assertNotIn("_chat_relation_service = CreateInProcessRelationService(", before_handler_boundary)
         self.assertNotIn("std::make_unique<ChatRelationService>", composition_source)
 
     def test_relation_service_backend_config_defaults_to_inprocess(self):
-        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationServiceConfig.h"
-        config_adapter_header_path = CHATSERVER_DIR / "config" / "RelationServiceConfig.h"
+        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationServiceConfig.hpp"
+        config_adapter_header_path = CHATSERVER_DIR / "config" / "RelationServiceConfig.hpp"
         config_adapter_source_path = CHATSERVER_DIR / "config" / "RelationServiceConfig.cpp"
         for path, label in (
             (config_port_path, "relation service config port header"),
@@ -2191,16 +2262,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("virtual std::string RelationServiceEndpoint() const = 0", config_port)
 
         config_adapter_header = config_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationServiceConfig.h", config_adapter_header)
+        self.assertIn("ports/IRelationServiceConfig.hpp", config_adapter_header)
         self.assertRegex(config_adapter_header, r"class\s+RelationServiceConfig\s*:\s*public\s+IRelationServiceConfig")
         self.assertIn("std::string RelationServiceEndpoint() const override", config_adapter_header)
 
         config_adapter_source = config_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "ConfigMgr.h"', config_adapter_source)
+        self.assertIn('#include "ConfigMgr.hpp"', config_adapter_source)
         self.assertIn('GetValue("RelationService", "Backend")', config_adapter_source)
         self.assertIn('GetValue("RelationService", "Endpoint")', config_adapter_source)
         self.assertIn('return "inprocess"', config_adapter_source)
-        self.assertIn("std::tolower", config_adapter_source)
+        self.assertIn("memochat::chat::config::modules::LowerAsciiInPlace", config_adapter_source)
 
         cmake = read_cmake()
         self.assertIn("config/RelationServiceConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
@@ -2211,12 +2282,12 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IRelationServiceConfig> _relation_service_config", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "RelationServiceConfig.h"', composition_source)
+        self.assertIn('#include "RelationServiceConfig.hpp"', composition_source)
         self.assertIn("_relation_service_config = std::make_unique<RelationServiceConfig>()", composition_source)
         self.assertIn("CreateRelationService(*_relation_service_config", composition_source)
 
     def test_relation_internal_grpc_adapter_wraps_synchronous_relation_port_methods(self):
-        adapter_header_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.h"
+        adapter_header_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.hpp"
         adapter_source_path = DOMAIN_RELATION_DIR / "ChatRelationInternalGrpcService.cpp"
         adapter_test_path = (
             REPO_ROOT
@@ -2237,7 +2308,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
         adapter_header = adapter_header_path.read_text(encoding="utf-8")
         self.assertIn("common/proto/chat_internal.grpc.pb.h", adapter_header)
-        self.assertIn("ports/IRelationService.h", adapter_header)
+        self.assertIn("ports/IRelationService.hpp", adapter_header)
         self.assertRegex(
             adapter_header,
             r"class\s+ChatRelationInternalGrpcService\s+final\s*:\s*public\s+chatinternal::ChatRelationInternalService::Service",
@@ -2285,7 +2356,7 @@ class ChatServerStructureTests(unittest.TestCase):
         assert_ini_section_has(self, worker_config_source, "RelationService", "Backend=inprocess")
 
     def test_relation_query_grpc_client_adapter_is_query_port_only_and_not_enabled_by_factory(self):
-        adapter_header_path = CHATSERVER_DIR / "clients" / "RelationQueryGrpcClient.h"
+        adapter_header_path = CHATSERVER_DIR / "clients" / "RelationQueryGrpcClient.hpp"
         adapter_source_path = CHATSERVER_DIR / "clients" / "RelationQueryGrpcClient.cpp"
         adapter_test_path = (
             REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "ChatServer" / "RelationQueryGrpcClientTest.cpp"
@@ -2298,8 +2369,8 @@ class ChatServerStructureTests(unittest.TestCase):
 
         adapter_header = adapter_header_path.read_text(encoding="utf-8")
         self.assertIn("common/proto/chat_internal.grpc.pb.h", adapter_header)
-        self.assertIn("ports/IRelationQueryService.h", adapter_header)
-        self.assertNotIn("ports/IRelationService.h", adapter_header)
+        self.assertIn("ports/IRelationQueryService.hpp", adapter_header)
+        self.assertNotIn("ports/IRelationService.hpp", adapter_header)
         self.assertRegex(
             adapter_header, r"class\s+RelationQueryGrpcClient\s+final\s*:\s*public\s+IRelationQueryService"
         )
@@ -2315,7 +2386,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("set_deadline", adapter_source)
         self.assertIn("memochat::json::reader_parse", adapter_source)
         self.assertIn("memochat::json::getMemberNames", adapter_source)
-        self.assertIn("relation_query_remote_error", adapter_source)
+        self.assertIn("relation_query_grpc_modules::RemoteErrorField()", adapter_source)
         self.assertNotIn("IRelationService", adapter_source)
 
         cmake = read_cmake()
@@ -2330,15 +2401,15 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("ChatRelationInternalGrpcService", adapter_test)
 
         relation_factory = (DOMAIN_RELATION_DIR / "RelationServiceFactory.cpp").read_text(encoding="utf-8")
-        self.assertIn('backend == "grpc" || backend == "remote"', relation_factory)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", relation_factory)
         self.assertIn("std::make_unique<RelationGrpcServiceAdapter>", relation_factory)
         self.assertNotIn("Relation service remote backend is not implemented yet", relation_factory)
 
     def test_relation_query_service_selection_is_separate_from_full_relation_backend(self):
-        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationQueryServiceConfig.h"
-        config_adapter_header_path = CHATSERVER_DIR / "config" / "RelationQueryServiceConfig.h"
+        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IRelationQueryServiceConfig.hpp"
+        config_adapter_header_path = CHATSERVER_DIR / "config" / "RelationQueryServiceConfig.hpp"
         config_adapter_source_path = CHATSERVER_DIR / "config" / "RelationQueryServiceConfig.cpp"
-        factory_header_path = CHATSERVER_DIR / "clients" / "RelationQueryServiceFactory.h"
+        factory_header_path = CHATSERVER_DIR / "clients" / "RelationQueryServiceFactory.hpp"
         factory_source_path = CHATSERVER_DIR / "clients" / "RelationQueryServiceFactory.cpp"
         factory_test_path = (
             REPO_ROOT
@@ -2368,7 +2439,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("virtual std::string RelationQueryServiceEndpoint() const = 0", config_port)
 
         config_adapter_header = config_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationQueryServiceConfig.h", config_adapter_header)
+        self.assertIn("ports/IRelationQueryServiceConfig.hpp", config_adapter_header)
         self.assertRegex(
             config_adapter_header, r"class\s+RelationQueryServiceConfig\s*:\s*public\s+IRelationQueryServiceConfig"
         )
@@ -2377,20 +2448,20 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn('GetValue("RelationQueryService", "Backend")', config_adapter_source)
         self.assertIn('GetValue("RelationQueryService", "Endpoint")', config_adapter_source)
         self.assertIn('return "inprocess"', config_adapter_source)
-        self.assertIn("std::tolower", config_adapter_source)
+        self.assertIn("memochat::chat::config::modules::LowerAsciiInPlace", config_adapter_source)
 
         factory_header = factory_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationQueryService.h", factory_header)
-        self.assertIn("ports/IRelationQueryServiceConfig.h", factory_header)
+        self.assertIn("ports/IRelationQueryService.hpp", factory_header)
+        self.assertIn("ports/IRelationQueryServiceConfig.hpp", factory_header)
         self.assertIn("CreateRemoteRelationQueryService", factory_header)
         self.assertIn("SelectRelationQueryService", factory_header)
         self.assertIn("std::unique_ptr<IRelationQueryService>& remote_relation_query_service", factory_header)
 
         factory_source = factory_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "RelationQueryGrpcClient.h"', factory_source)
+        self.assertIn('#include "RelationQueryGrpcClient.hpp"', factory_source)
         self.assertIn("std::make_unique<RelationQueryGrpcClient>", factory_source)
-        self.assertIn('backend == "inprocess"', factory_source)
-        self.assertIn('backend == "grpc" || backend == "remote"', factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsInProcessBackend", factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", factory_source)
         self.assertIn("Relation query service remote endpoint is empty", factory_source)
         self.assertIn("chat.relation_query_service.unsupported_backend", factory_source)
         self.assertIn('{"fallback_backend", "inprocess"}', factory_source)
@@ -2411,8 +2482,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IRelationQueryService> _relation_query_service_remote", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "RelationQueryServiceConfig.h"', composition_source)
-        self.assertIn('#include "RelationQueryServiceFactory.h"', composition_source)
+        self.assertIn('#include "RelationQueryServiceConfig.hpp"', composition_source)
+        self.assertIn('#include "RelationQueryServiceFactory.hpp"', composition_source)
         self.assertIn(
             "_relation_query_service_config = std::make_unique<RelationQueryServiceConfig>()", composition_source
         )
@@ -2472,13 +2543,13 @@ class ChatServerStructureTests(unittest.TestCase):
         adapter_cmake = adapter_cmake_path.read_text(encoding="utf-8")
         self.assertIn("RelationQueryRemoteSmokeTest.cpp", adapter_cmake)
         self.assertIn("chatserver_relation_query_remote_smoke_gtest", adapter_cmake)
-        self.assertIn("RelationQueryServiceConfig.cpp", adapter_cmake)
-        self.assertIn("ConfigMgr.cpp", adapter_cmake)
+        self.assertIn("ChatClientCore", adapter_cmake)
+        self.assertIn("ChatConfigCore", read_cmake())
 
     def test_message_services_have_ingress_facing_handler_contracts(self):
-        message_command_port_path = CHATSERVER_DIR / "domain" / "ports" / "IMessageCommandService.h"
-        private_port_path = CHATSERVER_DIR / "domain" / "ports" / "IPrivateMessageService.h"
-        group_port_path = CHATSERVER_DIR / "domain" / "ports" / "IGroupMessageService.h"
+        message_command_port_path = CHATSERVER_DIR / "domain" / "ports" / "IMessageCommandService.hpp"
+        private_port_path = CHATSERVER_DIR / "domain" / "ports" / "IPrivateMessageService.hpp"
+        group_port_path = CHATSERVER_DIR / "domain" / "ports" / "IGroupMessageService.hpp"
         self.assertTrue(message_command_port_path.is_file(), "message command service contract header is missing")
         self.assertTrue(private_port_path.is_file(), "private message service contract header is missing")
         self.assertTrue(group_port_path.is_file(), "group message service contract header is missing")
@@ -2508,7 +2579,7 @@ class ChatServerStructureTests(unittest.TestCase):
         )
 
         private_port = private_port_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageCommandService.h", private_port)
+        self.assertIn("ports/IMessageCommandService.hpp", private_port)
         self.assertIn("class IPrivateMessageService", private_port)
         self.assertRegex(private_port, r"class\s+IPrivateMessageService\s*:\s*public\s+IPrivateMessageCommandService")
         self.assertIn("virtual ~IPrivateMessageService() = default", private_port)
@@ -2523,7 +2594,7 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertRegex(private_port, rf"virtual\s+void\s+{re.escape(method)}")
 
         group_port = group_port_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageCommandService.h", group_port)
+        self.assertIn("ports/IMessageCommandService.hpp", group_port)
         self.assertIn("class IGroupMessageService", group_port)
         self.assertRegex(group_port, r"class\s+IGroupMessageService\s*:\s*public\s+IGroupMessageCommandService")
         self.assertIn("virtual ~IGroupMessageService() = default", group_port)
@@ -2551,8 +2622,8 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertRegex(group_port, rf"virtual\s+void\s+{re.escape(method)}")
 
-        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IPrivateMessageService.h", private_header)
+        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IPrivateMessageService.hpp", private_header)
         self.assertRegex(private_header, r"class\s+PrivateMessageService\s*:\s*public\s+IPrivateMessageService")
         self.assertIn(
             "MessageCommandResult TextChatMessage(const MessageCommandRequest& request) override", private_header
@@ -2560,8 +2631,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("HandleTextChatMessage(const std::shared_ptr<CSession>& session", private_header)
         self.assertIn("override", private_header)
 
-        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IGroupMessageService.h", group_header)
+        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IGroupMessageService.hpp", group_header)
         self.assertRegex(group_header, r"class\s+GroupMessageService\s*:\s*public\s+IGroupMessageService")
         self.assertIn("BuildGroupListJson(int uid, memochat::json::JsonValue& out) override", group_header)
         self.assertIn(
@@ -2616,10 +2687,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("friend class GroupMessageService;", logic_header_text)
 
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "ports/IPrivateMessageService.h"', registrar_source)
-        self.assertIn('#include "ports/IGroupMessageService.h"', registrar_source)
-        self.assertNotIn('#include "PrivateMessageService.h"', registrar_source)
-        self.assertNotIn('#include "GroupMessageService.h"', registrar_source)
+        self.assertIn('#include "ports/IPrivateMessageService.hpp"', registrar_source)
+        self.assertIn('#include "ports/IGroupMessageService.hpp"', registrar_source)
+        self.assertNotIn('#include "PrivateMessageService.hpp"', registrar_source)
+        self.assertNotIn('#include "GroupMessageService.hpp"', registrar_source)
         for method in (
             "HandleTextChatMessage",
             "HandleForwardPrivateMessage",
@@ -2654,11 +2725,11 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertNotIn(f"&GroupMessageService::{method}", registrar_source)
 
     def test_message_command_grpc_adapters_enable_explicit_remote_backend_selection(self):
-        service_header_path = DOMAIN_MESSAGE_DIR / "ChatMessageInternalGrpcService.h"
+        service_header_path = DOMAIN_MESSAGE_DIR / "ChatMessageInternalGrpcService.hpp"
         service_source_path = DOMAIN_MESSAGE_DIR / "ChatMessageInternalGrpcService.cpp"
-        client_header_path = CHATSERVER_DIR / "clients" / "MessageGrpcClient.h"
+        client_header_path = CHATSERVER_DIR / "clients" / "MessageGrpcClient.hpp"
         client_source_path = CHATSERVER_DIR / "clients" / "MessageGrpcClient.cpp"
-        adapter_header_path = CHATSERVER_DIR / "clients" / "MessageGrpcServiceAdapter.h"
+        adapter_header_path = CHATSERVER_DIR / "clients" / "MessageGrpcServiceAdapter.hpp"
         adapter_source_path = CHATSERVER_DIR / "clients" / "MessageGrpcServiceAdapter.cpp"
 
         for path, label in (
@@ -2700,7 +2771,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("ChatGroupMessageInternalService::NewStub", client_source)
         self.assertIn("_private_stub->SendTextChatMessage", client_source)
         self.assertIn("_group_stub->GroupChatMessage", client_source)
-        self.assertIn("message_remote_error", client_source)
+        self.assertIn("message_grpc_modules::RemoteErrorField()", client_source)
 
         adapter_header = adapter_header_path.read_text(encoding="utf-8")
         self.assertIn("class MessageGrpcServiceAdapter final", adapter_header)
@@ -2735,7 +2806,7 @@ class ChatServerStructureTests(unittest.TestCase):
         )
 
         factory_source = (DOMAIN_MESSAGE_DIR / "MessageServiceFactory.cpp").read_text(encoding="utf-8")
-        self.assertIn('#include "MessageGrpcServiceAdapter.h"', factory_source)
+        self.assertIn('#include "MessageGrpcServiceAdapter.hpp"', factory_source)
         self.assertIn("std::make_unique<MessageGrpcServiceAdapter>(endpoint)", factory_source)
         self.assertIn("Message service remote endpoint is empty", factory_source)
         self.assertNotIn("chat.message_service.remote_backend_not_implemented", factory_source)
@@ -2743,21 +2814,21 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("ChatMessageInternalGrpcService", factory_source)
 
     def test_message_service_construction_is_hidden_behind_factory(self):
-        factory_header_path = DOMAIN_MESSAGE_DIR / "MessageServiceFactory.h"
+        factory_header_path = DOMAIN_MESSAGE_DIR / "MessageServiceFactory.hpp"
         factory_source_path = DOMAIN_MESSAGE_DIR / "MessageServiceFactory.cpp"
         self.assertTrue(factory_header_path.is_file(), "message service factory header is missing")
         self.assertTrue(factory_source_path.is_file(), "message service factory source is missing")
 
         factory_header = factory_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IPrivateMessageService.h", factory_header)
-        self.assertIn("ports/IGroupMessageService.h", factory_header)
-        self.assertIn("ports/IMessageRepository.h", factory_header)
-        self.assertIn("ports/IMessageServiceConfig.h", factory_header)
-        self.assertIn("ports/IOnlineRouteStore.h", factory_header)
-        self.assertIn("ports/IDeliveryGateway.h", factory_header)
-        self.assertIn("ports/IEventPublisher.h", factory_header)
-        self.assertIn("ports/IRelationRepository.h", factory_header)
-        self.assertIn("ports/ISessionRegistry.h", factory_header)
+        self.assertIn("ports/IPrivateMessageService.hpp", factory_header)
+        self.assertIn("ports/IGroupMessageService.hpp", factory_header)
+        self.assertIn("ports/IMessageRepository.hpp", factory_header)
+        self.assertIn("ports/IMessageServiceConfig.hpp", factory_header)
+        self.assertIn("ports/IOnlineRouteStore.hpp", factory_header)
+        self.assertIn("ports/IDeliveryGateway.hpp", factory_header)
+        self.assertIn("ports/IEventPublisher.hpp", factory_header)
+        self.assertIn("ports/IRelationRepository.hpp", factory_header)
+        self.assertIn("ports/ISessionRegistry.hpp", factory_header)
         self.assertIn("std::unique_ptr<IPrivateMessageService> CreateInProcessPrivateMessageService", factory_header)
         self.assertIn("std::unique_ptr<IGroupMessageService> CreateInProcessGroupMessageService", factory_header)
         self.assertIn("std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService", factory_header)
@@ -2770,16 +2841,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("IEventPublisher* event_publisher", factory_header)
 
         factory_source = factory_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "PrivateMessageService.h"', factory_source)
-        self.assertIn('#include "GroupMessageService.h"', factory_source)
-        self.assertIn('#include "logging/Logger.h"', factory_source)
+        self.assertIn('#include "PrivateMessageService.hpp"', factory_source)
+        self.assertIn('#include "GroupMessageService.hpp"', factory_source)
+        self.assertIn('#include "logging/Logger.hpp"', factory_source)
         self.assertIn("<stdexcept>", factory_source)
         self.assertIn("std::make_unique<PrivateMessageService>", factory_source)
         self.assertIn("IRelationRepository* relation_repository", factory_source)
         self.assertIn("relation_repository,", factory_source)
         self.assertIn("std::make_unique<GroupMessageService>", factory_source)
-        self.assertIn('backend == "inprocess"', factory_source)
-        self.assertIn('backend == "grpc" || backend == "remote"', factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsInProcessBackend", factory_source)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", factory_source)
         self.assertIn("message_service_config.MessageServiceEndpoint()", factory_source)
         self.assertIn("std::make_unique<MessageGrpcServiceAdapter>(endpoint)", factory_source)
         self.assertIn("Message service remote endpoint is empty", factory_source)
@@ -2787,15 +2858,15 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("Message service remote backend is not implemented yet", factory_source)
         self.assertIn("chat.message_service.unsupported_backend", factory_source)
         self.assertIn('{"fallback_backend", "inprocess"}', factory_source)
-        self.assertNotIn('#include "LogicSystem.h"', factory_source)
+        self.assertNotIn('#include "LogicSystem.hpp"', factory_source)
 
         cmake = read_cmake()
         self.assertIn("domain/message/MessageServiceFactory.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES"))
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "MessageServiceFactory.h"', composition_source)
-        self.assertNotIn('#include "PrivateMessageService.h"', composition_source)
-        self.assertNotIn('#include "GroupMessageService.h"', composition_source)
+        self.assertIn('#include "MessageServiceFactory.hpp"', composition_source)
+        self.assertNotIn('#include "PrivateMessageService.hpp"', composition_source)
+        self.assertNotIn('#include "GroupMessageService.hpp"', composition_source)
         self.assertIn("CreatePrivateMessageService(*_message_service_config", composition_source)
         self.assertIn("CreateGroupMessageService(*_message_service_config", composition_source)
         self.assertIn("_message_delivery_service.get()", composition_source)
@@ -2807,11 +2878,11 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::make_unique<GroupMessageService>", composition_source)
 
     def test_message_services_use_delivery_and_event_ports_instead_of_logicsystem(self):
-        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
-        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.h").read_text(encoding="utf-8")
+        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp").read_text(encoding="utf-8")
+        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
         for header in (private_header, group_header):
-            self.assertIn("ports/IDeliveryGateway.h", header)
-            self.assertIn("ports/IEventPublisher.h", header)
+            self.assertIn("ports/IDeliveryGateway.hpp", header)
+            self.assertIn("ports/IEventPublisher.hpp", header)
             self.assertIn("IDeliveryGateway* delivery_gateway", header)
             self.assertIn("IEventPublisher* event_publisher", header)
             self.assertIn("IDeliveryGateway* _delivery_gateway", header)
@@ -2822,8 +2893,8 @@ class ChatServerStructureTests(unittest.TestCase):
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
         for source in (private_source, group_source):
-            self.assertNotIn('#include "LogicSystem.h"', source)
-            self.assertNotIn('#include "MessageDeliveryService.h"', source)
+            self.assertNotIn('#include "LogicSystem.hpp"', source)
+            self.assertNotIn('#include "MessageDeliveryService.hpp"', source)
             self.assertNotIn("_logic.", source)
             self.assertNotIn("MessageDelivery().PushPayload", source)
             self.assertNotIn("PublishAsyncEvent", source)
@@ -2844,22 +2915,22 @@ class ChatServerStructureTests(unittest.TestCase):
 
     def test_message_service_code_only_uses_allowed_repositories_and_ports(self):
         checked_paths = (
-            DOMAIN_MESSAGE_DIR / "PrivateMessageService.h",
+            DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp",
-            DOMAIN_MESSAGE_DIR / "GroupMessageService.h",
+            DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp",
         )
         forbidden_tokens = (
-            '#include "LogicSystem.h"',
-            '#include "PostgresMgr.h"',
-            '#include "MongoMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "UserMgr.h"',
-            '#include "ConfigMgr.h"',
-            '#include "ChatMessageRepository.h"',
-            '#include "ChatRelationRepository.h"',
-            '#include "MessageDeliveryService.h"',
-            '#include "AsyncEventDispatcher.h"',
+            '#include "LogicSystem.hpp"',
+            '#include "PostgresMgr.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "UserMgr.hpp"',
+            '#include "ConfigMgr.hpp"',
+            '#include "ChatMessageRepository.hpp"',
+            '#include "ChatRelationRepository.hpp"',
+            '#include "MessageDeliveryService.hpp"',
+            '#include "AsyncEventDispatcher.hpp"',
             "LogicSystem&",
             "_logic",
             "PostgresMgr::GetInstance()",
@@ -2880,17 +2951,17 @@ class ChatServerStructureTests(unittest.TestCase):
                     violations.append(f"{path.relative_to(CHATSERVER_DIR)} contains {token}")
         self.assertEqual([], violations)
 
-        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.h").read_text(encoding="utf-8")
+        private_header = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp").read_text(encoding="utf-8")
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
-        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.h").read_text(encoding="utf-8")
+        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
 
         for token in (
-            "ports/IMessageRepository.h",
-            "ports/ISessionRegistry.h",
-            "ports/IOnlineRouteStore.h",
-            "ports/IDeliveryGateway.h",
-            "ports/IEventPublisher.h",
+            "ports/IMessageRepository.hpp",
+            "ports/ISessionRegistry.hpp",
+            "ports/IOnlineRouteStore.hpp",
+            "ports/IDeliveryGateway.hpp",
+            "ports/IEventPublisher.hpp",
         ):
             self.assertIn(token, private_header)
         for token in (
@@ -2903,10 +2974,10 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, private_source)
 
         for token in (
-            "ports/IMessageRepository.h",
-            "ports/IRelationRepository.h",
-            "ports/IDeliveryGateway.h",
-            "ports/IEventPublisher.h",
+            "ports/IMessageRepository.hpp",
+            "ports/IRelationRepository.hpp",
+            "ports/IDeliveryGateway.hpp",
+            "ports/IEventPublisher.hpp",
         ):
             self.assertIn(token, group_header)
         for token in (
@@ -2917,31 +2988,31 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertIn(token, group_source)
 
-        self.assertIn('#include "ChatGrpcClient.h"', private_source)
+        self.assertIn('#include "ChatGrpcClient.hpp"', private_source)
         self.assertIn("ChatGrpcClient::GetInstance()->NotifyTextChatMsg", private_source)
         self.assertNotIn("ChatGrpcClient", group_source)
 
     def test_chatserver_service_data_ownership_matrix(self):
         relation_paths = (
-            DOMAIN_RELATION_DIR / "ChatRelationService.h",
+            DOMAIN_RELATION_DIR / "ChatRelationService.hpp",
             DOMAIN_RELATION_DIR / "ChatRelationService.cpp",
         )
         message_paths = (
-            DOMAIN_MESSAGE_DIR / "PrivateMessageService.h",
+            DOMAIN_MESSAGE_DIR / "PrivateMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp",
-            DOMAIN_MESSAGE_DIR / "GroupMessageService.h",
+            DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp",
         )
         delivery_paths = (
-            DOMAIN_MESSAGE_DIR / "MessageDeliveryService.h",
+            DOMAIN_MESSAGE_DIR / "MessageDeliveryService.hpp",
             DOMAIN_MESSAGE_DIR / "MessageDeliveryService.cpp",
-            DOMAIN_DELIVERY_DIR / "TaskDispatcher.h",
+            DOMAIN_DELIVERY_DIR / "TaskDispatcher.hpp",
             DOMAIN_DELIVERY_DIR / "TaskDispatcher.cpp",
-            DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.h",
+            DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.hpp",
             DOMAIN_DELIVERY_DIR / "ChatDeliveryRuntime.cpp",
         )
         async_paths = (
-            CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.h",
+            CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.hpp",
             CHATSERVER_DIR / "messaging" / "AsyncEventDispatcher.cpp",
         )
 
@@ -2955,11 +3026,11 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertEqual([], violations)
 
         concrete_manager_tokens = (
-            '#include "PostgresMgr.h"',
-            '#include "MongoMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "ConfigMgr.h"',
-            '#include "UserMgr.h"',
+            '#include "PostgresMgr.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "ConfigMgr.hpp"',
+            '#include "UserMgr.hpp"',
             "PostgresMgr::GetInstance()",
             "MongoMgr::GetInstance()",
             "RedisMgr::GetInstance()",
@@ -2967,8 +3038,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "UserMgr::GetInstance()",
         )
         concrete_repo_tokens = (
-            '#include "ChatMessageRepository.h"',
-            '#include "ChatRelationRepository.h"',
+            '#include "ChatMessageRepository.hpp"',
+            '#include "ChatRelationRepository.hpp"',
             "ChatMessageRepository",
             "ChatRelationRepository",
         )
@@ -3042,8 +3113,8 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(token, async_source)
 
     def test_message_service_backend_config_defaults_to_inprocess(self):
-        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IMessageServiceConfig.h"
-        config_adapter_header_path = CHATSERVER_DIR / "config" / "MessageServiceConfig.h"
+        config_port_path = CHATSERVER_DIR / "domain" / "ports" / "IMessageServiceConfig.hpp"
+        config_adapter_header_path = CHATSERVER_DIR / "config" / "MessageServiceConfig.hpp"
         config_adapter_source_path = CHATSERVER_DIR / "config" / "MessageServiceConfig.cpp"
         for path, label in (
             (config_port_path, "message service config port header"),
@@ -3058,16 +3129,16 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("virtual std::string MessageServiceEndpoint() const = 0", config_port)
 
         config_adapter_header = config_adapter_header_path.read_text(encoding="utf-8")
-        self.assertIn("ports/IMessageServiceConfig.h", config_adapter_header)
+        self.assertIn("ports/IMessageServiceConfig.hpp", config_adapter_header)
         self.assertRegex(config_adapter_header, r"class\s+MessageServiceConfig\s*:\s*public\s+IMessageServiceConfig")
         self.assertIn("std::string MessageServiceEndpoint() const override", config_adapter_header)
 
         config_adapter_source = config_adapter_source_path.read_text(encoding="utf-8")
-        self.assertIn('#include "ConfigMgr.h"', config_adapter_source)
+        self.assertIn('#include "ConfigMgr.hpp"', config_adapter_source)
         self.assertIn('GetValue("MessageService", "Backend")', config_adapter_source)
         self.assertIn('GetValue("MessageService", "Endpoint")', config_adapter_source)
         self.assertIn('return "inprocess"', config_adapter_source)
-        self.assertIn("std::tolower", config_adapter_source)
+        self.assertIn("memochat::chat::config::modules::LowerAsciiInPlace", config_adapter_source)
 
         cmake = read_cmake()
         self.assertIn("config/MessageServiceConfig.cpp", cmake_set_values(cmake, "CHATSERVER_CONFIG_SOURCES"))
@@ -3078,7 +3149,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("std::unique_ptr<IMessageServiceConfig> _message_service_config", logic_header_source())
 
         composition_source = runtime_composition_source()
-        self.assertIn('#include "MessageServiceConfig.h"', composition_source)
+        self.assertIn('#include "MessageServiceConfig.hpp"', composition_source)
         self.assertIn("_message_service_config = std::make_unique<MessageServiceConfig>()", composition_source)
         self.assertIn("CreatePrivateMessageService(*_message_service_config", composition_source)
         self.assertIn("CreateGroupMessageService(*_message_service_config", composition_source)
@@ -3195,10 +3266,10 @@ class ChatServerStructureTests(unittest.TestCase):
 
         relation_factory = (DOMAIN_RELATION_DIR / "RelationServiceFactory.cpp").read_text(encoding="utf-8")
         message_factory = (DOMAIN_MESSAGE_DIR / "MessageServiceFactory.cpp").read_text(encoding="utf-8")
-        self.assertIn('backend == "grpc" || backend == "remote"', relation_factory)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", relation_factory)
         self.assertIn("std::make_unique<RelationGrpcServiceAdapter>", relation_factory)
         self.assertNotIn("remote_backend_not_implemented", relation_factory)
-        self.assertIn('backend == "grpc" || backend == "remote"', message_factory)
+        self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", message_factory)
         self.assertIn("std::make_unique<MessageGrpcServiceAdapter>", message_factory)
         self.assertNotIn("remote_backend_not_implemented", message_factory)
 
@@ -3229,11 +3300,11 @@ class ChatServerStructureTests(unittest.TestCase):
     def test_chat_relation_service_does_not_access_concrete_manager_singletons(self):
         checked_paths = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp",)
         forbidden_tokens = (
-            '#include "PostgresMgr.h"',
-            '#include "MongoMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "ConfigMgr.h"',
-            '#include "UserMgr.h"',
+            '#include "PostgresMgr.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "ConfigMgr.hpp"',
+            '#include "UserMgr.hpp"',
             "PostgresMgr::GetInstance()",
             "MongoMgr::GetInstance()",
             "RedisMgr::GetInstance()",
@@ -3249,7 +3320,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertEqual([], violations)
 
     def test_group_message_service_uses_relation_repository_for_group_management(self):
-        port_source = (CHATSERVER_DIR / "domain" / "ports" / "IRelationRepository.h").read_text(encoding="utf-8")
+        port_source = (CHATSERVER_DIR / "domain" / "ports" / "IRelationRepository.hpp").read_text(encoding="utf-8")
         for method in (
             "GetUserByUid",
             "GetGroupById",
@@ -3271,7 +3342,7 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertIn(method, port_source)
 
-        adapter_header = (CHATSERVER_DIR / "persistence" / "ChatRelationRepository.h").read_text(encoding="utf-8")
+        adapter_header = (CHATSERVER_DIR / "persistence" / "ChatRelationRepository.hpp").read_text(encoding="utf-8")
         adapter_source = (CHATSERVER_DIR / "persistence" / "ChatRelationRepository.cpp").read_text(encoding="utf-8")
         for method in (
             "GetUserByUid",
@@ -3295,13 +3366,13 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertIn(method, adapter_header)
             self.assertIn(f"ChatRelationRepository::{method}", adapter_source)
 
-        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.h").read_text(encoding="utf-8")
-        self.assertIn("ports/IRelationRepository.h", group_header)
+        group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
+        self.assertIn("ports/IRelationRepository.hpp", group_header)
         self.assertIn("IRelationRepository* relation_repository", group_header)
         self.assertIn("IRelationRepository* _relation_repository", group_header)
 
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
-        self.assertNotIn('#include "PostgresMgr.h"', group_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', group_source)
         self.assertNotIn("PostgresMgr::GetInstance()", group_source)
         for method in (
             "GetUserGroupList",
@@ -3339,7 +3410,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
     def test_logicsystem_tcp_dispatch_uses_service_registrars_without_legacy_handler_fallbacks(self):
         logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.h").read_text(encoding="utf-8")
+        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.hpp").read_text(encoding="utf-8")
         registrar_source = (DOMAIN_ORCHESTRATION_DIR / "ChatHandlerRegistrars.cpp").read_text(encoding="utf-8")
 
         composition_source = runtime_composition_source()
@@ -3446,13 +3517,13 @@ class ChatServerStructureTests(unittest.TestCase):
             self.assertNotIn(stale_logic_method, logic_source)
 
         for stale_include in (
-            '#include "StatusGrpcClient.h"',
-            '#include "MongoMgr.h"',
-            '#include "RedisMgr.h"',
-            '#include "ChatGrpcClient.h"',
-            '#include "DistLock.h"',
-            '#include "cluster/ChatClusterDiscovery.h"',
-            '#include "auth/ChatLoginTicket.h"',
+            '#include "StatusGrpcClient.hpp"',
+            '#include "MongoMgr.hpp"',
+            '#include "RedisMgr.hpp"',
+            '#include "ChatGrpcClient.hpp"',
+            '#include "DistLock.hpp"',
+            '#include "cluster/ChatClusterDiscovery.hpp"',
+            '#include "auth/ChatLoginTicket.hpp"',
         ):
             self.assertNotIn(stale_include, logic_source)
 

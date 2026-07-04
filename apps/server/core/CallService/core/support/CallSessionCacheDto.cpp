@@ -1,6 +1,8 @@
-#include "CallSessionCacheDto.h"
+#include "CallSessionCacheDto.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
+
+import memochat.call.session_cache_algorithms;
 
 namespace memochat::call
 {
@@ -54,7 +56,7 @@ bool DecodeCallSessionCache(std::string_view body, CallSessionCacheDto* out, std
     {
         return false;
     }
-    return out != nullptr && !out->call_id.empty();
+    return out != nullptr && session_cache::modules::HasValidCacheIdentity(!out->call_id.empty());
 }
 
 bool DecodeCallSessionCache(std::string_view body, CallSessionInfo* out, std::string* error_out)

@@ -6,8 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `global.cpp` | 全局函数/变量定义（repolish、xorString 等）实现 |
-| `global.h` | 全局声明：ReqId 等请求枚举、全局函数与公共类型 |
+| `global.cpp` | 全局函数/变量定义（repolish、网关 URL 前缀等）实现 |
+| `global.h` | 全局声明：ReqId 等请求枚举、全局函数、登录响应与公共类型 |
 | `singleton.h` | 通用单例模板 Singleton<T>（含线程安全初始化） |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

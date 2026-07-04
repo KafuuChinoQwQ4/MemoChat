@@ -1,4 +1,4 @@
-#include "R18PluginProtocol.h"
+#include "R18PluginProtocol.hpp"
 
 #include <cstdlib>
 #include <cstring>

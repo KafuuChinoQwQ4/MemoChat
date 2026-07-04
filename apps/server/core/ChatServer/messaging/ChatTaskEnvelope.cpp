@@ -1,7 +1,7 @@
-#include "ChatTaskEnvelope.h"
+#include "ChatTaskEnvelope.hpp"
 
-#include "json/TypedJsonCodec.h"
-#include "logging/TraceContext.h"
+#include "json/TypedJsonCodec.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -11,6 +11,8 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include <glaze/glaze.hpp>
+
+import memochat.chat.messaging_envelope_algorithms;
 
 namespace
 {
@@ -135,8 +137,9 @@ TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
         envelope.request_id = memolog::TraceContext::NewId();
     }
     envelope.created_at_ms = NowMsTaskEnvelope();
-    envelope.available_at_ms = envelope.created_at_ms + std::max(0, delay_ms);
-    envelope.max_retries = std::max(0, max_retries);
+    envelope.available_at_ms =
+        envelope.created_at_ms + memochat::chat::messaging::envelope_modules::NonNegative(delay_ms);
+    envelope.max_retries = memochat::chat::messaging::envelope_modules::NonNegative(max_retries);
     envelope.routing_key = routing_key;
     envelope.payload = incoming_payload;
     return envelope;

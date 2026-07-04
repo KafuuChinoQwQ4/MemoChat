@@ -1,9 +1,9 @@
-#include "MessageGrpcServiceAdapter.h"
+#include "MessageGrpcServiceAdapter.hpp"
 
-#include "ChatRuntime.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "transport/CSession.h"
+#include "ChatRuntime.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "transport/CSession.hpp"
 
 #include <utility>
 

@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "RelationQueryGrpcClient.h"
-#include "RelationQueryServiceFactory.h"
-#include "const.h"
+#include "RelationQueryGrpcClient.hpp"
+#include "RelationQueryServiceFactory.hpp"
+#include "const.hpp"
 
 #include <memory>
 #include <stdexcept>

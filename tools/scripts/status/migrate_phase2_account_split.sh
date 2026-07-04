@@ -18,9 +18,44 @@ SRC_DB="${MEMOCHAT_PG_SRC_DB:-memo_pg}"
 DST_DB="memo_account"
 ROLE="memo_account_app"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd 2>/dev/null || echo /root/code/MemoChat-Qml-Drogon-linux)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd 2>/dev/null || echo /root/code/MemoChat)"
 MIG_DIR="${PROJECT_ROOT}/apps/server/migrations/postgresql/business"
 TABLES=("user" "user_id")
+
+first_env()
+{
+    local name
+    for name in "$@"; do
+        if [[ -n "${!name:-}" ]]; then
+            printf '%s' "${!name}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+require_value()
+{
+    local label="$1"
+    local value="$2"
+    if [[ -z "${value}" ]]; then
+        echo "[ERROR] Missing ${label}; export MEMOCHAT_ACCOUNT_DB_ROLE_PASSWORD." >&2
+        exit 1
+    fi
+}
+
+sql_quote_literal()
+{
+    printf "%s" "$1" | sed "s/'/''/g"
+}
+
+required_account_role_password()
+{
+    local value
+    value="$(first_env MEMOCHAT_ACCOUNT_DB_ROLE_PASSWORD MEMOCHAT_PHASE2_SERVICE_ROLE_PASSWORD MEMOCHAT_POSTGRES_SERVICE_ROLE_PASSWORD || true)"
+    require_value "account role password" "${value}"
+    printf '%s' "${value}"
+}
 
 psql_db() { docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$1" "${@:2}"; }
 db_exists() { docker exec "$CONTAINER" psql -U "$PG_USER" -d "$SRC_DB" -tAc "SELECT 1 FROM pg_database WHERE datname='$1'" 2>/dev/null | grep -q 1; }
@@ -28,9 +63,15 @@ src_count() { docker exec "$CONTAINER" psql -U "$PG_USER" -d "$SRC_DB" -tAc "SEL
 dst_count() { docker exec "$CONTAINER" psql -U "$PG_USER" -d "$DST_DB" -tAc "SELECT count(*) FROM memo.\"$1\"" 2>/dev/null | tr -d '[:space:]'; }
 
 do_migrate() {
+    local role_password role_password_sql
+    role_password="$(required_account_role_password)"
+    role_password_sql="$(sql_quote_literal "${role_password}")"
+
     echo "[STEP] role + db"
     docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$SRC_DB" -c \
-        "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='$ROLE') THEN CREATE ROLE $ROLE LOGIN PASSWORD '123456'; END IF; END \$\$;" >/dev/null
+        "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='$ROLE') THEN CREATE ROLE $ROLE LOGIN; END IF; END \$\$;" >/dev/null
+    docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$SRC_DB" \
+        -c "ALTER ROLE $ROLE PASSWORD '${role_password_sql}'" >/dev/null
     if ! db_exists "$DST_DB"; then
         docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$SRC_DB" -c "CREATE DATABASE $DST_DB" >/dev/null
         echo "  [OK] created $DST_DB"
@@ -63,6 +104,8 @@ do_migrate() {
 
 do_verify() {
     local fail=0
+    local role_password
+    role_password="$(required_account_role_password)"
     if ! db_exists "$DST_DB"; then echo "  [FAIL] $DST_DB missing"; return 1; fi
     for t in "${TABLES[@]}"; do
         local a b; a="$(src_count "$t")"; b="$(dst_count "$t")"
@@ -74,13 +117,13 @@ do_verify() {
     else
         echo "  [OK] $DST_DB has no chat (friend) table"
     fi
-    if docker exec "$CONTAINER" env PGPASSWORD=123456 psql -U "$ROLE" -d "$SRC_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" env PGPASSWORD="${role_password}" psql -U "$ROLE" -d "$SRC_DB" -tAc "SELECT 1" >/dev/null 2>&1; then
         echo "  [FAIL] $ROLE could connect to $SRC_DB"; fail=1
     else
         echo "  [OK] $ROLE cannot connect to $SRC_DB"
     fi
     # account role CAN read its own user table.
-    if docker exec "$CONTAINER" env PGPASSWORD=123456 psql -U "$ROLE" -d "$DST_DB" -tAc "SELECT count(*) FROM memo.\"user\"" >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" env PGPASSWORD="${role_password}" psql -U "$ROLE" -d "$DST_DB" -tAc "SELECT count(*) FROM memo.\"user\"" >/dev/null 2>&1; then
         echo "  [OK] $ROLE can read its own memo.user"
     else
         echo "  [FAIL] $ROLE cannot read memo.user in $DST_DB"; fail=1

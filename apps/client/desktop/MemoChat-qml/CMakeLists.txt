@@ -77,6 +77,28 @@ set_source_files_properties(
     PROPERTIES SKIP_AUTOMOC ON
 )
 
+# ── TypeScript runtime build ─────────────────────────────────────────────────
+# Compiles features/*/runtime/*.ts and qml/runtime/*.ts → sibling .js files.
+# Requires node + npm; gracefully skipped if not found.
+find_program(NODE_EXECUTABLE node)
+find_program(NPM_EXECUTABLE npm)
+
+if(NODE_EXECUTABLE AND NPM_EXECUTABLE)
+    add_custom_target(MemoChatQml_RuntimeTS
+        COMMAND ${NPM_EXECUTABLE} install --prefer-offline --no-audit --no-fund
+        COMMAND ${NPM_EXECUTABLE} run build
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Building QML TypeScript runtime files"
+        VERBATIM
+    )
+else()
+    message(WARNING
+        "node/npm not found — TypeScript runtime build skipped. "
+        "Pre-compiled .js files will be used as-is. "
+        "Install Node.js to enable TypeScript compilation.")
+    add_custom_target(MemoChatQml_RuntimeTS)
+endif()
+
 add_executable(MemoChatQml WIN32 MACOSX_BUNDLE
     ${MEMOCHAT_QML_APP_SOURCES}
     ${MEMOCHAT_QML_FEATURE_SOURCES}
@@ -93,6 +115,7 @@ set_target_properties(MemoChatQml PROPERTIES
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
+add_dependencies(MemoChatQml MemoChatQml_RuntimeTS)
 
 target_include_directories(MemoChatQml PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

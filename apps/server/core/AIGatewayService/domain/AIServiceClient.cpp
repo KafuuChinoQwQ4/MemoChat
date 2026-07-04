@@ -1,10 +1,14 @@
-#include "AIServiceClient.h"
-#include "services/ai/AIPublicDtos.h"
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
+#include "AIServiceClient.hpp"
+#include "services/ai/AIPublicDtos.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/random_generator.hpp>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <string_view>
 
 using namespace memochat::json;
 
@@ -54,6 +58,100 @@ memochat::gate::services::ai::AISessionInfoResponseDto SessionInfoToResponseDto(
     return response;
 }
 
+std::string TrimAscii(std::string value)
+{
+    auto is_space = [](unsigned char c)
+    {
+        return std::isspace(c) != 0;
+    };
+    value.erase(value.begin(),
+                std::find_if(value.begin(),
+                             value.end(),
+                             [&](char c)
+                             {
+                                 return !is_space(static_cast<unsigned char>(c));
+                             }));
+    value.erase(std::find_if(value.rbegin(),
+                             value.rend(),
+                             [&](char c)
+                             {
+                                 return !is_space(static_cast<unsigned char>(c));
+                             })
+                    .base(),
+                value.end());
+    return value;
+}
+
+std::string LowerAscii(std::string value)
+{
+    std::transform(value.begin(),
+                   value.end(),
+                   value.begin(),
+                   [](unsigned char c)
+                   {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return value;
+}
+
+std::string ConfigValue(std::string_view section, std::string_view key)
+{
+    return TrimAscii(ConfigMgr::Inst().GetValue(std::string(section), std::string(key)));
+}
+
+std::string EnvValue(const std::string& name)
+{
+    if (name.empty())
+    {
+        return "";
+    }
+    const char* value = std::getenv(name.c_str());
+    return value == nullptr ? "" : TrimAscii(value);
+}
+
+std::string ProviderAdminMetadataKey()
+{
+    std::string header = ConfigValue("AIProviderAdmin", "AuthHeader");
+    if (header.empty())
+    {
+        header = "X-MemoChat-AI-Provider-Admin-Key";
+    }
+    return LowerAscii(header);
+}
+
+std::string ResolveProviderAdminKey()
+{
+    std::string env_name = ConfigValue("AIProviderAdmin", "AdminKeyEnv");
+    if (env_name.empty())
+    {
+        env_name = "MEMOCHAT_AI_PROVIDER_ADMIN_KEY";
+    }
+    if (const std::string env_value = EnvValue(env_name); !env_value.empty())
+    {
+        return env_value;
+    }
+    return ConfigValue("AIProviderAdmin", "AdminKey");
+}
+
+void AttachProviderAdminMetadata(grpc::ClientContext& ctx)
+{
+    const std::string key = ResolveProviderAdminKey();
+    if (!key.empty())
+    {
+        ctx.AddMetadata(ProviderAdminMetadataKey(), key);
+    }
+}
+
+// Apply a deadline to a gRPC ClientContext so that a hung AIServer never
+// blocks the gateway indefinitely.
+// fast_path=true  → 30 s  (session mgmt, history, model list, KB list, …)
+// fast_path=false → 300 s (chat, smart, KB upload/search, agent tasks)
+void ApplyDeadline(grpc::ClientContext& ctx, bool fast_path = true)
+{
+    const int timeout_sec = fast_path ? 30 : 300;
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(timeout_sec));
+}
+
 } // namespace
 
 class AIServiceClient::Impl
@@ -90,6 +188,7 @@ public:
                               ai::AIChatRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx, /*fast_path=*/false);
         ai::AIChatReq req;
         req.set_from_uid(uid);
         req.set_session_id(session_id);
@@ -111,6 +210,7 @@ public:
                                ai::AISmartRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx, /*fast_path=*/false);
         ai::AISmartReq req;
         req.set_from_uid(uid);
         req.set_feature_type(feature_type);
@@ -127,6 +227,7 @@ public:
     makeGetHistoryCall(int32_t uid, const std::string& session_id, int limit, int offset, ai::AIHistoryRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIHistoryReq req;
         req.set_from_uid(uid);
         req.set_session_id(session_id);
@@ -141,6 +242,7 @@ public:
                                        ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AICreateSessionReq req;
         req.set_uid(uid);
         req.set_model_type(model_type);
@@ -154,6 +256,7 @@ public:
                                       ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AICreateSessionReq req;
         req.set_uid(uid);
         req.set_model_type(model_type);
@@ -164,6 +267,7 @@ public:
     grpc::Status makeDeleteSessionCall(int32_t uid, const std::string& session_id, ai::AIDeleteSessionRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIDeleteSessionReq req;
         req.set_uid(uid);
         req.set_session_id(session_id);
@@ -174,6 +278,7 @@ public:
     makeUpdateSessionCall(int32_t uid, const std::string& session_id, const std::string& title, ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIUpdateSessionReq req;
         req.set_uid(uid);
         req.set_session_id(session_id);
@@ -184,6 +289,7 @@ public:
     grpc::Status makeListModelsCall(ai::AIListModelsRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIListModelsReq req;
         return _stub->ListModels(&ctx, req, reply);
     }
@@ -195,6 +301,8 @@ public:
                                              ai::AIRegisterApiProviderRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
+        AttachProviderAdminMetadata(ctx);
         ai::AIRegisterApiProviderReq req;
         req.set_provider_name(provider_name);
         req.set_base_url(base_url);
@@ -206,6 +314,8 @@ public:
     grpc::Status makeDeleteApiProviderCall(const std::string& provider_id, ai::AIDeleteApiProviderRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
+        AttachProviderAdminMetadata(ctx);
         ai::AIDeleteApiProviderReq req;
         req.set_provider_id(provider_id);
         return _stub->DeleteApiProvider(&ctx, req, reply);
@@ -218,6 +328,7 @@ public:
                                   ai::AIKbUploadRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIKbUploadReq req;
         req.set_uid(uid);
         req.set_file_name(file_name);
@@ -229,6 +340,7 @@ public:
     grpc::Status makeKbSearchCall(int32_t uid, const std::string& query, int top_k, ai::AIKbSearchRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIKbSearchReq req;
         req.set_uid(uid);
         req.set_query(query);
@@ -239,6 +351,7 @@ public:
     grpc::Status makeListKbCall(int32_t uid, ai::AIKbListRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIKbListReq req;
         req.set_uid(uid);
         return _stub->KbList(&ctx, req, reply);
@@ -247,6 +360,7 @@ public:
     grpc::Status makeDeleteKbCall(int32_t uid, const std::string& kb_id, ai::AIKbDeleteRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIKbDeleteReq req;
         req.set_uid(uid);
         req.set_kb_id(kb_id);
@@ -256,6 +370,7 @@ public:
     grpc::Status makeMemoryListCall(int32_t uid, ai::AIMemoryListRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIMemoryReq req;
         req.set_uid(uid);
         return _stub->MemoryList(&ctx, req, reply);
@@ -264,6 +379,7 @@ public:
     grpc::Status makeMemoryCreateCall(int32_t uid, const std::string& content, ai::AIMemoryRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIMemoryReq req;
         req.set_uid(uid);
         req.set_content(content);
@@ -273,6 +389,7 @@ public:
     grpc::Status makeMemoryDeleteCall(int32_t uid, const std::string& memory_id, ai::AIMemoryRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIMemoryReq req;
         req.set_uid(uid);
         req.set_memory_id(memory_id);
@@ -290,6 +407,7 @@ public:
                                          ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_title(title);
@@ -305,32 +423,39 @@ public:
     grpc::Status makeAgentTaskListCall(int32_t uid, int limit, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_limit(limit);
         return _stub->AgentTaskList(&ctx, req, reply);
     }
 
-    grpc::Status makeAgentTaskGetCall(const std::string& task_id, ai::AIAgentTaskRsp* reply)
+    grpc::Status makeAgentTaskGetCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIAgentTaskReq req;
+        req.set_uid(uid);
         req.set_task_id(task_id);
         return _stub->AgentTaskGet(&ctx, req, reply);
     }
 
-    grpc::Status makeAgentTaskCancelCall(const std::string& task_id, ai::AIAgentTaskRsp* reply)
+    grpc::Status makeAgentTaskCancelCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIAgentTaskReq req;
+        req.set_uid(uid);
         req.set_task_id(task_id);
         return _stub->AgentTaskCancel(&ctx, req, reply);
     }
 
-    grpc::Status makeAgentTaskResumeCall(const std::string& task_id, ai::AIAgentTaskRsp* reply)
+    grpc::Status makeAgentTaskResumeCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
+        ApplyDeadline(ctx);
         ai::AIAgentTaskReq req;
+        req.set_uid(uid);
         req.set_task_id(task_id);
         return _stub->AgentTaskResume(&ctx, req, reply);
     }
@@ -391,6 +516,7 @@ void AIServiceClient::ChatStream(int32_t uid,
                                  memochat::json::JsonValue* out_result)
 {
     grpc::ClientContext ctx;
+    ApplyDeadline(ctx);
     ai::AIChatStreamReq req;
     req.mutable_req()->set_from_uid(uid);
     req.mutable_req()->set_session_id(session_id);
@@ -868,10 +994,10 @@ memochat::json::JsonValue AIServiceClient::AgentTaskList(int32_t uid, int limit)
     return AgentTaskRspToJson(reply);
 }
 
-memochat::json::JsonValue AIServiceClient::AgentTaskGet(const std::string& task_id)
+memochat::json::JsonValue AIServiceClient::AgentTaskGet(int32_t uid, const std::string& task_id)
 {
     ai::AIAgentTaskRsp reply;
-    auto status = _impl->makeAgentTaskGetCall(task_id, &reply);
+    auto status = _impl->makeAgentTaskGetCall(uid, task_id, &reply);
     if (!status.ok())
     {
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task get failed"));
@@ -879,10 +1005,10 @@ memochat::json::JsonValue AIServiceClient::AgentTaskGet(const std::string& task_
     return AgentTaskRspToJson(reply);
 }
 
-memochat::json::JsonValue AIServiceClient::AgentTaskCancel(const std::string& task_id)
+memochat::json::JsonValue AIServiceClient::AgentTaskCancel(int32_t uid, const std::string& task_id)
 {
     ai::AIAgentTaskRsp reply;
-    auto status = _impl->makeAgentTaskCancelCall(task_id, &reply);
+    auto status = _impl->makeAgentTaskCancelCall(uid, task_id, &reply);
     if (!status.ok())
     {
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task cancel failed"));
@@ -890,10 +1016,10 @@ memochat::json::JsonValue AIServiceClient::AgentTaskCancel(const std::string& ta
     return AgentTaskRspToJson(reply);
 }
 
-memochat::json::JsonValue AIServiceClient::AgentTaskResume(const std::string& task_id)
+memochat::json::JsonValue AIServiceClient::AgentTaskResume(int32_t uid, const std::string& task_id)
 {
     ai::AIAgentTaskRsp reply;
-    auto status = _impl->makeAgentTaskResumeCall(task_id, &reply);
+    auto status = _impl->makeAgentTaskResumeCall(uid, task_id, &reply);
     if (!status.ok())
     {
         return memochat::gate::services::ai::AISimpleResponseToJsonValue(MakeSimpleResponse(500, "task resume failed"));

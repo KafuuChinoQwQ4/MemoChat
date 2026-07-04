@@ -1,13 +1,15 @@
-#include "ChatAsyncEvent.h"
+#include "ChatAsyncEvent.hpp"
 
-#include "ChatRuntime.h"
-#include "json/TypedJsonCodec.h"
+#include "ChatRuntime.hpp"
+#include "json/TypedJsonCodec.hpp"
 
 #include <algorithm>
 #include <memory>
 #include <utility>
 
 #include <glaze/glaze.hpp>
+
+import memochat.chat.messaging_envelope_algorithms;
 
 namespace
 {
@@ -94,8 +96,8 @@ std::string BuildAsyncEventPartitionKey(const std::string& topic, const memochat
         auto mk = memochat::json::make_member_ref(payload);
         const int from_uid = memochat::json::glaze_safe_get<int>(mk, "fromuid", 0);
         const int to_uid = memochat::json::glaze_safe_get<int>(mk, "touid", 0);
-        const int uid_min = std::min(from_uid, to_uid);
-        const int uid_max = std::max(from_uid, to_uid);
+        const int uid_min = memochat::chat::messaging::envelope_modules::MinInt(from_uid, to_uid);
+        const int uid_max = memochat::chat::messaging::envelope_modules::MaxInt(from_uid, to_uid);
         return std::to_string(uid_min) + ":" + std::to_string(uid_max);
     }
 

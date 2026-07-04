@@ -85,7 +85,7 @@ class MemoryService:
 
     async def load(self, uid: int, session_id: str, include_graph: bool = False) -> MemorySnapshot:
         system_messages: list[LLMMessage] = []
-        chat_history, short_term_summary = await self._load_short_term(session_id)
+        chat_history, short_term_summary = await self._load_short_term(uid, session_id)
         episodic = await self._load_episodic(uid)
         semantic = await self._load_semantic(uid)
         graph_context = await self._load_graph_context(uid) if include_graph else []
@@ -387,19 +387,24 @@ class MemoryService:
             metadata={"section_count": len(sections)},
         )
 
-    async def _load_short_term(self, session_id: str) -> tuple[list[LLMMessage], str]:
-        if not session_id:
+    async def _load_short_term(self, uid: int, session_id: str) -> tuple[list[LLMMessage], str]:
+        if uid <= 0 or not session_id:
             return [], ""
         try:
             pg = PostgresClient()
             rows = await pg.fetchall(
                 """
-                SELECT role, content, created_at
-                FROM ai_message
-                WHERE session_id = $1 AND deleted_at IS NULL
-                ORDER BY created_at DESC
-                LIMIT $2
+                SELECT m.role, m.content, m.created_at
+                FROM ai_message m
+                JOIN ai_session s ON s.session_id = m.session_id
+                WHERE s.uid = $1
+                  AND m.session_id = $2
+                  AND s.deleted_at IS NULL
+                  AND m.deleted_at IS NULL
+                ORDER BY m.created_at DESC
+                LIMIT $3
                 """,
+                uid,
                 session_id,
                 self._short_term_fetch_limit,
             )
@@ -411,7 +416,7 @@ class MemoryService:
                 for row in window_rows
             ], summary
         except Exception as exc:
-            logger.warning("memory.short_term.load_failed", session_id=session_id, error=str(exc))
+            logger.warning("memory.short_term.load_failed", uid=uid, session_id=session_id, error=str(exc))
             return [], ""
 
     def _select_dynamic_window(self, rows: list[dict]) -> tuple[list[dict], list[dict]]:

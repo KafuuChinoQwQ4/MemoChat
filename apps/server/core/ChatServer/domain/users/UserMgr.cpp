@@ -1,6 +1,6 @@
-#include "UserMgr.h"
-#include "CSession.h"
-#include "logging/Logger.h"
+#include "UserMgr.hpp"
+#include "CSession.hpp"
+#include "logging/Logger.hpp"
 
 UserMgr::~UserMgr()
 {

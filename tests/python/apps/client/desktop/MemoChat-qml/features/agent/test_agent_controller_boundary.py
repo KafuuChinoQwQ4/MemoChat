@@ -34,7 +34,160 @@ def function_body(source: str, name: str) -> str:
     return source[match.end() : index - 1]
 
 
+def free_function_body(source: str, name: str) -> str:
+    match = re.search(r"\b[\w:<>]+\s+" + re.escape(name) + r"\s*\([^)]*\)\s*\{", source)
+    if not match:
+        return ""
+
+    depth = 1
+    index = match.end()
+    while index < len(source) and depth > 0:
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        index += 1
+    return source[match.end() : index - 1]
+
+
+def qml_handler_body(source: str, handler_name: str) -> str:
+    marker = handler_name + ":"
+    start = source.find(marker)
+    if start == -1:
+        return ""
+    open_brace = source.find("{", start)
+    if open_brace == -1:
+        return ""
+
+    depth = 1
+    index = open_brace + 1
+    while index < len(source) and depth > 0:
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+        index += 1
+    return source[open_brace + 1 : index - 1]
+
+
+def qml_property_names(header_text: str) -> set[str]:
+    return set(re.findall(r"Q_PROPERTY\([^)\n]+\s+(\w+)\s+READ\s", header_text))
+
+
+def qml_invokable_names(header_text: str) -> set[str]:
+    public_surface = header_text.split("signals:", 1)[0]
+    return set(re.findall(r"Q_INVOKABLE\s+[\w:<>*&]+\s+(\w+)\s*\(", public_surface))
+
+
 class AgentControllerBoundaryTests(unittest.TestCase):
+    def test_agent_controller_qml_surface_is_explicitly_capped(self):
+        header = read(AGENT_CONTROLLER_DIR / "AgentController.h")
+
+        expected_properties = {
+            "sessions",
+            "model",
+            "currentSessionId",
+            "currentModel",
+            "availableModels",
+            "modelRefreshBusy",
+            "apiProviderBusy",
+            "apiProviderStatus",
+            "thinkingEnabled",
+            "currentModelSupportsThinking",
+            "knowledgeBases",
+            "knowledgeSearchResult",
+            "knowledgeBusy",
+            "knowledgeStatusText",
+            "knowledgeError",
+            "memories",
+            "memoryBusy",
+            "memoryStatusText",
+            "memoryError",
+            "agentTasks",
+            "agentTaskBusy",
+            "agentTaskStatusText",
+            "agentTaskError",
+            "currentTraceId",
+            "currentSkill",
+            "currentFeedbackSummary",
+            "traceEvents",
+            "traceObservations",
+            "agentSkillMode",
+            "agentSkillDisplay",
+            "gameRooms",
+            "gameTemplates",
+            "gameTemplatePresets",
+            "gameState",
+            "currentGameRoomId",
+            "gameRulesets",
+            "gameRolePresets",
+            "gameBusy",
+            "gameStatusText",
+            "gameError",
+            "loading",
+            "error",
+            "streaming",
+            "currentGeneratingMsgId",
+        }
+        expected_invokables = {
+            "sendMessage",
+            "sendStreamMessage",
+            "resetForLogout",
+            "createSession",
+            "switchSession",
+            "deleteSession",
+            "renameSession",
+            "loadHistory",
+            "loadSessions",
+            "switchModel",
+            "switchAgentSkillMode",
+            "refreshModelList",
+            "registerApiProvider",
+            "deleteApiProvider",
+            "summarizeChat",
+            "suggestReply",
+            "translateMessage",
+            "translateMessageWithSource",
+            "uploadDocument",
+            "chooseAndUploadDocument",
+            "searchKnowledgeBase",
+            "listKnowledgeBases",
+            "deleteKnowledgeBase",
+            "listMemories",
+            "createMemory",
+            "deleteMemory",
+            "listAgentTasks",
+            "createAgentTask",
+            "cancelAgentTask",
+            "resumeAgentTask",
+            "listGameRulesets",
+            "loadGameRolePresets",
+            "listGameRooms",
+            "listGameTemplates",
+            "listGameTemplatePresets",
+            "loadGameRoom",
+            "deleteGameRoom",
+            "createGameRoom",
+            "saveGameTemplate",
+            "deleteGameTemplate",
+            "cloneGameTemplatePreset",
+            "exportGameTemplate",
+            "importGameTemplate",
+            "createGameRoomFromTemplate",
+            "startGameRoom",
+            "restartGameRoom",
+            "tickGameRoom",
+            "autoTickGameRoom",
+            "submitGameAction",
+            "updateGameParticipant",
+            "cancelStream",
+        }
+
+        self.assertEqual(sorted(expected_properties), sorted(qml_property_names(header)))
+        self.assertEqual(sorted(expected_invokables), sorted(qml_invokable_names(header)))
+
     def test_agent_request_tracker_files_exist_and_are_registered(self):
         expected_files = (
             AGENT_MODEL_DIR / "AgentRequestTypes.h",
@@ -133,6 +286,19 @@ class AgentControllerBoundaryTests(unittest.TestCase):
         self.assertNotIn("QNetworkRequest request", text)
         self.assertNotIn("_streamManager->post", text)
         self.assertIn("AgentStreamClient", (AGENT_CONTROLLER_DIR / "AgentController.h").read_text(encoding="utf-8"))
+
+    def test_stream_client_uses_gate_protocol_fallback_before_reporting_network_error(self):
+        header = (AGENT_TRANSPORT_DIR / "AgentStreamClient.h").read_text(encoding="utf-8")
+        source = (AGENT_TRANSPORT_DIR / "AgentStreamClient.cpp").read_text(encoding="utf-8")
+
+        self.assertIn('#include "HttpMgrRequestUtils.h"', source)
+        self.assertIn("gateProtocolFallbackUrls(url)", source)
+        self.assertIn("QVector<QUrl> _fallbackUrls", header)
+        self.assertIn("bool _receivedAnyChunk = false", header)
+        self.assertIn("void startRequest(const QUrl& url)", header)
+        self.assertLess(source.index("!receivedAnyChunk"), source.index("startRequest(fallback)"))
+        self.assertLess(source.index("startRequest(fallback)"), source.index("emit errorOccurred"))
+        self.assertIn("updateGatePrefixesFromReplyUrl(replyUrl)", source)
 
     def test_game_network_controller_uses_game_client_for_reply_parsing(self):
         text = (AGENT_GAME_DIR / "AgentControllerGameNetwork.cpp").read_text(encoding="utf-8")
@@ -299,6 +465,86 @@ class AgentControllerBoundaryTests(unittest.TestCase):
             "if (_currentStreamUid != 0 && _currentStreamUid != currentUid())",
             read(AGENT_CONTROLLER_DIR / "AgentControllerStream.cpp"),
         )
+
+    def test_ai_gateway_requests_attach_current_user_token(self):
+        header = read(AGENT_CONTROLLER_DIR / "AgentController.h")
+        controller = read(AGENT_CONTROLLER_DIR / "AgentController.cpp")
+
+        self.assertIn("QString currentAuthToken() const;", header)
+        self.assertIn("void addAuthToPayload(QJsonObject& payload) const;", header)
+        self.assertIn("void addAuthToQuery(QUrlQuery& query) const;", header)
+        self.assertIn("GetToken()", controller)
+        self.assertIn('payload[QStringLiteral("token")] = token;', controller)
+        self.assertIn('query.addQueryItem(QStringLiteral("token"), token);', controller)
+
+        expected_payload_calls = {
+            "AgentControllerChat.cpp": 4,
+            "AgentControllerStream.cpp": 1,
+            "AgentControllerSessions.cpp": 3,
+            "AgentControllerKnowledge.cpp": 3,
+            "AgentControllerMemory.cpp": 2,
+            "AgentControllerAgentTasks.cpp": 3,
+            "AgentControllerModels.cpp": 2,
+        }
+        for file_name, count in expected_payload_calls.items():
+            with self.subTest(file=file_name, helper="payload"):
+                self.assertEqual(read(AGENT_CONTROLLER_DIR / file_name).count("addAuthToPayload(payload);"), count)
+
+        expected_query_calls = {
+            "AgentControllerSessions.cpp": 2,
+            "AgentControllerKnowledge.cpp": 1,
+            "AgentControllerMemory.cpp": 1,
+            "AgentControllerAgentTasks.cpp": 1,
+            "AgentControllerModels.cpp": 1,
+        }
+        for file_name, count in expected_query_calls.items():
+            with self.subTest(file=file_name, helper="query"):
+                self.assertEqual(read(AGENT_CONTROLLER_DIR / file_name).count("addAuthToQuery(query);"), count)
+
+        game_network = read(AGENT_GAME_DIR / "AgentControllerGameNetwork.cpp")
+        self.assertEqual(game_network.count("addAuthToQuery(query);"), 2)
+        self.assertEqual(game_network.count("addAuthToPayload(authedPayload);"), 1)
+
+    def test_ai_tab_entry_stays_lightweight_and_non_stacking(self):
+        client = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
+        chat_left_panel = read(client / "features/chat/view/ChatLeftPanel.qml")
+        chat_normal_face = read(client / "features/chat/view/ChatNormalFace.qml")
+        app_navigation = read(client / "app/controller/AppControllerNavigation.cpp")
+        models = read(AGENT_CONTROLLER_DIR / "AgentControllerModels.cpp")
+        request_utils = read(client / "core/network/HttpMgrRequestUtils.cpp")
+        direct_agent_request_utils = read(AGENT_TRANSPORT_DIR / "AgentNetworkRequestUtils.h")
+
+        tab_handler = qml_handler_body(chat_left_panel, "onCurrentTabChanged")
+        self.assertNotIn("agentRefreshRequested()", tab_handler)
+
+        agent_refresh_handler = qml_handler_body(chat_normal_face, "onAgentRefreshRequested")
+        self.assertIn("agent.loadSessions()", agent_refresh_handler)
+        self.assertIn("agent.refreshModelList()", agent_refresh_handler)
+        self.assertNotIn("agent.listGameRooms()", agent_refresh_handler)
+        self.assertNotIn("agent.listGameRulesets()", agent_refresh_handler)
+        self.assertNotIn("agent.listGameTemplates()", agent_refresh_handler)
+
+        switch_tab_body = free_function_body(app_navigation, "AppController::switchChatTab")
+        self.assertIn("target == AgentTabPage", switch_tab_body)
+        self.assertIn("_features.agentController.loadSessions();", switch_tab_body)
+        self.assertIn("_features.agentController.refreshModelList();", switch_tab_body)
+
+        refresh_model_body = function_body(models, "refreshModelList")
+        self.assertIn("if (_model_refresh_busy)", refresh_model_body)
+        self.assertLess(
+            refresh_model_body.find("if (_model_refresh_busy)"),
+            refresh_model_body.find("setModelRefreshBusy(true);"),
+        )
+
+        long_ai_body = free_function_body(request_utils, "isLongAiRequest")
+        self.assertIn('QStringLiteral("/ai/chat")', long_ai_body)
+        self.assertIn('QStringLiteral("/ai/chat/stream")', long_ai_body)
+        self.assertIn('QStringLiteral("/ai/model/api/register")', long_ai_body)
+        self.assertNotIn('QStringLiteral("/ai/session")', long_ai_body)
+        self.assertNotIn('QStringLiteral("/ai/session/list")', long_ai_body)
+        self.assertNotIn('QStringLiteral("/ai/history")', long_ai_body)
+
+        self.assertIn("request.setTransferTimeout(10000);", direct_agent_request_utils)
 
 
 if __name__ == "__main__":

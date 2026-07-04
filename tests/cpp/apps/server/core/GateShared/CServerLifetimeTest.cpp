@@ -19,7 +19,7 @@
 
 #include <gtest/gtest.h>
 
-#include "CServer.h"
+#include "CServer.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>

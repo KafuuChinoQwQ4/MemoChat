@@ -100,13 +100,14 @@ void MomentsController::publishDraftMoment(const QString& text, int visibility, 
     const QString token = um->GetToken();
 
     const auto future = QtConcurrent::run(
-        [this, trimmedText, normalizedAttachments, uid, token]()
+        [this, trimmedText, normalizedAttachments, uid, token, visibility]()
         {
             return memochat::moments::buildUploadedDraftMomentItems(
                 trimmedText,
                 normalizedAttachments,
                 uid,
                 token,
+                visibility,
                 [this](int index, int attachmentCount, const QString& stage, int percent)
                 {
                     QMetaObject::invokeMethod(

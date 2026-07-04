@@ -1,14 +1,22 @@
-#include "ChatHandlerRegistrars.h"
-#include "ChatRuntimeComposition.h"
-#include "ChatSessionService.h"
-#include "const.h"
-#include "ports/IGroupMessageService.h"
-#include "ports/IPrivateMessageService.h"
-#include "ports/IRelationSessionService.h"
+#include "ChatHandlerRegistrars.hpp"
+#include "ChatRuntimeComposition.hpp"
+#include "ChatSessionService.hpp"
+#include "const.hpp"
+#include "ports/IGroupMessageService.hpp"
+#include "ports/IPrivateMessageService.hpp"
+#include "ports/IRelationSessionService.hpp"
+
+import memochat.chat.handler_registrar_algorithms;
+
+namespace handler_registrar_modules = memochat::chat::orchestration::handler_registrar::modules;
+
+static_assert(handler_registrar_modules::ExpectedTotalHandlerCount() == 34U);
 
 void ChatSessionServiceRegistrar::Register(ChatRuntimeComposition& composition,
                                            std::map<short, FunCallBack>& callbacks) const
 {
+    static_assert(handler_registrar_modules::ChatSessionHandlerCount() == 3U);
+
     callbacks[MSG_CHAT_LOGIN] = std::bind(&ChatSessionService::HandleLogin,
                                           &composition.SessionService(),
                                           std::placeholders::_1,
@@ -29,6 +37,8 @@ void ChatSessionServiceRegistrar::Register(ChatRuntimeComposition& composition,
 void ChatRelationServiceRegistrar::Register(ChatRuntimeComposition& composition,
                                             std::map<short, FunCallBack>& callbacks) const
 {
+    static_assert(handler_registrar_modules::ChatRelationHandlerCount() == 7U);
+
     callbacks[ID_SEARCH_USER_REQ] = std::bind(&IRelationSessionService::HandleSearchUser,
                                               &composition.RelationSessionService(),
                                               std::placeholders::_1,
@@ -69,6 +79,8 @@ void ChatRelationServiceRegistrar::Register(ChatRuntimeComposition& composition,
 void PrivateMessageServiceRegistrar::Register(ChatRuntimeComposition& composition,
                                               std::map<short, FunCallBack>& callbacks) const
 {
+    static_assert(handler_registrar_modules::PrivateMessageHandlerCount() == 6U);
+
     callbacks[ID_TEXT_CHAT_MSG_REQ] = std::bind(&IPrivateMessageService::HandleTextChatMessage,
                                                 &composition.PrivateMessageService(),
                                                 std::placeholders::_1,
@@ -104,6 +116,8 @@ void PrivateMessageServiceRegistrar::Register(ChatRuntimeComposition& compositio
 void GroupMessageServiceRegistrar::Register(ChatRuntimeComposition& composition,
                                             std::map<short, FunCallBack>& callbacks) const
 {
+    static_assert(handler_registrar_modules::GroupMessageHandlerCount() == 18U);
+
     callbacks[ID_CREATE_GROUP_REQ] = std::bind(&IGroupMessageService::HandleCreateGroup,
                                                &composition.GroupMessageService(),
                                                std::placeholders::_1,
@@ -198,4 +212,8 @@ void GroupMessageServiceRegistrar::Register(ChatRuntimeComposition& composition,
 
 void AsyncEventDispatcherRegistrar::Register(ChatRuntimeComposition&, std::map<short, FunCallBack>&) const
 {
+    if constexpr (!handler_registrar_modules::ShouldRegisterAsyncEventDispatcherHandlers())
+    {
+        return;
+    }
 }

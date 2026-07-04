@@ -1,31 +1,37 @@
-#include "ChatRuntimeComposition.h"
+#include "ChatRuntimeComposition.hpp"
 
-#include "AsyncEventDispatcher.h"
-#include "ChatDeliveryRuntime.h"
-#include "ChatMessageRepository.h"
-#include "ChatRelationRepository.h"
-#include "ChatRelationSessionAdapter.h"
-#include "ChatRuntime.h"
-#include "ChatSessionConfig.h"
-#include "ChatSessionRepository.h"
-#include "ChatSessionService.h"
-#include "InlineTaskBus.h"
-#include "KafkaAsyncEventBus.h"
-#include "LogicSystem.h"
-#include "MessageDeliveryService.h"
-#include "MessageServiceConfig.h"
-#include "MessageServiceFactory.h"
-#include "RabbitMqTaskBus.h"
-#include "RedisAsyncEventBus.h"
-#include "RedisOnlineRouteStore.h"
-#include "RedisRelationBootstrapCache.h"
-#include "RelationQueryServiceConfig.h"
-#include "RelationQueryServiceFactory.h"
-#include "RelationServiceConfig.h"
-#include "RelationServiceFactory.h"
-#include "TaskDispatcher.h"
-#include "UserMgr.h"
-#include "logging/Logger.h"
+#include "AsyncEventDispatcher.hpp"
+#include "ChatDeliveryRuntime.hpp"
+#include "ChatMessageRepository.hpp"
+#include "MongoMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "ChatRelationRepository.hpp"
+#include "ChatRelationSessionAdapter.hpp"
+#include "ChatRuntime.hpp"
+#include "ChatSessionConfig.hpp"
+#include "ChatSessionRepository.hpp"
+#include "ChatSessionService.hpp"
+#include "InlineTaskBus.hpp"
+#include "KafkaAsyncEventBus.hpp"
+#include "LogicSystem.hpp"
+#include "MessageDeliveryService.hpp"
+#include "MessageServiceConfig.hpp"
+#include "MessageServiceFactory.hpp"
+#include "RabbitMqTaskBus.hpp"
+#include "RedisAsyncEventBus.hpp"
+#include "RedisOnlineRouteStore.hpp"
+#include "RedisRelationBootstrapCache.hpp"
+#include "RelationQueryServiceConfig.hpp"
+#include "RelationQueryServiceFactory.hpp"
+#include "RelationServiceConfig.hpp"
+#include "RelationServiceFactory.hpp"
+#include "TaskDispatcher.hpp"
+#include "UserMgr.hpp"
+#include "logging/Logger.hpp"
+
+import memochat.chat.runtime_composition_algorithms;
+
+namespace runtime_composition_modules = memochat::chat::orchestration::runtime_composition::modules;
 
 ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
     : _logic(logic)
@@ -38,10 +44,14 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
     _relation_query_service_config = std::make_unique<RelationQueryServiceConfig>();
     _relation_service_config = std::make_unique<RelationServiceConfig>();
     _message_service_config = std::make_unique<MessageServiceConfig>();
-    _message_repository = std::make_unique<ChatMessageRepository>();
+    _message_repository =
+        std::make_unique<ChatMessageRepository>(*PostgresMgr::GetInstance(), *MongoMgr::GetInstance());
 
     const auto task_bus_backend = memochat::chatruntime::TaskBusBackend();
-    if (task_bus_backend == "rabbitmq" && RabbitMqTaskBus::BuildAvailable())
+    const bool rabbitmq_available = RabbitMqTaskBus::BuildAvailable();
+    if (runtime_composition_modules::ShouldUseRabbitMqTaskBus(task_bus_backend.data(),
+                                                              task_bus_backend.size(),
+                                                              rabbitmq_available))
     {
         _task_bus = std::make_shared<RabbitMqTaskBus>();
         memolog::LogInfo("chat.task_bus.rabbitmq",
@@ -50,23 +60,31 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
     }
     else
     {
-        if (task_bus_backend == "rabbitmq" && !RabbitMqTaskBus::BuildAvailable())
+        if (runtime_composition_modules::ShouldWarnRabbitMqTaskBusUnavailable(task_bus_backend.data(),
+                                                                              task_bus_backend.size(),
+                                                                              rabbitmq_available))
         {
             memolog::LogWarn("chat.task_bus.rabbitmq_unavailable",
                              "chat task bus rabbitmq backend is not available in current build, fallback to inline",
-                             {{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
+                             {{"configured_backend", task_bus_backend},
+                              {"fallback_backend", runtime_composition_modules::InlineTaskBusBackend()}});
         }
-        else if (task_bus_backend != "inline")
+        else if (runtime_composition_modules::ShouldWarnUnsupportedTaskBusBackend(task_bus_backend.data(),
+                                                                                  task_bus_backend.size()))
         {
             memolog::LogWarn("chat.task_bus.unsupported_backend",
                              "task bus backend is not implemented yet, fallback to inline",
-                             {{"configured_backend", task_bus_backend}, {"fallback_backend", "inline"}});
+                             {{"configured_backend", task_bus_backend},
+                              {"fallback_backend", runtime_composition_modules::InlineTaskBusBackend()}});
         }
         _task_bus = std::make_shared<InlineTaskBus>();
     }
 
     const auto async_event_bus_backend = memochat::chatruntime::AsyncEventBusBackend();
-    if (async_event_bus_backend == "kafka" && KafkaAsyncEventBus::BuildAvailable())
+    const bool kafka_available = KafkaAsyncEventBus::BuildAvailable();
+    if (runtime_composition_modules::ShouldUseKafkaAsyncEventBus(async_event_bus_backend.data(),
+                                                                 async_event_bus_backend.size(),
+                                                                 kafka_available))
     {
         _async_event_bus = std::make_shared<KafkaAsyncEventBus>(
             [this](int64_t outbox_id, int delay_ms, int max_retries, std::string* error)
@@ -86,17 +104,22 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
     }
     else
     {
-        if (async_event_bus_backend == "kafka" && !KafkaAsyncEventBus::BuildAvailable())
+        if (runtime_composition_modules::ShouldWarnKafkaAsyncEventBusUnavailable(async_event_bus_backend.data(),
+                                                                                 async_event_bus_backend.size(),
+                                                                                 kafka_available))
         {
             memolog::LogWarn("chat.async_event_bus.kafka_unavailable",
                              "chat async event bus kafka backend is not available in current build, fallback to redis",
-                             {{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
+                             {{"configured_backend", async_event_bus_backend},
+                              {"fallback_backend", runtime_composition_modules::RedisAsyncEventBusBackend()}});
         }
-        else if (async_event_bus_backend != "redis")
+        else if (runtime_composition_modules::ShouldWarnUnsupportedAsyncEventBusBackend(async_event_bus_backend.data(),
+                                                                                        async_event_bus_backend.size()))
         {
             memolog::LogWarn("chat.async_event_bus.unsupported_backend",
                              "async event bus backend is not implemented yet, fallback to redis",
-                             {{"configured_backend", async_event_bus_backend}, {"fallback_backend", "redis"}});
+                             {{"configured_backend", async_event_bus_backend},
+                              {"fallback_backend", runtime_composition_modules::RedisAsyncEventBusBackend()}});
         }
         _async_event_bus = std::make_shared<RedisAsyncEventBus>();
     }

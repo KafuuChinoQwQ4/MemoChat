@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "ChatRelationInternalGrpcService.h"
-#include "RelationQueryGrpcClient.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "ChatRelationInternalGrpcService.hpp"
+#include "RelationQueryGrpcClient.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <chrono>
 #include <memory>

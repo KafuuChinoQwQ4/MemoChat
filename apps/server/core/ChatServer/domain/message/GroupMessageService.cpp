@@ -1,18 +1,18 @@
-﻿#include "GroupMessageService.h"
+﻿#include "GroupMessageService.hpp"
 
-#include "ChatRuntime.h"
-#include "CSession.h"
-#include "ChatGroupCommandDtos.h"
-#include "ChatHistoryCommandDtos.h"
-#include "ChatMessageCommandDtos.h"
-#include "ChatRelationGroupDtos.h"
-#include "GroupResponseFormatter.h"
-#include "MessageServiceUtil.h"
-#include "logging/Logger.h"
+#include "ChatRuntime.hpp"
+#include "CSession.hpp"
+#include "ChatGroupCommandDtos.hpp"
+#include "ChatHistoryCommandDtos.hpp"
+#include "ChatMessageCommandDtos.hpp"
+#include "ChatRelationGroupDtos.hpp"
+#include "GroupResponseFormatter.hpp"
+#include "MessageServiceUtil.hpp"
+#include "logging/Logger.hpp"
 
 #include <chrono>
 #include <iostream>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <unordered_set>
 
 namespace
@@ -53,6 +53,11 @@ MessageCommandRequest BuildGroupMessageCommandRequestLocal(const std::shared_ptr
         request.session_id = session->GetSessionId();
     }
     return request;
+}
+
+int AuthenticatedGroupRequestUidLocal(const MessageCommandRequest& request, int payload_uid)
+{
+    return request.session_uid > 0 ? request.session_uid : payload_uid;
 }
 
 void SendGroupMessageCommandResultLocal(const std::shared_ptr<CSession>& session, const MessageCommandResult& result)
@@ -149,7 +154,7 @@ MessageCommandResult GroupMessageService::CreateGroup(const MessageCommandReques
     reader.parse(request.payload_json, root);
 
     const auto command = ChatGroupCommand::ChatGroupCreateRequestFromJsonValue(root);
-    const int owner_uid = command.owner_uid;
+    const int owner_uid = AuthenticatedGroupRequestUidLocal(request, command.owner_uid);
     const std::string& group_name = command.name;
     const std::string& announcement = command.announcement;
     const int member_limit = command.member_limit;
@@ -245,7 +250,7 @@ MessageCommandResult GroupMessageService::GetGroupList(const MessageCommandReque
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupListRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
 
     memochat::json::JsonValue rtvalue =
         ChatGroupCommand::ToJsonValue(ChatGroupCommand::ChatGroupListResponseDto{.error = ErrorCodes::Success});
@@ -277,7 +282,7 @@ MessageCommandResult GroupMessageService::InviteGroupMember(const MessageCommand
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupInviteMemberRequestFromJsonValue(root);
-    const int from_uid = command.from_uid;
+    const int from_uid = AuthenticatedGroupRequestUidLocal(request, command.from_uid);
     const std::string& target_user_id = command.target_user_id;
     const int64_t group_id = command.group_id;
     const std::string& reason = command.reason;
@@ -339,7 +344,7 @@ MessageCommandResult GroupMessageService::ApplyJoinGroup(const MessageCommandReq
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupApplyJoinRequestFromJsonValue(root);
-    const int from_uid = command.from_uid;
+    const int from_uid = AuthenticatedGroupRequestUidLocal(request, command.from_uid);
     const std::string& group_code = command.group_code;
     int64_t group_id = 0;
     if (!_relation_repository->GetGroupIdByCode(group_code, group_id))
@@ -410,7 +415,7 @@ MessageCommandResult GroupMessageService::ReviewGroupApply(const MessageCommandR
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupReviewApplyRequestFromJsonValue(root);
-    const int reviewer_uid = command.reviewer_uid;
+    const int reviewer_uid = AuthenticatedGroupRequestUidLocal(request, command.reviewer_uid);
     const int64_t apply_id = command.apply_id;
     const bool agree = command.agree;
 
@@ -492,7 +497,8 @@ MessageCommandResult GroupMessageService::GroupChatMessage(const MessageCommandR
 {
     memochat::json::JsonValue root;
     ParseJsonObjectGroupLocal(request.payload_json, root);
-    const int from_uid = memochat::json::glaze_safe_get<int>(root, "fromuid", 0);
+    const int from_uid =
+        AuthenticatedGroupRequestUidLocal(request, memochat::json::glaze_safe_get<int>(root, "fromuid", 0));
     const int64_t group_id = memochat::json::glaze_safe_get<int64_t>(root, "groupid", 0);
     const auto msg = root.get("msg");
     const std::string client_msg_id = memochat::json::glaze_safe_get<std::string>(msg, "msgid", "");
@@ -697,7 +703,7 @@ MessageCommandResult GroupMessageService::GroupHistory(const MessageCommandReque
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatHistoryCommand::ChatGroupHistoryRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     const int64_t before_ts = command.before_ts;
     const int64_t before_seq = command.before_seq;
@@ -796,7 +802,7 @@ MessageCommandResult GroupMessageService::EditGroupMessage(const MessageCommandR
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatGroupEditRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     const std::string& target_msg_id = command.msgid;
     const std::string& content = command.content;
@@ -867,7 +873,7 @@ MessageCommandResult GroupMessageService::RevokeGroupMessage(const MessageComman
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatGroupRevokeRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     const std::string& target_msg_id = command.msgid;
     const int64_t now_ms = NowMs();
@@ -939,7 +945,7 @@ MessageCommandResult GroupMessageService::ForwardGroupMessage(const MessageComma
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatMessageCommand::ChatGroupForwardRequestFromJsonValue(root);
-    const int from_uid = command.from_uid;
+    const int from_uid = AuthenticatedGroupRequestUidLocal(request, command.from_uid);
     const int64_t group_id = command.group_id;
     const std::string& source_msg_id = command.source_msg_id;
     std::string client_msg_id = command.client_msg_id;
@@ -1118,7 +1124,7 @@ MessageCommandResult GroupMessageService::GroupReadAck(const MessageCommandReque
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupReadAckRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     int64_t read_ts = command.read_ts;
     const auto result = []()
@@ -1173,7 +1179,7 @@ MessageCommandResult GroupMessageService::UpdateGroupAnnouncement(const MessageC
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupAnnouncementUpdateRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     const std::string& announcement = command.announcement;
 
@@ -1235,7 +1241,7 @@ MessageCommandResult GroupMessageService::UpdateGroupIcon(const MessageCommandRe
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupIconUpdateRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
     const std::string& icon = command.icon;
 
@@ -1302,7 +1308,7 @@ MessageCommandResult GroupMessageService::SetGroupAdmin(const MessageCommandRequ
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupSetAdminRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const std::string& target_user_id = command.target_user_id;
     const int64_t group_id = command.group_id;
     const bool is_admin = command.is_admin;
@@ -1378,7 +1384,7 @@ MessageCommandResult GroupMessageService::MuteGroupMember(const MessageCommandRe
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupMemberActionRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const std::string& target_user_id = command.target_user_id;
     const int64_t group_id = command.group_id;
     const int mute_seconds = command.mute_seconds;
@@ -1451,7 +1457,7 @@ MessageCommandResult GroupMessageService::KickGroupMember(const MessageCommandRe
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupMemberActionRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const std::string& target_user_id = command.target_user_id;
     const int64_t group_id = command.group_id;
     int target_uid = 0;
@@ -1521,7 +1527,7 @@ MessageCommandResult GroupMessageService::QuitGroup(const MessageCommandRequest&
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupIdRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
 
     ChatGroupCommand::ChatGroupQuitResponseDto rtdto{.error = ErrorCodes::Success, .groupid = group_id};
@@ -1578,7 +1584,7 @@ MessageCommandResult GroupMessageService::DissolveGroup(const MessageCommandRequ
     memochat::json::JsonValue root;
     reader.parse(request.payload_json, root);
     const auto command = ChatGroupCommand::ChatGroupIdRequestFromJsonValue(root);
-    const int uid = command.uid;
+    const int uid = AuthenticatedGroupRequestUidLocal(request, command.uid);
     const int64_t group_id = command.group_id;
 
     ChatGroupCommand::ChatGroupDissolveResponseDto rtdto{.error = ErrorCodes::Success, .groupid = group_id};

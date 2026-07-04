@@ -1,9 +1,13 @@
-#include "PostgresMgr.h"
-#include "logging/Logger.h"
+#include "PostgresMgr.hpp"
+#include "logging/Logger.hpp"
+
+import memochat.chat.postgres_mgr_algorithms;
+
+namespace postgres_mgr_modules = memochat::chat::persistence::postgres_mgr::modules;
 
 PostgresMgr::~PostgresMgr()
 {
-    if (_dao)
+    if (postgres_mgr_modules::ShouldResetDao(static_cast<bool>(_dao)))
     {
         _dao.reset();
     }
@@ -11,7 +15,7 @@ PostgresMgr::~PostgresMgr()
 
 void PostgresMgr::EnsurePostgresDaoInitialized(PostgresMgr* mgr)
 {
-    if (mgr->_dao)
+    if (!postgres_mgr_modules::ShouldInitializeDao(static_cast<bool>(mgr->_dao)))
     {
         return;
     }
@@ -21,8 +25,8 @@ void PostgresMgr::EnsurePostgresDaoInitialized(PostgresMgr* mgr)
     }
     catch (const std::exception& e)
     {
-        memolog::LogError("service.postgres_init_failed",
-                          "PostgresMgr failed to initialize PostgresDao - service cannot start",
+        memolog::LogError(postgres_mgr_modules::InitFailureEvent(),
+                          postgres_mgr_modules::InitFailureMessage(),
                           {{"error", e.what()}});
         throw;
     }

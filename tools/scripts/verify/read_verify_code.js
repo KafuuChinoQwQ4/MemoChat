@@ -2,10 +2,14 @@ const redis = require('redis');
 const { promisify } = require('util');
 
 async function main() {
+    const password = process.env.MEMOCHAT_REDIS_PASSWORD;
+    if (!password) {
+        throw new Error('Missing MEMOCHAT_REDIS_PASSWORD');
+    }
     const client = redis.createClient({
-        host: '127.0.0.1',
-        port: 6379,
-        password: '123456'
+        host: process.env.MEMOCHAT_REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.MEMOCHAT_REDIS_PORT || 6379),
+        password
     });
     const getAsync = promisify(client.get).bind(client);
     

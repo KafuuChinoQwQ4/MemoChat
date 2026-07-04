@@ -16,7 +16,7 @@ description: Use when diagnosing MemoChat Docker services, fixed ports, containe
 - 从 Windows/PowerShell 进入默认 Linux 环境时使用：
 
 ```powershell
-wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat && source /root/.memochat-linux-env && <command>'
 ```
 
 - Linux 缓存/下载优先使用 `/data`，Docker 绑定数据使用 `/data/docker-data/memochat`。`D:\docker-data` 下的 Windows Docker Desktop 数据只作为旧版迁移/备份数据。

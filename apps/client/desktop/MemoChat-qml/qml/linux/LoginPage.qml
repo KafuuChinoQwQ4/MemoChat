@@ -52,7 +52,7 @@ Rectangle {
     function replaceCredentialModel(records) {
         credentialModel.clear()
         for (let i = 0; i < records.length; ++i) {
-            credentialModel.append({ "email": records[i].email, "password": records[i].password })
+            credentialModel.append({ "email": records[i].email })
         }
     }
 
@@ -75,24 +75,22 @@ Rectangle {
         if (!record) {
             return
         }
-        if (fillOnlyEmpty && (emailField.text.length > 0 || pwdField.text.length > 0)) {
+        if (fillOnlyEmpty && emailField.text.length > 0) {
             return
         }
         emailField.text = record.email
-        pwdField.text = record.password
     }
 
-    function saveCredential(email, password) {
-        const normalized = LoginCredentialRuntime.normalizeCredential(email, password)
+    function saveCredential(email) {
+        const normalized = LoginCredentialRuntime.normalizeCredential(email)
         if (!LoginCredentialRuntime.isSaveableCredential(normalized)) {
             return
         }
         const savedRecords = LoginCredentialRuntime.buildSavedCredentials(credentialCacheJson(),
                                                                           normalized.email,
-                                                                          normalized.password,
                                                                           maxCachedCredentials)
         if (credentialProvider) {
-            credentialProvider.saveLoginCredential(normalized.email, normalized.password)
+            credentialProvider.saveLoginCredential(normalized.email, "")
         }
         replaceCredentialModel(savedRecords)
     }
@@ -103,7 +101,6 @@ Rectangle {
             return
         }
         emailField.text = record.email
-        pwdField.text = record.password
         credentialDropdownOpen = false
         credentialDropdown.close()
         loginRoot.clearTipRequested()

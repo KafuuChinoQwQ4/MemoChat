@@ -4,10 +4,10 @@ services:
     container_name: memochat-rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: "${MEMOCHAT_RABBITMQ_USER:-memochat}"
+      RABBITMQ_DEFAULT_PASS: "${MEMOCHAT_RABBITMQ_PASSWORD:-123456}"
     volumes:
       - D:/Docker/rabbitmq/data:/var/lib/rabbitmq

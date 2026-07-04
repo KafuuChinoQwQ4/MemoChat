@@ -1,15 +1,19 @@
-#include "TaskDispatcher.h"
+#include "TaskDispatcher.hpp"
 
-#include "ChatRuntime.h"
-#include "ChatTaskEnvelope.h"
-#include "IAsyncTaskBus.h"
-#include "MessageDeliveryTaskPayload.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "ChatRuntime.hpp"
+#include "ChatTaskEnvelope.hpp"
+#include "IAsyncTaskBus.hpp"
+#include "MessageDeliveryTaskPayload.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <chrono>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 #include <thread>
+
+import memochat.chat.task_dispatcher_algorithms;
+
+namespace task_dispatcher_modules = memochat::chat::delivery::task_dispatcher::modules;
 
 namespace
 {
@@ -41,11 +45,11 @@ bool TaskDispatcher::PublishTask(const std::string& task_type,
                                  int max_retries,
                                  std::string* error)
 {
-    if (!_task_bus)
+    if (!task_dispatcher_modules::ShouldPublishTask(static_cast<bool>(_task_bus)))
     {
         if (error)
         {
-            *error = "task_bus_unavailable";
+            *error = task_dispatcher_modules::TaskBusUnavailableError();
         }
         return false;
     }
@@ -72,7 +76,7 @@ void TaskDispatcher::DealTasks()
         const bool handled = _task_bus && _task_bus->ConsumeOnce(TaskRoutingKeys(), task, &consume_error);
         if (!handled)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
             continue;
         }
 
@@ -85,7 +89,7 @@ void TaskDispatcher::DealTasks()
         }
         else
         {
-            _task_bus->NackLastConsumed("task_handler_failed");
+            _task_bus->NackLastConsumed(task_dispatcher_modules::TaskHandlerFailedError());
         }
         memolog::TraceContext::Clear();
     }
@@ -93,12 +97,12 @@ void TaskDispatcher::DealTasks()
 
 bool TaskDispatcher::HandleTask(const memochat::json::JsonValue& payload, const std::string& task_type)
 {
-    if (task_type == "message_delivery_retry" || task_type == "offline_notify" || task_type == "relation_notify")
+    if (task_dispatcher_modules::IsDeliveryTaskType(task_type.data(), task_type.size()))
     {
         memochat::chat::delivery::MessageDeliveryTaskPayload task_payload;
         if (!memochat::chat::delivery::ParseDeliveryTaskPayload(payload, &task_payload))
         {
-            return true;
+            return task_dispatcher_modules::ShouldAckInvalidDeliveryTaskPayload();
         }
         return _delivery_gateway && _delivery_gateway->TryPushPayload({task_payload.recipient_uid},
                                                                       static_cast<short>(task_payload.msgid),
@@ -106,11 +110,14 @@ bool TaskDispatcher::HandleTask(const memochat::json::JsonValue& payload, const 
                                                                       task_payload.exclude_uid,
                                                                       false);
     }
-    if (task_type == "outbox_repair")
+    if (task_dispatcher_modules::IsOutboxRepairTaskType(task_type.data(), task_type.size()))
     {
         const auto outbox_id = payload.get("outbox_id", 0).asInt64();
-        return _outbox_repair_scheduler && outbox_id > 0 && _outbox_repair_scheduler->ExpediteOutboxRepair(outbox_id);
+        return task_dispatcher_modules::ShouldExpediteOutboxRepair(_outbox_repair_scheduler != nullptr, outbox_id) &&
+               _outbox_repair_scheduler->ExpediteOutboxRepair(outbox_id);
     }
-    memolog::LogWarn("chat.task.unknown_type", "task type is not registered", {{"task_type", task_type}});
+    memolog::LogWarn(task_dispatcher_modules::UnknownTaskTypeEventName(),
+                     task_dispatcher_modules::UnknownTaskTypeMessage(),
+                     {{"task_type", task_type}});
     return true;
 }

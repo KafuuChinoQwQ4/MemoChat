@@ -1,7 +1,7 @@
-#include "reflection/StdReflectionIntrospection.h"
+#include "reflection/StdReflectionIntrospection.hpp"
 
-#include "EmailDeliveryTaskCodec.h"
-#include "auth/ChatLoginTicket.h"
+#include "EmailDeliveryTaskCodec.hpp"
+#include "auth/ChatLoginTicket.hpp"
 
 #include <gtest/gtest.h>
 
@@ -34,7 +34,7 @@ static_assert(memochat::reflection::FieldNamesEqual<varifyservice::EmailDelivery
     std::array<std::string_view, 4>{"email", "code", "trace_id", "retry_count"}));
 
 static_assert(memochat::reflection::FieldNamesEqual<memochat::auth::ChatLoginTicketClaims>(
-    std::array<std::string_view, 12>{"uid",
+    std::array<std::string_view, 13>{"uid",
                                      "user_id",
                                      "name",
                                      "nick",
@@ -45,7 +45,8 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::auth::ChatLoginTic
                                      "target_server",
                                      "protocol_version",
                                      "issued_at_ms",
-                                     "expire_at_ms"}));
+                                     "expire_at_ms",
+                                     "jti"}));
 
 #endif
 
@@ -85,11 +86,12 @@ TEST(StdReflectionIntrospectionTest, ListsLoginTicketClaimFieldsWithoutOwningJso
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
     constexpr auto names = memochat::reflection::FieldNames<memochat::auth::ChatLoginTicketClaims>();
 
-    ASSERT_EQ(names.size(), 12U);
+    ASSERT_EQ(names.size(), 13U);
     EXPECT_EQ(names[0], "uid");
     EXPECT_EQ(names[1], "user_id");
     EXPECT_EQ(names[8], "target_server");
     EXPECT_EQ(names[11], "expire_at_ms");
+    EXPECT_EQ(names[12], "jti");
 #else
     GTEST_SKIP() << "C++26 reflection is disabled for this target";
 #endif

@@ -15,7 +15,7 @@
 
 #include <gtest/gtest.h>
 
-#include "CServer.h"
+#include "CServer.hpp"
 
 #include <boost/asio.hpp>
 
@@ -78,7 +78,8 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
     EXPECT_TRUE(weak.expired());
 }
 
-// 生产停机顺序验收:StopTimer() 在 io_context.stop() 之前,协程帧有机会被分发展开。
+// 生产停机顺序验收:StopTimer() 在 io_context.stop() 之前,并把 stop 推迟到后续
+// io_context turn,让取消 completion 有机会分发展开协程帧。
 // 对应 ChatServer.cpp signal handler 的修后顺序。
 TEST(CServerLifetime, ProductionShutdownOrder_StopTimerBeforeIoContextStop)
 {
@@ -97,10 +98,18 @@ TEST(CServerLifetime, ProductionShutdownOrder_StopTimerBeforeIoContextStop)
         server->StartTimer();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        // 生产顺序: 先 StopTimer(取消协程) 再 io_context.stop()
+        // 生产顺序:先 StopTimer(取消协程),再把 io_context.stop() 推迟到后续 turn。
         server->StopTimer();
         work.reset();
-        server_ctx.stop();
+        net::post(server_ctx,
+                  [&server_ctx]
+                  {
+                      net::post(server_ctx,
+                                [&server_ctx]
+                                {
+                                    server_ctx.stop();
+                                });
+                  });
     }
 
     bool released = false;

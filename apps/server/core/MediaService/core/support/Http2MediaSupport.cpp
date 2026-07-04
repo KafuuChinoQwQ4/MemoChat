@@ -1,29 +1,40 @@
-﻿#include "Http2MediaSupport.h"
-#include "json/GlazeCompat.h"
-#include "ConfigMgr.h"
-#include "MediaStorage.h"
-#include "services/media/MediaPublicDtos.h"
-#include "services/media/MediaUploadSessionDto.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "const.h"
-#include "logging/Logger.h"
-#include "support/UserTokenValidator.h"
+﻿#include "Http2MediaSupport.hpp"
+#include "json/GlazeCompat.hpp"
+#include "ConfigMgr.hpp"
+#include "MediaStorage.hpp"
+#include "services/media/MediaPublicDtos.hpp"
+#include "services/media/MediaUploadSessionDto.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "logging/Logger.hpp"
+#include "support/UserTokenValidator.hpp"
 
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <set>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+import memochat.media.config_algorithms;
 
 namespace
 {
+struct MediaUploadGrantSpecLocal
+{
+    std::vector<int> grant_uids;
+    int64_t grant_group_id = 0;
+    bool grant_public = false;
+    bool grant_friends = false;
+};
 
 int64_t NowMsLocal()
 {
@@ -52,6 +63,124 @@ std::string SanitizeFileNameLocal(const std::string& fileName)
     if (safe.size() > 96)
         safe = safe.substr(safe.size() - 96);
     return safe;
+}
+
+std::vector<int> NormalizeGrantUidsLocal(std::vector<int> values)
+{
+    values.erase(std::remove_if(values.begin(),
+                                values.end(),
+                                [](int uid)
+                                {
+                                    return uid <= 0;
+                                }),
+                 values.end());
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    return values;
+}
+
+MediaUploadGrantSpecLocal NormalizeGrantSpecLocal(MediaUploadGrantSpecLocal grants)
+{
+    grants.grant_uids = NormalizeGrantUidsLocal(std::move(grants.grant_uids));
+    if (grants.grant_group_id < 0)
+    {
+        grants.grant_group_id = 0;
+    }
+    return grants;
+}
+
+bool HasAnyGrantLocal(const MediaUploadGrantSpecLocal& grants)
+{
+    return !grants.grant_uids.empty() || grants.grant_group_id > 0 || grants.grant_public || grants.grant_friends;
+}
+
+bool IsAvatarMediaTypeLocal(const std::string& media_type)
+{
+    return media_type == "avatar";
+}
+
+MediaUploadGrantSpecLocal GrantSpecFromSessionLocal(const memochat::media::MediaUploadSessionDto& session)
+{
+    MediaUploadGrantSpecLocal grants;
+    grants.grant_uids = session.grant_uids;
+    grants.grant_group_id = session.grant_group_id;
+    grants.grant_public = session.grant_public;
+    grants.grant_friends = session.grant_friends;
+    return NormalizeGrantSpecLocal(std::move(grants));
+}
+
+bool ApplyMediaUploadGrantsLocal(const std::string& media_key,
+                                 int owner_uid,
+                                 MediaUploadGrantSpecLocal grants,
+                                 std::string* error_out)
+{
+    grants = NormalizeGrantSpecLocal(std::move(grants));
+
+    MediaAssetInfo persisted;
+    if (!PostgresMgr::GetInstance()->GetMediaAssetByKey(media_key, persisted) || persisted.owner_uid != owner_uid ||
+        persisted.media_id <= 0)
+    {
+        if (error_out != nullptr)
+        {
+            *error_out = "load media metadata for grant failed";
+        }
+        return false;
+    }
+
+    if (IsAvatarMediaTypeLocal(persisted.media_type))
+    {
+        grants.grant_public = true;
+    }
+    if (!HasAnyGrantLocal(grants))
+    {
+        return true;
+    }
+
+    const int64_t now_ms = NowMsLocal();
+    for (int grantee_uid : grants.grant_uids)
+    {
+        if (grantee_uid <= 0 || grantee_uid == owner_uid)
+        {
+            continue;
+        }
+        if (!PostgresMgr::GetInstance()->GrantMediaAccess(persisted.media_id, grantee_uid, "direct", now_ms))
+        {
+            if (error_out != nullptr)
+            {
+                *error_out = "grant media access failed";
+            }
+            return false;
+        }
+    }
+    if (grants.grant_public && !PostgresMgr::GetInstance()->GrantMediaAccess(persisted.media_id, 0, "public", now_ms))
+    {
+        if (error_out != nullptr)
+        {
+            *error_out = "grant public media access failed";
+        }
+        return false;
+    }
+    if (grants.grant_friends && !PostgresMgr::GetInstance()->GrantMediaAccess(persisted.media_id, 0, "friends", now_ms))
+    {
+        if (error_out != nullptr)
+        {
+            *error_out = "grant friends media access failed";
+        }
+        return false;
+    }
+    if (grants.grant_group_id > 0 && !PostgresMgr::GetInstance()->GrantMediaGroupAccess(persisted.media_id,
+                                                                                        grants.grant_group_id,
+                                                                                        owner_uid,
+                                                                                        "group",
+                                                                                        now_ms))
+    {
+        if (error_out != nullptr)
+        {
+            *error_out = "grant group media access failed";
+        }
+        return false;
+    }
+    return true;
 }
 
 std::string DecodeBase64Local(const std::string& input)
@@ -101,13 +230,7 @@ std::string GuessContentTypeLocal(const std::string& fileName, const std::string
     if (dotPos != std::string::npos)
     {
         ext = fileName.substr(dotPos);
-        std::transform(ext.begin(),
-                       ext.end(),
-                       ext.begin(),
-                       [](unsigned char c)
-                       {
-                           return static_cast<char>(std::tolower(c));
-                       });
+        memochat::media::modules::LowerAsciiInPlace(ext.data(), ext.size());
     }
     auto it = extMap.find(ext);
     return (it != extMap.end()) ? it->second : "application/octet-stream";
@@ -280,13 +403,37 @@ MediaConfigLocal LoadMediaConfigLocal()
     {
         cfg.storage_provider = provider;
     }
-    cfg.chunk_size_bytes = std::clamp(cfg.chunk_size_bytes, 256 * 1024, 4 * 1024 * 1024);
+    cfg.chunk_size_bytes = memochat::media::modules::ClampInt(cfg.chunk_size_bytes, 256 * 1024, 4 * 1024 * 1024);
     return cfg;
 }
 
 bool IsMediaTypeImageLocal(const std::string& media_type)
 {
     return media_type == "image" || media_type == "moment_image";
+}
+
+uint64_t Base64EncodedLimitForDecodedBytesLocal(uint64_t decoded_limit)
+{
+    return ((decoded_limit + 2ULL) / 3ULL) * 4ULL;
+}
+
+bool ShouldRejectEncodedPayloadSizeLocal(uint64_t encoded_size, uint64_t decoded_limit)
+{
+    return encoded_size > Base64EncodedLimitForDecodedBytesLocal(decoded_limit);
+}
+
+int64_t SimpleJsonDecodedHardLimitLocal()
+{
+    return 64LL * 1024LL * 1024LL;
+}
+
+int64_t EffectiveSimpleJsonDecodedLimitLocal(int64_t configured_limit)
+{
+    if (configured_limit <= 0)
+    {
+        return SimpleJsonDecodedHardLimitLocal();
+    }
+    return configured_limit < SimpleJsonDecodedHardLimitLocal() ? configured_limit : SimpleJsonDecodedHardLimitLocal();
 }
 
 } // namespace
@@ -315,7 +462,11 @@ MediaResult HandleUploadMediaInit(int uid,
                                   const std::string& media_type,
                                   const std::string& file_name,
                                   const std::string& mime,
-                                  int64_t file_size)
+                                  int64_t file_size,
+                                  std::vector<int> grant_uids,
+                                  int64_t grant_group_id,
+                                  bool grant_public,
+                                  bool grant_friends)
 {
     MediaResult result;
     if (uid <= 0 || file_name.empty() || file_size <= 0 || !ValidateUserTokenLocal(uid, token))
@@ -363,6 +514,16 @@ MediaResult HandleUploadMediaInit(int uid,
     session.created_at = static_cast<int64_t>(NowMsLocal());
     session.expires_at = static_cast<int64_t>(NowMsLocal() + static_cast<int64_t>(cfg.session_expire_sec) * 1000);
     session.storage_provider = cfg.storage_provider;
+    MediaUploadGrantSpecLocal grants;
+    grants.grant_uids = std::move(grant_uids);
+    grants.grant_group_id = grant_group_id;
+    grants.grant_public = grant_public;
+    grants.grant_friends = grant_friends;
+    grants = NormalizeGrantSpecLocal(std::move(grants));
+    session.grant_uids = grants.grant_uids;
+    session.grant_group_id = grants.grant_group_id;
+    session.grant_public = grants.grant_public;
+    session.grant_friends = grants.grant_friends;
     if (!SaveJsonFileLocal(SessionPathForLocal(upload_id), memochat::media::MediaUploadSessionToJsonValue(session)))
     {
         result.error = ErrorCodes::MediaUploadFailed;
@@ -390,6 +551,17 @@ MediaResult HandleUploadMediaChunk(int uid,
         MediaResult result;
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
+        return result;
+    }
+
+    const MediaConfigLocal cfg = LoadMediaConfigLocal();
+    if (ShouldRejectEncodedPayloadSizeLocal(static_cast<uint64_t>(chunk_data_base64.size()),
+                                            static_cast<uint64_t>(cfg.chunk_size_bytes)))
+    {
+        MediaResult result;
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = "encoded payload too large";
+        result.data["limit_bytes"] = static_cast<int64_t>(cfg.chunk_size_bytes);
         return result;
     }
 
@@ -649,6 +821,13 @@ MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const s
         result.message = "save media metadata failed";
         return result;
     }
+    std::string grant_error;
+    if (!ApplyMediaUploadGrantsLocal(media_key, uid, GrantSpecFromSessionLocal(session), &grant_error))
+    {
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = grant_error;
+        return result;
+    }
 
     std::filesystem::remove(SessionPathForLocal(upload_id), ec);
     std::filesystem::remove_all(chunk_dir, ec);
@@ -670,13 +849,30 @@ MediaResult HandleUploadMediaSimple(int uid,
                                     const std::string& media_type,
                                     const std::string& file_name,
                                     const std::string& mime,
-                                    const std::string& data_base64)
+                                    const std::string& data_base64,
+                                    std::vector<int> grant_uids,
+                                    int64_t grant_group_id,
+                                    bool grant_public,
+                                    bool grant_friends)
 {
     MediaResult result;
     if (uid <= 0 || file_name.empty() || data_base64.empty() || !ValidateUserTokenLocal(uid, token))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
+        return result;
+    }
+
+    MediaConfigLocal cfg = LoadMediaConfigLocal();
+    std::string safe_type = media_type.empty() ? "file" : media_type;
+    const int64_t configured_limit = IsMediaTypeImageLocal(safe_type) ? cfg.max_image_bytes : cfg.max_file_bytes;
+    const int64_t simple_decoded_limit = EffectiveSimpleJsonDecodedLimitLocal(configured_limit);
+    if (ShouldRejectEncodedPayloadSizeLocal(static_cast<uint64_t>(data_base64.size()),
+                                            static_cast<uint64_t>(simple_decoded_limit)))
+    {
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = "encoded payload too large";
+        result.data["limit_bytes"] = static_cast<int64_t>(simple_decoded_limit);
         return result;
     }
 
@@ -688,14 +884,11 @@ MediaResult HandleUploadMediaSimple(int uid,
         return result;
     }
 
-    MediaConfigLocal cfg = LoadMediaConfigLocal();
-    std::string safe_type = media_type.empty() ? "file" : media_type;
-    int64_t limit = IsMediaTypeImageLocal(safe_type) ? cfg.max_image_bytes : cfg.max_file_bytes;
-    if (static_cast<int64_t>(binary.size()) > limit)
+    if (static_cast<int64_t>(binary.size()) > simple_decoded_limit)
     {
         result.error = ErrorCodes::MediaUploadFailed;
         result.message = "file too large";
-        result.data["limit_bytes"] = static_cast<int64_t>(limit);
+        result.data["limit_bytes"] = static_cast<int64_t>(simple_decoded_limit);
         return result;
     }
 
@@ -751,6 +944,18 @@ MediaResult HandleUploadMediaSimple(int uid,
         result.message = "save media metadata failed";
         return result;
     }
+    MediaUploadGrantSpecLocal grants;
+    grants.grant_uids = std::move(grant_uids);
+    grants.grant_group_id = grant_group_id;
+    grants.grant_public = grant_public;
+    grants.grant_friends = grant_friends;
+    std::string grant_error;
+    if (!ApplyMediaUploadGrantsLocal(media_key, uid, std::move(grants), &grant_error))
+    {
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = grant_error;
+        return result;
+    }
 
     std::filesystem::remove_all(temp_dir, ec);
     memochat::media::MediaUploadAssetResponseDto response_dto;
@@ -783,27 +988,15 @@ MediaResult HandleMediaDownloadInfo(int uid, const std::string& token, const std
         result.message = "asset not found";
         return result;
     }
-
-    IMediaStorage& storage = MediaStorageForLocal(asset.storage_provider);
-    std::string public_url;
-    if (storage.ResolvePublicUrl(asset.storage_path, asset.media_type, public_url) && !public_url.empty())
+    if (asset.owner_uid != uid && !PostgresMgr::GetInstance()->HasMediaAccess(asset.media_id, uid))
     {
-        // Do NOT expose MinIO public URL if the bucket is not publicly accessible.
-        // Instead, let the client fall through to stream via /media/download.
-        // Skip the redirect and serve locally or via ReadObject below.
-        // (public_url is intentionally not used here)
-    }
-
-    std::filesystem::path full_path;
-    if (storage.ResolveReadPath(asset.storage_path, full_path) && std::filesystem::exists(full_path))
-    {
-        result.error = ErrorCodes::Success;
-        result.data["path"] = full_path.string();
-        result.data["content_type"] = GuessContentTypeLocal(asset.origin_file_name, asset.mime);
+        result.error = ErrorCodes::UidInvalid;
+        result.message = "media access denied";
         return result;
     }
 
-    // Last resort: try ReadObject for S3
+    IMediaStorage& storage = MediaStorageForLocal(asset.storage_provider);
+
     std::vector<char> data;
     std::string ct_from_storage;
     std::string storage_err;
@@ -816,7 +1009,7 @@ MediaResult HandleMediaDownloadInfo(int uid, const std::string& token, const std
     }
 
     result.error = ErrorCodes::UidInvalid;
-    result.message = storage_err.empty() ? "file not found" : storage_err;
+    result.message = "file not found";
     return result;
 }
 

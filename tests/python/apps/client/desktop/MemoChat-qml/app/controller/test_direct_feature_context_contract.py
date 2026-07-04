@@ -124,7 +124,8 @@ class DirectFeatureContextContractTests(unittest.TestCase):
         self.assertNotIn("_auth_credential_store", controller)
 
         auth_viewmodel = normalized(read(FEATURES / "auth/viewmodel/AuthViewModel.cpp"))
-        self.assertIn("_credentialStore.saveLoginCredential(email, password);", auth_viewmodel)
+        self.assertIn("Q_UNUSED(password)", auth_viewmodel)
+        self.assertIn("_credentialStore.saveLoginCredential(email, QString());", auth_viewmodel)
 
     def test_appcontroller_prunes_feature_object_qml_properties_but_keeps_cpp_getters(self):
         header = read(APP / "controller/AppController.h")

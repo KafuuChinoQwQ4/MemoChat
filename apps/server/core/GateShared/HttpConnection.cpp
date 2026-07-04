@@ -1,19 +1,119 @@
-#include "HttpConnection.h"
+#include "HttpConnection.hpp"
 
-#include "LogicSystem.h"
-#include "GateWorkerPool.h"
-#include "GateGlobals.h"
-#include "logging/Telemetry.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "LogicSystem.hpp"
+#include "GateWorkerPool.hpp"
+#include "GateGlobals.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
+#include <array>
+#include <cstdlib>
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <string_view>
 
 namespace
 {
 constexpr std::uint64_t kMediaRequestBodyLimitBytes = 64ULL * 1024ULL * 1024ULL;
+constexpr std::array<std::string_view, 4> kDefaultCorsAllowedOrigins = {
+    "http://127.0.0.1",
+    "http://localhost",
+    "https://127.0.0.1",
+    "https://localhost",
+};
+
+std::string TrimAsciiLocal(std::string_view value)
+{
+    while (!value.empty() &&
+           (value.front() == ' ' || value.front() == '\t' || value.front() == '\r' || value.front() == '\n'))
+    {
+        value.remove_prefix(1);
+    }
+    while (!value.empty() &&
+           (value.back() == ' ' || value.back() == '\t' || value.back() == '\r' || value.back() == '\n'))
+    {
+        value.remove_suffix(1);
+    }
+    return std::string(value);
 }
+
+bool OriginEqualsLocal(std::string_view lhs, std::string_view rhs)
+{
+    return TrimAsciiLocal(lhs) == TrimAsciiLocal(rhs);
+}
+
+bool IsCorsOriginAllowedLocal(std::string_view origin)
+{
+    const std::string trimmed_origin = TrimAsciiLocal(origin);
+    if (trimmed_origin.empty())
+    {
+        return false;
+    }
+    if (const char* configured = std::getenv("MEMOCHAT_CORS_ALLOWED_ORIGINS"); configured != nullptr)
+    {
+        std::string_view remaining(configured);
+        while (!remaining.empty())
+        {
+            const auto comma = remaining.find(',');
+            const std::string_view item = comma == std::string_view::npos ? remaining : remaining.substr(0, comma);
+            if (OriginEqualsLocal(trimmed_origin, item))
+            {
+                return true;
+            }
+            if (comma == std::string_view::npos)
+            {
+                break;
+            }
+            remaining.remove_prefix(comma + 1);
+        }
+        return false;
+    }
+    for (const auto allowed : kDefaultCorsAllowedOrigins)
+    {
+        if (trimmed_origin == allowed)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string AllowedCorsOriginForRequestLocal(const http::request<http::dynamic_body>& request)
+{
+    const auto origin = request.find(http::field::origin);
+    if (origin == request.end())
+    {
+        return {};
+    }
+    const std::string_view value(origin->value().data(), origin->value().size());
+    if (!IsCorsOriginAllowedLocal(value))
+    {
+        return {};
+    }
+    return TrimAsciiLocal(value);
+}
+
+template <typename Body>
+void ApplyCorsHeadersLocal(http::response<Body>& response, const http::request<http::dynamic_body>& request)
+{
+    const std::string origin = AllowedCorsOriginForRequestLocal(request);
+    if (origin.empty())
+    {
+        response.erase(http::field::access_control_allow_origin);
+        return;
+    }
+    response.set(http::field::access_control_allow_origin, origin);
+    response.set(http::field::vary, "Origin");
+}
+
+std::string RequestPathForLog(boost::beast::string_view target)
+{
+    const auto query_pos = target.find('?');
+    const auto path = query_pos == boost::beast::string_view::npos ? target : target.substr(0, query_pos);
+    return std::string(path.data(), path.size());
+}
+} // namespace
 
 HttpConnection::HttpConnection(boost::asio::io_context& ioc)
     : _socket(ioc)
@@ -143,7 +243,7 @@ void HttpConnection::Start()
                 const auto target_sv = self->_request.target();
                 const auto method_sv = self->_request.method_string();
                 std::map<std::string, std::string> fields;
-                fields["route"] = std::string(target_sv.data(), target_sv.size());
+                fields["route"] = RequestPathForLog(target_sv);
                 fields["method"] = std::string(method_sv.data(), method_sv.size());
                 fields["module"] = "http";
                 memolog::LogInfo("http.request.received", "incoming http request", fields);
@@ -281,7 +381,7 @@ void HttpConnection::HandleReq()
     _response.keep_alive(false);
     _response.set("X-Trace-Id", _trace_id);
     _response.set("X-Request-Id", _request_id);
-    _response.set(boost::beast::http::field::access_control_allow_origin, "*");
+    ApplyCorsHeadersLocal(_response, _request);
 
     if (_request.method() == http::verb::get)
     {
@@ -442,14 +542,19 @@ void HttpConnection::EnsureSseStreamStarted()
     }
 
     std::ostringstream header;
+    const std::string cors_origin = AllowedCorsOriginForRequestLocal(_request);
     header << "HTTP/1.1 200 OK\r\n"
            << "Server: GateServer\r\n"
            << "Content-Type: text/event-stream\r\n"
            << "Cache-Control: no-cache\r\n"
            << "Connection: close\r\n"
-           << "Transfer-Encoding: chunked\r\n"
-           << "Access-Control-Allow-Origin: *\r\n"
-           << "X-Accel-Buffering: no\r\n";
+           << "Transfer-Encoding: chunked\r\n";
+    if (!cors_origin.empty())
+    {
+        header << "Access-Control-Allow-Origin: " << cors_origin << "\r\n"
+               << "Vary: Origin\r\n";
+    }
+    header << "X-Accel-Buffering: no\r\n";
     if (!_trace_id.empty())
     {
         header << "X-Trace-Id: " << _trace_id << "\r\n";
@@ -544,7 +649,7 @@ void HttpConnection::WriteFileResponse()
     response->set(http::field::server, "GateServer");
     response->set("X-Trace-Id", _trace_id);
     response->set("X-Request-Id", _request_id);
-    response->set(http::field::access_control_allow_origin, "*");
+    ApplyCorsHeadersLocal(*response, _request);
     if (!_send_file_content_type.empty())
     {
         response->set(http::field::content_type, _send_file_content_type);

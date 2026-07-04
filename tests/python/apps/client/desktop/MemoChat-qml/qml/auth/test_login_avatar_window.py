@@ -48,7 +48,9 @@ class LoginAvatarWindowTests(unittest.TestCase):
 
         self.assertIn("isGateRelativeMediaDownloadUrl", source)
         self.assertIn("withGateMediaUrlPrefix", source)
-        self.assertIn("return attachMediaDownloadAuth(withGateMediaUrlPrefix(icon));", source)
+        # normalizeRelativeMediaDownloadUrl now checks prefix is non-empty before
+        # passing to attachMediaDownloadAuth (avatar-bug fix: return {} when unset).
+        self.assertIn("return attachMediaDownloadAuth(full);", source)
         self.assertLess(
             source.index("isGateRelativeMediaDownloadUrl(icon)"),
             source.index("if (QDir::isAbsolutePath(icon))"),
@@ -121,6 +123,7 @@ class LoginAvatarWindowTests(unittest.TestCase):
         qrc = QML_SHELL_QRC.read_text(encoding="utf-8") + "\n" + AUTH_QRC.read_text(encoding="utf-8")
         login_page = LOGIN_PAGE_QML.read_text(encoding="utf-8")
         linux_login_page = LINUX_LOGIN_PAGE_QML.read_text(encoding="utf-8")
+        runtime = LOGIN_CREDENTIAL_RUNTIME.read_text(encoding="utf-8")
 
         self.assertTrue(LOGIN_CREDENTIAL_RUNTIME.is_file())
         self.assertIn("features/auth/runtime/LoginCredentialRuntime.js", qrc)
@@ -139,6 +142,27 @@ class LoginAvatarWindowTests(unittest.TestCase):
                 self.assertNotIn(".filter(function(item)", page)
                 self.assertNotIn("records.unshift", page)
                 self.assertNotIn("records.slice(0, maxCachedCredentials)", page)
+
+        self.assertNotIn("password", runtime)
+        for page in (login_page, linux_login_page):
+            with self.subTest(cache_contract_page=page[:32]):
+                replace_model = extract_qml_function(page, "replaceCredentialModel")
+                load_last = extract_qml_function(page, "loadLastCredential")
+                save_credential = extract_qml_function(page, "saveCredential")
+                apply_credential = extract_qml_function(page, "applyCredential")
+                cache_helpers = "\n".join((replace_model, load_last, save_credential, apply_credential))
+
+                self.assertIn('credentialModel.append({ "email": records[i].email })', replace_model)
+                self.assertIn("LoginCredentialRuntime.normalizeCredential(email)", save_credential)
+                self.assertIn("credentialProvider.saveLoginCredential(normalized.email", save_credential)
+                for token in (
+                    '"password"',
+                    "record.password",
+                    "normalized.password",
+                    "pwdField.text = record",
+                    "buildSavedCredentials(credentialCacheJson(), normalized.email, normalized.password",
+                ):
+                    self.assertNotIn(token, cache_helpers)
 
 
 if __name__ == "__main__":

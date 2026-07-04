@@ -1,4 +1,4 @@
-#include "routing/RouteSchema.h"
+#include "routing/RouteSchema.hpp"
 
 #include <gtest/gtest.h>
 

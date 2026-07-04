@@ -1,6 +1,6 @@
-#include "GateDomainServer.h"
-#include "GateAsyncSideEffects.h"
-#include "GateRouteProfileRegistrar.h"
+#include "GateDomainServer.hpp"
+#include "GateAsyncSideEffects.hpp"
+#include "GateRouteProfileRegistrar.hpp"
 
 // RegisterServer — account creation + recovery, peeled off GateServer
 // (gateserver split Phase 5). Serves /healthz, /readyz, /get_varifycode,

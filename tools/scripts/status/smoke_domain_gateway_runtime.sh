@@ -79,6 +79,27 @@ BIN_PATH="${BUILD_BIN}/${BINARY}"
 
 fail() { echo "[FAIL] $1" >&2; exit 1; }
 
+first_env()
+{
+    local name
+    for name in "$@"; do
+        if [[ -n "${!name:-}" ]]; then
+            printf '%s' "${!name}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+require_value()
+{
+    local label="$1"
+    local value="$2"
+    if [[ -z "${value}" ]]; then
+        fail "Missing ${label}; export the matching MEMOCHAT_* environment variable before running this smoke"
+    fi
+}
+
 cleanup() {
     if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
@@ -97,6 +118,31 @@ TMP_ROOT="$(mktemp -d -t domain-gateway-smoke-XXXXXX)"
 RUN_DIR="${TMP_ROOT}/${BINARY}"
 mkdir -p "${RUN_DIR}/logs"
 
+POSTGRES_HOST="${MEMOCHAT_POSTGRES_HOST:-127.0.0.1}"
+POSTGRES_PORT="${MEMOCHAT_POSTGRES_PORT:-15432}"
+POSTGRES_USER="${MEMOCHAT_POSTGRES_USER:-memochat}"
+POSTGRES_PASSWORD="$(first_env MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_POSTGRES_PASSWORD || true)"
+POSTGRES_DB="${MEMOCHAT_POSTGRES_DB:-memo_pg}"
+REDIS_HOST="${MEMOCHAT_REDIS_HOST:-127.0.0.1}"
+REDIS_PORT="${MEMOCHAT_REDIS_PORT:-6379}"
+REDIS_PASSWORD="$(first_env MEMOCHAT_REDIS_PASSWD MEMOCHAT_REDIS_PASSWORD || true)"
+CHAT_AUTH_HMAC_SECRET="${MEMOCHAT_CHATAUTH_HMACSECRET:-}"
+MONGO_URI="$(first_env MEMOCHAT_MONGODB_URI MEMOCHAT_MONGO_URI || true)"
+MINIO_ENDPOINT="${MEMOCHAT_MINIO_ENDPOINT:-127.0.0.1:9000}"
+MINIO_ACCESS_KEY="$(first_env MEMOCHAT_MINIO_ROOT_USER MEMOCHAT_MINIO_ACCESSKEY MEMOCHAT_MINIO_ACCESS_KEY MINIO_ROOT_USER MINIO_ACCESS_KEY || true)"
+MINIO_SECRET_KEY="$(first_env MEMOCHAT_MINIO_ROOT_PASSWORD MEMOCHAT_MINIO_SECRETKEY MEMOCHAT_MINIO_SECRET_KEY MINIO_ROOT_PASSWORD MINIO_SECRET_KEY || true)"
+CALL_API_KEY="$(first_env MEMOCHAT_CALL_APIKEY MEMOCHAT_LIVEKIT_API_KEY LIVEKIT_API_KEY || true)"
+CALL_API_SECRET="$(first_env MEMOCHAT_CALL_APISECRET MEMOCHAT_LIVEKIT_API_SECRET LIVEKIT_API_SECRET || true)"
+
+require_value "Postgres password" "${POSTGRES_PASSWORD}"
+require_value "Redis password" "${REDIS_PASSWORD}"
+require_value "ChatAuth HMAC secret" "${CHAT_AUTH_HMAC_SECRET}"
+require_value "MongoDB URI" "${MONGO_URI}"
+require_value "MinIO access key" "${MINIO_ACCESS_KEY}"
+require_value "MinIO secret key" "${MINIO_SECRET_KEY}"
+require_value "Call/LiveKit API key" "${CALL_API_KEY}"
+require_value "Call/LiveKit API secret" "${CALL_API_SECRET}"
+
 # Minimal config: the listen port + DB/redis/mongo/minio so service singletons
 # can open lazily. We point at the live local Docker infra (stable dev ports).
 cat >"${RUN_DIR}/config.ini" <<INI
@@ -109,28 +155,28 @@ DatacenterId=0
 WorkerId=9
 
 [Postgres]
-Host=127.0.0.1
-Port=15432
-User=memochat
-Passwd=123456
-Database=memo_pg
+Host=${POSTGRES_HOST}
+Port=${POSTGRES_PORT}
+User=${POSTGRES_USER}
+Passwd=${POSTGRES_PASSWORD}
+Database=${POSTGRES_DB}
 Schema=memo
 SslMode=disable
 PoolSize=4
 
 [Redis]
-Host=127.0.0.1
-Port=6379
-Passwd=123456
+Host=${REDIS_HOST}
+Port=${REDIS_PORT}
+Passwd=${REDIS_PASSWORD}
 PoolSize=8
 
 [ChatAuth]
-HmacSecret=memochat-dev-chat-secret
+HmacSecret=${CHAT_AUTH_HMAC_SECRET}
 TicketTtlSec=20
 
 [Mongo]
 Enabled=true
-Uri=mongodb://memochat_app:123456@localhost:27017/memochat
+Uri=${MONGO_URI}
 Database=memochat
 MomentsCollection=moments_content
 
@@ -139,10 +185,10 @@ StorageProvider=s3
 
 [MinIO]
 Enabled=true
-Endpoint=127.0.0.1:9000
+Endpoint=${MINIO_ENDPOINT}
 Region=us-east-1
-AccessKey=memochat_admin
-SecretKey=MinioPass2026!
+AccessKey=${MINIO_ACCESS_KEY}
+SecretKey=${MINIO_SECRET_KEY}
 BucketAvatar=memochat-avatar
 BucketFile=memochat-file
 BucketImage=memochat-image
@@ -154,8 +200,8 @@ PublicUrl=http://127.0.0.1:9000
 Enabled=true
 BaseUrl=http://127.0.0.1:${PORT}
 LiveKitUrl=ws://127.0.0.1:7880
-ApiKey=devkey
-ApiSecret=secret
+ApiKey=${CALL_API_KEY}
+ApiSecret=${CALL_API_SECRET}
 RoomPrefix=memochat
 TokenTtlSec=3600
 

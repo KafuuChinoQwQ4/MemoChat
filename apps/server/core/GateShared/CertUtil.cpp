@@ -1,5 +1,5 @@
-#include "CertUtil.h"
-#include "logging/Logger.h"
+#include "CertUtil.hpp"
+#include "logging/Logger.hpp"
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>

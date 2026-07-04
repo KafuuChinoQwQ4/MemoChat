@@ -1,46 +1,25 @@
-#include "logging/LogConfig.h"
+#include "logging/LogConfig.hpp"
 
-#include <algorithm>
-#include <cctype>
+import memochat.logging.config_algorithms;
+import memochat.logging.log_config_algorithms;
 
 namespace memolog
 {
+namespace log_config_modules = memochat::logging::log_config_modules;
+
 namespace
 {
 
 std::string Trim(std::string value)
 {
-    auto is_space = [](unsigned char c)
-    {
-        return std::isspace(c) != 0;
-    };
-    value.erase(value.begin(),
-                std::find_if(value.begin(),
-                             value.end(),
-                             [&](char c)
-                             {
-                                 return !is_space(static_cast<unsigned char>(c));
-                             }));
-    value.erase(std::find_if(value.rbegin(),
-                             value.rend(),
-                             [&](char c)
-                             {
-                                 return !is_space(static_cast<unsigned char>(c));
-                             })
-                    .base(),
-                value.end());
-    return value;
+    const auto begin = memochat::logging::modules::TrimAsciiBegin(value.data(), value.size());
+    const auto end = memochat::logging::modules::TrimAsciiEnd(value.data(), value.size());
+    return value.substr(begin, end - begin);
 }
 
 std::string ToLower(std::string value)
 {
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char c)
-                   {
-                       return static_cast<char>(std::tolower(c));
-                   });
+    memochat::logging::modules::LowerAsciiInPlace(value.data(), value.size());
     return value;
 }
 
@@ -51,11 +30,11 @@ bool ParseBool(const std::string& raw, bool fallback)
         return fallback;
     }
     const std::string v = ToLower(Trim(raw));
-    if (v == "1" || v == "true" || v == "yes" || v == "on")
+    if (log_config_modules::IsTrueBoolToken(v.data(), v.size()))
     {
         return true;
     }
-    if (v == "0" || v == "false" || v == "no" || v == "off")
+    if (log_config_modules::IsFalseBoolToken(v.data(), v.size()))
     {
         return false;
     }
@@ -102,22 +81,15 @@ LogConfig LogConfig::FromGetter(const std::function<std::string(const std::strin
     cfg.max_size_mb = ParseInt(read("MaxSizeMB", std::to_string(cfg.max_size_mb)), cfg.max_size_mb);
     cfg.redact = ParseBool(read("Redact", cfg.redact ? "true" : "false"), cfg.redact);
     cfg.env = read("Env", cfg.env);
-    if (cfg.max_files <= 0)
+    cfg.max_files = log_config_modules::NormalizeMaxFiles(cfg.max_files);
+    cfg.max_size_mb = log_config_modules::NormalizeMaxSizeMb(cfg.max_size_mb);
+    if (!log_config_modules::IsValidRotateMode(cfg.rotate_mode.data(), cfg.rotate_mode.size()))
     {
-        cfg.max_files = 14;
+        cfg.rotate_mode = log_config_modules::DefaultRotateMode();
     }
-    if (cfg.max_size_mb <= 0)
+    if (!log_config_modules::IsValidLogLevel(cfg.level.data(), cfg.level.size()))
     {
-        cfg.max_size_mb = 100;
-    }
-    if (cfg.rotate_mode != "daily" && cfg.rotate_mode != "size")
-    {
-        cfg.rotate_mode = "daily";
-    }
-    if (cfg.level != "trace" && cfg.level != "debug" && cfg.level != "info" && cfg.level != "warn" &&
-        cfg.level != "error" && cfg.level != "critical")
-    {
-        cfg.level = "info";
+        cfg.level = log_config_modules::DefaultLogLevel();
     }
     return cfg;
 }

@@ -146,9 +146,6 @@ RowLayout {
             onAgentRefreshRequested: {
                 if (agent) {
                     agent.loadSessions()
-                    agent.listGameRooms()
-                    agent.listGameRulesets()
-                    agent.listGameTemplates()
                     agent.refreshModelList()
                 }
             }

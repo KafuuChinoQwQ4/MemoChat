@@ -1,20 +1,23 @@
-#include "VarifyServer.h"
+#include "VarifyServer.hpp"
 
-#include "VarifyServiceImpl.h"
-#include "VerifyCodePolicy.h"
-#include "VarifyRedisMgr.h"
-#include "RateLimiter.h"
-#include "EmailSender.h"
-#include "EmailTaskBus.h"
-#include "ConfigMgr.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "VarifyServiceImpl.hpp"
+#include "VerifyCodePolicy.hpp"
+#include "VarifyRedisMgr.hpp"
+#include "RateLimiter.hpp"
+#include "EmailSender.hpp"
+#include "EmailTaskBus.hpp"
+#include "ConfigMgr.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 
 #include <chrono>
 #include <grpcpp/grpcpp.h>
 
+import memochat.varify.service_algorithms;
+
 namespace varifyservice
 {
+namespace varify_service_modules = memochat::varify::service::modules;
 
 VarifyMetrics g_metrics;
 
@@ -120,20 +123,20 @@ bool VarifyServiceImpl::IsValidEmail(const std::string& email)
 
 std::string VarifyServiceImpl::ExtractPeerIP(grpc::ServerContext* context)
 {
-    if (!context)
+    if (!varify_service_modules::HasGrpcContext(context != nullptr))
         return "";
 
     auto peer = context->peer();
-    if (peer.empty())
+    if (!varify_service_modules::HasPeerText(peer.empty()))
         return "";
 
-    if (peer.find("ipv4:") == 0)
+    if (peer.find(varify_service_modules::Ipv4PeerPrefix()) == 0)
     {
-        return peer.substr(5);
+        return peer.substr(varify_service_modules::PeerAddressPrefixLength());
     }
-    if (peer.find("ipv6:") == 0)
+    if (peer.find(varify_service_modules::Ipv6PeerPrefix()) == 0)
     {
-        return peer.substr(5);
+        return peer.substr(varify_service_modules::PeerAddressPrefixLength());
     }
 
     return peer;
@@ -181,9 +184,10 @@ grpc::Status VarifyServiceImpl::GetVarifyCode(grpc::ServerContext* context,
         trace_id = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     }
 
-    memolog::LogInfo("varify.get_code.request",
-                     "get verify code request",
-                     {{"email", email}, {"trace_id", trace_id}, {"module", "grpc"}});
+    memolog::LogInfo(
+        "varify.get_code.request",
+        "get verify code request",
+        {{"email", email}, {"trace_id", trace_id}, {"module", varify_service_modules::GrpcLogModuleName()}});
 
     if (!IsValidEmail(email))
     {
@@ -199,6 +203,15 @@ grpc::Status VarifyServiceImpl::GetVarifyCode(grpc::ServerContext* context,
 
     auto email_result =
         RateLimiter::CheckEmail(email, config_.email_rate_limit_window_sec, config_.email_rate_limit_count);
+    if (email_result == RateLimiter::Result::Error)
+    {
+        g_metrics.requests_failed.fetch_add(1, std::memory_order_relaxed);
+        memolog::LogError("varify.get_code.rate_limit_counter_error_email",
+                          "rate-limit counter check failed closed by email",
+                          {{"email", email}, {"trace_id", trace_id}});
+        reply->set_error(static_cast<int>(VarifyError::RedisErr));
+        return grpc::Status::OK;
+    }
     if (email_result == RateLimiter::Result::RateLimited)
     {
         g_metrics.rate_limited.fetch_add(1, std::memory_order_relaxed);
@@ -212,6 +225,15 @@ grpc::Status VarifyServiceImpl::GetVarifyCode(grpc::ServerContext* context,
     if (!ip.empty())
     {
         auto ip_result = RateLimiter::CheckIP(ip, config_.ip_rate_limit_window_sec, config_.ip_rate_limit_count);
+        if (ip_result == RateLimiter::Result::Error)
+        {
+            g_metrics.requests_failed.fetch_add(1, std::memory_order_relaxed);
+            memolog::LogError("varify.get_code.rate_limit_counter_error_ip",
+                              "rate-limit counter check failed closed by IP",
+                              {{"ip", ip}, {"trace_id", trace_id}});
+            reply->set_error(static_cast<int>(VarifyError::RedisErr));
+            return grpc::Status::OK;
+        }
         if (ip_result == RateLimiter::Result::RateLimited)
         {
             g_metrics.rate_limited.fetch_add(1, std::memory_order_relaxed);
@@ -252,7 +274,7 @@ grpc::Status VarifyServiceImpl::GetVarifyCode(grpc::ServerContext* context,
 
     bool synthetic_email = IsSyntheticLoadtestEmail(email);
 
-    if (!synthetic_email)
+    if (varify_service_modules::ShouldSendEmailForSyntheticAccount(synthetic_email))
     {
         bool email_ok = SendEmail(email, code);
         if (!email_ok)

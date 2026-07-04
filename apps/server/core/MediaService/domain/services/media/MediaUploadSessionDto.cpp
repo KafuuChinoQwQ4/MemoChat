@@ -1,29 +1,59 @@
-#include "services/media/MediaUploadSessionDto.h"
+#include "services/media/MediaUploadSessionDto.hpp"
 
-#include "json/TypedJsonCodec.h"
+#include "json/TypedJsonCodec.hpp"
 
+#include <algorithm>
 #include <utility>
+
+import memochat.media.upload_session_algorithms;
 
 namespace memochat::media
 {
+namespace
+{
+
+std::vector<int> NormalizeSessionGrantUids(std::vector<int> values)
+{
+    values.erase(std::remove_if(values.begin(),
+                                values.end(),
+                                [](int uid)
+                                {
+                                    return uid <= 0;
+                                }),
+                 values.end());
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    return values;
+}
+
+} // namespace
 
 MediaUploadSessionDto NormalizeMediaUploadSession(MediaUploadSessionDto session)
 {
-    if (session.media_type.empty())
+    if (upload_session::modules::ShouldUseDefaultMediaType(session.media_type.empty()))
     {
         session.media_type = "file";
     }
-    if (session.storage_provider.empty())
+    if (upload_session::modules::ShouldUseDefaultStorageProvider(session.storage_provider.empty()))
     {
         session.storage_provider = "local";
+    }
+    session.grant_uids = NormalizeSessionGrantUids(std::move(session.grant_uids));
+    if (session.grant_group_id < 0)
+    {
+        session.grant_group_id = 0;
     }
     return session;
 }
 
 bool IsValidMediaUploadSession(const MediaUploadSessionDto& session)
 {
-    return session.uid > 0 && !session.upload_id.empty() && !session.file_name.empty() && session.file_size > 0 &&
-           session.chunk_size > 0 && session.total_chunks > 0;
+    return upload_session::modules::HasValidUploadSessionShape(session.uid > 0,
+                                                               !session.upload_id.empty(),
+                                                               !session.file_name.empty(),
+                                                               session.file_size > 0,
+                                                               session.chunk_size > 0,
+                                                               session.total_chunks > 0);
 }
 
 bool EncodeMediaUploadSession(const MediaUploadSessionDto& session, std::string* out, std::string* error_out)

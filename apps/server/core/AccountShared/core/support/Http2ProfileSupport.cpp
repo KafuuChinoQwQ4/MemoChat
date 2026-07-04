@@ -1,11 +1,16 @@
-﻿#include "Http2ProfileSupport.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "const.h"
-#include "AuthLoginSupport.h"
-#include "AuthPublicDtos.h"
-#include "logging/Logger.h"
-#include "json/GlazeCompat.h"
+﻿#include "Http2ProfileSupport.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "AuthLoginSupport.hpp"
+#include "AuthPublicDtos.hpp"
+#include "logging/Logger.hpp"
+#include "json/GlazeCompat.hpp"
+#include "support/UserTokenValidator.hpp"
+
+import memochat.account.profile_support_algorithms;
+
+namespace profile_algo = memochat::account::profile_support::modules;
 
 namespace Http2ProfileSupport
 {
@@ -32,13 +37,14 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     ProfileResult result;
     if (!gateauthsupport::HasProfileUpdateRequiredFields(req))
     {
-        result.error = 1;
-        result.message = "missing required fields";
+        result.error = profile_algo::ProfileErrorCode();
+        result.message = profile_algo::MissingRequiredFieldsMessage();
         return result;
     }
 
     const auto profile_request = gateauthsupport::ProfileUpdateRequestFromJsonValue(req);
     const auto uid = profile_request.uid;
+    const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
@@ -46,28 +52,34 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
 
     if (uid <= 0 || nick.empty())
     {
-        result.error = 1;
-        result.message = "invalid uid or nick";
+        result.error = profile_algo::ProfileErrorCode();
+        result.message = profile_algo::InvalidUidOrNickMessage();
+        return result;
+    }
+    if (!memochat::auth::ValidateUserToken(uid, token))
+    {
+        result.error = ErrorCodes::TokenInvalid;
+        result.message = "token invalid";
         return result;
     }
 
     if (!PostgresMgr::GetInstance()->UpdateUserProfile(uid, nick, desc, icon))
     {
-        result.error = 1;
-        result.message = "profile update failed";
+        result.error = profile_algo::ProfileErrorCode();
+        result.message = profile_algo::ProfileUpdateFailedMessage();
         return result;
     }
 
-    RedisMgr::GetInstance()->Del("ubaseinfo_" + std::to_string(uid));
+    RedisMgr::GetInstance()->Del(profile_algo::UserBaseInfoKeyPrefix() + std::to_string(uid));
     if (!name.empty())
     {
-        RedisMgr::GetInstance()->Del("nameinfo_" + name);
+        RedisMgr::GetInstance()->Del(profile_algo::UserNameInfoKeyPrefix() + name);
     }
     gateauthsupport::InvalidateLoginCacheByUid(uid);
 
-    result.error = 0;
+    result.error = profile_algo::ProfileSuccessCode();
     gateauthsupport::ProfileUpdateResponseDto profile_response;
-    profile_response.error = 0;
+    profile_response.error = profile_algo::ProfileSuccessCode();
     profile_response.uid = uid;
     profile_response.name = name;
     profile_response.nick = nick;
@@ -86,20 +98,20 @@ ProfileResult HandleGetUserInfo(int uid)
     ProfileResult result;
     if (uid <= 0)
     {
-        result.error = 1;
-        result.message = "invalid uid";
+        result.error = profile_algo::ProfileErrorCode();
+        result.message = profile_algo::InvalidUidMessage();
         return result;
     }
     ::UserInfo user_info;
     if (!PostgresMgr::GetInstance()->GetUserInfo(uid, user_info))
     {
-        result.error = 1;
-        result.message = "user not found";
+        result.error = profile_algo::ProfileErrorCode();
+        result.message = profile_algo::UserNotFoundMessage();
         return result;
     }
-    result.error = 0;
+    result.error = profile_algo::ProfileSuccessCode();
     gateauthsupport::UserInfoResponseDto user_info_response;
-    user_info_response.error = 0;
+    user_info_response.error = profile_algo::ProfileSuccessCode();
     user_info_response.uid = user_info.uid;
     user_info_response.user_id = user_info.user_id;
     user_info_response.name = user_info.name;

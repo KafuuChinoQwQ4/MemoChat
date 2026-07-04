@@ -1,14 +1,12 @@
-#include "PostgresDao.h"
-#include "ConfigMgr.h"
-#include "PostgresDaoUtil.h"
-#include "db/PqxxCompat.h"
-#include "PostgresPool.h"
-#include "SnowflakeUtil.h"
+#include "PostgresDao.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresDaoUtil.hpp"
+#include "db/PqxxCompat.hpp"
+#include "PostgresPool.hpp"
+#include "SnowflakeUtil.hpp"
 #include <pqxx/pqxx>
 #include <set>
-#include <algorithm>
 #include <chrono>
-#include <cctype>
 #include <unordered_set>
 #include <unordered_map>
 #include <random>
@@ -16,21 +14,24 @@
 #include <limits>
 #include <sstream>
 
+import memochat.chat.postgres_dao_dialogs_algorithms;
+
+namespace postgres_dao_dialogs_modules = memochat::chat::persistence::postgres_dao_dialogs::modules;
+
 namespace
 {
 bool IsValidGroupCode(const std::string& group_code)
 {
-    if (group_code.size() != 10 || group_code[0] != 'g')
-    {
-        return false;
-    }
-    if (group_code[1] < '1' || group_code[1] > '9')
+    const int length = static_cast<int>(group_code.size());
+    const char prefix = length > 0 ? group_code[0] : '\0';
+    const char first_digit = length > 1 ? group_code[1] : '\0';
+    if (!postgres_dao_dialogs_modules::HasGroupCodeHeader(length, prefix, first_digit))
     {
         return false;
     }
     for (size_t i = 2; i < group_code.size(); ++i)
     {
-        if (!std::isdigit(static_cast<unsigned char>(group_code[i])))
+        if (!postgres_dao_dialogs_modules::IsGroupCodeTailChar(group_code[i]))
         {
             return false;
         }
@@ -56,7 +57,7 @@ void ExecuteIgnoreSql(sql::Statement* stmt, const std::string& sql_text)
 bool PostgresDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::shared_ptr<DialogMetaInfo>>& metas)
 {
     metas.clear();
-    if (owner_uid <= 0)
+    if (!postgres_dao_dialogs_modules::CanLoadDialogMeta(owner_uid))
     {
         return false;
     }
@@ -133,7 +134,7 @@ bool PostgresDao::GetDialogMetaByOwner(const int& owner_uid, std::vector<std::sh
 bool PostgresDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_uid, DialogRuntimeInfo& runtime)
 {
     runtime = DialogRuntimeInfo();
-    if (owner_uid <= 0 || peer_uid <= 0)
+    if (!postgres_dao_dialogs_modules::CanReadPrivateDialogRuntime(owner_uid, peer_uid))
     {
         return false;
     }
@@ -153,7 +154,10 @@ bool PostgresDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_
                 const auto& row = rows[0];
                 runtime.last_msg_preview = row["last_msg_preview"].is_null() ? "" : row["last_msg_preview"].c_str();
                 runtime.last_msg_ts = row["last_msg_ts"].is_null() ? 0 : row["last_msg_ts"].as<int64_t>();
-                runtime.unread_count = row["unread_count"].is_null() ? 0 : std::max(0, row["unread_count"].as<int>());
+                runtime.unread_count =
+                    row["unread_count"].is_null()
+                        ? 0
+                        : postgres_dao_dialogs_modules::NormalizeUnreadCount(row["unread_count"].as<int>());
             }
             return true;
         }
@@ -186,7 +190,7 @@ bool PostgresDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_
         {
             runtime.last_msg_preview = res->isNull("last_msg_preview") ? "" : res->getString("last_msg_preview");
             runtime.last_msg_ts = res->isNull("last_msg_ts") ? 0 : res->getInt64("last_msg_ts");
-            runtime.unread_count = std::max(0, res->getInt("unread_count"));
+            runtime.unread_count = postgres_dao_dialogs_modules::NormalizeUnreadCount(res->getInt("unread_count"));
         }
         return true;
     }
@@ -202,7 +206,7 @@ bool PostgresDao::GetPrivateDialogRuntime(const int& owner_uid, const int& peer_
 bool PostgresDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& group_id, DialogRuntimeInfo& runtime)
 {
     runtime = DialogRuntimeInfo();
-    if (owner_uid <= 0 || group_id <= 0)
+    if (!postgres_dao_dialogs_modules::CanReadGroupDialogRuntime(owner_uid, group_id))
     {
         return false;
     }
@@ -222,7 +226,10 @@ bool PostgresDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& gro
                 const auto& row = rows[0];
                 runtime.last_msg_preview = row["last_msg_preview"].is_null() ? "" : row["last_msg_preview"].c_str();
                 runtime.last_msg_ts = row["last_msg_ts"].is_null() ? 0 : row["last_msg_ts"].as<int64_t>();
-                runtime.unread_count = row["unread_count"].is_null() ? 0 : std::max(0, row["unread_count"].as<int>());
+                runtime.unread_count =
+                    row["unread_count"].is_null()
+                        ? 0
+                        : postgres_dao_dialogs_modules::NormalizeUnreadCount(row["unread_count"].as<int>());
             }
             return true;
         }
@@ -256,7 +263,7 @@ bool PostgresDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& gro
         {
             runtime.last_msg_preview = res->isNull("last_msg_preview") ? "" : res->getString("last_msg_preview");
             runtime.last_msg_ts = res->isNull("last_msg_ts") ? 0 : res->getInt64("last_msg_ts");
-            runtime.unread_count = std::max(0, res->getInt("unread_count"));
+            runtime.unread_count = postgres_dao_dialogs_modules::NormalizeUnreadCount(res->getInt("unread_count"));
         }
         return true;
     }
@@ -271,7 +278,7 @@ bool PostgresDao::GetGroupDialogRuntime(const int& owner_uid, const int64_t& gro
 
 bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
 {
-    if (owner_uid <= 0)
+    if (!postgres_dao_dialogs_modules::CanLoadDialogMeta(owner_uid))
     {
         return false;
     }
@@ -288,7 +295,7 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                 for (const auto& row : peer_rows)
                 {
                     const auto peer_uid = row["friend_id"].as<int>();
-                    if (peer_uid > 0)
+                    if (postgres_dao_dialogs_modules::ShouldKeepPositiveUid(peer_uid))
                     {
                         peers.push_back(peer_uid);
                     }
@@ -304,8 +311,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                                  owner_uid,
                                  peer_uid);
 
-                const int conv_min = std::min(owner_uid, peer_uid);
-                const int conv_max = std::max(owner_uid, peer_uid);
+                const int conv_min = postgres_dao_dialogs_modules::ConversationUidMin(owner_uid, peer_uid);
+                const int conv_max = postgres_dao_dialogs_modules::ConversationUidMax(owner_uid, peer_uid);
                 std::string preview;
                 int64_t last_msg_ts = 0;
                 int unread_count = 0;
@@ -335,7 +342,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                                     peer_uid);
                 if (!unread_rows.empty())
                 {
-                    unread_count = std::max(0, unread_rows[0]["unread_count"].as<int>());
+                    unread_count =
+                        postgres_dao_dialogs_modules::NormalizeUnreadCount(unread_rows[0]["unread_count"].as<int>());
                 }
 
                 txn.exec_params0("UPDATE chat_dialog SET last_msg_preview = $1, last_msg_ts = $2, unread_count = $3, "
@@ -357,7 +365,7 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                 for (const auto& row : group_rows)
                 {
                     const auto group_id = row["group_id"].as<int64_t>();
-                    if (group_id > 0)
+                    if (postgres_dao_dialogs_modules::ShouldKeepPositiveGroupId(group_id))
                     {
                         groups.push_back(group_id);
                     }
@@ -402,7 +410,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                                     owner_uid);
                 if (!unread_rows.empty())
                 {
-                    unread_count = std::max(0, unread_rows[0]["unread_count"].as<int>());
+                    unread_count =
+                        postgres_dao_dialogs_modules::NormalizeUnreadCount(unread_rows[0]["unread_count"].as<int>());
                 }
 
                 txn.exec_params0("UPDATE chat_dialog SET last_msg_preview = $1, last_msg_ts = $2, unread_count = $3, "
@@ -462,7 +471,7 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
             while (private_res->next())
             {
                 const int peer_uid = private_res->getInt("friend_id");
-                if (peer_uid > 0)
+                if (postgres_dao_dialogs_modules::ShouldKeepPositiveUid(peer_uid))
                 {
                     peers.push_back(peer_uid);
                 }
@@ -480,8 +489,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
             ensure_row->setInt(2, peer_uid);
             ensure_row->executeUpdate();
 
-            const int conv_min = std::min(owner_uid, peer_uid);
-            const int conv_max = std::max(owner_uid, peer_uid);
+            const int conv_min = postgres_dao_dialogs_modules::ConversationUidMin(owner_uid, peer_uid);
+            const int conv_max = postgres_dao_dialogs_modules::ConversationUidMax(owner_uid, peer_uid);
             std::string preview;
             int64_t last_msg_ts = 0;
             int unread_count = 0;
@@ -516,7 +525,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                 std::unique_ptr<sql::ResultSet> unread_res(unread_stmt->executeQuery());
                 if (unread_res->next())
                 {
-                    unread_count = std::max(0, unread_res->getInt("unread_count"));
+                    unread_count =
+                        postgres_dao_dialogs_modules::NormalizeUnreadCount(unread_res->getInt("unread_count"));
                 }
             }
 
@@ -543,7 +553,7 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
             while (group_res->next())
             {
                 const int64_t group_id = group_res->getInt64("group_id");
-                if (group_id > 0)
+                if (postgres_dao_dialogs_modules::ShouldKeepPositiveGroupId(group_id))
                 {
                     groups.push_back(group_id);
                 }
@@ -593,7 +603,8 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
                 std::unique_ptr<sql::ResultSet> unread_res(unread_stmt->executeQuery());
                 if (unread_res->next())
                 {
-                    unread_count = std::max(0, unread_res->getInt("unread_count"));
+                    unread_count =
+                        postgres_dao_dialogs_modules::NormalizeUnreadCount(unread_res->getInt("unread_count"));
                 }
             }
 
@@ -643,12 +654,12 @@ bool PostgresDao::RefreshDialogsForOwner(const int& owner_uid)
 
 bool PostgresDao::UpsertGroupReadState(const int& uid, const int64_t& group_id, const int64_t& read_ts)
 {
-    if (uid <= 0 || group_id <= 0)
+    if (!postgres_dao_dialogs_modules::CanUpsertGroupReadState(uid, group_id))
     {
         return false;
     }
     int64_t normalized_read_ts = read_ts;
-    if (normalized_read_ts <= 0)
+    if (postgres_dao_dialogs_modules::ShouldUseFallbackTimestamp(normalized_read_ts))
     {
         normalized_read_ts = static_cast<int64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -714,22 +725,23 @@ bool PostgresDao::UpsertDialogDraft(const int& owner_uid,
                                     const int64_t& group_id,
                                     const std::string& draft_text)
 {
-    if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group"))
-    {
-        return false;
-    }
-
-    const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
-    const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
-    if ((dialog_type == "private" && normalized_peer_uid <= 0) || (dialog_type == "group" && normalized_group_id <= 0))
+    const bool is_private = dialog_type == "private";
+    const bool is_group = dialog_type == "group";
+    const int normalized_peer_uid = postgres_dao_dialogs_modules::NormalizeDialogPeerUid(is_private, peer_uid);
+    const int64_t normalized_group_id = postgres_dao_dialogs_modules::NormalizeDialogGroupId(is_group, group_id);
+    if (!postgres_dao_dialogs_modules::CanUpsertDialogMeta(owner_uid,
+                                                           is_private,
+                                                           is_group,
+                                                           normalized_peer_uid,
+                                                           normalized_group_id))
     {
         return false;
     }
 
     std::string normalized_draft = draft_text;
-    if (normalized_draft.size() > 2000)
+    if (normalized_draft.size() > static_cast<size_t>(postgres_dao_dialogs_modules::MaxDraftLength()))
     {
-        normalized_draft.resize(2000);
+        normalized_draft.resize(static_cast<size_t>(postgres_dao_dialogs_modules::MaxDraftLength()));
     }
     if (use_postgres_)
     {
@@ -796,17 +808,19 @@ bool PostgresDao::UpsertDialogPinned(const int& owner_uid,
                                      const int64_t& group_id,
                                      const int& pinned_rank)
 {
-    if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group"))
+    const bool is_private = dialog_type == "private";
+    const bool is_group = dialog_type == "group";
+    const int normalized_peer_uid = postgres_dao_dialogs_modules::NormalizeDialogPeerUid(is_private, peer_uid);
+    const int64_t normalized_group_id = postgres_dao_dialogs_modules::NormalizeDialogGroupId(is_group, group_id);
+    if (!postgres_dao_dialogs_modules::CanUpsertDialogMeta(owner_uid,
+                                                           is_private,
+                                                           is_group,
+                                                           normalized_peer_uid,
+                                                           normalized_group_id))
     {
         return false;
     }
-    const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
-    const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
-    if ((dialog_type == "private" && normalized_peer_uid <= 0) || (dialog_type == "group" && normalized_group_id <= 0))
-    {
-        return false;
-    }
-    const int normalized_pinned_rank = std::max(0, pinned_rank);
+    const int normalized_pinned_rank = postgres_dao_dialogs_modules::NormalizePinnedRank(pinned_rank);
     if (use_postgres_)
     {
         try
@@ -872,17 +886,19 @@ bool PostgresDao::UpsertDialogMuteState(const int& owner_uid,
                                         const int64_t& group_id,
                                         const int& mute_state)
 {
-    if (owner_uid <= 0 || (dialog_type != "private" && dialog_type != "group"))
+    const bool is_private = dialog_type == "private";
+    const bool is_group = dialog_type == "group";
+    const int normalized_peer_uid = postgres_dao_dialogs_modules::NormalizeDialogPeerUid(is_private, peer_uid);
+    const int64_t normalized_group_id = postgres_dao_dialogs_modules::NormalizeDialogGroupId(is_group, group_id);
+    if (!postgres_dao_dialogs_modules::CanUpsertDialogMeta(owner_uid,
+                                                           is_private,
+                                                           is_group,
+                                                           normalized_peer_uid,
+                                                           normalized_group_id))
     {
         return false;
     }
-    const int normalized_peer_uid = (dialog_type == "private") ? peer_uid : 0;
-    const int64_t normalized_group_id = (dialog_type == "group") ? group_id : 0;
-    if ((dialog_type == "private" && normalized_peer_uid <= 0) || (dialog_type == "group" && normalized_group_id <= 0))
-    {
-        return false;
-    }
-    const int normalized_mute_state = mute_state > 0 ? 1 : 0;
+    const int normalized_mute_state = postgres_dao_dialogs_modules::NormalizeMuteState(mute_state);
     if (use_postgres_)
     {
         try
@@ -1606,7 +1622,7 @@ bool PostgresDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid,
     {
         try
         {
-            const int final_limit = std::max(1, std::min(limit, 100));
+            const int final_limit = postgres_dao_dialogs_modules::ClampGroupApplyLimit(limit);
             pqxx::connection conn(postgres_connection_string_);
             pqxx::read_transaction txn(conn);
             const auto rows =
@@ -1656,7 +1672,7 @@ bool PostgresDao::GetPendingGroupApplyForReviewer(const int& reviewer_uid,
         });
     try
     {
-        const int final_limit = std::max(1, std::min(limit, 100));
+        const int final_limit = postgres_dao_dialogs_modules::ClampGroupApplyLimit(limit);
         std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
             "SELECT a.apply_id, a.group_id, a.applicant_uid, a.inviter_uid, a.type, a.status, a.reason, a.reviewer_uid "
             "FROM chat_group_apply a "

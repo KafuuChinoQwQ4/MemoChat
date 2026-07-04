@@ -1,20 +1,20 @@
-#include "ChatMessageInternalGrpcService.h"
-#include "ChatMessageRepository.h"
-#include "ChatRelationRepository.h"
-#include "ConfigMgr.h"
-#include "GroupMessageService.h"
-#include "MessageDeliveryService.h"
-#include "MongoMgr.h"
-#include "PostgresMgr.h"
-#include "PrivateMessageService.h"
-#include "RedisMgr.h"
-#include "RedisOnlineRouteStore.h"
-#include "SnowflakeUtil.h"
-#include "UserMgr.h"
-#include "logging/LogConfig.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
-#include "logging/TelemetryConfig.h"
+#include "ChatMessageInternalGrpcService.hpp"
+#include "ChatMessageRepository.hpp"
+#include "ChatRelationRepository.hpp"
+#include "ConfigMgr.hpp"
+#include "GroupMessageService.hpp"
+#include "MessageDeliveryService.hpp"
+#include "MongoMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "PrivateMessageService.hpp"
+#include "RedisMgr.hpp"
+#include "RedisOnlineRouteStore.hpp"
+#include "SnowflakeUtil.hpp"
+#include "UserMgr.hpp"
+#include "logging/LogConfig.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TelemetryConfig.hpp"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -28,6 +28,10 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+
+import memochat.chat.message_service_runtime_algorithms;
+
+namespace message_service_modules = memochat::chat::message_service::modules;
 
 namespace
 {
@@ -61,10 +65,10 @@ public:
     {
         if (error)
         {
-            *error = "ChatMessageService event publishing is disabled in this scaffold";
+            *error = message_service_modules::DisabledEventPublishError();
         }
-        memolog::LogWarn("message_service.event_publish_disabled",
-                         "ChatMessageService rejected message event publish",
+        memolog::LogWarn(message_service_modules::DisabledEventPublishLogEvent(),
+                         message_service_modules::DisabledEventPublishLogMessage(),
                          {{"topic", topic}});
         return false;
     }
@@ -75,15 +79,15 @@ std::string ParseConfigPath(int argc, char** argv)
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
-        if (arg == "--config")
+        if (message_service_modules::IsConfigFlag(arg.data(), arg.size()))
         {
-            if (i + 1 >= argc)
+            if (message_service_modules::ShouldRejectMissingConfigValue(i + 1 < argc))
             {
-                throw std::runtime_error("missing value for --config");
+                throw std::runtime_error(message_service_modules::MissingConfigValueMessage());
             }
             return argv[++i];
         }
-        throw std::runtime_error("unknown argument: " + arg);
+        throw std::runtime_error(std::string(message_service_modules::UnknownArgumentPrefix()) + arg);
     }
     return "";
 }
@@ -94,12 +98,12 @@ std::string ConfigValueOrDefault(ConfigMgr& cfg,
                                  const std::string& default_value)
 {
     const auto value = cfg.GetValue(section, key);
-    return value.empty() ? default_value : value;
+    return message_service_modules::ShouldUseDefaultConfigValue(value.empty()) ? default_value : value;
 }
 
 void SetInstanceNameEnv(const std::string& instance_name)
 {
-    if (instance_name.empty())
+    if (!message_service_modules::ShouldSetInstanceName(instance_name.empty()))
     {
         return;
     }
@@ -114,15 +118,17 @@ void InitSnowflake(ConfigMgr& cfg)
 {
     const auto datacenter_id_str = cfg.GetValue("Snowflake", "DatacenterId");
     const auto worker_id_str = cfg.GetValue("Snowflake", "WorkerId");
-    const int64_t datacenter_id = datacenter_id_str.empty() ? 1 : std::stoll(datacenter_id_str);
-    const int64_t worker_id = worker_id_str.empty() ? 10 : std::stoll(worker_id_str);
+    const int64_t datacenter_id = datacenter_id_str.empty() ? message_service_modules::DefaultSnowflakeDatacenterId()
+                                                            : std::stoll(datacenter_id_str);
+    const int64_t worker_id =
+        worker_id_str.empty() ? message_service_modules::DefaultSnowflakeWorkerId() : std::stoll(worker_id_str);
     SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
 }
 
 std::string MessageServiceRpcAddress(ConfigMgr& cfg)
 {
-    const auto host = ConfigValueOrDefault(cfg, "MessageServiceRpc", "Host", "127.0.0.1");
-    const auto port = ConfigValueOrDefault(cfg, "MessageServiceRpc", "Port", "50092");
+    const auto host = ConfigValueOrDefault(cfg, "MessageServiceRpc", "Host", message_service_modules::DefaultRpcHost());
+    const auto port = ConfigValueOrDefault(cfg, "MessageServiceRpc", "Port", message_service_modules::DefaultRpcPort());
     return host + ":" + port;
 }
 } // namespace
@@ -134,7 +140,8 @@ int main(int argc, char** argv)
         ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv));
         auto& cfg = ConfigMgr::Inst();
 
-        const auto service_name = ConfigValueOrDefault(cfg, "SelfServer", "Name", "chatmessageservice1");
+        const auto service_name =
+            ConfigValueOrDefault(cfg, "SelfServer", "Name", message_service_modules::DefaultServiceName());
         SetInstanceNameEnv(service_name);
         InitSnowflake(cfg);
 
@@ -148,8 +155,8 @@ int main(int argc, char** argv)
             {
                 return cfg.GetValue(section, key);
             });
-        memolog::Logger::Init("ChatMessageService", log_cfg);
-        memolog::Telemetry::Init("ChatMessageService", telemetry_cfg);
+        memolog::Logger::Init(message_service_modules::LoggerName(), log_cfg);
+        memolog::Telemetry::Init(message_service_modules::LoggerName(), telemetry_cfg);
 
         ScopeExit cleanup(
             [service_name]()
@@ -171,7 +178,7 @@ int main(int argc, char** argv)
                                               std::chrono::steady_clock::now() - storage_init_start)
                                               .count())}});
 
-        ChatMessageRepository message_repository;
+        ChatMessageRepository message_repository(*PostgresMgr::GetInstance(), *MongoMgr::GetInstance());
         ChatRelationRepository relation_repository;
         RedisOnlineRouteStore online_route_store;
         DisabledMessageEventPublisher event_publisher;

@@ -1,14 +1,16 @@
-#include "ChatGrpcClient.h"
-#include "RedisMgr.h"
-#include "ConfigMgr.h"
-#include "UserMgr.h"
-#include "CSession.h"
-#include "PostgresMgr.h"
-#include "cluster/ChatClusterDiscovery.h"
-#include "logging/GrpcTrace.h"
-#include "logging/Logger.h"
-#include "logging/Telemetry.h"
+#include "ChatGrpcClient.hpp"
+#include "ConfigMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "cluster/ChatClusterDiscovery.hpp"
+#include "logging/GrpcTrace.hpp"
+#include "logging/Logger.hpp"
+#include "logging/Telemetry.hpp"
 #include <sstream>
+
+import memochat.chat.chat_grpc_client_algorithms;
+
+namespace chat_grpc_modules = memochat::chat::chat_grpc_client::modules;
 
 ChatGrpcClient::ChatGrpcClient()
 {
@@ -23,11 +25,15 @@ ChatGrpcClient::ChatGrpcClient()
 
     for (const auto& node : cluster.enabledNodes())
     {
-        if (node.name == self_name)
+        if (chat_grpc_modules::ShouldSkipSelfNode(node.name.data(),
+                                                  node.name.size(),
+                                                  self_name.data(),
+                                                  self_name.size()))
         {
             continue;
         }
-        _pools[node.name] = std::make_unique<ChatConPool>(5, node.rpc_host, node.rpc_port);
+        _pools[node.name] =
+            std::make_unique<ChatConPool>(chat_grpc_modules::DefaultRemotePoolSize(), node.rpc_host, node.rpc_port);
     }
 }
 
@@ -49,7 +55,7 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFri
         });
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -65,7 +71,7 @@ AddFriendRsp ChatGrpcClient::NotifyAddFriend(std::string server_ip, const AddFri
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -88,7 +94,6 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
         }
         userinfo->uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
         userinfo->name = memochat::json::glaze_safe_get<std::string>(root, "name", "");
-        userinfo->pwd = memochat::json::glaze_safe_get<std::string>(root, "pwd", "");
         userinfo->email = memochat::json::glaze_safe_get<std::string>(root, "email", "");
         userinfo->nick = memochat::json::glaze_safe_get<std::string>(root, "nick", "");
         userinfo->desc = memochat::json::glaze_safe_get<std::string>(root, "desc", "");
@@ -108,7 +113,6 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
 
         memochat::json::JsonValue redis_root;
         redis_root["uid"] = uid;
-        redis_root["pwd"] = userinfo->pwd;
         redis_root["name"] = userinfo->name;
         redis_root["email"] = userinfo->email;
         redis_root["nick"] = userinfo->nick;
@@ -140,7 +144,7 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
         });
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -156,7 +160,7 @@ AuthFriendRsp ChatGrpcClient::NotifyAuthFriend(std::string server_ip, const Auth
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -194,7 +198,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
         });
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         rsp.set_error(ErrorCodes::TargetOffline);
         return rsp;
@@ -211,7 +215,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyTextChatMsg(std::string server_ip,
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::TargetOffline);
@@ -238,7 +242,7 @@ KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUser
         });
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -254,7 +258,7 @@ KickUserRsp ChatGrpcClient::NotifyKickUser(std::string server_ip, const KickUser
         });
     Status status = stub->NotifyKickUser(&context, req, &rsp);
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -276,7 +280,7 @@ GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, 
     rsp.set_error(ErrorCodes::Success);
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -292,7 +296,7 @@ GroupMessageNotifyRsp ChatGrpcClient::NotifyGroupMessage(std::string server_ip, 
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -312,7 +316,7 @@ GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, cons
     rsp.set_error(ErrorCodes::Success);
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -328,7 +332,7 @@ GroupEventNotifyRsp ChatGrpcClient::NotifyGroupEvent(std::string server_ip, cons
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);
@@ -348,7 +352,7 @@ GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip
     rsp.set_error(ErrorCodes::Success);
 
     auto find_iter = _pools.find(server_ip);
-    if (find_iter == _pools.end())
+    if (chat_grpc_modules::ShouldSkipRemoteCall(find_iter != _pools.end()))
     {
         return rsp;
     }
@@ -364,7 +368,7 @@ GroupMemberBatchRsp ChatGrpcClient::NotifyGroupMemberBatch(std::string server_ip
             pool->returnConnection(std::move(stub));
         });
 
-    if (!status.ok())
+    if (chat_grpc_modules::ShouldReportGrpcStatusError(status.ok()))
     {
         span.SetStatusError("grpc", status.error_message());
         rsp.set_error(ErrorCodes::RPCFailed);

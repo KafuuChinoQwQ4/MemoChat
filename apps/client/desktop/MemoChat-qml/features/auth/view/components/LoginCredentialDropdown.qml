@@ -44,14 +44,6 @@ Popup {
         return 58 + listHeight + 14
     }
 
-    function maskedPassword(password) {
-        const length = Math.max(0, String(password || "").length)
-        if (length <= 0) {
-            return "未保存密码"
-        }
-        return "\u2022".repeat(Math.min(length, 10))
-    }
-
     function reposition() {
         if (!root.parent || !root.anchorItem || !root.hostItem) {
             return
@@ -202,7 +194,7 @@ Popup {
                     Text {
                         width: parent.width
                         text: root.credentialCount() > 0
-                              ? "选择一个历史账号快速填充"
+                              ? "选择一个历史邮箱快速填充"
                               : "登录成功后会自动保存在这里"
                         color: "#6a7d90"
                         font.pixelSize: 11
@@ -283,7 +275,6 @@ Popup {
                     id: credentialDelegate
                     required property int index
                     required property string email
-                    required property string password
 
                     width: credentialList.width
                     height: 56
@@ -351,7 +342,7 @@ Popup {
                         }
 
                         Text {
-                            text: "密码 " + root.maskedPassword(credentialDelegate.password)
+                            text: "点击填入邮箱"
                             color: "#6b7f92"
                             font.pixelSize: 11
                             elide: Text.ElideRight

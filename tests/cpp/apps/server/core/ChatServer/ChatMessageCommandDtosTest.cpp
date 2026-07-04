@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "ChatMessageCommandDtos.h"
-#include "json/GlazeCompat.h"
-#include "message/GroupResponseFormatter.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "ChatMessageCommandDtos.hpp"
+#include "json/GlazeCompat.hpp"
+#include "message/GroupResponseFormatter.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <optional>

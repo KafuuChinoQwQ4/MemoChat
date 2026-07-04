@@ -1,14 +1,18 @@
-#include "ChatMessageInternalGrpcService.h"
+#include "ChatMessageInternalGrpcService.hpp"
 
-#include "const.h"
-#include "json/GlazeCompat.h"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+
+import memochat.chat.message_internal_grpc_service_algorithms;
+
+namespace message_internal_grpc_modules = memochat::chat::message_internal_grpc_service::modules;
 
 namespace
 {
 MessageCommandRequest BuildCommandRequest(const chatinternal::JsonPayloadRequest& request)
 {
     MessageCommandRequest command_request;
-    command_request.request_msg_id = static_cast<short>(request.tcp_msg_id());
+    command_request.request_msg_id = message_internal_grpc_modules::TcpMessageId(request.tcp_msg_id());
     command_request.payload_json = request.payload_json();
     command_request.session_uid = request.session().uid();
     command_request.session_id = request.session().session_id();
@@ -78,15 +82,17 @@ grpc::Status ChatMessageInternalGrpcService::BuildGroupList(grpc::ServerContext*
                                                             const chatinternal::BootstrapRequest* request,
                                                             chatinternal::BootstrapResponse* response)
 {
-    if (!request || !response)
+    if (message_internal_grpc_modules::ShouldReportMissingRequestOrResponse(request != nullptr, response != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "missing group list bootstrap request or response");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            message_internal_grpc_modules::MissingGroupListBootstrapRequestMessage());
     }
-    if (!_group_message_service)
+    if (message_internal_grpc_modules::ShouldReportMissingGroupService(_group_message_service != nullptr))
     {
         response->set_error(ErrorCodes::RPCFailed);
-        response->set_payload_json("{}");
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "group message command service is not configured");
+        response->set_payload_json(message_internal_grpc_modules::DefaultPayloadJson());
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            message_internal_grpc_modules::GroupMessageCommandServiceNotConfiguredMessage());
     }
 
     memochat::json::JsonValue out(memochat::json::object_t{});
@@ -227,15 +233,17 @@ grpc::Status ChatMessageInternalGrpcService::BuildPrivateCommandResponse(
     chatinternal::JsonPayloadResponse* response,
     MessageCommandResult (IPrivateMessageCommandService::*handler)(const MessageCommandRequest&))
 {
-    if (!request || !response)
+    if (message_internal_grpc_modules::ShouldReportMissingRequestOrResponse(request != nullptr, response != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "missing private message command request or response");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            message_internal_grpc_modules::MissingPrivateMessageCommandRequestMessage());
     }
-    if (!_private_message_service)
+    if (message_internal_grpc_modules::ShouldReportMissingPrivateService(_private_message_service != nullptr))
     {
         response->set_error(ErrorCodes::RPCFailed);
-        response->set_payload_json("{}");
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "private message command service is not configured");
+        response->set_payload_json(message_internal_grpc_modules::DefaultPayloadJson());
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            message_internal_grpc_modules::PrivateMessageCommandServiceNotConfiguredMessage());
     }
 
     const auto result = (_private_message_service->*handler)(BuildCommandRequest(*request));
@@ -250,15 +258,17 @@ grpc::Status ChatMessageInternalGrpcService::BuildGroupCommandResponse(
     chatinternal::JsonPayloadResponse* response,
     MessageCommandResult (IGroupMessageCommandService::*handler)(const MessageCommandRequest&))
 {
-    if (!request || !response)
+    if (message_internal_grpc_modules::ShouldReportMissingRequestOrResponse(request != nullptr, response != nullptr))
     {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "missing group message command request or response");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                            message_internal_grpc_modules::MissingGroupMessageCommandRequestMessage());
     }
-    if (!_group_message_service)
+    if (message_internal_grpc_modules::ShouldReportMissingGroupService(_group_message_service != nullptr))
     {
         response->set_error(ErrorCodes::RPCFailed);
-        response->set_payload_json("{}");
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "group message command service is not configured");
+        response->set_payload_json(message_internal_grpc_modules::DefaultPayloadJson());
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            message_internal_grpc_modules::GroupMessageCommandServiceNotConfiguredMessage());
     }
 
     const auto result = (_group_message_service->*handler)(BuildCommandRequest(*request));

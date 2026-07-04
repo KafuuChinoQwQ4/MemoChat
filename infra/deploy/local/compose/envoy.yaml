@@ -1,7 +1,7 @@
 admin:
   address:
     socket_address:
-      address: 0.0.0.0
+      address: 127.0.0.1
       port_value: 9901
 
 static_resources:
@@ -130,6 +130,13 @@ static_resources:
                               retry_on: connect-failure,reset,5xx,gateway-error
                               num_retries: 2
                               per_try_timeout: 10s
+                        - name: http_to_https
+                          match:
+                            prefix: /
+                          redirect:
+                            scheme_redirect: https
+                            port_redirect: 8443
+                            response_code: PERMANENT_REDIRECT
                         - name: auth
                           match:
                             path: /get_varifycode
@@ -169,6 +176,78 @@ static_resources:
                         - name: auth
                           match:
                             path: /user_login
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_rate_limiter
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/refresh
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_rate_limiter
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/logout
                             headers:
                               - name: ":method"
                                 exact_match: POST
@@ -277,6 +356,16 @@ static_resources:
                         - name: auth
                           match:
                             path: /user_login
+                            headers:
+                              - name: ":method"
+                                exact_match: GET
+                          direct_response:
+                            status: 405
+                            body:
+                              inline_string: "Method Not Allowed\n"
+                        - name: auth
+                          match:
+                            path: /auth/refresh
                             headers:
                               - name: ":method"
                                 exact_match: GET
@@ -555,6 +644,10 @@ static_resources:
                             value: h3=":8443"; ma=86400, h3-29=":8443"; ma=86400
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                         - header:
+                            key: Strict-Transport-Security
+                            value: "max-age=31536000; includeSubDomains"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
                             key: X-Content-Type-Options
                             value: nosniff
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
@@ -591,6 +684,78 @@ static_resources:
                         - name: auth
                           match:
                             path: /user_login
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_ratelimiter_https
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/refresh
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_ratelimiter_https
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/logout
                             headers:
                               - name: ":method"
                                 exact_match: POST
@@ -883,6 +1048,10 @@ static_resources:
                         - host.docker.internal
                       response_headers_to_add:
                         - header:
+                            key: Strict-Transport-Security
+                            value: "max-age=31536000; includeSubDomains"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - header:
                             key: X-Content-Type-Options
                             value: nosniff
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
@@ -919,6 +1088,78 @@ static_resources:
                         - name: auth
                           match:
                             path: /user_login
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_ratelimiter_h3
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/refresh
+                            headers:
+                              - name: ":method"
+                                exact_match: POST
+                          route:
+                            cluster: login_backend
+                            timeout: 60s
+                            retry_policy:
+                              retry_on: connect-failure,reset,5xx,gateway-error
+                              num_retries: 2
+                              per_try_timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: auth_local_ratelimiter_h3
+                              token_bucket:
+                                max_tokens: 10
+                                tokens_per_fill: 1
+                                fill_interval: 2s
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enabled
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                                runtime_key: local_rate_limit_enforced
+                              response_headers_to_add:
+                                - header:
+                                    key: x-envoy-ratelimited
+                                    value: "true"
+                                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                        - name: auth
+                          match:
+                            path: /auth/logout
                             headers:
                               - name: ":method"
                                 exact_match: POST

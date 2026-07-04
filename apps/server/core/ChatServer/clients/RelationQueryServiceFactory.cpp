@@ -1,11 +1,13 @@
-#include "RelationQueryServiceFactory.h"
+#include "RelationQueryServiceFactory.hpp"
 
-#include "RelationQueryGrpcClient.h"
-#include "logging/Logger.h"
+#include "RelationQueryGrpcClient.hpp"
+#include "logging/Logger.hpp"
 
 #include <stdexcept>
 #include <string>
 #include <utility>
+
+import memochat.chat.service_factory_algorithms;
 
 namespace
 {
@@ -111,11 +113,11 @@ IRelationQueryService* SelectRelationQueryService(const IRelationQueryServiceCon
     remote_relation_query_service.reset();
 
     const auto backend = relation_query_service_config.RelationQueryServiceBackend();
-    if (backend == "inprocess")
+    if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
     {
         return inprocess_relation_query_service;
     }
-    if (backend == "grpc" || backend == "remote")
+    if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
         auto primary = CreateRemoteRelationQueryService(relation_query_service_config);
         if (inprocess_relation_query_service != nullptr)

@@ -1,14 +1,17 @@
-#include "r18/R18SourceService.h"
+#include "r18/R18SourceService.hpp"
 
-#include "r18/R18AdapterUtils.h"
-#include "r18/R18JmAdapter.h"
-#include "r18/R18PicacgAdapter.h"
-#include "r18/R18SourceRecordCodec.h"
+#include "r18/R18AdapterUtils.hpp"
+#include "r18/R18JmAdapter.hpp"
+#include "r18/R18PicacgAdapter.hpp"
+#include "r18/R18SourceRecordCodec.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+
+import memochat.r18.source_algorithms;
+import memochat.r18.source_service_algorithms;
 
 namespace memochat::r18
 {
@@ -17,7 +20,7 @@ namespace
 
 using json::JsonValue;
 
-constexpr const char* kMockSourceId = "mock";
+const char* const kMockSourceId = source_service::modules::MockSourceId();
 
 bool IsBuiltinSourceId(const std::string& id)
 {
@@ -47,14 +50,8 @@ std::filesystem::path ResolveDataRoot()
 {
     const auto cwd = std::filesystem::current_path();
     std::string leaf = cwd.filename().string();
-    std::transform(leaf.begin(),
-                   leaf.end(),
-                   leaf.begin(),
-                   [](unsigned char c)
-                   {
-                       return static_cast<char>(std::tolower(c));
-                   });
-    const auto base = leaf.rfind("gateserver", 0) == 0 ? cwd.parent_path() : cwd;
+    modules::LowerAsciiInPlace(leaf.data(), leaf.size());
+    const auto base = leaf.rfind(source_service::modules::GateShellPrefix(), 0) == 0 ? cwd.parent_path() : cwd;
     return base / "data" / "r18" / "sources";
 }
 
@@ -67,8 +64,7 @@ bool EndsWithCaseInsensitive(const std::string& value, const std::string& suffix
                       value.rbegin(),
                       [](char a, char b)
                       {
-                          return std::tolower(static_cast<unsigned char>(a)) ==
-                                 std::tolower(static_cast<unsigned char>(b));
+                          return modules::EqualsAsciiCaseInsensitive(a, b);
                       });
 }
 
@@ -81,13 +77,10 @@ std::string Stem(const std::string& file_name)
 
 std::string NormalizeId(std::string value)
 {
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char c)
-                   {
-                       return std::isalnum(c) ? static_cast<char>(std::tolower(c)) : '-';
-                   });
+    for (char& c : value)
+    {
+        c = modules::NormalizeSourceIdChar(static_cast<unsigned char>(c));
+    }
     value.erase(std::unique(value.begin(),
                             value.end(),
                             [](char a, char b)
@@ -106,7 +99,7 @@ std::string TrimAscii(std::string value)
 {
     const auto is_space = [](unsigned char c)
     {
-        return std::isspace(c) != 0;
+        return modules::IsAsciiSpace(c);
     };
     while (!value.empty() && is_space(static_cast<unsigned char>(value.front())))
         value.erase(value.begin());
@@ -117,13 +110,10 @@ std::string TrimAscii(std::string value)
 
 std::string NormalizePathSegment(std::string value, const std::string& fallback)
 {
-    std::transform(value.begin(),
-                   value.end(),
-                   value.begin(),
-                   [](unsigned char c)
-                   {
-                       return (std::isalnum(c) || c == '.' || c == '_' || c == '-') ? static_cast<char>(c) : '-';
-                   });
+    for (char& c : value)
+    {
+        c = modules::NormalizePathSegmentChar(static_cast<unsigned char>(c));
+    }
     value.erase(std::unique(value.begin(),
                             value.end(),
                             [](char a, char b)
@@ -131,9 +121,9 @@ std::string NormalizePathSegment(std::string value, const std::string& fallback)
                                 return a == '-' && b == '-';
                             }),
                 value.end());
-    while (!value.empty() && (value.front() == '.' || value.front() == '-' || value.front() == '_'))
+    while (!value.empty() && modules::IsPathSegmentTrimChar(value.front()))
         value.erase(value.begin());
-    while (!value.empty() && (value.back() == '.' || value.back() == '-' || value.back() == '_'))
+    while (!value.empty() && modules::IsPathSegmentTrimChar(value.back()))
         value.pop_back();
     return value.empty() ? fallback : value;
 }
@@ -148,13 +138,15 @@ bool LooksLikeJavaScript(const std::string& file_name, const std::string& manife
         if (json::glaze_parse(manifest, manifest_json))
         {
             const std::string format = json::glaze_safe_get<std::string>(manifest, "format", "");
-            if (format == "source-js" || format == "javascript")
+            if (format == source_service::modules::SourceJsFormat() || format == "javascript")
                 return true;
         }
     }
-    const auto probe = binary.substr(0, std::min<std::size_t>(binary.size(), 4096));
-    return probe.find("class ") != std::string::npos &&
-           (probe.find("ComicSource") != std::string::npos || probe.find("search") != std::string::npos);
+    const auto probe =
+        binary.substr(0, std::min<std::size_t>(binary.size(), source_service::modules::ManifestProbeWindow()));
+    return source_service::modules::MatchesJsSourceProbe(probe.find("class ") != std::string::npos,
+                                                         probe.find("ComicSource") != std::string::npos,
+                                                         probe.find("search") != std::string::npos);
 }
 
 } // namespace
@@ -186,14 +178,14 @@ void R18SourceService::InstallBuiltinSourcesLocked()
         rec.id = id;
         rec.name = name;
         rec.version = version;
-        rec.format = "native";
+        rec.format = source_service::modules::NativeFormat();
         rec.enabled = true;
         rec.builtin = true;
-        rec.status = "ok";
+        rec.status = source_service::modules::OkStatus();
         sources_[rec.id] = rec;
     };
-    install(kJmSourceId, "禁漫天堂", "2.0.16");
-    install(kPicacgSourceId, "哔咔漫画", "2.2.1");
+    install(kJmSourceId, "禁漫天堂", source_service::modules::JmSourceVersion());
+    install(kPicacgSourceId, "哔咔漫画", source_service::modules::PicacgSourceVersion());
 }
 
 json::JsonValue R18SourceService::ListSources()
@@ -238,7 +230,7 @@ bool R18SourceService::EnableSource(const std::string& id, bool enabled, std::st
     if (it == sources_.end())
     {
         if (error)
-            *error = "source not found";
+            *error = source_service::modules::SourceNotFoundMessage();
         return false;
     }
     it->second.enabled = enabled;
@@ -255,14 +247,14 @@ bool R18SourceService::DeleteSource(const std::string& id, std::string* error)
     if (IsBuiltinSourceId(normalized_id))
     {
         if (error)
-            *error = "cannot delete a built-in source";
+            *error = source_service::modules::CannotDeleteBuiltinMessage();
         return false;
     }
     auto it = sources_.find(normalized_id);
     if (it == sources_.end())
     {
         if (error)
-            *error = "source not found";
+            *error = source_service::modules::SourceNotFoundMessage();
         return false;
     }
     // Remove files from disk
@@ -285,12 +277,14 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     std::lock_guard<std::mutex> lock(mu_);
     InstallBuiltinSourcesLocked();
     LoadLocked();
-    const bool zip_payload = binary.size() >= 4 && binary[0] == 'P' && binary[1] == 'K';
+    const bool zip_payload = source_service::modules::IsZipMagic(binary.empty() ? '\0' : binary[0],
+                                                                 binary.size() >= 2 ? binary[1] : '\0',
+                                                                 binary.size());
     const bool js_payload = LooksLikeJavaScript(file_name, manifest_json, binary);
     if (!zip_payload && !js_payload)
     {
         if (error)
-            *error = "plugin package must be a zip file or JavaScript source";
+            *error = source_service::modules::InvalidPackagePayloadMessage();
         return {};
     }
 
@@ -298,7 +292,7 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     if (!manifest_json.empty() && !json::glaze_parse(manifest, manifest_json))
     {
         if (error)
-            *error = "manifest_json is invalid";
+            *error = source_service::modules::InvalidManifestMessage();
         return {};
     }
 
@@ -307,27 +301,32 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     rec.id = manifest_json.empty() ? fallback_id : json::glaze_safe_get<std::string>(manifest, "id", fallback_id);
     rec.id = NormalizeId(rec.id);
     rec.name = manifest_json.empty() ? rec.id : json::glaze_safe_get<std::string>(manifest, "name", rec.id);
-    rec.version = manifest_json.empty() ? "0.0.0" : json::glaze_safe_get<std::string>(manifest, "version", "0.0.0");
-    rec.version = NormalizePathSegment(rec.version, "0.0.0");
-    rec.format = js_payload ? "source-js" : json::glaze_safe_get<std::string>(manifest, "format", "native-zip");
+    rec.version =
+        manifest_json.empty()
+            ? source_service::modules::DefaultVersion()
+            : json::glaze_safe_get<std::string>(manifest, "version", source_service::modules::DefaultVersion());
+    rec.version = NormalizePathSegment(rec.version, source_service::modules::DefaultVersion());
+    rec.format =
+        js_payload ? source_service::modules::SourceJsFormat()
+                   : json::glaze_safe_get<std::string>(manifest, "format", source_service::modules::NativeZipFormat());
     rec.source_url = manifest_json.empty() ? "" : json::glaze_safe_get<std::string>(manifest, "source_url", "");
     rec.catalog_url = manifest_json.empty() ? "" : json::glaze_safe_get<std::string>(manifest, "catalog_url", "");
     rec.enabled = false;
     rec.builtin = false;
-    rec.status = js_payload ? "staged-js" : "staged";
+    rec.status = js_payload ? source_service::modules::StagedJsStatus() : source_service::modules::StagedStatus();
     rec.message = js_payload ? "JavaScript source saved. Execution requires a MemoChat source runtime adapter."
                              : "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
 
     if (rec.id.empty())
     {
         if (error)
-            *error = "source id is empty";
+            *error = source_service::modules::SourceIdEmptyMessage();
         return {};
     }
     if (IsBuiltinSourceId(rec.id))
     {
         if (error)
-            *error = "source id is reserved for a built-in adapter";
+            *error = source_service::modules::ReservedSourceIdMessage();
         return {};
     }
 
@@ -337,7 +336,7 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     if (ec)
     {
         if (error)
-            *error = "failed to create source directory";
+            *error = source_service::modules::CreateDirFailedMessage();
         return {};
     }
     const auto source_path = dir / (js_payload ? "source.js" : "source.zip");
@@ -345,7 +344,7 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     if (!out.is_open())
     {
         if (error)
-            *error = "failed to persist source package";
+            *error = source_service::modules::PersistFailedMessage();
         return {};
     }
     out.write(binary.data(), static_cast<std::streamsize>(binary.size()));
@@ -372,7 +371,7 @@ json::JsonValue R18SourceService::Search(const std::string& source_id,
     {
         try
         {
-            return JmSearch(keyword, page < 1 ? 1 : page, uid, token);
+            return JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), uid, token);
         }
         catch (const std::exception& exc)
         {
@@ -383,7 +382,7 @@ json::JsonValue R18SourceService::Search(const std::string& source_id,
     {
         try
         {
-            return PicacgSearch(keyword, page < 1 ? 1 : page, uid, token);
+            return PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page), uid, token);
         }
         catch (const std::exception& exc)
         {
@@ -460,7 +459,7 @@ R18SourceService::Detail(const std::string& source_id, const std::string& comic_
     data["cover"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + detail::UrlEncode(token) +
                     "&source_id=" + detail::UrlEncode(source_id) + "&image_id=cover";
     data["chapters"] = json::JsonValue{json::array_t{}};
-    for (int i = 1; i <= 3; ++i)
+    for (int i = 1; i <= source_service::modules::PreviewChapterCount(); ++i)
     {
         json::JsonValue ch;
         ch["source_id"] = source_id;
@@ -515,7 +514,7 @@ R18SourceService::Pages(const std::string& source_id, const std::string& chapter
     data["source_id"] = source_id;
     data["chapter_id"] = chapter_id;
     data["pages"] = json::JsonValue{json::array_t{}};
-    for (int i = 1; i <= 5; ++i)
+    for (int i = 1; i <= source_service::modules::PreviewPageCount(); ++i)
     {
         json::JsonValue page;
         page["index"] = i;

@@ -1,5 +1,7 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrl>
@@ -11,7 +13,7 @@ namespace
 {
 QString gameBaseUrl()
 {
-    return gate_url_prefix + QStringLiteral("/ai/games");
+    return agentApiUrl(QStringLiteral("/ai/games")).toString();
 }
 
 QJsonObject hostConfigFromVariant(const QVariantMap& host)

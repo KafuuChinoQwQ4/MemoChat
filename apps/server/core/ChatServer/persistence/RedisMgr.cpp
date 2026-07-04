@@ -1,7 +1,13 @@
-#include "RedisMgr.h"
-#include "const.h"
-#include "ConfigMgr.h"
-#include "DistLock.h"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "ConfigMgr.hpp"
+#include "DistLock.hpp"
+#include "chat_lua_scripts.hpp"
+
+import memochat.chat.redis_mgr_algorithms;
+
+namespace redis_mgr_modules = memochat::chat::persistence::redis_mgr::modules;
+
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
@@ -31,7 +37,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_STRING)
+    if (!redis_mgr_modules::IsStringReply(reply->type, REDIS_REPLY_STRING))
     {
         std::cout << "[ GET  " << key << " ] failed" << std::endl;
         freeReplyObject(reply);
@@ -63,7 +69,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value)
         return false;
     }
 
-    if (!(reply->type == REDIS_REPLY_STATUS && (strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0)))
+    if (!redis_mgr_modules::IsStatusOk(reply->type, reply->str, REDIS_REPLY_STATUS))
     {
         std::cout << "Execut command [ SET " << key << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -84,7 +90,7 @@ bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expir
         return false;
     }
 
-    const std::string ttl = std::to_string(expire_seconds > 0 ? expire_seconds : 1);
+    const std::string ttl = std::to_string(redis_mgr_modules::NormalizeExpireSeconds(expire_seconds));
     const char* argv[4];
     size_t argvlen[4];
     argv[0] = "SETEX";
@@ -104,8 +110,7 @@ bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expir
         return false;
     }
 
-    if (!(reply->type == REDIS_REPLY_STATUS && reply->str != nullptr &&
-          (strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0)))
+    if (!redis_mgr_modules::IsStatusOk(reply->type, reply->str, REDIS_REPLY_STATUS))
     {
         std::cout << "Execut command [ SETEX " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -116,6 +121,44 @@ bool RedisMgr::SetEx(const std::string& key, const std::string& value, int expir
     freeReplyObject(reply);
     _con_pool->returnConnection(connect);
     return true;
+}
+
+bool RedisMgr::SetNxEx(const std::string& key, const std::string& value, int expire_seconds)
+{
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr)
+    {
+        return false;
+    }
+
+    const std::string ttl = std::to_string(redis_mgr_modules::NormalizeExpireSeconds(expire_seconds));
+    const char* argv[6];
+    size_t argvlen[6];
+    argv[0] = "SET";
+    argvlen[0] = 3;
+    argv[1] = key.c_str();
+    argvlen[1] = key.size();
+    argv[2] = value.data();
+    argvlen[2] = value.size();
+    argv[3] = "NX";
+    argvlen[3] = 2;
+    argv[4] = "EX";
+    argvlen[4] = 2;
+    argv[5] = ttl.c_str();
+    argvlen[5] = ttl.size();
+
+    auto reply = static_cast<redisReply*>(redisCommandArgv(connect, 6, argv, argvlen));
+    if (reply == nullptr)
+    {
+        std::cout << "Execut command [ SET " << key << " NX EX ] failure ! " << std::endl;
+        _con_pool->returnConnection(connect);
+        return false;
+    }
+
+    const bool ok = redis_mgr_modules::IsStatusOk(reply->type, reply->str, REDIS_REPLY_STATUS);
+    freeReplyObject(reply);
+    _con_pool->returnConnection(connect);
+    return ok;
 }
 
 bool RedisMgr::LPush(const std::string& key, const std::string& value)
@@ -134,7 +177,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, reply->integer, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ LPUSH " << key << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -162,7 +205,7 @@ bool RedisMgr::LPop(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsNilReply(reply->type, REDIS_REPLY_NIL))
     {
         std::cout << "Execut command [ LPOP " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -192,7 +235,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, reply->integer, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ RPUSH " << key << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -219,7 +262,7 @@ bool RedisMgr::RPop(const std::string& key, std::string& value)
         return false;
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsNilReply(reply->type, REDIS_REPLY_NIL))
     {
         std::cout << "Execut command [ RPOP " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -247,7 +290,7 @@ bool RedisMgr::HSet(const std::string& key, const std::string& hkey, const std::
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ HSet " << key << "  " << hkey << "  " << value << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -286,7 +329,7 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ HSet " << key << "  " << hkey << "  " << hvalue << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -322,7 +365,7 @@ std::string RedisMgr::HGet(const std::string& key, const std::string& hkey)
         return "";
     }
 
-    if (reply->type == REDIS_REPLY_NIL)
+    if (redis_mgr_modules::IsNilReply(reply->type, REDIS_REPLY_NIL))
     {
         freeReplyObject(reply);
         std::cout << "Execut command [ HGet " << key << " " << hkey << "  ] failure ! " << std::endl;
@@ -358,7 +401,7 @@ bool RedisMgr::HDel(const std::string& key, const std::string& field)
     }
 
     bool success = false;
-    if (reply->type == REDIS_REPLY_INTEGER)
+    if (redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER))
     {
         success = reply->integer > 0;
     }
@@ -388,7 +431,7 @@ bool RedisMgr::SAdd(const std::string& key, const std::string& member)
         return false;
     }
 
-    const bool success = reply->type == REDIS_REPLY_INTEGER;
+    const bool success = redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
     return success;
 }
@@ -414,7 +457,7 @@ bool RedisMgr::SRem(const std::string& key, const std::string& member)
         return false;
     }
 
-    const bool success = reply->type == REDIS_REPLY_INTEGER;
+    const bool success = redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER);
     freeReplyObject(reply);
     return success;
 }
@@ -441,7 +484,7 @@ bool RedisMgr::SMembers(const std::string& key, std::vector<std::string>& member
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_ARRAY)
+    if (!redis_mgr_modules::IsArrayReply(reply->type, REDIS_REPLY_ARRAY))
     {
         freeReplyObject(reply);
         return false;
@@ -451,7 +494,8 @@ bool RedisMgr::SMembers(const std::string& key, std::vector<std::string>& member
     for (size_t i = 0; i < reply->elements; ++i)
     {
         auto* element = reply->element[i];
-        if (element == nullptr || element->type != REDIS_REPLY_STRING || element->str == nullptr)
+        if (element == nullptr || !redis_mgr_modules::IsStringReply(element->type, REDIS_REPLY_STRING) ||
+            element->str == nullptr)
         {
             continue;
         }
@@ -484,7 +528,7 @@ bool RedisMgr::Keys(const std::string& pattern, std::vector<std::string>& keys)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_ARRAY)
+    if (!redis_mgr_modules::IsArrayReply(reply->type, REDIS_REPLY_ARRAY))
     {
         freeReplyObject(reply);
         return false;
@@ -494,7 +538,8 @@ bool RedisMgr::Keys(const std::string& pattern, std::vector<std::string>& keys)
     for (size_t i = 0; i < reply->elements; ++i)
     {
         auto* element = reply->element[i];
-        if (element == nullptr || element->type != REDIS_REPLY_STRING || element->str == nullptr)
+        if (element == nullptr || !redis_mgr_modules::IsStringReply(element->type, REDIS_REPLY_STRING) ||
+            element->str == nullptr)
         {
             continue;
         }
@@ -519,7 +564,7 @@ bool RedisMgr::Incr(const std::string& key, int64_t& value)
         _con_pool->returnConnection(connect);
         return false;
     }
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER))
     {
         freeReplyObject(reply);
         _con_pool->returnConnection(connect);
@@ -546,7 +591,7 @@ bool RedisMgr::Del(const std::string& key)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER)
+    if (!redis_mgr_modules::IsIntegerReply(reply->type, REDIS_REPLY_INTEGER))
     {
         std::cout << "Execut command [ Del " << key << " ] failure ! " << std::endl;
         freeReplyObject(reply);
@@ -575,7 +620,7 @@ bool RedisMgr::ExistsKey(const std::string& key)
         return false;
     }
 
-    if (reply->type != REDIS_REPLY_INTEGER || reply->integer == 0)
+    if (!redis_mgr_modules::IsPositiveIntegerReply(reply->type, reply->integer, REDIS_REPLY_INTEGER))
     {
         std::cout << "Not Found [ Key " << key << " ]  ! " << std::endl;
         _con_pool->returnConnection(connect);
@@ -606,7 +651,7 @@ std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, 
 
 bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier)
 {
-    if (identifier.empty())
+    if (redis_mgr_modules::ShouldTreatEmptyLockIdentifierAsReleased(identifier.empty()))
     {
         return true;
     }
@@ -627,77 +672,58 @@ bool RedisMgr::releaseLock(const std::string& lockName, const std::string& ident
 
 void RedisMgr::IncreaseCount(std::string server_name)
 {
-    auto lock_key = LOCK_COUNT;
-    auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-
-    Defer defer2(
-        [this, identifier, lock_key]()
-        {
-            RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-        });
-
-    auto rd_res = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name);
-    int count = 0;
-    if (!rd_res.empty())
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr)
     {
-        count = std::stoi(rd_res);
+        return;
     }
 
-    count++;
-    auto count_str = std::to_string(count);
-    RedisMgr::GetInstance()->HSet(LOGIN_COUNT, server_name, count_str);
+    Defer defer(
+        [&connect, this]()
+        {
+            _con_pool->returnConnection(connect);
+        });
+
+    auto reply = (redisReply*) redisCommand(connect, "HINCRBY %s %s 1", LOGIN_COUNT, server_name.c_str());
+    if (reply == nullptr)
+    {
+        std::cerr << "HINCRBY command failed" << std::endl;
+        return;
+    }
+    freeReplyObject(reply);
 }
 
 void RedisMgr::DecreaseCount(std::string server_name)
 {
-    auto lock_key = LOCK_COUNT;
-    auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-
-    Defer defer2(
-        [this, identifier, lock_key]()
-        {
-            RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-        });
-
-    auto rd_res = RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name);
-    int count = 0;
-    if (!rd_res.empty())
+    auto connect = _con_pool->getConnection();
+    if (connect == nullptr)
     {
-        count = std::stoi(rd_res);
-        if (count > 0)
-        {
-            count--;
-        }
+        return;
     }
 
-    auto count_str = std::to_string(count);
-    RedisMgr::GetInstance()->HSet(LOGIN_COUNT, server_name, count_str);
+    Defer defer(
+        [&connect, this]()
+        {
+            _con_pool->returnConnection(connect);
+        });
+
+    const std::string lua_script(memochat::chat::lua_scripts::khash_decrement_floor);
+
+    auto reply = (redisReply*) redisCommand(connect, "EVAL %s 1 %s %s", lua_script, LOGIN_COUNT, server_name.c_str());
+    if (reply == nullptr)
+    {
+        std::cerr << "EVAL (DecreaseCount) command failed" << std::endl;
+        return;
+    }
+    freeReplyObject(reply);
 }
 
 void RedisMgr::InitCount(std::string server_name)
 {
-    auto lock_key = LOCK_COUNT;
-    auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-
-    Defer defer2(
-        [this, identifier, lock_key]()
-        {
-            RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-        });
-
     RedisMgr::GetInstance()->HSet(LOGIN_COUNT, server_name, "0");
 }
 
 void RedisMgr::DelCount(std::string server_name)
 {
-    auto lock_key = LOCK_COUNT;
-    auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
-
-    Defer defer2(
-        [this, identifier, lock_key]()
-        {
-            RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
-        });
-
     RedisMgr::GetInstance()->HDel(LOGIN_COUNT, server_name);
 }

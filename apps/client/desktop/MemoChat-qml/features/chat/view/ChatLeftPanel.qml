@@ -200,10 +200,6 @@ Rectangle {
             root.ensureCurrentSessionSource()
         }
 
-        if (currentTab === ShellViewModel.AgentTabPage) {
-            agentRefreshRequested()
-        }
-
         if (currentTab === ShellViewModel.Live2DTabPage) {
             root.bindLive2DEntrySettingsToCurrentUser()
         }

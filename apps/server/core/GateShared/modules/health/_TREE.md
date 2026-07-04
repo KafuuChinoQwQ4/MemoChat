@@ -6,7 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `HealthRouteModule.cpp` | 健康检查路由模块实现。 |
+| `HealthRouteModule.cpp` | 健康检查路由模块实现，消费健康检查算法 module 生成 probe 响应。 |
 | `HealthRouteModule.h` | 健康检查路由模块接口声明。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

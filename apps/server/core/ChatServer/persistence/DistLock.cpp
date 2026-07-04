@@ -1,4 +1,4 @@
-#include "DistLock.h"
+#include "DistLock.hpp"
 #include <thread>
 #include <iostream>
 #include <string>
@@ -9,6 +9,11 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <hiredis/hiredis.h>
+#include "chat_lua_scripts.hpp"
+
+import memochat.chat.dist_lock_algorithms;
+
+namespace dist_lock_modules = memochat::chat::persistence::dist_lock::modules;
 
 DistLock& DistLock::Inst()
 {
@@ -35,7 +40,7 @@ DistLock::acquireLock(redisContext* context, const std::string& lockName, int lo
             (redisReply*) redisCommand(context, "SET %s %s NX EX %d", lockKey.c_str(), identifier.c_str(), lockTimeout);
         if (reply != nullptr)
         {
-            if (reply->type == REDIS_REPLY_STATUS && std::string(reply->str) == "OK")
+            if (dist_lock_modules::IsAcquireReplyOk(reply->type, reply->str, REDIS_REPLY_STATUS))
             {
                 freeReplyObject(reply);
                 return identifier;
@@ -52,18 +57,14 @@ bool DistLock::releaseLock(redisContext* context, const std::string& lockName, c
 {
     std::string lockKey = "lock:" + lockName;
 
-    const char* luaScript = "if redis.call('get', KEYS[1]) == ARGV[1] then \
-                                return redis.call('del', KEYS[1]) \
-                             else \
-                                return 0 \
-                             end";
+    const auto& luaScript = memochat::chat::lua_scripts::kdist_lock_release;
 
-    redisReply* reply =
-        (redisReply*) redisCommand(context, "EVAL %s 1 %s %s", luaScript, lockKey.c_str(), identifier.c_str());
+    redisReply* reply = (redisReply*)
+        redisCommand(context, "EVAL %s 1 %s %s", std::string(luaScript).c_str(), lockKey.c_str(), identifier.c_str());
     bool success = false;
     if (reply != nullptr)
     {
-        if (reply->type == REDIS_REPLY_INTEGER && reply->integer == 1)
+        if (dist_lock_modules::IsReleaseReplyDeleted(reply->type, reply->integer, REDIS_REPLY_INTEGER))
         {
             success = true;
         }

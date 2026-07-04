@@ -10,7 +10,7 @@ Write-Host "=========================================="
 
 # Keep the existing CMake cache by default. Deleting it forces vcpkg to
 # re-evaluate the full manifest and is the main cause of repeated dependency work.
-$cacheFile = "d:\MemoChat-Qml-Drogon\build-msquic\CMakeCache.txt"
+$cacheFile = "d:\MemoChat\build-msquic\CMakeCache.txt"
 if ($Force -and (Test-Path $cacheFile)) {
     Write-Host "[REMOVE] CMakeCache.txt"
     Remove-Item $cacheFile -Force
@@ -34,8 +34,8 @@ Write-Host "[ENV] WINSDK_LIB_UM = $($env:WINSDK_LIB_UM)"
 
 $cmakeBin = "C:\Program Files\CMake\bin\cmake.exe"
 $cmakeArgs = @(
-    "-S", "d:\MemoChat-Qml-Drogon",
-    "-B", "d:\MemoChat-Qml-Drogon\build-msquic",
+    "-S", "d:\MemoChat",
+    "-B", "d:\MemoChat\build-msquic",
     "-G", "Ninja Multi-Config",
     "-DCMAKE_BUILD_TYPE=Release",
     "-DBUILD_CLIENT=ON",
@@ -49,7 +49,7 @@ $cmakeArgs = @(
     "-DVCPKG_BINARY_SOURCES=clear;files,D:/vcpkg/bincache,readwrite",
     "-DVCPKG_TARGET_TRIPLET=x64-windows",
     "-DVCPKG_HOST_TRIPLET=x64-windows",
-    "-DVCPKG_INSTALLED_DIR=d:/MemoChat-Qml-Drogon/vcpkg_installed",
+    "-DVCPKG_INSTALLED_DIR=d:/MemoChat/vcpkg_installed",
     "-DVCPKG_MANIFEST_FEATURES=server",
     "-DVCPKG_BUILD_TYPE=release",
     "-DCMAKE_CXX_COMPILER=D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"

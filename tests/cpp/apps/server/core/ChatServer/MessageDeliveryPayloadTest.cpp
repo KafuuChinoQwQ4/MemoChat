@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "MessageDeliveryPayload.h"
-#include "json/GlazeCompat.h"
+#include "MessageDeliveryPayload.hpp"
+#include "json/GlazeCompat.hpp"
 
 TEST(MessageDeliveryPayloadTest, SerializeDeliveryPayloadForWireKeepsJsonObjectShape)
 {

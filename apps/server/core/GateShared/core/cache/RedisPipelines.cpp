@@ -1,35 +1,27 @@
-#include "RedisPipelines.h"
-#include "RedisMgr.h"
-#include "const.h"
-#include "logging/Logger.h"
+#include "RedisPipelines.hpp"
+#include "RedisMgr.hpp"
+#include "logging/Logger.hpp"
+
+import memochat.gate.redis_pipeline_algorithms;
+
+namespace redis_pipeline_modules = memochat::gate::redis_pipeline::modules;
 
 namespace
 {
 
 std::string BuildLoginCacheKey(const std::string& email)
 {
-    return "ulogin_profile_" + email;
+    return std::string(redis_pipeline_modules::LoginProfilePrefix()) + email;
 }
 
 std::string BuildLoginCacheUidKey(int uid)
 {
-    return "ulogin_profile_uid_" + std::to_string(uid);
+    return std::string(redis_pipeline_modules::LoginProfileUidPrefix()) + std::to_string(uid);
 }
 
 std::string BuildTokenKey(int uid)
 {
-    return USERTOKENPREFIX + std::to_string(uid);
-}
-
-std::string DecodeLegacyXorPwd(const std::string& input)
-{
-    unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
-    std::string decoded = input;
-    for (size_t i = 0; i < decoded.size(); ++i)
-    {
-        decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
-    }
-    return decoded;
+    return std::string(redis_pipeline_modules::UserTokenPrefix()) + std::to_string(uid);
 }
 
 } // namespace

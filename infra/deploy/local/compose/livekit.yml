@@ -3,9 +3,9 @@ version: "3.9"
 services:
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "123456"]
+    command: ["redis-server", "--requirepass", "${MEMOCHAT_LIVEKIT_REDIS_PASSWORD:-123456}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   livekit:
     image: livekit/livekit-server:latest
@@ -14,10 +14,10 @@ services:
       - --bind
       - 0.0.0.0
     environment:
-      LIVEKIT_KEYS: "devkey: secret"
+      LIVEKIT_KEYS: "${MEMOCHAT_LIVEKIT_API_KEY:-devkey}: ${MEMOCHAT_LIVEKIT_API_SECRET:-secret}"
     ports:
-      - "7880:7880"
-      - "7881:7881/udp"
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881/udp"
     depends_on:
       - redis
 
@@ -27,11 +27,11 @@ services:
       - -n
       - --log-file=stdout
       - --realm=memochat.local
-      - --user=memochat:123456
+      - --user=${MEMOCHAT_TURN_USER:-memochat}:${MEMOCHAT_TURN_PASSWORD:-123456}
       - --external-ip=127.0.0.1
       - --listening-port=3478
       - --min-port=49160
       - --max-port=49200
     ports:
-      - "3478:3478"
-      - "49160-49200:49160-49200/udp"
+      - "127.0.0.1:3478:3478"
+      - "127.0.0.1:49160-49200:49160-49200/udp"

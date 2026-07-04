@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "MessageGrpcServiceAdapter.h"
-#include "MessageServiceFactory.h"
+#include "MessageGrpcServiceAdapter.hpp"
+#include "MessageServiceFactory.hpp"
 
 #include <memory>
 #include <stdexcept>

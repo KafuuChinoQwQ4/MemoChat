@@ -1,5 +1,7 @@
 #include "AgentController.h"
 
+#include "AgentNetworkRequestUtils.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,7 +18,7 @@ namespace
 {
 QString gameBaseUrl()
 {
-    return gate_url_prefix + QStringLiteral("/ai/games");
+    return agentApiUrl(QStringLiteral("/ai/games")).toString();
 }
 
 QJsonValue sanitizedGameTemplateValue(const QJsonValue& value)

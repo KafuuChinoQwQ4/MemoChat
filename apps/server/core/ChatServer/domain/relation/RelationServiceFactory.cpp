@@ -1,10 +1,12 @@
-#include "RelationServiceFactory.h"
+#include "RelationServiceFactory.hpp"
 
-#include "ChatRelationService.h"
-#include "RelationGrpcServiceAdapter.h"
-#include "logging/Logger.h"
+#include "ChatRelationService.hpp"
+#include "RelationGrpcServiceAdapter.hpp"
+#include "logging/Logger.hpp"
 
 #include <stdexcept>
+
+import memochat.chat.service_factory_algorithms;
 
 std::unique_ptr<IRelationService> CreateInProcessRelationService(IRelationRepository* relation_repository,
                                                                  IRelationBootstrapCache* relation_bootstrap_cache,
@@ -27,7 +29,7 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
                                                         IEventPublisher* event_publisher)
 {
     const auto backend = relation_service_config.RelationServiceBackend();
-    if (backend == "inprocess")
+    if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
     {
         return CreateInProcessRelationService(relation_repository,
                                               relation_bootstrap_cache,
@@ -35,7 +37,7 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
                                               task_publisher,
                                               event_publisher);
     }
-    if (backend == "grpc" || backend == "remote")
+    if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
         const auto endpoint = relation_service_config.RelationServiceEndpoint();
         if (endpoint.empty())

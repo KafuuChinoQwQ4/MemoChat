@@ -63,7 +63,9 @@ class AgentMarkdownProviderContractTests(unittest.TestCase):
             "providerPalette",
         ):
             with self.subTest(function=function_name):
-                self.assertRegex(runtime, rf"function\s+{re.escape(function_name)}\s*\(")
+                # Accepts both ES5 declaration and ES6 arrow-function assignment styles.
+                pattern = rf"(?:function\s+{re.escape(function_name)}\s*\(|const\s+{re.escape(function_name)}\s*=\s*\()"
+                self.assertRegex(runtime, pattern)
 
         for token in (
             "openai",

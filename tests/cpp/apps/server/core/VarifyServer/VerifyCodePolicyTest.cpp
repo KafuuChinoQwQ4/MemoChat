@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "VerifyCodePolicy.h"
+#include "VerifyCodePolicy.hpp"
 
 #include <algorithm>
 #include <cctype>

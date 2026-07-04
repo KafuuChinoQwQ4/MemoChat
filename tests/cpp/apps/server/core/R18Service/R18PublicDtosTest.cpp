@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "json/GlazeCompat.h"
-#include "r18/R18PublicDtos.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "json/GlazeCompat.hpp"
+#include "r18/R18PublicDtos.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>

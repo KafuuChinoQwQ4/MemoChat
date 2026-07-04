@@ -1,8 +1,14 @@
-#include "PostgresDao.h"
-#include "ConfigMgr.h"
-#include "SnowflakeUtil.h"
-#include "db/PqxxCompat.h"
+#include "PostgresDao.hpp"
+#include "ConfigMgr.hpp"
+#include "SnowflakeUtil.hpp"
+#include "auth/PasswordHasher.hpp"
+#include "auth/RefreshToken.hpp"
+#include "db/PqxxCompat.hpp"
 #include <string_view>
+
+import memochat.gate.postgres_dao_account_algorithms;
+
+namespace postgres_dao_account_modules = memochat::gate::postgres_dao_account::modules;
 
 namespace
 {
@@ -10,7 +16,7 @@ std::string PostgresSchemaName()
 {
     auto& cfg = ConfigMgr::Inst();
     const auto schema = cfg["Postgres"]["Schema"];
-    return schema.empty() ? "public" : schema;
+    return schema.empty() ? postgres_dao_account_modules::DefaultSchema() : schema;
 }
 
 std::string QuotePgIdent(std::string_view ident)
@@ -36,21 +42,19 @@ std::string PgTable(std::string_view table)
     return QuotePgIdent(PostgresSchemaName()) + "." + QuotePgIdent(table);
 }
 
-std::string DecodeLegacyXorPwd(const std::string& input)
+std::string ClampText(std::string value, std::size_t max_size)
 {
-    unsigned int xor_code = static_cast<unsigned int>(input.size() % 255);
-    std::string decoded = input;
-    for (size_t i = 0; i < decoded.size(); ++i)
+    if (value.size() > max_size)
     {
-        decoded[i] = static_cast<char>(static_cast<unsigned char>(decoded[i]) ^ xor_code);
+        value.resize(max_size);
     }
-    return decoded;
+    return value;
 }
 } // namespace
 
 int PostgresDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
 {
-    return RegUserTransaction(name, email, pwd, ":/res/head_1.jpg");
+    return RegUserTransaction(name, email, pwd, postgres_dao_account_modules::DefaultUserIcon());
 }
 
 int PostgresDao::RegUserTransaction(const std::string& name,
@@ -72,6 +76,12 @@ int PostgresDao::RegUserTransaction(const std::string& name,
 
     try
     {
+        std::string password_hash;
+        if (!memochat::auth::HashPassword(pwd, password_hash))
+        {
+            return -1;
+        }
+
         pqxx::work txn(*con->_con);
         const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
         if (!exists.empty())
@@ -86,30 +96,29 @@ int PostgresDao::RegUserTransaction(const std::string& name,
         txn.exec_params0("INSERT INTO user_id(id) VALUES ($1)", new_id);
 
         std::string user_public_id;
-        for (int i = 0; i < 20; ++i)
+        for (int i = 0; i < postgres_dao_account_modules::UserPublicIdMaxAttempts(); ++i)
         {
             user_public_id = GenerateUserPublicId();
             const auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE user_id = $1 LIMIT 1", user_public_id);
-            if (rows.empty())
+            if (postgres_dao_account_modules::ShouldAcceptGeneratedPublicId(rows.empty()))
             {
                 break;
             }
             user_public_id.clear();
         }
 
-        if (user_public_id.empty())
+        if (!postgres_dao_account_modules::HasGeneratedUserPublicId(user_public_id.empty()))
         {
             std::cout << "generate user_public_id failed" << std::endl;
             return -1;
         }
 
-        const std::string pwd_stored = DecodeLegacyXorPwd(pwd);
-        txn.exec_params0("INSERT INTO \"user\"(uid, name, email, pwd, nick, icon, user_id) "
-                         "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        txn.exec_params0("INSERT INTO \"user\"(uid, name, email, pwd, password_hash, nick, icon, user_id) "
+                         "VALUES ($1, $2, $3, '', $4, $5, $6, $7)",
                          new_id,
                          name,
                          email,
-                         pwd_stored,
+                         password_hash,
                          name,
                          icon,
                          user_public_id);
@@ -168,15 +177,263 @@ bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
 
     try
     {
+        std::string password_hash;
+        if (!memochat::auth::HashPassword(newpwd, password_hash))
+        {
+            return false;
+        }
+
         pqxx::work txn(*con->_con);
-        const auto result = txn.exec_params("UPDATE \"user\" SET pwd = $1 WHERE email = $2", newpwd, email);
+        const auto result = txn.exec_params("UPDATE \"user\" SET password_hash = $1, pwd = '' WHERE email = $2 "
+                                            "RETURNING uid",
+                                            password_hash,
+                                            email);
+        if (!result.empty())
+        {
+            const int uid = result[0]["uid"].as<int>();
+            txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                                 " SET revoked_at = now() WHERE uid = $1 AND revoked_at IS NULL",
+                             uid);
+        }
         txn.commit();
         std::cout << "Updated rows: " << result.affected_rows() << std::endl;
-        return result.affected_rows() > 0;
+        return postgres_dao_account_modules::IsAffectedRowsPositive(result.affected_rows());
     }
     catch (const std::exception& e)
     {
         std::cerr << "PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool PostgresDao::IssueRefreshToken(int uid,
+                                    const std::string& selector,
+                                    const std::string& verifier_hash,
+                                    int ttl_seconds,
+                                    const std::string& user_agent,
+                                    const std::string& ip_hash)
+{
+    if (uid <= 0 || selector.empty() || !memochat::auth::LooksLikeRefreshTokenHash(verifier_hash) || ttl_seconds <= 0)
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        const auto result =
+            txn.exec_params("INSERT INTO " + PgTable("auth_refresh_token") +
+                                "(uid, selector, verifier_hash, expires_at, user_agent, ip_hash) "
+                                "VALUES ($1, $2, $3, now() + ($4::integer * interval '1 second'), $5, $6) "
+                                "ON CONFLICT (selector) DO NOTHING",
+                            uid,
+                            selector,
+                            verifier_hash,
+                            ttl_seconds,
+                            ClampText(user_agent, 512),
+                            ip_hash);
+        txn.commit();
+        return postgres_dao_account_modules::IsAffectedRowsPositive(result.affected_rows());
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "IssueRefreshToken PostgreSQL exception: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+RefreshTokenRotationStatus PostgresDao::RotateRefreshToken(const std::string& selector,
+                                                           const std::string& verifier,
+                                                           const std::string& replacement_selector,
+                                                           const std::string& replacement_verifier_hash,
+                                                           int ttl_seconds,
+                                                           const std::string& user_agent,
+                                                           const std::string& ip_hash,
+                                                           int& uid)
+{
+    uid = 0;
+    if (selector.empty() || verifier.empty() || replacement_selector.empty() ||
+        !memochat::auth::LooksLikeRefreshTokenHash(replacement_verifier_hash) || ttl_seconds <= 0)
+    {
+        return RefreshTokenRotationStatus::Invalid;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return RefreshTokenRotationStatus::StorageError;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        const auto rows = txn.exec_params("SELECT uid, verifier_hash, expires_at <= now() AS expired, "
+                                          "revoked_at IS NOT NULL AS revoked, rotated_at IS NOT NULL AS rotated "
+                                          "FROM " +
+                                              PgTable("auth_refresh_token") + " WHERE selector = $1 FOR UPDATE",
+                                          selector);
+        if (rows.empty())
+        {
+            txn.commit();
+            return RefreshTokenRotationStatus::Invalid;
+        }
+
+        const auto& row = rows[0];
+        uid = row["uid"].as<int>();
+        const bool expired = row["expired"].as<bool>();
+        const bool revoked = row["revoked"].as<bool>();
+        const bool rotated = row["rotated"].as<bool>();
+        if (revoked || rotated)
+        {
+            txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                                 " SET revoked_at = COALESCE(revoked_at, now()) "
+                                 "WHERE uid = $1 AND revoked_at IS NULL",
+                             uid);
+            txn.commit();
+            return RefreshTokenRotationStatus::Reused;
+        }
+        if (expired)
+        {
+            txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                                 " SET revoked_at = COALESCE(revoked_at, now()) WHERE selector = $1",
+                             selector);
+            txn.commit();
+            return RefreshTokenRotationStatus::Expired;
+        }
+
+        const std::string stored_hash = row["verifier_hash"].is_null() ? "" : row["verifier_hash"].c_str();
+        if (!memochat::auth::VerifyRefreshTokenVerifier(verifier, stored_hash))
+        {
+            txn.commit();
+            return RefreshTokenRotationStatus::Invalid;
+        }
+
+        txn.exec_params0("INSERT INTO " + PgTable("auth_refresh_token") +
+                             "(uid, selector, verifier_hash, expires_at, user_agent, ip_hash) "
+                             "VALUES ($1, $2, $3, now() + ($4::integer * interval '1 second'), $5, $6)",
+                         uid,
+                         replacement_selector,
+                         replacement_verifier_hash,
+                         ttl_seconds,
+                         ClampText(user_agent, 512),
+                         ip_hash);
+        txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                             " SET rotated_at = now(), replaced_by_selector = $1 WHERE selector = $2",
+                         replacement_selector,
+                         selector);
+        txn.commit();
+        return RefreshTokenRotationStatus::Success;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "RotateRefreshToken PostgreSQL exception: " << e.what() << std::endl;
+        uid = 0;
+        return RefreshTokenRotationStatus::StorageError;
+    }
+}
+
+bool PostgresDao::RevokeRefreshToken(const std::string& selector, const std::string& verifier, int& uid)
+{
+    uid = 0;
+    if (selector.empty() || verifier.empty())
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        const auto rows = txn.exec_params("SELECT uid, verifier_hash FROM " + PgTable("auth_refresh_token") +
+                                              " WHERE selector = $1 FOR UPDATE",
+                                          selector);
+        if (rows.empty())
+        {
+            txn.commit();
+            return false;
+        }
+        const auto& row = rows[0];
+        const std::string stored_hash = row["verifier_hash"].is_null() ? "" : row["verifier_hash"].c_str();
+        if (!memochat::auth::VerifyRefreshTokenVerifier(verifier, stored_hash))
+        {
+            txn.commit();
+            return false;
+        }
+        uid = row["uid"].as<int>();
+        txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                             " SET revoked_at = COALESCE(revoked_at, now()) WHERE selector = $1",
+                         selector);
+        txn.commit();
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "RevokeRefreshToken PostgreSQL exception: " << e.what() << std::endl;
+        uid = 0;
+        return false;
+    }
+}
+
+bool PostgresDao::RevokeAllRefreshTokensForUid(int uid)
+{
+    if (uid <= 0)
+    {
+        return false;
+    }
+
+    auto con = pool_->getConnection();
+    if (con == nullptr)
+    {
+        return false;
+    }
+
+    Defer defer(
+        [this, &con]()
+        {
+            pool_->returnConnection(std::move(con));
+        });
+
+    try
+    {
+        pqxx::work txn(*con->_con);
+        txn.exec_params0("UPDATE " + PgTable("auth_refresh_token") +
+                             " SET revoked_at = COALESCE(revoked_at, now()) WHERE uid = $1 AND revoked_at IS NULL",
+                         uid);
+        txn.commit();
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "RevokeAllRefreshTokensForUid PostgreSQL exception: " << e.what() << std::endl;
         return false;
     }
 }
@@ -199,7 +456,7 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        const auto rows = txn.exec_params("SELECT uid, name, email, pwd, user_id, nick, icon, \"desc\", sex "
+        const auto rows = txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
                                           "FROM " +
                                               PgTable("user") + " WHERE email = $1 LIMIT 1",
                                           email);
@@ -210,9 +467,8 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
         }
 
         const auto& row = rows[0];
-        const std::string origin_pwd = row["pwd"].c_str() ? row["pwd"].c_str() : "";
-        const std::string decoded_pwd = DecodeLegacyXorPwd(origin_pwd);
-        if (pwd != origin_pwd && pwd != decoded_pwd)
+        const std::string password_hash = row["password_hash"].c_str() ? row["password_hash"].c_str() : "";
+        if (!memochat::auth::VerifyPassword(password_hash, pwd))
         {
             return false;
         }
@@ -225,7 +481,7 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
         userInfo.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
         userInfo.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
         userInfo.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
-        userInfo.pwd = decoded_pwd;
+        userInfo.pwd.clear();
         return true;
     }
     catch (const std::exception& e)
@@ -283,7 +539,7 @@ void PostgresDao::WarmupAuthQueries()
     try
     {
         pqxx::read_transaction txn(*con->_con);
-        txn.exec_params("SELECT uid, name, email, pwd, user_id, nick, icon, \"desc\", sex "
+        txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
                         "FROM \"user\" WHERE email = $1 LIMIT 1",
                         "__memochat_warmup__@invalid.local");
         txn.commit();
@@ -301,7 +557,7 @@ std::string PostgresDao::GenerateUserPublicId()
 
 bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info)
 {
-    if (uid <= 0)
+    if (!postgres_dao_account_modules::HasPositiveUid(uid))
     {
         return false;
     }
@@ -309,7 +565,7 @@ bool PostgresDao::GetUserInfo(int uid, UserInfo& user_info)
     // Account-owning services keep the user table in their pooled DB; services
     // that bridge to memo_account (e.g. moments after the Phase 2 split) read it
     // over a dedicated connection because "user" doesn't exist in their own DB.
-    if (!account_connection_string_.empty())
+    if (postgres_dao_account_modules::ShouldUseAccountBridge(account_connection_string_.empty()))
     {
         try
         {

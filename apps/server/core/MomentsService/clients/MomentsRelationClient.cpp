@@ -1,8 +1,8 @@
-#include "clients/MomentsRelationClient.h"
+#include "clients/MomentsRelationClient.hpp"
 
 #include "common/proto/chat_internal.grpc.pb.h"
-#include "json/GlazeCompat.h"
-#include "logging/Logger.h"
+#include "json/GlazeCompat.hpp"
+#include "logging/Logger.hpp"
 
 #include <chrono>
 #include <memory>

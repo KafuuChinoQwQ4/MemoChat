@@ -72,6 +72,7 @@ class SkillRegistry:
                     system_prompt="仅在给定的工具和参数范围内执行，不猜测工具参数。",
                     default_actions=["mcp_tool"],
                     allow_mcp=True,
+                    metadata={"tool_policy": {"allow_mcp": True, "allowed_tools": []}},
                 ),
             ]
         }

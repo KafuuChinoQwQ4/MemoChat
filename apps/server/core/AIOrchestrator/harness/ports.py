@@ -74,6 +74,7 @@ class ToolExecutionPort(Protocol):
         target_lang: str = "",
         requested_tools: list[str] | None = None,
         tool_arguments: dict[str, dict] | None = None,
+        skill: AgentSkill | None = None,
     ) -> list[ToolObservation]: ...
 
 
@@ -122,6 +123,7 @@ class GuardrailPort(Protocol):
         request: Any,
         plan_steps: list[PlanStep],
         tool_specs: list[ToolSpec],
+        skill: AgentSkill | None = None,
     ) -> list[GuardrailResult]: ...
     def check_output(self, response_text: str, observations: list[ToolObservation]) -> list[GuardrailResult]: ...
     def has_blocking(self, results: list[GuardrailResult]) -> bool: ...

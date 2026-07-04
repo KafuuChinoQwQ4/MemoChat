@@ -159,7 +159,7 @@ data:
     Host={{ .Values.aiOrchestrator.dependencies.neo4jHost }}
     Port={{ .Values.aiOrchestrator.dependencies.neo4jPort }}
     Username=neo4j
-    Password=password
+    Password=
     Database=neo4j
     Enabled=false
     [Postgres]
@@ -311,7 +311,7 @@ data:
       host: "{{ .Values.aiOrchestrator.dependencies.neo4jHost }}"
       port: {{ .Values.aiOrchestrator.dependencies.neo4jPort }}
       username: "neo4j"
-      password: "password"
+      password: ""
       database: "neo4j"
       vector_dimension: 384
       enabled: {{ .Values.aiOrchestrator.dependencies.neo4jEnabled }}

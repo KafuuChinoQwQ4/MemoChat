@@ -14,6 +14,7 @@ QString uploadFailureFallback(const QString& attachmentType)
 }
 
 MediaUploadRequest uploadRequestFrom(const QVariantMap& attachment,
+                                     const ChatPendingSendQueueSnapshot& queueSnapshot,
                                      const MediaPendingAttachmentSessionSnapshot& session)
 {
     MediaUploadRequest request;
@@ -22,6 +23,14 @@ MediaUploadRequest uploadRequestFrom(const QVariantMap& attachment,
     request.uid = session.selfUid;
     request.token = session.authToken;
     request.fallbackName = attachment.value(QStringLiteral("fileName")).toString();
+    if (queueSnapshot.groupId > 0)
+    {
+        request.grantGroupId = queueSnapshot.groupId;
+    }
+    else if (queueSnapshot.chatUid > 0 && queueSnapshot.chatUid != session.selfUid)
+    {
+        request.grantUids.append(queueSnapshot.chatUid);
+    }
     return request;
 }
 } // namespace
@@ -101,7 +110,7 @@ MediaPendingAttachmentRunner::processNext(const MediaPendingAttachmentRunnerPort
     const QString attachmentType = currentAttachment.value(QStringLiteral("type")).toString();
     setProgressText(port, QStringLiteral("正在发送附件 %1/%2").arg(attachmentIndex).arg(totalCount));
 
-    const MediaUploadRequest request = uploadRequestFrom(currentAttachment, session);
+    const MediaUploadRequest request = uploadRequestFrom(currentAttachment, queueSnapshot, session);
     MediaUploadResult uploadResult;
     if (port.uploadLocalFile)
     {
@@ -237,7 +246,7 @@ void MediaPendingAttachmentRunner::processNextAsync()
     const int totalCount = qMax(1, queueSnapshot.totalCount);
     setProgressText(_port, QStringLiteral("正在发送附件 %1/%2").arg(attachmentIndex).arg(totalCount));
 
-    const MediaUploadRequest request = uploadRequestFrom(currentAttachment, session);
+    const MediaUploadRequest request = uploadRequestFrom(currentAttachment, queueSnapshot, session);
     auto* watcher = new QFutureWatcher<MediaUploadResult>(this);
     connect(watcher,
             &QFutureWatcher<MediaUploadResult>::finished,

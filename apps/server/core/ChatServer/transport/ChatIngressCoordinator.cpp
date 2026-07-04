@@ -1,8 +1,8 @@
-#include "ChatIngressCoordinator.h"
+#include "ChatIngressCoordinator.hpp"
 
-#include "CServer.h"
-#include "QuicChatServer.h"
-#include "logging/Logger.h"
+#include "CServer.hpp"
+#include "QuicChatServer.hpp"
+#include "logging/Logger.hpp"
 
 #include <cstdlib>
 

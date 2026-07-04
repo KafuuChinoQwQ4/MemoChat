@@ -1,4 +1,4 @@
-#include "GateGlobals.h"
+#include "GateGlobals.hpp"
 
 namespace gateglobals
 {

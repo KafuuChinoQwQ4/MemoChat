@@ -1,12 +1,14 @@
-#include "runtime/IoContextPool.h"
+#include "runtime/IoContextPool.hpp"
 
 #include <iostream>
+
+import memochat.runtime.io_context_pool_algorithms;
 
 namespace memochat::runtime
 {
 
 IoContextPool::IoContextPool(std::size_t size)
-    : _ioServices(size == 0 ? 1 : size)
+    : _ioServices(static_cast<std::size_t>(modules::NormalizeIoContextPoolSize(size)))
     , _works(_ioServices.size())
 {
     for (std::size_t i = 0; i < _ioServices.size(); ++i)
@@ -33,7 +35,7 @@ IoContextPool::~IoContextPool()
 boost::asio::io_context& IoContextPool::GetIOService()
 {
     auto& service = _ioServices[_nextIOService++];
-    if (_nextIOService == _ioServices.size())
+    if (modules::ShouldWrapNextIoContextIndex(_nextIOService, _ioServices.size()))
     {
         _nextIOService = 0;
     }
@@ -42,7 +44,7 @@ boost::asio::io_context& IoContextPool::GetIOService()
 
 void IoContextPool::Stop()
 {
-    if (_stopped)
+    if (!modules::ShouldStopIoContextPool(_stopped))
     {
         return;
     }
@@ -60,7 +62,7 @@ void IoContextPool::Stop()
 
     for (auto& thread : _threads)
     {
-        if (thread.joinable())
+        if (modules::ShouldJoinIoContextThread(thread.joinable()))
         {
             thread.join();
         }

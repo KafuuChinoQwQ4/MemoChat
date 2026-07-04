@@ -1,5 +1,5 @@
-#include "GateDomainServer.h"
-#include "GateRouteProfileRegistrar.h"
+#include "GateDomainServer.hpp"
+#include "GateRouteProfileRegistrar.hpp"
 
 // R18GatewayServer — R18 source domain peeled off GateServer (gateserver split
 // Phase 4). Serves /healthz, /readyz and /api/r18/*. Owns memo r18 data + Redis

@@ -1,9 +1,22 @@
-#include "modules/profile/ProfileRouteModule.h"
+#include "modules/profile/ProfileRouteModule.hpp"
 
 #include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
+
+namespace memochat::tests::account::profile_route_schema
+{
+const char* PostMethod();
+const char* UpdateProfilePath();
+const char* UpdateProfileRouteName();
+const char* UpdateProfileRequestTypeName();
+const char* UpdateProfileResponseTypeName();
+const char* GetUserInfoPath();
+const char* GetUserInfoRouteName();
+const char* GetUserInfoRequestTypeName();
+const char* UserInfoResponseTypeName();
+} // namespace memochat::tests::account::profile_route_schema
 
 namespace
 {
@@ -24,6 +37,7 @@ const char* ExpectedProfileRouteSchemaSnapshot()
            "path: /user_update_profile\n"
            "request: ProfileUpdateRequestDto\n"
            "  - uid\n"
+           "  - token\n"
            "  - name\n"
            "  - nick\n"
            "  - desc\n"
@@ -61,17 +75,21 @@ TEST(ProfileRouteSchemaTest, ListsOnlyStableProfileRoutes)
     const auto schemas = memochat::gate::modules::profile::ProfileRouteModule::RouteSchemas();
 
     ASSERT_EQ(schemas.size(), 2U);
-    EXPECT_EQ(schemas[0].name, "profile.user.update");
-    EXPECT_EQ(schemas[0].method, "POST");
-    EXPECT_EQ(schemas[0].path, "/user_update_profile");
-    EXPECT_EQ(schemas[0].request.type_name, "ProfileUpdateRequestDto");
-    EXPECT_EQ(schemas[0].response.type_name, "ProfileUpdateResponseDto");
+    EXPECT_EQ(schemas[0].name, memochat::tests::account::profile_route_schema::UpdateProfileRouteName());
+    EXPECT_EQ(schemas[0].method, memochat::tests::account::profile_route_schema::PostMethod());
+    EXPECT_EQ(schemas[0].path, memochat::tests::account::profile_route_schema::UpdateProfilePath());
+    EXPECT_EQ(schemas[0].request.type_name,
+              memochat::tests::account::profile_route_schema::UpdateProfileRequestTypeName());
+    EXPECT_EQ(schemas[0].response.type_name,
+              memochat::tests::account::profile_route_schema::UpdateProfileResponseTypeName());
 
-    EXPECT_EQ(schemas[1].name, "profile.user.info");
-    EXPECT_EQ(schemas[1].method, "POST");
-    EXPECT_EQ(schemas[1].path, "/get_user_info");
-    EXPECT_EQ(schemas[1].request.type_name, "GetUserInfoRequestDto");
-    EXPECT_EQ(schemas[1].response.type_name, "UserInfoResponseDto");
+    EXPECT_EQ(schemas[1].name, memochat::tests::account::profile_route_schema::GetUserInfoRouteName());
+    EXPECT_EQ(schemas[1].method, memochat::tests::account::profile_route_schema::PostMethod());
+    EXPECT_EQ(schemas[1].path, memochat::tests::account::profile_route_schema::GetUserInfoPath());
+    EXPECT_EQ(schemas[1].request.type_name,
+              memochat::tests::account::profile_route_schema::GetUserInfoRequestTypeName());
+    EXPECT_EQ(schemas[1].response.type_name,
+              memochat::tests::account::profile_route_schema::UserInfoResponseTypeName());
 }
 
 TEST(ProfileRouteSchemaTest, BuildsFieldInventoriesFromProfileDtos)
@@ -79,7 +97,7 @@ TEST(ProfileRouteSchemaTest, BuildsFieldInventoriesFromProfileDtos)
     const auto schemas = memochat::gate::modules::profile::ProfileRouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 2U);
 
-    ExpectFields(schemas[0].request, {"uid", "name", "nick", "desc", "icon"});
+    ExpectFields(schemas[0].request, {"uid", "token", "name", "nick", "desc", "icon"});
     ExpectFields(schemas[0].response, {"error", "uid", "name", "nick", "desc", "icon"});
 
     ExpectFields(schemas[1].request, {"uid"});

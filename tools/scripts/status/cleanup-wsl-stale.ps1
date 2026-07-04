@@ -3,7 +3,7 @@ param(
     [string]$Distro = $(if ($env:MEMOCHAT_WSL_DISTRO) { $env:MEMOCHAT_WSL_DISTRO } else { 'archlinux' }),
 
     [Alias('ProjectRoot')]
-    [string]$ProjectPath = $(if ($env:MEMOCHAT_WSL_PROJECT_ROOT) { $env:MEMOCHAT_WSL_PROJECT_ROOT } else { '/root/code/MemoChat-Qml-Drogon-linux' }),
+    [string]$ProjectPath = $(if ($env:MEMOCHAT_WSL_PROJECT_ROOT) { $env:MEMOCHAT_WSL_PROJECT_ROOT } else { '/root/code/MemoChat' }),
 
     [ValidateRange(1, 10080)]
     [int]$MaxAgeMinutes = 15,

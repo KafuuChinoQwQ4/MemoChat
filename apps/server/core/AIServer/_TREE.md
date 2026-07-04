@@ -7,12 +7,15 @@
 | 子目录 | 作用概括 |
 | --- | --- |
 | [`db/`](db/_TREE.md) | AI 会话与智能日志的数据库仓储。 |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | AIServer 的 C++ module 接口分组。 |
 
 ## 文件
 
 | 文件 | 作用概括 |
 | --- | --- |
 | `AIServer.cpp` | 服务进程入口：初始化并启动 AIServer。 |
+| `AIServiceAlgorithms.cpp` | 导入 AIServer C++ module 并向普通服务代码暴露窄算法函数。 |
+| `AIServiceAlgorithms.h` | AIServer module-backed 算法函数声明。 |
 | `AIServiceClient.cpp` | 调用下游 AI 编排/模型服务的客户端实现。 |
 | `AIServiceClient.h` | AI 服务客户端接口声明。 |
 | `AIServiceCore.cpp` | AI 服务核心逻辑实现。 |

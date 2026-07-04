@@ -1,6 +1,6 @@
-#include "MediaHttpService.h"
+#include "MediaHttpService.hpp"
 
-#include "LogicSystem.h"
+#include "LogicSystem.hpp"
 
 void MediaHttpService::RegisterRoutes(LogicSystem& logic)
 {

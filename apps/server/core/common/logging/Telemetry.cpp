@@ -1,6 +1,6 @@
-﻿#include "logging/Telemetry.h"
+﻿#include "logging/Telemetry.hpp"
 
-#include "logging/TraceContext.h"
+#include "logging/TraceContext.hpp"
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -8,7 +8,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
-#include "json/GlazeCompat.h"
+#include "json/GlazeCompat.hpp"
 
 #include <chrono>
 #include <condition_variable>
@@ -18,6 +18,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+
+import memochat.logging.telemetry_algorithms;
 
 #ifdef _WIN32
 #include <process.h>
@@ -65,22 +67,23 @@ ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw)
 {
     ParsedHttpEndpoint endpoint;
     std::string value = raw;
-    const std::string http_prefix = "http://";
-    if (value.rfind(http_prefix, 0) == 0)
+    if (memochat::logging::telemetry_modules::HasHttpSchemePrefix(value.data(), value.size()))
     {
-        value.erase(0, http_prefix.size());
+        value.erase(0, memochat::logging::telemetry_modules::HttpSchemePrefixSize());
     }
 
     const auto slash_pos = value.find('/');
     std::string host_port = slash_pos == std::string::npos ? value : value.substr(0, slash_pos);
     endpoint.target = slash_pos == std::string::npos ? "/" : value.substr(slash_pos);
-    if (host_port.empty())
+    if (!memochat::logging::telemetry_modules::HasUsableEndpointAuthority(host_port.empty()))
     {
         return endpoint;
     }
 
     const auto colon_pos = host_port.rfind(':');
-    if (colon_pos != std::string::npos && colon_pos + 1 < host_port.size())
+    if (memochat::logging::telemetry_modules::HasExplicitEndpointPort(colon_pos != std::string::npos,
+                                                                      colon_pos,
+                                                                      host_port.size()))
     {
         endpoint.host = host_port.substr(0, colon_pos);
         endpoint.port = host_port.substr(colon_pos + 1);
@@ -90,7 +93,8 @@ ParsedHttpEndpoint ParseHttpEndpoint(const std::string& raw)
         endpoint.host = host_port;
     }
 
-    endpoint.ok = !endpoint.host.empty() && !endpoint.target.empty();
+    endpoint.ok =
+        memochat::logging::telemetry_modules::IsParsedHttpEndpointOk(endpoint.host.empty(), endpoint.target.empty());
     return endpoint;
 }
 
@@ -102,15 +106,19 @@ std::string DetectServiceInstance(const std::string& service_name)
         host = std::getenv("HOSTNAME");
     }
     const char* instance = std::getenv("MEMOCHAT_INSTANCE_NAME");
-    const std::string host_name = (host == nullptr || *host == '\0') ? "localhost" : std::string(host);
-    const std::string instance_name = (instance == nullptr || *instance == '\0') ? "" : std::string(instance);
+    const bool host_empty = host == nullptr || *host == '\0';
+    const bool instance_empty = instance == nullptr || *instance == '\0';
+    const std::string host_name =
+        memochat::logging::telemetry_modules::ShouldUseFallbackText(host_empty) ? "localhost" : std::string(host);
+    const std::string instance_name =
+        memochat::logging::telemetry_modules::ShouldUseFallbackText(instance_empty) ? "" : std::string(instance);
 #ifdef _WIN32
     const int pid = _getpid();
 #else
     const int pid = getpid();
 #endif
     std::string value = service_name + "@";
-    if (!instance_name.empty())
+    if (memochat::logging::telemetry_modules::ShouldIncludeInstanceName(instance_name.empty()))
     {
         value += instance_name + ".";
     }
@@ -219,7 +227,7 @@ void StopExportWorker()
 
 void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body)
 {
-    if (endpoint.empty() || body.empty())
+    if (memochat::logging::telemetry_modules::ShouldDropExportJob(endpoint.empty(), body.empty()))
     {
         return;
     }
@@ -240,8 +248,9 @@ void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body)
 void Telemetry::Init(const std::string& service_name, const TelemetryConfig& cfg)
 {
     config_ = cfg;
-    service_name_ = service_name.empty() ? "unknown" : service_name;
-    if (config_.service_name.empty())
+    service_name_ =
+        memochat::logging::telemetry_modules::ShouldUseFallbackText(service_name.empty()) ? "unknown" : service_name;
+    if (memochat::logging::telemetry_modules::ShouldUseFallbackText(config_.service_name.empty()))
     {
         config_.service_name = service_name_;
     }
@@ -274,7 +283,7 @@ const std::string& Telemetry::ServiceInstance()
 
 bool Telemetry::Enabled()
 {
-    return config_.enabled && config_.export_traces;
+    return memochat::logging::telemetry_modules::IsTelemetryEnabled(config_.enabled, config_.export_traces);
 }
 
 void Telemetry::ExportSpan(const std::string& trace_id,
@@ -312,7 +321,7 @@ void Telemetry::ExportSpan(const std::string& trace_id,
     tags["service.namespace"] = config_.service_namespace;
     for (const auto& entry : attributes)
     {
-        if (!entry.first.empty() && !entry.second.empty())
+        if (memochat::logging::telemetry_modules::ShouldKeepSpanAttribute(entry.first.empty(), entry.second.empty()))
         {
             tags[entry.first] = entry.second;
         }

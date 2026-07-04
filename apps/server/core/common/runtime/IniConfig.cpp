@@ -1,4 +1,4 @@
-#include "runtime/IniConfig.h"
+#include "runtime/IniConfig.hpp"
 
 #include <boost/filesystem.hpp>
 #include <algorithm>
@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+
+import memochat.runtime.ini_config_algorithms;
 
 namespace memochat::runtime
 {
@@ -144,14 +146,7 @@ std::string IniConfig::SanitizeEnvToken(const std::string& raw)
     token.reserve(raw.size());
     for (unsigned char ch : raw)
     {
-        if (std::isalnum(ch))
-        {
-            token.push_back(static_cast<char>(std::toupper(ch)));
-        }
-        else
-        {
-            token.push_back('_');
-        }
+        token.push_back(modules::SanitizeEnvTokenChar(ch));
     }
     return token;
 }

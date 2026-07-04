@@ -18,7 +18,7 @@ description: Use when validating MemoChat local runtime startup, Docker dependen
 - 从 Windows 调用 Linux smoke/build 时使用发行版名 `archlinux`，并显式进入 Linux 路径：
 
 ```powershell
-wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat-Qml-Drogon-linux && source /root/.memochat-linux-env && <command>'
+wsl -d archlinux -- bash -lc 'cd /root/code/MemoChat && source /root/.memochat-linux-env && <command>'
 ```
 
 ## Docker 依赖检查

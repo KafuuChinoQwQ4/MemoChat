@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "ChatGroupCommandDtos.h"
-#include "json/GlazeCompat.h"
-#include "reflection/StdReflectionIntrospection.h"
+#include "ChatGroupCommandDtos.hpp"
+#include "json/GlazeCompat.hpp"
+#include "reflection/StdReflectionIntrospection.hpp"
 
 #include <array>
 #include <string>

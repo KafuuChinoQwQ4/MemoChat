@@ -1,4 +1,4 @@
-#include "GateRouteProfileRegistrar.h"
+#include "GateRouteProfileRegistrar.hpp"
 
 namespace memochat::gate::profiles
 {

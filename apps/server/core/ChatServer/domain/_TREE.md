@@ -8,6 +8,7 @@
 | --- | --- |
 | [`delivery/`](delivery/_TREE.md) | 投递运行时、任务分发与投递任务载荷 DTO |
 | [`message/`](message/_TREE.md) | 私聊/群聊消息服务与消息载荷 |
+| [`cxx_modules/`](cxx_modules/_TREE.md) | 领域层共享轻量算法的 C++ module 接口分组 |
 | [`orchestration/`](orchestration/_TREE.md) | 逻辑系统与处理器注册（编排） |
 | [`ports/`](ports/_TREE.md) | 领域依赖的端口接口抽象 |
 | [`relation/`](relation/_TREE.md) | 好友关系服务与内部 gRPC |

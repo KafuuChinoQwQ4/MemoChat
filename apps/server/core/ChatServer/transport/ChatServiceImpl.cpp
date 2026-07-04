@@ -1,15 +1,15 @@
-﻿#include "ChatServiceImpl.h"
-#include "UserMgr.h"
-#include "CSession.h"
-#include "logging/GrpcTrace.h"
-#include "logging/Telemetry.h"
-#include "logging/TraceContext.h"
-#include "json/GlazeCompat.h"
+﻿#include "ChatServiceImpl.hpp"
+#include "UserMgr.hpp"
+#include "CSession.hpp"
+#include "logging/GrpcTrace.hpp"
+#include "logging/Telemetry.hpp"
+#include "logging/TraceContext.hpp"
+#include "json/GlazeCompat.hpp"
 
 #include <chrono>
-#include "RedisMgr.h"
-#include "PostgresMgr.h"
-#include "MongoMgr.h"
+#include "RedisMgr.hpp"
+#include "PostgresMgr.hpp"
+#include "MongoMgr.hpp"
 
 namespace
 {
@@ -206,7 +206,6 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         userinfo->uid = root["uid"].asInt();
         userinfo->user_id = root["user_id"].asString();
         userinfo->name = root["name"].asString();
-        userinfo->pwd = root["pwd"].asString();
         userinfo->email = root["email"].asString();
         userinfo->nick = root["nick"].asString();
         userinfo->desc = root["desc"].asString();
@@ -224,7 +223,6 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
             memochat::json::JsonValue redis_root;
             redis_root["uid"] = uid;
             redis_root["user_id"] = userinfo->user_id;
-            redis_root["pwd"] = userinfo->pwd;
             redis_root["name"] = userinfo->name;
             redis_root["email"] = userinfo->email;
             redis_root["nick"] = userinfo->nick;
@@ -248,7 +246,6 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         memochat::json::JsonValue redis_root;
         redis_root["uid"] = uid;
         redis_root["user_id"] = userinfo->user_id;
-        redis_root["pwd"] = userinfo->pwd;
         redis_root["name"] = userinfo->name;
         redis_root["email"] = userinfo->email;
         redis_root["nick"] = userinfo->nick;

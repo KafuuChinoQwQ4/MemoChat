@@ -1,14 +1,17 @@
-#include "modules/profile/ProfileRouteModule.h"
+#include "modules/profile/ProfileRouteModule.hpp"
 
-#include "AuthLoginSupport.h"
-#include "AuthPublicDtos.h"
-#include "PostgresMgr.h"
-#include "RedisMgr.h"
-#include "const.h"
-#include "json/GlazeCompat.h"
-#include "routing/RouteRegistry.h"
+#include "AuthLoginSupport.hpp"
+#include "AuthPublicDtos.hpp"
+#include "PostgresMgr.hpp"
+#include "RedisMgr.hpp"
+#include "const.hpp"
+#include "json/GlazeCompat.hpp"
+#include "routing/RouteRegistry.hpp"
+#include "support/UserTokenValidator.hpp"
 
 #include <string>
+
+import memochat.account.profile_route_registration_algorithms;
 
 namespace memochat::gate::modules::profile
 {
@@ -43,6 +46,7 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
     }
 
     const auto uid = profile_request.uid;
+    const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
@@ -50,6 +54,12 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
     if (uid <= 0 || nick.empty())
     {
         root["error"] = ErrorCodes::Error_Json;
+        WriteJson(response, root);
+        return true;
+    }
+    if (!memochat::auth::ValidateUserToken(uid, token))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
         WriteJson(response, root);
         return true;
     }
@@ -127,12 +137,16 @@ bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
 
 void ProfileRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& registry)
 {
-    registry.Register("POST", "/user_update_profile", HandleUserUpdateProfile);
+    namespace modules = memochat::account::profile_route_registration::modules;
+
+    registry.Register(modules::PostMethod(), modules::UserUpdateProfilePath(), HandleUserUpdateProfile);
 }
 
 void ProfileRouteModule::RegisterUserInfoRoutes(memochat::gate::routing::RouteRegistry& registry)
 {
-    registry.Register("POST", "/get_user_info", HandleGetUserInfo);
+    namespace modules = memochat::account::profile_route_registration::modules;
+
+    registry.Register(modules::PostMethod(), modules::GetUserInfoPath(), HandleGetUserInfo);
 }
 
 } // namespace memochat::gate::modules::profile

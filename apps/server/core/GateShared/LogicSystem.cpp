@@ -1,27 +1,20 @@
-#include "LogicSystem.h"
-#include "HttpConnection.h"
-#include "adapters/h1/H1RouteAdapter.h"
-#include "GateHttpJsonSupport.h"
-#include "modules/health/HealthRouteModule.h"
-#include "transports/h3/listener/GateHttp3Connection.h"
-#include "logging/Logger.h"
-#include "logging/TraceContext.h"
+#include "LogicSystem.hpp"
+#include "HttpConnection.hpp"
+#include "adapters/h1/H1RouteAdapter.hpp"
+#include "GateHttpJsonSupport.hpp"
+#include "modules/health/HealthRouteModule.hpp"
+#include "transports/h3/listener/GateHttp3Connection.hpp"
+#include "logging/Logger.hpp"
+#include "logging/TraceContext.hpp"
 #include <string_view>
+
+import memochat.gate.routing_algorithms;
 
 namespace
 {
 bool MatchesRoutePrefix(const std::string& path, const std::string& prefix)
 {
-    if (path == prefix)
-    {
-        return true;
-    }
-    if (path.size() <= prefix.size() || path.rfind(prefix, 0) != 0)
-    {
-        return false;
-    }
-    const char next = path[prefix.size()];
-    return next == '/' || next == '?';
+    return memochat::gate::routing::modules::MatchesRoutePrefix(path.data(), path.size(), prefix.data(), prefix.size());
 }
 
 void ApplyRouteTraceContext(const memochat::gate::routing::GateRequest& request)

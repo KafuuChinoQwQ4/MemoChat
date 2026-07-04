@@ -32,6 +32,7 @@ void AppSessionCoordinator::resetLoginAttemptState(qint64 loginStartedMs)
     _pending_login_state.uid = 0;
     _pending_login_state.token.clear();
     _pending_login_state.loginTicket.clear();
+    _pending_login_state.refreshToken.clear();
     _pending_login_state.traceId.clear();
     _chat_endpoint_state.endpoints.clear();
     _chat_endpoint_state.endpointIndex = -1;
@@ -50,6 +51,7 @@ void AppSessionCoordinator::applyLoginSuccessState(const ServerInfo& serverInfo,
     _pending_login_state.uid = serverInfo.Uid;
     _pending_login_state.token = serverInfo.Token;
     _pending_login_state.loginTicket = serverInfo.LoginTicket;
+    _pending_login_state.refreshToken = serverInfo.RefreshToken;
     _pending_login_state.traceId = traceId;
 
     _chat_endpoint_state.protocolVersion = serverInfo.ProtocolVersion;
@@ -81,6 +83,7 @@ void AppSessionCoordinator::clearSessionForLogout()
     _pending_login_state.uid = 0;
     _pending_login_state.token.clear();
     _pending_login_state.loginTicket.clear();
+    _pending_login_state.refreshToken.clear();
     _pending_login_state.traceId.clear();
 
     _chat_endpoint_state.host.clear();

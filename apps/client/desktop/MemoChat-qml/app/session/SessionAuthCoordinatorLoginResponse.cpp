@@ -79,7 +79,8 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
     server_info.Uid = obj.value("uid").toInt();
     server_info.Token = obj.value("token").toString();
     server_info.LoginTicket = obj.value("login_ticket").toString();
-    server_info.ProtocolVersion = obj.value("protocol_version").toInt(2);
+    server_info.RefreshToken = obj.value("refresh_token").toString();
+    server_info.ProtocolVersion = obj.value("protocol_version").toInt(3);
     server_info.PreferredTransport = parseTransportKind(obj.value("preferred_transport").toString());
     server_info.FallbackTransport = parseTransportKind(obj.value("fallback_transport").toString());
     server_info.ConnectTimeoutMs = kDefaultChatConnectTimeoutMs;
@@ -100,12 +101,16 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
             server_info.Endpoints.push_back(endpoint);
         }
     }
-    if (server_info.Uid <= 0 || server_info.Endpoints.isEmpty())
+    if (server_info.Uid <= 0 || server_info.Token.trimmed().isEmpty() || server_info.LoginTicket.trimmed().isEmpty() ||
+        server_info.RefreshToken.trimmed().isEmpty() || server_info.Endpoints.isEmpty())
     {
         _port.setIgnoreNextLoginDisconnect(false);
         _port.setBusy(false);
         _port.setTip("聊天服务配置无效，请确认服务已启动", true);
-        qWarning() << "Invalid chat server response:" << obj;
+        qWarning() << "Invalid chat server response:"
+                   << "uid" << server_info.Uid << "hasToken" << !server_info.Token.trimmed().isEmpty()
+                   << "hasLoginTicket" << !server_info.LoginTicket.trimmed().isEmpty() << "hasRefreshToken"
+                   << !server_info.RefreshToken.trimmed().isEmpty() << "endpointCount" << server_info.Endpoints.size();
         return;
     }
 
