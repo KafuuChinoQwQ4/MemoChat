@@ -28,8 +28,9 @@ function(memochat_find_gnu_std_module_source module_file out_var)
     set(${out_var} "${_module_source}" PARENT_SCOPE)
 endfunction()
 
-function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
+function(memochat_prepare_gnu_std_modules out_cmis out_stamps out_mapper_lines out_target)
     set(${out_cmis} "" PARENT_SCOPE)
+    set(${out_stamps} "" PARENT_SCOPE)
     set(${out_mapper_lines} "" PARENT_SCOPE)
     set(${out_target} "" PARENT_SCOPE)
 
@@ -53,12 +54,14 @@ function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
         set(_std_mapper_file "${_std_module_build_dir}/std.mapper")
         set(_std_cmi "${_std_gcm_cache_dir}/std.gcm")
         set(_std_obj "${_std_module_build_dir}/std.o")
+        set(_std_stamp "${_std_module_build_dir}/std.stamp")
         set(_std_mapper_lines "std ${_std_cmi}")
-        set(_std_outputs "${_std_obj}" "${_std_cmi}")
+        set(_std_outputs "${_std_obj}" "${_std_cmi}" "${_std_stamp}")
         set(_std_cmis "${_std_cmi}")
+        set(_std_stamps "${_std_stamp}")
 
         add_custom_command(
-            OUTPUT "${_std_obj}" "${_std_cmi}"
+            OUTPUT "${_std_obj}" "${_std_cmi}" "${_std_stamp}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_std_module_build_dir}" "${_std_gcm_cache_dir}"
             COMMAND
                 ${CMAKE_CXX_COMPILER}
@@ -69,6 +72,10 @@ function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
                 -fmodule-mapper=${_std_mapper_file}
                 -c "${_std_module_source}"
                 -o "${_std_obj}"
+            COMMAND ${CMAKE_COMMAND}
+                -DCMI_FILE=${_std_cmi}
+                -DSTAMP_FILE=${_std_stamp}
+                -P "${CMAKE_SOURCE_DIR}/cmake/UpdateModuleStamp.cmake"
             DEPENDS "${_std_module_source}" "${_std_mapper_file}"
             COMMENT "Building libstdc++ module std"
             VERBATIM
@@ -78,12 +85,14 @@ function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
         if(_std_compat_module_source)
             set(_std_compat_cmi "${_std_gcm_cache_dir}/std.compat.gcm")
             set(_std_compat_obj "${_std_module_build_dir}/std.compat.o")
+            set(_std_compat_stamp "${_std_module_build_dir}/std.compat.stamp")
             list(APPEND _std_mapper_lines "std.compat ${_std_compat_cmi}")
-            list(APPEND _std_outputs "${_std_compat_obj}" "${_std_compat_cmi}")
+            list(APPEND _std_outputs "${_std_compat_obj}" "${_std_compat_cmi}" "${_std_compat_stamp}")
             list(APPEND _std_cmis "${_std_compat_cmi}")
+            list(APPEND _std_stamps "${_std_compat_stamp}")
 
             add_custom_command(
-                OUTPUT "${_std_compat_obj}" "${_std_compat_cmi}"
+                OUTPUT "${_std_compat_obj}" "${_std_compat_cmi}" "${_std_compat_stamp}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${_std_module_build_dir}" "${_std_gcm_cache_dir}"
                 COMMAND
                     ${CMAKE_CXX_COMPILER}
@@ -94,7 +103,11 @@ function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
                     -fmodule-mapper=${_std_mapper_file}
                     -c "${_std_compat_module_source}"
                     -o "${_std_compat_obj}"
-                DEPENDS "${_std_compat_module_source}" "${_std_cmi}" "${_std_mapper_file}"
+                COMMAND ${CMAKE_COMMAND}
+                    -DCMI_FILE=${_std_compat_cmi}
+                    -DSTAMP_FILE=${_std_compat_stamp}
+                    -P "${CMAKE_SOURCE_DIR}/cmake/UpdateModuleStamp.cmake"
+                DEPENDS "${_std_compat_module_source}" "${_std_stamp}" "${_std_mapper_file}"
                 COMMENT "Building libstdc++ module std.compat"
                 VERBATIM
                 COMMAND_EXPAND_LISTS
@@ -114,14 +127,17 @@ function(memochat_prepare_gnu_std_modules out_cmis out_mapper_lines out_target)
 
         set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULES_CONFIGURED TRUE)
         set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_CMIS "${_std_cmis}")
+        set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_STAMPS "${_std_stamps}")
         set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_MAPPER_LINES "${_std_mapper_lines}")
         set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_TARGET memochat_gnu_std_modules)
     endif()
 
     get_property(_std_cmis GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_CMIS)
+    get_property(_std_stamps GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_STAMPS)
     get_property(_std_mapper_lines GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_MAPPER_LINES)
     get_property(_std_target GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_TARGET)
     set(${out_cmis} "${_std_cmis}" PARENT_SCOPE)
+    set(${out_stamps} "${_std_stamps}" PARENT_SCOPE)
     set(${out_mapper_lines} "${_std_mapper_lines}" PARENT_SCOPE)
     set(${out_target} "${_std_target}" PARENT_SCOPE)
 endfunction()
@@ -163,16 +179,19 @@ function(memochat_enable_gnu_modules target_name)
     set(_mapper_file "${_module_build_dir}/module.mapper")
     set(_module_objects)
     set(_module_cmis)
+    set(_module_stamps)
     set(_mapper_lines)
     set(_module_interface_paths)
     set(_module_include_args)
     set(_module_definition_args)
     set(_std_module_cmis)
+    set(_std_module_stamps)
     set(_std_module_mapper_lines)
     set(_std_module_target)
 
-    memochat_prepare_gnu_std_modules(_std_module_cmis _std_module_mapper_lines _std_module_target)
+    memochat_prepare_gnu_std_modules(_std_module_cmis _std_module_stamps _std_module_mapper_lines _std_module_target)
     list(APPEND _module_cmis ${_std_module_cmis})
+    list(APPEND _module_stamps ${_std_module_stamps})
     list(APPEND _mapper_lines ${_std_module_mapper_lines})
 
     foreach(_module_include_dir IN LISTS MEMOCHAT_MODULES_MODULE_INCLUDE_DIRS)
@@ -206,17 +225,24 @@ function(memochat_enable_gnu_modules target_name)
         string(MAKE_C_IDENTIFIER "${_module_name}" _module_id)
         set(_module_obj "${_module_build_dir}/${_module_id}.o")
 
+        # Stamp file: only updated when CMI content (SHA256) actually changes.
+        # Consumer sources depend on the stamp rather than the .gcm directly, so
+        # they are not rebuilt just because GCC touched the .gcm timestamp while
+        # reading it during a consumer compile.
+        set(_module_stamp "${_module_build_dir}/${_module_id}.stamp")
+
         list(APPEND _mapper_lines "${_module_name} ${_module_cmi}")
         list(APPEND _module_interface_paths "${_module_source}")
         list(APPEND _module_objects "${_module_obj}")
         list(APPEND _module_cmis "${_module_cmi}")
+        list(APPEND _module_stamps "${_module_stamp}")
         set_source_files_properties("${_module_obj}" PROPERTIES
             EXTERNAL_OBJECT TRUE
             GENERATED TRUE
         )
 
         add_custom_command(
-            OUTPUT "${_module_obj}" "${_module_cmi}"
+            OUTPUT "${_module_obj}" "${_module_cmi}" "${_module_stamp}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_module_build_dir}" "${_module_cmi_dir}"
             COMMAND
                 ${CMAKE_CXX_COMPILER}
@@ -230,7 +256,15 @@ function(memochat_enable_gnu_modules target_name)
                 ${MEMOCHAT_MODULES_MODULE_OPTIONS}
                 -c "${_module_source}"
                 -o "${_module_obj}"
-            DEPENDS "${_module_source}" "${_mapper_file}" ${_std_module_cmis} ${MEMOCHAT_MODULES_MODULE_DEPENDS}
+            # Update stamp only when CMI content changed; keeps consumer timestamps stable.
+            # The stamp is a declared OUTPUT so Ninja knows the rule that produces it;
+            # CMake sets restat=1 on custom commands, so an unchanged stamp does not
+            # cascade a rebuild to the consumers that depend on it.
+            COMMAND ${CMAKE_COMMAND}
+                -DCMI_FILE=${_module_cmi}
+                -DSTAMP_FILE=${_module_stamp}
+                -P "${CMAKE_SOURCE_DIR}/cmake/UpdateModuleStamp.cmake"
+            DEPENDS "${_module_source}" "${_mapper_file}" ${_std_module_stamps} ${MEMOCHAT_MODULES_MODULE_DEPENDS}
             COMMENT "Building C++ module ${_module_name} for ${target_name}"
             VERBATIM
             COMMAND_EXPAND_LISTS
@@ -244,7 +278,7 @@ function(memochat_enable_gnu_modules target_name)
     )
 
     add_custom_target(${target_name}_cxx_modules
-        DEPENDS ${_module_objects} ${_module_cmis}
+        DEPENDS ${_module_objects} ${_module_cmis} ${_module_stamps}
         SOURCES ${_module_interface_paths}
     )
     set_target_properties(${target_name}_cxx_modules PROPERTIES FOLDER "Server/Modules")
@@ -253,15 +287,35 @@ function(memochat_enable_gnu_modules target_name)
     endif()
 
     add_dependencies(${target_name} ${target_name}_cxx_modules)
+
+    # Route this target's compiles through the depfile filter. g++ -fmodules -MD
+    # emits phantom "<module>.c++-module" prerequisites into the Make depfile that
+    # Ninja (deps = gcc) treats as always-missing. It also records raw .gcm paths,
+    # whose mtimes can move independently of CMI content. The launcher strips both
+    # after compile; explicit OBJECT_DEPENDS on content-hash stamps below preserve
+    # the real module-change dependency without poisoning Ninja's deps log.
+    get_target_property(_existing_cxx_launcher ${target_name} CXX_COMPILER_LAUNCHER)
+    set(_module_depfile_filter "${CMAKE_SOURCE_DIR}/cmake/gcc-modules-depfile-filter.sh")
+    if(_existing_cxx_launcher)
+        set(_new_cxx_launcher "${_existing_cxx_launcher};${_module_depfile_filter}")
+    else()
+        set(_new_cxx_launcher "${_module_depfile_filter}")
+    endif()
+    set_target_properties(${target_name} PROPERTIES CXX_COMPILER_LAUNCHER "${_new_cxx_launcher}")
+
     target_sources(${target_name} PRIVATE ${MEMOCHAT_MODULES_PRIVATE_SOURCES} ${_module_objects})
     set(_module_consumer_sources ${MEMOCHAT_MODULES_PRIVATE_SOURCES} ${MEMOCHAT_MODULES_CONSUMER_SOURCES})
     foreach(_consumer_source IN LISTS _module_consumer_sources)
         if(NOT IS_ABSOLUTE "${_consumer_source}")
             set(_consumer_source "${CMAKE_CURRENT_SOURCE_DIR}/${_consumer_source}")
         endif()
-        set_source_files_properties("${_consumer_source}" PROPERTIES OBJECT_DEPENDS "${_module_cmis};${_mapper_file}")
+        # Depend on stamp files (content-hash gated) rather than raw .gcm files
+        # (timestamp-based). This prevents spurious rebuilds when GCC touches .gcm
+        # timestamps while reading them during consumer compilation.
+        set_source_files_properties("${_consumer_source}" PROPERTIES
+            OBJECT_DEPENDS "${_module_stamps};${_mapper_file}")
         set_property(SOURCE "${_consumer_source}" APPEND_STRING PROPERTY COMPILE_FLAGS
-            " -fmodules -fmodule-mapper=${_mapper_file} -flang-info-module-cmi"
+            " -fmodules -fmodule-mapper=${_mapper_file}"
         )
     endforeach()
     set_property(TARGET ${target_name} APPEND PROPERTY MEMOCHAT_CXX_MODULE_CMIS "${_module_cmis}")

@@ -1,5 +1,8 @@
 import json
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -49,6 +52,76 @@ class CxxModulesContractTest(unittest.TestCase):
         self.assertIn("MODULE_DEPENDS", helper)
         self.assertIn("CONSUMER_SOURCES", helper)
         self.assertIn("add_custom_target(${target_name}_cxx_modules", helper)
+
+    def test_cmake_helper_uses_stamp_deps_and_depfile_filter_for_incremental_modules(self):
+        helper = read(REPO_ROOT / "cmake" / "MemoChatModules.cmake")
+
+        self.assertIn(
+            "function(memochat_prepare_gnu_std_modules out_cmis out_stamps out_mapper_lines out_target)", helper
+        )
+        self.assertIn("set_property(GLOBAL PROPERTY MEMOCHAT_GNU_STD_MODULE_STAMPS", helper)
+        self.assertIn("UpdateModuleStamp.cmake", helper)
+        self.assertIn("CXX_COMPILER_LAUNCHER", helper)
+        self.assertIn("gcc-modules-depfile-filter.sh", helper)
+        self.assertIn('OBJECT_DEPENDS "${_module_stamps};${_mapper_file}"', helper)
+        self.assertIn('DEPENDS "${_module_source}" "${_mapper_file}" ${_std_module_stamps}', helper)
+        self.assertNotIn('OBJECT_DEPENDS "${_module_cmis};${_mapper_file}"', helper)
+
+    @unittest.skipUnless(os.name == "posix", "GNU modules depfile filter is a POSIX launcher")
+    def test_gnu_module_depfile_filter_removes_ninja_poison_module_deps(self):
+        depfile_filter = REPO_ROOT / "cmake" / "gcc-modules-depfile-filter.sh"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            fake_compiler = tmpdir / "fake-gxx"
+            depfile = tmpdir / "consumer.o.d"
+            depfile_joined = tmpdir / "consumer-joined.o.d"
+
+            fake_compiler.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+depfile=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; ++i)); do
+    arg="${args[$i]}"
+    case "$arg" in
+        -MF)
+            depfile="${args[$((i + 1))]}"
+            ;;
+        -MF*)
+            depfile="${arg#-MF}"
+            ;;
+    esac
+done
+cat > "$depfile" <<'DEPFILE'
+consumer.o: consumer.cpp \\
+  /tmp/build/gcm.cache/memochat/gate/domain_runtime_algorithms.gcm \\
+  memochat.gate.domain_runtime_algorithms.c++-module \\
+  /tmp/include/header.hpp
+CXX_IMPORTS += memochat.gate.domain_runtime_algorithms.c++-module \\
+  /tmp/build/gcm.cache/memochat/gate/domain_runtime_algorithms.gcm
+DEPFILE
+""",
+                encoding="utf-8",
+            )
+            fake_compiler.chmod(0o755)
+
+            subprocess.run(
+                [str(depfile_filter), str(fake_compiler), "-c", "consumer.cpp", "-MF", str(depfile)],
+                check=True,
+            )
+            subprocess.run(
+                [str(depfile_filter), str(fake_compiler), "-c", "consumer.cpp", f"-MF{depfile_joined}"],
+                check=True,
+            )
+
+            for sanitized in (read(depfile), read(depfile_joined)):
+                self.assertIn("consumer.cpp", sanitized)
+                self.assertIn("/tmp/include/header.hpp", sanitized)
+                self.assertNotIn(".c++-module", sanitized)
+                self.assertNotIn(".gcm", sanitized)
+                self.assertNotIn("CXX_IMPORTS", sanitized)
+                self.assertIsNone(re.search(r"^[ \t]*\\$", sanitized, flags=re.M))
 
     def test_lua_embed_helper_preserves_cpp_semicolons_in_generated_headers(self):
         helper = read(REPO_ROOT / "cmake" / "EmbedLuaScripts.cmake")
