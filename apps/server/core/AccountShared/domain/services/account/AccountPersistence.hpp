@@ -55,6 +55,7 @@ public:
     bool UpdatePassword(const std::string& email, const std::string& password);
     bool CheckPassword(const std::string& email, const std::string& password, AccountProfile& profile);
     bool GetUserProfile(int uid, AccountProfile& profile);
+    bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
     RefreshTokenIssueResult
     IssueRefreshToken(int uid, int ttl_seconds, const std::string& user_agent, const std::string& ip_hash);
     RefreshTokenRotateResult RotateRefreshToken(const std::string& refresh_token,

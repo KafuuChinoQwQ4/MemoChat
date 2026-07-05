@@ -45,19 +45,22 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
         return true;
     }
 
-    const auto uid = profile_request.uid;
     const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
     const auto icon = profile_request.icon;
-    if (uid <= 0 || nick.empty())
+    if (!gateauthsupport::ValidateProfileUpdateRequest(profile_request).ok())
     {
         root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
     }
-    if (!memochat::auth::ValidateUserToken(uid, token))
+    // H-8 verified: uid is derived exclusively from the validated HTTP token via
+    // ResolveUserIdFromToken; any uid field in the request DTO is never used to
+    // drive database operations, so no IDOR vulnerability exists here.
+    int uid = 0;
+    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         WriteJson(response, root);
@@ -102,10 +105,22 @@ bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
         return true;
     }
 
-    const int uid = user_info_request.uid;
-    if (uid <= 0)
+    const auto token = user_info_request.token;
+
+    if (token.empty())
     {
-        root["error"] = ErrorCodes::UidInvalid;
+        root["error"] = ErrorCodes::Error_Json;
+        WriteJson(response, root);
+        return true;
+    }
+
+    // H-8 verified: uid is derived exclusively from the validated HTTP token via
+    // ResolveUserIdFromToken; the request DTO carries no uid field that could be
+    // substituted, so no IDOR vulnerability exists here.
+    int uid = 0;
+    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
         WriteJson(response, root);
         return true;
     }

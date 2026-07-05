@@ -4,10 +4,26 @@
 
 import memochat.account.auth_public_dto_algorithms;
 
+#include <algorithm>
+#include <cctype>
 #include <exception>
+#include <string>
 
 namespace
 {
+
+constexpr std::size_t kMaxEmailLength = 254;
+constexpr std::size_t kMaxUserLength = 32;
+constexpr std::size_t kMaxPasswordLength = 128;
+constexpr std::size_t kMaxIconLength = 512;
+constexpr std::size_t kMaxNickLength = 32;
+constexpr std::size_t kMaxDescLength = 255;
+constexpr std::size_t kMaxVerifyCodeLength = 16;
+constexpr std::size_t kMaxRefreshTokenLength = 128;
+constexpr std::size_t kMaxClientVersionLength = 32;
+constexpr std::size_t kMaxAccessTokenLength = 128;
+constexpr std::size_t kRefreshTokenSelectorLength = 36;
+constexpr std::size_t kRefreshTokenVerifierLength = 64;
 
 bool ParseJsonForAuthPublic(std::string_view body, memochat::json::JsonValue* out, std::string* error_out)
 {
@@ -91,10 +107,407 @@ template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& va
     return root;
 }
 
+bool IsLowerHex(std::string_view value)
+{
+    for (const char ch : value)
+    {
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsEmailLocalChar(char ch)
+{
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalnum(uch) || ch == '.' || ch == '_' || ch == '%' || ch == '+' || ch == '-';
+}
+
+bool IsDomainLabelChar(char ch)
+{
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalnum(uch) || ch == '-';
+}
+
+bool HasNoDotEdgeOrRun(std::string_view value)
+{
+    return !value.empty() && value.front() != '.' && value.back() != '.' && value.find("..") == std::string_view::npos;
+}
+
+gateauthsupport::AuthInputValidationResult TooLong(gateauthsupport::AuthInputField field)
+{
+    return gateauthsupport::AuthInputValidationResult{.code = gateauthsupport::AuthInputValidationCode::TooLong,
+                                                      .field = field,
+                                                      .max_length = gateauthsupport::AuthInputMaxLength(field)};
+}
+
+gateauthsupport::AuthInputValidationResult Missing(gateauthsupport::AuthInputField field)
+{
+    return gateauthsupport::AuthInputValidationResult{.code = gateauthsupport::AuthInputValidationCode::MissingRequired,
+                                                      .field = field,
+                                                      .max_length = gateauthsupport::AuthInputMaxLength(field)};
+}
+
+gateauthsupport::AuthInputValidationResult InvalidEmail()
+{
+    return gateauthsupport::AuthInputValidationResult{
+        .code = gateauthsupport::AuthInputValidationCode::InvalidEmail,
+        .field = gateauthsupport::AuthInputField::Email,
+        .max_length = gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::Email)};
+}
+
+gateauthsupport::AuthInputValidationResult InvalidRefreshToken()
+{
+    return gateauthsupport::AuthInputValidationResult{
+        .code = gateauthsupport::AuthInputValidationCode::InvalidRefreshToken,
+        .field = gateauthsupport::AuthInputField::RefreshToken,
+        .max_length = gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::RefreshToken)};
+}
+
+gateauthsupport::AuthInputValidationResult
+ValidateStringField(std::string_view value, gateauthsupport::AuthInputField field, bool required)
+{
+    if (value.size() > gateauthsupport::AuthInputMaxLength(field))
+    {
+        return TooLong(field);
+    }
+    if (required && value.empty())
+    {
+        return Missing(field);
+    }
+    return {};
+}
+
 } // namespace
 
 namespace gateauthsupport
 {
+
+const char* AuthInputFieldName(AuthInputField field)
+{
+    switch (field)
+    {
+        case AuthInputField::Email:
+            return "email";
+        case AuthInputField::User:
+            return "user";
+        case AuthInputField::Passwd:
+            return "passwd";
+        case AuthInputField::Confirm:
+            return "confirm";
+        case AuthInputField::Icon:
+            return "icon";
+        case AuthInputField::Nick:
+            return "nick";
+        case AuthInputField::Desc:
+            return "desc";
+        case AuthInputField::VarifyCode:
+            return "varifycode";
+        case AuthInputField::RefreshToken:
+            return "refresh_token";
+        case AuthInputField::ClientVer:
+            return "client_ver";
+        case AuthInputField::Token:
+            return "token";
+    }
+    return "unknown";
+}
+
+const char* AuthInputValidationCodeName(AuthInputValidationCode code)
+{
+    switch (code)
+    {
+        case AuthInputValidationCode::Ok:
+            return "ok";
+        case AuthInputValidationCode::MissingRequired:
+            return "missing_required";
+        case AuthInputValidationCode::TooLong:
+            return "too_long";
+        case AuthInputValidationCode::InvalidEmail:
+            return "invalid_email";
+        case AuthInputValidationCode::InvalidRefreshToken:
+            return "invalid_refresh_token";
+    }
+    return "unknown";
+}
+
+std::size_t AuthInputMaxLength(AuthInputField field)
+{
+    switch (field)
+    {
+        case AuthInputField::Email:
+            return kMaxEmailLength;
+        case AuthInputField::User:
+            return kMaxUserLength;
+        case AuthInputField::Passwd:
+        case AuthInputField::Confirm:
+            return kMaxPasswordLength;
+        case AuthInputField::Icon:
+            return kMaxIconLength;
+        case AuthInputField::Nick:
+            return kMaxNickLength;
+        case AuthInputField::Desc:
+            return kMaxDescLength;
+        case AuthInputField::VarifyCode:
+            return kMaxVerifyCodeLength;
+        case AuthInputField::RefreshToken:
+            return kMaxRefreshTokenLength;
+        case AuthInputField::ClientVer:
+            return kMaxClientVersionLength;
+        case AuthInputField::Token:
+            return kMaxAccessTokenLength;
+    }
+    return 0;
+}
+
+bool IsValidAuthEmail(std::string_view email)
+{
+    if (email.empty() || email.size() > kMaxEmailLength)
+    {
+        return false;
+    }
+    for (const char ch : email)
+    {
+        const unsigned char uch = static_cast<unsigned char>(ch);
+        if (uch <= 32 || uch >= 127)
+        {
+            return false;
+        }
+    }
+
+    const auto at = email.find('@');
+    if (at == std::string_view::npos || email.find('@', at + 1) != std::string_view::npos || at == 0 ||
+        at + 1 >= email.size())
+    {
+        return false;
+    }
+
+    const auto local = email.substr(0, at);
+    const auto domain = email.substr(at + 1);
+    if (local.size() > 64 || domain.size() > 253 || !HasNoDotEdgeOrRun(local) || !HasNoDotEdgeOrRun(domain))
+    {
+        return false;
+    }
+    if (domain.find('.') == std::string_view::npos)
+    {
+        return false;
+    }
+    if (!std::all_of(local.begin(), local.end(), IsEmailLocalChar))
+    {
+        return false;
+    }
+
+    std::size_t label_start = 0;
+    while (label_start < domain.size())
+    {
+        const auto dot = domain.find('.', label_start);
+        const auto label_end = dot == std::string_view::npos ? domain.size() : dot;
+        const auto label = domain.substr(label_start, label_end - label_start);
+        if (label.empty() || label.size() > 63 || label.front() == '-' || label.back() == '-' ||
+            !std::all_of(label.begin(), label.end(), IsDomainLabelChar))
+        {
+            return false;
+        }
+        if (dot == std::string_view::npos)
+        {
+            break;
+        }
+        label_start = dot + 1;
+    }
+
+    const auto last_dot = domain.rfind('.');
+    const auto tld = domain.substr(last_dot + 1);
+    if (tld.size() < 2)
+    {
+        return false;
+    }
+    return std::all_of(tld.begin(),
+                       tld.end(),
+                       [](char ch)
+                       {
+                           return std::isalpha(static_cast<unsigned char>(ch));
+                       });
+}
+
+bool IsValidAuthRefreshTokenShape(std::string_view refresh_token)
+{
+    if (refresh_token.size() > kMaxRefreshTokenLength)
+    {
+        return false;
+    }
+    const auto separator = refresh_token.find('.');
+    if (separator == std::string_view::npos || refresh_token.find('.', separator + 1) != std::string_view::npos)
+    {
+        return false;
+    }
+    const auto selector = refresh_token.substr(0, separator);
+    const auto verifier = refresh_token.substr(separator + 1);
+    return selector.size() == kRefreshTokenSelectorLength && verifier.size() == kRefreshTokenVerifierLength &&
+           IsLowerHex(selector) && IsLowerHex(verifier);
+}
+
+std::string AuthRefreshTokenRateLimitSubject(std::string_view refresh_token)
+{
+    if (!IsValidAuthRefreshTokenShape(refresh_token))
+    {
+        return "";
+    }
+    return std::string(refresh_token.substr(0, refresh_token.find('.')));
+}
+
+AuthInputValidationResult ValidateAuthEmailRequest(const AuthEmailRequestDto& request)
+{
+    if (const auto result = ValidateStringField(request.email, AuthInputField::Email, true); !result.ok())
+    {
+        return result;
+    }
+    if (!IsValidAuthEmail(request.email))
+    {
+        return InvalidEmail();
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateAuthResetPasswordRequest(const AuthResetPasswordRequestDto& request)
+{
+    if (const auto result = ValidateAuthEmailRequest(AuthEmailRequestDto{.email = request.email}); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.user, AuthInputField::User, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.passwd, AuthInputField::Passwd, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.varifycode, AuthInputField::VarifyCode, true); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateAuthRegisterRequest(const AuthRegisterRequestDto& request)
+{
+    if (const auto result = ValidateAuthEmailRequest(AuthEmailRequestDto{.email = request.email}); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.user, AuthInputField::User, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.passwd, AuthInputField::Passwd, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.confirm, AuthInputField::Confirm, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.icon, AuthInputField::Icon, false); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.varifycode, AuthInputField::VarifyCode, true); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateAuthLoginRequest(const AuthLoginRequestDto& request)
+{
+    if (const auto result = ValidateAuthEmailRequest(AuthEmailRequestDto{.email = request.email}); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.passwd, AuthInputField::Passwd, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.client_ver, AuthInputField::ClientVer, false); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateAuthRefreshRequest(const AuthRefreshRequestDto& request)
+{
+    if (const auto result = ValidateStringField(request.refresh_token, AuthInputField::RefreshToken, true);
+        !result.ok())
+    {
+        return result;
+    }
+    if (!IsValidAuthRefreshTokenShape(request.refresh_token))
+    {
+        return InvalidRefreshToken();
+    }
+    if (const auto result = ValidateStringField(request.client_ver, AuthInputField::ClientVer, false); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateAuthLogoutRequest(const AuthLogoutRequestDto& request)
+{
+    if (const auto result = ValidateStringField(request.token, AuthInputField::Token, true); !result.ok())
+    {
+        return result;
+    }
+    if (!request.refresh_token.empty())
+    {
+        if (const auto result = ValidateStringField(request.refresh_token, AuthInputField::RefreshToken, false);
+            !result.ok())
+        {
+            return result;
+        }
+        if (!IsValidAuthRefreshTokenShape(request.refresh_token))
+        {
+            return InvalidRefreshToken();
+        }
+    }
+    else if (!request.all_devices)
+    {
+        return Missing(AuthInputField::RefreshToken);
+    }
+    if (const auto result = ValidateStringField(request.client_ver, AuthInputField::ClientVer, false); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
+
+AuthInputValidationResult ValidateProfileUpdateRequest(const ProfileUpdateRequestDto& request)
+{
+    if (const auto result = ValidateStringField(request.token, AuthInputField::Token, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.name, AuthInputField::User, false); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.nick, AuthInputField::Nick, true); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.desc, AuthInputField::Desc, false); !result.ok())
+    {
+        return result;
+    }
+    if (const auto result = ValidateStringField(request.icon, AuthInputField::Icon, false); !result.ok())
+    {
+        return result;
+    }
+    return {};
+}
 
 AuthEmailRequestDto AuthEmailRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
@@ -157,7 +570,6 @@ AuthLogoutRequestDto AuthLogoutRequestFromJsonValue(const memochat::json::JsonVa
 ProfileUpdateRequestDto ProfileUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ProfileUpdateRequestDto request;
-    request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
     request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     request.name = memochat::json::glaze_safe_get<std::string>(root, "name", "");
     request.nick = memochat::json::glaze_safe_get<std::string>(root, "nick", "");
@@ -169,7 +581,7 @@ ProfileUpdateRequestDto ProfileUpdateRequestFromJsonValue(const memochat::json::
 GetUserInfoRequestDto GetUserInfoRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     GetUserInfoRequestDto request;
-    request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
+    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     return request;
 }
 
@@ -182,7 +594,6 @@ bool HasAuthEmailRequiredFields(const memochat::json::JsonValue& root)
 bool HasProfileUpdateRequiredFields(const memochat::json::JsonValue& root)
 {
     return memochat::account::auth_public::modules::HasProfileUpdateRequiredShape(
-        memochat::json::glaze_has_key(root, "uid"),
         memochat::json::glaze_has_key(root, "token"),
         memochat::json::glaze_has_key(root, "nick"),
         memochat::json::glaze_has_key(root, "desc"),

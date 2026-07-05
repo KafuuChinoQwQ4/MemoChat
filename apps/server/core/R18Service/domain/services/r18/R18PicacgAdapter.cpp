@@ -36,6 +36,16 @@ namespace
 using namespace detail;
 using json::JsonValue;
 
+void ConfigureTlsPeerVerification(ssl::context& ctx,
+                                  beast::ssl_stream<beast::tcp_stream>& stream,
+                                  const std::string& host)
+{
+    ctx.set_default_verify_paths();
+    ctx.set_verify_mode(ssl::verify_peer);
+    stream.set_verify_mode(ssl::verify_peer);
+    stream.set_verify_callback(ssl::host_name_verification(host));
+}
+
 std::string HmacSha256Hex(const std::string& key, const std::string& data)
 {
     unsigned char digest[EVP_MAX_MD_SIZE];
@@ -154,9 +164,10 @@ json::JsonValue PicacgSearch(const std::string& keyword, int page, int uid, cons
     const detail::ParsedUrl parsed = detail::ParseUrl(url);
     net::io_context ioc;
     ssl::context ctx(ssl::context::tls_client);
-    ctx.set_verify_mode(ssl::verify_none);
     beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
-    SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str());
+    ConfigureTlsPeerVerification(ctx, stream, parsed.host);
+    if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
+        throw std::runtime_error("failed to set TLS SNI host");
     tcp::resolver resolver(ioc);
     beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(picacg_adapter::modules::ApiTimeoutSeconds()));
     beast::get_lowest_layer(stream).connect(resolver.resolve(parsed.host, parsed.port));

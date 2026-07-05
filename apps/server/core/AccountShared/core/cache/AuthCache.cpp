@@ -1,6 +1,7 @@
 #include "AuthCache.hpp"
 
 #include "RedisMgr.hpp"
+#include "support/UserTokenValidator.hpp"
 
 import memochat.account.auth_cache_algorithms;
 
@@ -57,12 +58,12 @@ bool AuthCache::GetHttpToken(int uid, std::string& token)
 
 bool AuthCache::SetHttpToken(int uid, const std::string& token, int ttl_seconds)
 {
-    return RedisMgr::GetInstance()->SetEx(BuildHttpTokenKey(uid), token, ttl_seconds);
+    return memochat::auth::StoreUserToken(uid, token, ttl_seconds);
 }
 
 void AuthCache::DeleteHttpToken(int uid)
 {
-    RedisMgr::GetInstance()->Del(BuildHttpTokenKey(uid));
+    memochat::auth::DeleteUserToken(uid);
 }
 
 bool AuthCache::LoadLoginProfileJson(const std::string& email, std::string& payload)

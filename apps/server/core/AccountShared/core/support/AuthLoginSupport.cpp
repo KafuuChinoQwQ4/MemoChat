@@ -24,6 +24,7 @@ namespace
 {
 constexpr const char* kMinClientVersion = "2.0.0";
 constexpr int kLoginProtocolVersion = 3;
+constexpr auto kChatRouteClusterCacheTtl = std::chrono::seconds(60);
 std::atomic<uint64_t> g_gate_route_rr_counter{0};
 
 bool IsTruthyFlag(const char* raw)
@@ -34,6 +35,48 @@ bool IsTruthyFlag(const char* raw)
     }
     const std::string value(raw);
     return value == "1" || value == "true" || value == "TRUE" || value == "on" || value == "ON";
+}
+
+bool EqualsIgnoreCase(std::string left, std::string right)
+{
+    std::transform(left.begin(),
+                   left.end(),
+                   left.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    std::transform(right.begin(),
+                   right.end(),
+                   right.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return left == right;
+}
+
+memochat::cluster::ChatClusterConfig LoadChatClusterConfigSnapshot()
+{
+    static std::mutex cache_mutex;
+    static memochat::cluster::ChatClusterConfig cached_cluster;
+    static std::chrono::steady_clock::time_point cached_at{};
+    static bool has_cached_cluster = false;
+
+    const auto now = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    if (!has_cached_cluster || now - cached_at >= kChatRouteClusterCacheTtl)
+    {
+        auto& cfg = ConfigMgr::Inst();
+        cached_cluster = memochat::cluster::LoadChatClusterConfig(
+            [&cfg](const std::string& section, const std::string& key)
+            {
+                return cfg.GetValue(section, key);
+            });
+        cached_at = now;
+        has_cached_cluster = true;
+    }
+    return cached_cluster;
 }
 } // namespace
 
@@ -100,11 +143,37 @@ bool IsQuicRolloutEnabled()
     return IsTruthyFlag(std::getenv("MEMOCHAT_ENABLE_QUIC"));
 }
 
+bool IsWebSocketRolloutEnabled()
+{
+    return IsTruthyFlag(std::getenv("MEMOCHAT_ENABLE_WS"));
+}
+
+bool IsWebTransportRuntimeEnabled()
+{
+    return IsTruthyFlag(std::getenv("MEMOCHAT_ENABLE_WEBTRANSPORT"));
+}
+
+bool IsWebTransportProviderRuntimeEnabled()
+{
+    return IsTruthyFlag(std::getenv("MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER"));
+}
+
+bool IsWebTransportAdvertiseEnabled()
+{
+    return IsTruthyFlag(std::getenv("MEMOCHAT_ADVERTISE_WEBTRANSPORT"));
+}
+
+bool ShouldAdvertiseWebTransportEndpoint(bool config_enabled)
+{
+    return (config_enabled || IsWebTransportRuntimeEnabled()) && IsWebTransportProviderRuntimeEnabled() &&
+           IsWebTransportAdvertiseEnabled();
+}
+
 bool IsClientVersionAllowed(const std::string& clientVer, const std::string& minVer)
 {
     if (clientVer.empty())
     {
-        return true;
+        return false;
     }
     memochat::account::auth::modules::SemVerParts client_version;
     memochat::account::auth::modules::SemVerParts min_version;
@@ -149,7 +218,7 @@ int GetChatTicketTtlSec()
     {
         return 20;
     }
-    return std::max(5, std::atoi(ttl.c_str()));
+    return std::clamp(std::atoi(ttl.c_str()), 5, 300);
 }
 
 bool TryLoadCachedLoginProfile(const std::string& email, UserInfo& userInfo)
@@ -193,6 +262,14 @@ bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo)
     ::UserInfo dbUserInfo;
     if (!PostgresMgr::GetInstance()->GetUserInfo(userInfo.uid, dbUserInfo))
     {
+        return false;
+    }
+    if (!dbUserInfo.email.empty() && !EqualsIgnoreCase(dbUserInfo.email, email))
+    {
+        memolog::LogWarn(
+            "gate.login_cache.email_mismatch",
+            "refusing to refresh login profile with mismatched email",
+            {{"requested_email", email}, {"db_email", dbUserInfo.email}, {"uid", std::to_string(userInfo.uid)}});
         return false;
     }
 
@@ -241,22 +318,14 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
     {
         least_loaded_snapshot->clear();
     }
-    static const auto kCachedCluster = []()
-    {
-        auto& cfg = ConfigMgr::Inst();
-        return memochat::cluster::LoadChatClusterConfig(
-            [&cfg](const std::string& section, const std::string& key)
-            {
-                return cfg.GetValue(section, key);
-            });
-    }();
+    const auto cluster = LoadChatClusterConfigSnapshot();
 
     try
     {
         std::vector<ChatRouteNode> nodes;
-        nodes.reserve(kCachedCluster.enabledNodes().size());
+        nodes.reserve(cluster.enabledNodes().size());
         int min_online = INT_MAX;
-        for (const auto& node : kCachedCluster.enabledNodes())
+        for (const auto& node : cluster.enabledNodes())
         {
             ChatRouteNode route_node;
             route_node.name = node.name;
@@ -267,6 +336,16 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
                 route_node.quic_host = node.quic_host;
                 route_node.quic_port = node.quic_port;
             }
+            route_node.ws_enabled = node.ws_enabled || IsWebSocketRolloutEnabled();
+            route_node.ws_host = node.ws_host;
+            route_node.ws_port = node.ws_port;
+            route_node.ws_path = node.ws_path;
+            route_node.ws_tls = node.ws_tls;
+            route_node.wt_enabled = ShouldAdvertiseWebTransportEndpoint(node.wt_enabled);
+            route_node.wt_host = node.wt_host;
+            route_node.wt_port = node.wt_port;
+            route_node.wt_path = node.wt_path;
+            route_node.wt_tls = node.wt_tls;
             const std::string online_users_key = std::string(SERVER_ONLINE_USERS_PREFIX) + node.name;
             int online_count = 0;
             const bool load_ok = RedisMgr::GetInstance()->SCard(online_users_key, online_count);

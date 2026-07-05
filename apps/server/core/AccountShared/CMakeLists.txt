@@ -37,11 +37,14 @@ add_library(GateAccountCore STATIC
     core/async/GateAsyncSideEffectDtos.hpp
     core/async/GateAsyncSideEffects.cpp
     core/async/GateAsyncSideEffects.hpp
+    domain/services/account/AccountPersistence.cpp
+    domain/services/account/AccountPersistence.hpp
 )
 memochat_configure_gate_core_lib(GateAccountCore)
 target_include_directories(GateAccountCore PUBLIC
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared
     ${CMAKE_BINARY_DIR}/generated/lua/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/domain
     ${CMAKE_CURRENT_SOURCE_DIR}/core/cache
     ${CMAKE_CURRENT_SOURCE_DIR}/core/support
     ${CMAKE_CURRENT_SOURCE_DIR}/core/async
@@ -74,7 +77,6 @@ add_library(GateAuthDomain STATIC
     domain/profiles/GateAuthProfile.cpp
     domain/modules/auth/AuthRouteModule.cpp
     domain/modules/auth/AuthRouteSchemas.cpp
-    domain/services/account/AccountPersistence.cpp
     domain/services/auth/AuthService.cpp
 )
 memochat_configure_gate_app_lib(GateAuthDomain)

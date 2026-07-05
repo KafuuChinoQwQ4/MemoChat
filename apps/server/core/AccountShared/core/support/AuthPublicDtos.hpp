@@ -2,6 +2,7 @@
 
 #include "json/GlazeCompat.hpp"
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -57,7 +58,6 @@ struct AuthLogoutRequestDto
 
 struct ProfileUpdateRequestDto
 {
-    int uid = 0;
     std::string token;
     std::string name;
     std::string nick;
@@ -67,7 +67,7 @@ struct ProfileUpdateRequestDto
 
 struct GetUserInfoRequestDto
 {
-    int uid = 0;
+    std::string token; ///< Session token — must match the authenticated caller's token.
 };
 
 struct AuthResetPasswordResponseDto
@@ -139,6 +139,8 @@ struct AuthChatEndpointDto
     std::string transport;
     std::string host;
     std::string port;
+    std::string path;
+    bool tls = false;
     std::string server_name;
     int priority = 0;
 };
@@ -171,6 +173,58 @@ struct AuthLoginResponseDto
     std::vector<AuthChatEndpointDto> chat_endpoints;
     AuthLoginStageMetricsDto stage_metrics;
 };
+
+enum class AuthInputField
+{
+    Email,
+    User,
+    Passwd,
+    Confirm,
+    Icon,
+    Nick,
+    Desc,
+    VarifyCode,
+    RefreshToken,
+    ClientVer,
+    Token,
+};
+
+enum class AuthInputValidationCode
+{
+    Ok,
+    MissingRequired,
+    TooLong,
+    InvalidEmail,
+    InvalidRefreshToken,
+};
+
+struct AuthInputValidationResult
+{
+    AuthInputValidationCode code = AuthInputValidationCode::Ok;
+    AuthInputField field = AuthInputField::Email;
+    std::size_t max_length = 0;
+
+    bool ok() const
+    {
+        return code == AuthInputValidationCode::Ok;
+    }
+};
+
+const char* AuthInputFieldName(AuthInputField field);
+const char* AuthInputValidationCodeName(AuthInputValidationCode code);
+std::size_t AuthInputMaxLength(AuthInputField field);
+
+bool IsValidAuthEmail(std::string_view email);
+bool IsValidAuthRefreshTokenShape(std::string_view refresh_token);
+std::string AuthRefreshTokenRateLimitSubject(std::string_view refresh_token);
+
+AuthInputValidationResult ValidateAuthEmailRequest(const AuthEmailRequestDto& request);
+AuthInputValidationResult ValidateAuthResetPasswordRequest(const AuthResetPasswordRequestDto& request);
+AuthInputValidationResult ValidateAuthRegisterRequest(const AuthRegisterRequestDto& request);
+AuthInputValidationResult ValidateAuthLoginRequest(const AuthLoginRequestDto& request);
+AuthInputValidationResult ValidateAuthRefreshRequest(const AuthRefreshRequestDto& request);
+AuthInputValidationResult ValidateAuthLogoutRequest(const AuthLogoutRequestDto& request);
+AuthInputValidationResult ValidateProfileUpdateRequest(const ProfileUpdateRequestDto& request);
 
 AuthEmailRequestDto AuthEmailRequestFromJsonValue(const memochat::json::JsonValue& root);
 AuthResetPasswordRequestDto AuthResetPasswordRequestFromJsonValue(const memochat::json::JsonValue& root);

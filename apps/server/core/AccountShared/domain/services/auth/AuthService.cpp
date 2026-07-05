@@ -18,6 +18,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <cctype>
 #include <sstream>
+#include <string_view>
 
 #include "json/GlazeCompat.hpp"
 
@@ -48,6 +49,61 @@ void WriteRateLimited(memochat::gate::routing::GateResponse& response,
     root["rate_limited"] = true;
     root["retry_after_sec"] = rate_limit.retry_after_sec;
     WriteJson(response, root);
+}
+
+bool WriteValidationFailed(memochat::gate::routing::GateResponse& response,
+                           memochat::json::JsonValue& root,
+                           const char* route,
+                           const gateauthsupport::AuthInputValidationResult& validation)
+{
+    root["error"] = validation.code == gateauthsupport::AuthInputValidationCode::InvalidEmail ? ErrorCodes::InvalidEmail
+                                                                                              : ErrorCodes::Error_Json;
+    memolog::LogWarn("gate.auth.invalid_input",
+                     "auth input rejected before side effects",
+                     {{"route", route},
+                      {"field", gateauthsupport::AuthInputFieldName(validation.field)},
+                      {"reason", gateauthsupport::AuthInputValidationCodeName(validation.code)},
+                      {"max_length", std::to_string(validation.max_length)}});
+    WriteJson(response, root);
+    return true;
+}
+
+bool WriteRequestRateLimitFailure(memochat::gate::routing::GateResponse& response,
+                                  memochat::json::JsonValue& root,
+                                  const char* route,
+                                  const gateauthsupport::AuthLoginRateLimitResult& rate_limit)
+{
+    if (rate_limit.redis_error)
+    {
+        memolog::LogWarn("gate.auth.request_rate_limit_redis_error",
+                         "auth request rate-limit counter failed closed",
+                         {{"route", route}});
+        root["error"] = ErrorCodes::RateLimited;
+        root["rate_limited"] = true;
+        root["retry_after_sec"] = 60;
+        WriteJson(response, root);
+        return true;
+    }
+    if (rate_limit.rate_limited)
+    {
+        memolog::LogWarn("gate.auth.request_rate_limited",
+                         "too many auth requests",
+                         {{"route", route}, {"retry_after_sec", std::to_string(rate_limit.retry_after_sec)}});
+        WriteRateLimited(response, root, rate_limit);
+        return true;
+    }
+    return false;
+}
+
+bool EnforceAuthRequestRateLimit(memochat::gate::routing::GateResponse& response,
+                                 memochat::json::JsonValue& root,
+                                 const memochat::gate::routing::GateRequest& request,
+                                 gateauthsupport::AuthRateLimitAction action,
+                                 std::string_view subject,
+                                 const char* route)
+{
+    const auto rate_limit = gateauthsupport::CheckAuthRequestRateLimit(action, subject, request);
+    return WriteRequestRateLimitFailure(response, root, route, rate_limit);
 }
 
 std::string Trim(std::string value)
@@ -224,6 +280,32 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     memochat::json::JsonValue chat_endpoints_arr(memochat::json::array_t{});
     for (const auto& route_node : route_nodes)
     {
+        if (route_node.ws_enabled && !route_node.ws_host.empty() && !route_node.ws_port.empty())
+        {
+            memochat::json::glaze_array_append(
+                chat_endpoints_arr,
+                gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
+                    .transport = auth_algo::WebSocketTransport(),
+                    .host = route_node.ws_host,
+                    .port = route_node.ws_port,
+                    .path = route_node.ws_path.empty() ? "/ws" : route_node.ws_path,
+                    .tls = route_node.ws_tls,
+                    .server_name = route_node.name,
+                    .priority = route_node.priority}));
+        }
+        if (route_node.wt_enabled && !route_node.wt_host.empty() && !route_node.wt_port.empty())
+        {
+            memochat::json::glaze_array_append(
+                chat_endpoints_arr,
+                gateauthsupport::AuthChatEndpointToJsonValue(gateauthsupport::AuthChatEndpointDto{
+                    .transport = auth_algo::WebTransportTransport(),
+                    .host = route_node.wt_host,
+                    .port = route_node.wt_port,
+                    .path = route_node.wt_path.empty() ? "/chat" : route_node.wt_path,
+                    .tls = route_node.wt_tls,
+                    .server_name = route_node.name,
+                    .priority = route_node.priority}));
+        }
         if (!route_node.quic_host.empty() && !route_node.quic_port.empty())
         {
             memochat::json::glaze_array_append(
@@ -232,6 +314,8 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
                     gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::QuicTransport(),
                                                          .host = route_node.quic_host,
                                                          .port = route_node.quic_port,
+                                                         .path = "",
+                                                         .tls = false,
                                                          .server_name = route_node.name,
                                                          .priority = route_node.priority}));
         }
@@ -241,6 +325,8 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
                 gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::TcpTransport(),
                                                      .host = route_node.host,
                                                      .port = route_node.port,
+                                                     .path = "",
+                                                     .tls = false,
                                                      .server_name = route_node.name,
                                                      .priority = route_node.priority}));
     }
@@ -340,7 +426,21 @@ bool AuthService::HandleGetVarifyCode(const memochat::gate::routing::GateRequest
         return true;
     }
 
-    const auto email = get_varify_code_request.email;
+    if (const auto validation = gateauthsupport::ValidateAuthEmailRequest(get_varify_code_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/get_varifycode", validation);
+    }
+    const auto& email = get_varify_code_request.email;
+    if (EnforceAuthRequestRateLimit(response,
+                                    root,
+                                    request,
+                                    gateauthsupport::AuthRateLimitAction::GetVarifyCode,
+                                    email,
+                                    "/get_varifycode"))
+    {
+        return true;
+    }
+
     const auto result = memochat::gate::core::AuthVerifyClient::Instance().RequestVerifyCode(email);
     root["error"] = result.error;
     root["email"] = src_root["email"];
@@ -364,9 +464,22 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
-    const auto email = reset_pwd_request.email;
-    const auto name = reset_pwd_request.user;
-    const auto pwd = reset_pwd_request.passwd;
+    if (const auto validation = gateauthsupport::ValidateAuthResetPasswordRequest(reset_pwd_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/reset_pwd", validation);
+    }
+    const auto& email = reset_pwd_request.email;
+    const auto& name = reset_pwd_request.user;
+    const auto& pwd = reset_pwd_request.passwd;
+    if (EnforceAuthRequestRateLimit(response,
+                                    root,
+                                    request,
+                                    gateauthsupport::AuthRateLimitAction::ResetPassword,
+                                    email,
+                                    "/reset_pwd"))
+    {
+        return true;
+    }
 
     std::string varify_code;
     if (!AuthCache::Instance().GetVerificationCode(email, varify_code))
@@ -436,11 +549,24 @@ bool AuthService::HandleUserRegister(const memochat::gate::routing::GateRequest&
         return true;
     }
 
-    const auto email = register_request.email;
-    const auto name = register_request.user;
-    const auto pwd = register_request.passwd;
-    const auto confirm = register_request.confirm;
-    const auto icon = register_request.icon;
+    if (const auto validation = gateauthsupport::ValidateAuthRegisterRequest(register_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/user_register", validation);
+    }
+    const auto& email = register_request.email;
+    const auto& name = register_request.user;
+    const auto& pwd = register_request.passwd;
+    const auto& confirm = register_request.confirm;
+    const auto& icon = register_request.icon;
+    if (EnforceAuthRequestRateLimit(response,
+                                    root,
+                                    request,
+                                    gateauthsupport::AuthRateLimitAction::Register,
+                                    email,
+                                    "/user_register"))
+    {
+        return true;
+    }
 
     if (pwd != confirm)
     {
@@ -518,9 +644,13 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         return true;
     }
 
-    const auto email = login_request.email;
-    const auto pwd = login_request.passwd;
-    const auto client_ver = login_request.client_ver;
+    if (const auto validation = gateauthsupport::ValidateAuthLoginRequest(login_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/user_login", validation);
+    }
+    const auto& email = login_request.email;
+    const auto& pwd = login_request.passwd;
+    const auto& client_ver = login_request.client_ver;
     root["min_version"] = gateauthsupport::MinClientVersion();
     root["feature_group_chat"] = auth_algo::FeatureGroupChatEnabled();
     memolog::LogInfo("gate.user_login.version_check",
@@ -656,6 +786,10 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
         return true;
     }
 
+    if (const auto validation = gateauthsupport::ValidateAuthRefreshRequest(refresh_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/auth_refresh", validation);
+    }
     if (!gateauthsupport::IsClientVersionAllowed(refresh_request.client_ver, gateauthsupport::MinClientVersion()))
     {
         root["error"] = ErrorCodes::ClientVersionTooLow;
@@ -664,6 +798,15 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
                          {{"client_ver", refresh_request.client_ver},
                           {"error_code", std::to_string(ErrorCodes::ClientVersionTooLow)}});
         WriteJson(response, root);
+        return true;
+    }
+    if (EnforceAuthRequestRateLimit(response,
+                                    root,
+                                    request,
+                                    gateauthsupport::AuthRateLimitAction::AuthRefresh,
+                                    gateauthsupport::AuthRefreshTokenRateLimitSubject(refresh_request.refresh_token),
+                                    "/auth_refresh"))
+    {
         return true;
     }
 
@@ -723,6 +866,10 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         return true;
     }
 
+    if (const auto validation = gateauthsupport::ValidateAuthLogoutRequest(logout_request); !validation.ok())
+    {
+        return WriteValidationFailed(response, root, "/auth_logout", validation);
+    }
     if (!gateauthsupport::IsClientVersionAllowed(logout_request.client_ver, gateauthsupport::MinClientVersion()))
     {
         root["error"] = ErrorCodes::ClientVersionTooLow;
