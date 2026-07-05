@@ -1,15 +1,25 @@
-/* Dark theme — override the same token names */
+/* Dark theme */
 [data-theme="dark"] {
-  --surface-bg: rgba(28, 30, 36, 0.95);
-  --surface-elevated: rgba(40, 43, 52, 0.80);
-  --text-primary: #e8e8e8;
-  --text-secondary: #9a9a9a;
-  --text-disabled: #555555;
+  --surface-bg: #161a22;
+  --surface-elevated: rgba(36, 40, 52, 0.85);
+  --text-primary: #e2e4ea;
+  --text-secondary: #8e92a0;
+  --text-disabled: #505462;
   --glass-fill: rgba(255, 255, 255, 0.07);
-  --glass-stroke: rgba(255, 255, 255, 0.20);
-  --glass-btn-text: #c0c0c0;
-  --glass-btn-bg: rgba(255, 255, 255, 0.07);
-  --glass-btn-bg-hover: rgba(255, 255, 255, 0.12);
-  --glass-btn-bg-press: rgba(255, 255, 255, 0.18);
-  --divider: rgba(255, 255, 255, 0.08);
+  --glass-stroke: rgba(255, 255, 255, 0.14);
+  --glass-input-bg: rgba(255, 255, 255, 0.06);
+  --glass-input-border: rgba(255, 255, 255, 0.10);
+  --glass-btn-text: #b8bcc8;
+  --glass-btn-bg: rgba(255, 255, 255, 0.06);
+  --glass-btn-bg-hover: rgba(255, 255, 255, 0.11);
+  --glass-btn-bg-press: rgba(255, 255, 255, 0.17);
+  --divider: rgba(255, 255, 255, 0.07);
+
+  /* Sidebar */
+  --sidebar-bg: rgba(255, 255, 255, 0.04);
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+
+  /* List panel */
+  --list-panel-bg: rgba(255, 255, 255, 0.03);
+  --list-panel-border: rgba(255, 255, 255, 0.06);
 }

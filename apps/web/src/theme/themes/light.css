@@ -1,12 +1,22 @@
-/* Light theme (default) — overrides :root tokens */
+/* Light theme (default) */
 [data-theme="light"],
 :root {
-  --surface-bg: rgba(240, 242, 245, 0.95);
-  --surface-elevated: rgba(255, 255, 255, 0.80);
-  --text-primary: #1a1a1a;
-  --text-secondary: #6b6b6b;
-  --text-disabled: #b0b0b0;
-  --glass-fill: rgba(255, 255, 255, 0.15);
-  --glass-stroke: rgba(255, 255, 255, 0.50);
-  --divider: rgba(0, 0, 0, 0.08);
+  --surface-bg: #eef0f5;
+  --surface-elevated: rgba(255, 255, 255, 0.85);
+  --text-primary: #1c1e24;
+  --text-secondary: #6a6f7a;
+  --text-disabled: #b2b5bc;
+  --glass-fill: rgba(255, 255, 255, 0.20);
+  --glass-stroke: rgba(255, 255, 255, 0.60);
+  --glass-input-bg: rgba(255, 255, 255, 0.70);
+  --glass-input-border: rgba(0, 0, 0, 0.09);
+  --divider: rgba(0, 0, 0, 0.07);
+
+  /* Sidebar */
+  --sidebar-bg: rgba(255, 255, 255, 0.55);
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+
+  /* List panel */
+  --list-panel-bg: rgba(255, 255, 255, 0.40);
+  --list-panel-border: rgba(0, 0, 0, 0.06);
 }
