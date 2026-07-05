@@ -81,6 +81,20 @@ add_dependencies(gtest_tests accountshared_auth_public_dtos_gtest)
 
 gtest_discover_tests(accountshared_auth_public_dtos_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(accountshared_refresh_token_security_gtest
+    main.cpp
+    RefreshTokenSecurityTest.cpp
+)
+
+target_link_libraries(accountshared_refresh_token_security_gtest PRIVATE
+    GTest_TestLib
+    memochat_server_deps
+)
+
+add_dependencies(gtest_tests accountshared_refresh_token_security_gtest)
+
+gtest_discover_tests(accountshared_refresh_token_security_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 add_executable(accountshared_gate_async_side_effect_dtos_gtest
     ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/async/GateAsyncSideEffectDtos.cpp
     main.cpp

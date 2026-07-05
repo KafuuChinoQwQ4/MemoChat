@@ -215,7 +215,11 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD",
             "MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD",
             "MEMOCHAT_AI_NEO4J__PASSWORD",
+            "MEMOCHAT_AI_INTERNAL_API_KEY",
+            "MEMOCHAT_AI_PROVIDER_ADMIN_KEY",
             "neo4j-password",
+            "ai-internal-api-key",
+            "ai-provider-admin-key",
         ):
             with self.subTest(k8s_token=token):
                 self.assertIn(token, k8s_ai + "\n" + k8s_secret)
@@ -235,8 +239,15 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "externalServices.livekit.apiSecret",
             "aiOrchestrator.dependencies.neo4jPassword",
             "secrets.chatAuthSecret",
+            "secrets.authRefreshPepper",
             "secrets.livekitApiKey",
             "secrets.livekitApiSecret",
+            "secrets.minioAccessKey",
+            "secrets.minioSecretKey",
+            "secrets.aiInternalApiKey",
+            "secrets.aiProviderAdminKey",
+            "secrets.r18PicacgApiKey",
+            "secrets.r18PicacgHmacKey",
         )
         for name in required_names:
             with self.subTest(name=name):
@@ -254,6 +265,63 @@ class SecretExternalizationContractTests(unittest.TestCase):
         self.assertIn("sslMode: verify-full", values)
         self.assertNotIn("sslMode: disable", values)
 
+    def test_helm_chart_has_service_mesh_and_external_secret_manager_contracts(self):
+        values = read(K8S_CHART / "values.yaml")
+        namespace_template = read(K8S_CHART / "templates/bootstrap/namespaces.yaml")
+        mesh_template = read(K8S_CHART / "templates/bootstrap/mesh-istio.yaml")
+        external_secret_template = read(K8S_CHART / "templates/bootstrap/external-secrets.yaml")
+        secret_template = read(K8S_CHART / "templates/bootstrap/secret.yaml")
+        gate_template = read(K8S_CHART / "templates/prod/gate.yaml")
+        focused_template = read(K8S_CHART / "templates/prod/focused-gateways.yaml")
+        ai_template = read(K8S_CHART / "templates/prod/ai.yaml")
+
+        self.assertIn("mesh:", values)
+        self.assertIn("provider: istio", values)
+        self.assertIn("mtlsMode: STRICT", values)
+        self.assertIn("externalSecrets:", values)
+        self.assertIn("secretStoreRef:", values)
+        self.assertIn("memochat/prod/app", values)
+        self.assertIn("memochat/prod/etcd-tls", values)
+
+        self.assertIn("istio-injection:", namespace_template)
+        self.assertIn("PeerAuthentication", mesh_template)
+        self.assertIn("mode: {{ .Values.mesh.istio.mtlsMode", mesh_template)
+        self.assertIn("DestinationRule", mesh_template)
+        self.assertIn("ISTIO_MUTUAL", mesh_template)
+        self.assertIn("AuthorizationPolicy", mesh_template)
+        self.assertIn(".Values.mesh.istio.authorizationPolicy.allowedNamespaces", mesh_template)
+
+        self.assertIn("{{- if not .Values.externalSecrets.enabled }}", secret_template)
+        self.assertIn("ExternalSecret", external_secret_template)
+        self.assertIn("ClusterSecretStore", external_secret_template)
+        self.assertIn("creationPolicy: Owner", external_secret_template)
+        self.assertIn("kubernetes.io/tls", external_secret_template)
+        for key in (
+            "auth-refresh-pepper",
+            "minio-access-key",
+            "minio-secret-key",
+            "ai-internal-api-key",
+            "ai-provider-admin-key",
+            "r18-picacg-api-key",
+            "r18-picacg-hmac-key",
+        ):
+            with self.subTest(key=key):
+                self.assertIn(key, external_secret_template)
+                self.assertIn(key, secret_template)
+
+        combined_workloads = gate_template + "\n" + focused_template + "\n" + ai_template
+        for env_name in (
+            "MEMOCHAT_AUTH_REFRESH_PEPPER",
+            "MEMOCHAT_MINIO_ACCESSKEY",
+            "MEMOCHAT_MINIO_SECRETKEY",
+            "MEMOCHAT_AI_INTERNAL_API_KEY",
+            "MEMOCHAT_AI_PROVIDER_ADMIN_KEY",
+            "MEMOCHAT_R18_PICACG_API_KEY",
+            "MEMOCHAT_R18_PICACG_HMAC_KEY",
+        ):
+            with self.subTest(env_name=env_name):
+                self.assertIn(env_name, combined_workloads)
+
     def test_secret_management_doc_lists_required_production_overrides(self):
         docs = read(SECRET_DOC)
         for token in (
@@ -268,6 +336,8 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD",
             "MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD",
             "MEMOCHAT_AI_NEO4J__PASSWORD",
+            "MEMOCHAT_AI_INTERNAL_API_KEY",
+            "MEMOCHAT_AI_PROVIDER_ADMIN_KEY",
             "${ENV:-dev_default}",
         ):
             with self.subTest(token=token):

@@ -117,6 +117,22 @@ bool LoadIniFile(const std::string& path, std::map<std::string, IniSection>& con
 
 } // namespace
 
+std::string IniSection::BuildEnvKey(const std::string& section, const std::string& key)
+{
+    // Mirrors IniConfig::EnvKeyFor: MEMOCHAT_<SECTION>_<KEY> with non-alphanumeric → '_'
+    auto sanitize = [](const std::string& raw) -> std::string
+    {
+        std::string token;
+        token.reserve(raw.size());
+        for (unsigned char ch : raw)
+        {
+            token.push_back(modules::SanitizeEnvTokenChar(ch));
+        }
+        return token;
+    };
+    return "MEMOCHAT_" + sanitize(section) + "_" + sanitize(key);
+}
+
 std::string IniSection::operator[](const std::string& key) const
 {
     return GetValue(key);
@@ -124,6 +140,17 @@ std::string IniSection::operator[](const std::string& key) const
 
 std::string IniSection::GetValue(const std::string& key) const
 {
+    // Env var override wins over INI file value.
+    // e.g. cfg["Redis"]["Passwd"] checks MEMOCHAT_REDIS_PASSWD first.
+    if (!section_name.empty())
+    {
+        const auto env_key = BuildEnvKey(section_name, key);
+        if (const char* env_value = std::getenv(env_key.c_str()))
+        {
+            return std::string(env_value);
+        }
+    }
+
     const auto it = values.find(key);
     if (it == values.end())
     {
@@ -182,9 +209,15 @@ IniSection IniConfig::operator[](const std::string& section) const
     const auto it = _config.find(section);
     if (it == _config.end())
     {
-        return IniSection();
+        // Return an empty section that still carries the section name
+        // so env var lookup works even for sections absent from the INI file.
+        IniSection empty;
+        empty.section_name = section;
+        return empty;
     }
-    return it->second;
+    IniSection result = it->second;
+    result.section_name = section;
+    return result;
 }
 
 std::string IniConfig::GetValue(const std::string& section, const std::string& key) const

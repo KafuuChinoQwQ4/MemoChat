@@ -29,6 +29,20 @@ using tcp = net::ip::tcp;
 
 namespace memochat::r18::detail
 {
+namespace
+{
+
+void ConfigureTlsPeerVerification(ssl::context& ctx,
+                                  beast::ssl_stream<beast::tcp_stream>& stream,
+                                  const std::string& host)
+{
+    ctx.set_default_verify_paths();
+    ctx.set_verify_mode(ssl::verify_peer);
+    stream.set_verify_mode(ssl::verify_peer);
+    stream.set_verify_callback(ssl::host_name_verification(host));
+}
+
+} // namespace
 
 ParsedUrl ParseUrl(const std::string& url)
 {
@@ -80,8 +94,8 @@ HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::st
     if (adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https"))
     {
         ssl::context ctx(ssl::context::tls_client);
-        ctx.set_verify_mode(ssl::verify_none);
         beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
+        ConfigureTlsPeerVerification(ctx, stream, parsed.host);
         if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
             throw std::runtime_error("failed to set TLS SNI host");
         beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
@@ -140,6 +154,13 @@ std::string Md5Hex(const std::string& input)
 
 std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& key)
 {
+    // NOTE: AES-256-ECB is used here ONLY because the upstream JM/Picacg API mandates
+    // this mode as part of its wire protocol. ECB is cryptographically weak (no IV,
+    // deterministic) and MUST NOT be used for any internal MemoChat encryption.
+    // Third-party protocol constraint — do not copy this pattern.
+    // AUDIT: CWE-327 accepted as third-party constraint (2026-07-05).
+    if (key.size() != 32)
+        throw std::runtime_error("JM AES-256-ECB key must be exactly 32 bytes");
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
         throw std::runtime_error("EVP_CIPHER_CTX_new failed");

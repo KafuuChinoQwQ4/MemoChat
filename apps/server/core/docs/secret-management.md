@@ -6,8 +6,8 @@
 ## ChatAuth HmacSecret
 
 登录票据(ChatLoginTicket)由 HMAC 签名,签名密钥配置在各服务 ini 的
-`[ChatAuth] HmacSecret`。本地开发所有服务共用同一个众所周知的 dev 值
-(`memochat-dev-chat-secret`),方便联调。
+`[ChatAuth] HmacSecret`。ini 中的众所周知 dev 值(`memochat-dev-chat-secret`)
+只作为本地占位；默认运行时 fail-closed,必须注入强随机密钥。
 
 ### 生产环境:环境变量注入
 
@@ -25,18 +25,31 @@ MEMOCHAT_CHATAUTH_HMACSECRET
 Kubernetes chart 的 `secrets.chatAuthSecret` 默认留空,模板使用 Helm `required` 强制部署时显式
 提供该值。
 
+生产 Kubernetes 推荐使用 External Secrets Operator 从 Vault 同步密钥。
+`infra/Memo_ops/k8s/overlays/prod` 提供 `ClusterSecretStore` 与 `ExternalSecret` 契约;Helm chart 的
+`externalSecrets.enabled=true` 会渲染 ExternalSecret,并停止渲染普通 Opaque Secret,避免同名 Secret
+由 chart 直接持有明文。应用容器仍通过 Kubernetes `secretKeyRef` 注入环境变量,真实值只存在于外部
+secret manager 和集群 Secret 中。
+
 ### 运行时防呆
 
-服务启动读取 HmacSecret 时,会用 `memochat::auth::IsWellKnownDevHmacSecret()` 检测是否仍是
-dev 默认值;若是,发出一次性 WARN 日志提示"set env MEMOCHAT_CHATAUTH_HMACSECRET"。
-此防呆已接入 `AuthLoginSupport`(Account/Register/Login 系)与 `ChatSessionConfig`(ChatServer)
-的密钥读取点。
+服务启动读取 HmacSecret 时,会拒绝空密钥、`memochat-dev-chat-secret` 和短于 32 字节的密钥。
+只有显式设置 `MEMOCHAT_ALLOW_DEV_SECRETS=1` 时才允许本地开发使用 dev secret；生产和 staging
+不得设置该开关。此防呆已接入 `AuthLoginSupport`(Account/Register/Login 系)与
+`ChatSessionConfig`(ChatServer)的密钥读取点。
+
+## Refresh Token Pepper
+
+Refresh token verifier 和 metadata hash 使用 keyed BLAKE2b。生产必须通过
+`MEMOCHAT_AUTH_REFRESH_PEPPER` 注入至少 32 字节的强随机 pepper；未注入或长度不足时默认
+fail-closed。只有 `MEMOCHAT_ALLOW_DEV_SECRETS=1` 的本地开发进程会退回 dev pepper。
 
 ## 注入约定
 
 | 密钥 | 配置位置 | 生产环境变量 |
 |------|----------|--------------|
 | 登录票据签名 | `[ChatAuth] HmacSecret` | `MEMOCHAT_CHATAUTH_HMACSECRET` |
+| Refresh token keyed hash pepper | 进程环境 | `MEMOCHAT_AUTH_REFRESH_PEPPER` |
 | Varify SMTP 用户 | `[Email] SMTPUser` | `MEMOCHAT_EMAIL_SMTPUSER` |
 | Varify SMTP 授权码 | `[Email] SMTPPass` | `MEMOCHAT_EMAIL_SMTPPASS` |
 | Varify SMTP 发件人 | `[Email] From` | `MEMOCHAT_EMAIL_FROM` |
@@ -50,6 +63,8 @@ dev 默认值;若是,发出一次性 WARN 日志提示"set env MEMOCHAT_CHATAUTH
 | AI RabbitMQ 密码 | AI compose/env override | `MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD` |
 | AI Redis 密码 | AI compose/env override | `MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD` |
 | AI Neo4j 密码 | AI compose/env override | `MEMOCHAT_AI_NEO4J__PASSWORD` |
+| AI internal API key | AI/AIGateway/AIOrchestrator 进程环境 | `MEMOCHAT_AI_INTERNAL_API_KEY` |
+| AI provider admin key | AI/AIGateway/AIOrchestrator 进程环境 | `MEMOCHAT_AI_PROVIDER_ADMIN_KEY` |
 | Grafana MCP admin 密码 | 开发工具进程环境 | `MEMOCHAT_GRAFANA_ADMIN_PASSWORD` |
 | RabbitMQ MCP admin 密码 | 开发工具进程环境 | `MEMOCHAT_RABBITMQ_PASSWORD` |
 | InfluxDB MCP token | 开发工具进程环境 | `MEMOCHAT_INFLUXDB_ADMIN_TOKEN` |
@@ -91,7 +106,10 @@ Picacg adapter 不提交 API key 或 HMAC key。启用官方源时,通过
 `apps/server/core/AIOrchestrator/docker-compose.yml` 注入 dev 默认值。生产必须覆盖 AI 相关
 `MEMOCHAT_AI_*__PASSWORD` 环境变量,尤其是 Postgres、RabbitMQ、Redis 和 Neo4j。
 
-dev 值保留在 ini 中无妨(仅本地用);所有 ini 的 `HmacSecret=` 行附有注释指向上述环境变量。
+依赖凭证不得以可用默认值提交到 ini；`Passwd=`、`Password=` 和 MongoDB `Uri=` 默认留空，
+由 `MEMOCHAT_<SECTION>_<KEY>` 环境变量或部署 Secret 注入。仅 `HmacSecret=memochat-dev-chat-secret`
+可作为本地开发占位保留，且生产默认 fail-closed，必须显式设置 `MEMOCHAT_ALLOW_DEV_SECRETS=1`
+才会接受 dev secret。
 
 ## Developer Tools / MCP
 

@@ -18,6 +18,6 @@ bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root);
 memochat::json::JsonValue MakeError(int error_code, const std::string& message);
 
 ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req);
-ProfileResult HandleGetUserInfo(int uid);
+ProfileResult HandleGetUserInfo(const std::string& token);
 
 } // namespace Http2ProfileSupport

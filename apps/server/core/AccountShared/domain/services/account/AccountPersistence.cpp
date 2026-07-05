@@ -85,6 +85,14 @@ bool AccountPersistence::GetUserProfile(int uid, AccountProfile& profile)
     return true;
 }
 
+bool AccountPersistence::UpdateUserProfile(int uid,
+                                           const std::string& nick,
+                                           const std::string& desc,
+                                           const std::string& icon)
+{
+    return PostgresMgr::GetInstance()->UpdateUserProfile(uid, nick, desc, icon);
+}
+
 RefreshTokenIssueResult AccountPersistence::IssueRefreshToken(int uid,
                                                               int ttl_seconds,
                                                               const std::string& user_agent,

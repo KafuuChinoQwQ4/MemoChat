@@ -6,6 +6,9 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 SERVER_CORE = REPO_ROOT / "apps/server/core"
+ENV_EXAMPLE = REPO_ROOT / ".env.example"
+GITIGNORE = REPO_ROOT / ".gitignore"
+CI_WORKFLOW = REPO_ROOT / ".github/workflows/ci.yml"
 AUTH_SERVICE = SERVER_CORE / "AccountShared/domain/services/auth/AuthService.cpp"
 AUTH_CACHE = SERVER_CORE / "AccountShared/core/cache/AuthCache.cpp"
 AUTH_CACHE_HEADER = SERVER_CORE / "AccountShared/core/cache/AuthCache.hpp"
@@ -35,9 +38,11 @@ CHAT_LOGIC_SYSTEM = SERVER_CORE / "ChatServer/domain/orchestration/LogicSystem.c
 CHAT_PRIVATE_MESSAGE = SERVER_CORE / "ChatServer/domain/message/PrivateMessageService.cpp"
 CHAT_GROUP_MESSAGE = SERVER_CORE / "ChatServer/domain/message/GroupMessageService.cpp"
 CHAT_SESSION_SERVICE = SERVER_CORE / "ChatServer/domain/session/ChatSessionService.cpp"
+CHAT_SESSION_REPOSITORY = SERVER_CORE / "ChatServer/persistence/ChatSessionRepository.cpp"
 CHAT_REDIS = SERVER_CORE / "ChatServer/persistence/RedisMgr.cpp"
 CHAT_REDIS_HEADER = SERVER_CORE / "ChatServer/persistence/RedisMgr.hpp"
 CHAT_LOGIN_TICKET = SERVER_CORE / "common/auth/ChatLoginTicket.hpp"
+USER_TOKEN_VALIDATOR = SERVER_CORE / "GateShared/core/support/UserTokenValidator.cpp"
 PROFILE_ROUTE_MODULE = SERVER_CORE / "AccountShared/domain/modules/profile/ProfileRouteModule.cpp"
 HTTP2_PROFILE_SUPPORT = SERVER_CORE / "AccountShared/core/support/Http2ProfileSupport.cpp"
 MOMENTS_SERVICE = SERVER_CORE / "MomentsService/domain/services/moments/MomentsService.cpp"
@@ -108,8 +113,8 @@ class SecurityHardeningContractTests(unittest.TestCase):
 
         self.assertIn("RejectUnauthenticatedBusinessMessage", logic)
         self.assertIn("msg_id == MSG_CHAT_LOGIN || msg_id == ID_HEART_BEAT_REQ", logic)
-        self.assertIn("session->GetUserId() > 0", logic)
-        self.assertIn("session->Close();", logic)
+        self.assertIn("session->userId() > 0", logic)
+        self.assertIn("session->close();", logic)
         self.assertIn("NormalizeAuthenticatedCallerFields", logic)
         for field in ('"uid"', '"fromuid"', '"owner_uid"', '"from_uid"', '"reviewer_uid"', '"viewer_uid"'):
             self.assertIn(field, logic)
@@ -131,12 +136,24 @@ class SecurityHardeningContractTests(unittest.TestCase):
         dto_header = read(AUTH_PUBLIC_DTOS_HEADER)
 
         self.assertIn('#include "support/UserTokenValidator.hpp"', profile)
-        self.assertIn("memochat::auth::ValidateUserToken(uid, token)", profile)
-        self.assertLess(profile.index("ValidateUserToken(uid, token)"), profile.index("UpdateUserProfile"))
+        self.assertIn("gateauthsupport::ValidateProfileUpdateRequest(profile_request)", profile)
+        self.assertLess(
+            profile.index("ValidateProfileUpdateRequest(profile_request)"),
+            profile.index("ResolveUserIdFromToken(token, uid)"),
+        )
+        self.assertIn("memochat::auth::ResolveUserIdFromToken(token, uid)", profile)
+        self.assertLess(profile.index("ResolveUserIdFromToken(token, uid)"), profile.index("UpdateUserProfile"))
 
         self.assertIn('#include "support/UserTokenValidator.hpp"', http2_profile)
-        self.assertIn("memochat::auth::ValidateUserToken(uid, token)", http2_profile)
-        self.assertLess(http2_profile.index("ValidateUserToken(uid, token)"), http2_profile.index("UpdateUserProfile"))
+        self.assertIn("gateauthsupport::ValidateProfileUpdateRequest(profile_request)", http2_profile)
+        self.assertLess(
+            http2_profile.index("ValidateProfileUpdateRequest(profile_request)"),
+            http2_profile.index("ResolveUserIdFromToken(token, uid)"),
+        )
+        self.assertIn("memochat::auth::ResolveUserIdFromToken(token, uid)", http2_profile)
+        self.assertLess(
+            http2_profile.index("ResolveUserIdFromToken(token, uid)"), http2_profile.index("UpdateUserProfile")
+        )
 
         self.assertIn('#include "support/UserTokenValidator.hpp"', moments)
         self.assertIn("memochat::auth::ValidateUserToken(uid, token)", moments)
@@ -528,13 +545,19 @@ class SecurityHardeningContractTests(unittest.TestCase):
         auth_cache = read(AUTH_CACHE)
         auth_cache_header = read(AUTH_CACHE_HEADER)
         auth_login_support = read(AUTH_LOGIN_SUPPORT)
+        user_token_validator = read(USER_TOKEN_VALIDATOR)
         issue_body = function_body(auth_service, "bool IssueLoginSessionForUser")
         reset_body = function_body(auth_service, "bool AuthService::HandleResetPwd")
 
         self.assertIn("int GetHttpTokenTtlSec()", auth_login_support)
         self.assertIn('GetValue("AuthToken", "HttpTokenTtlSec")', auth_login_support)
         self.assertIn("bool SetHttpToken", auth_cache_header)
-        self.assertIn("RedisMgr::GetInstance()->SetEx(BuildHttpTokenKey(uid), token, ttl_seconds)", auth_cache)
+        self.assertIn("memochat::auth::StoreUserToken(uid, token, ttl_seconds)", auth_cache)
+        self.assertIn('constexpr std::string_view kUserTokenLookupPrefix = "utoken_lookup_";', user_token_validator)
+        self.assertIn("RedisMgr::GetInstance()->SetEx(token_key, token, ttl_seconds)", user_token_validator)
+        self.assertIn(
+            "RedisMgr::GetInstance()->SetEx(lookup_key, std::to_string(uid), ttl_seconds)", user_token_validator
+        )
         self.assertIn("boost::uuids::random_generator()()", issue_body)
         self.assertIn("SetHttpToken(userInfo.uid, http_token, gateauthsupport::GetHttpTokenTtlSec())", issue_body)
         self.assertNotIn("GetHttpToken(userInfo.uid, http_token)", issue_body)
@@ -549,10 +572,21 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("rate-limit counter check failed closed", login_body)
         self.assertIn('root["error"] = ErrorCodes::RateLimited;', login_body)
 
+    def test_chat_route_cluster_cache_expires_instead_of_process_lifetime_static(self):
+        auth_login_support = read(AUTH_LOGIN_SUPPORT)
+
+        self.assertIn("constexpr auto kChatRouteClusterCacheTtl = std::chrono::seconds(60);", auth_login_support)
+        self.assertIn("LoadChatClusterConfigSnapshot", auth_login_support)
+        self.assertIn("std::chrono::steady_clock::now()", auth_login_support)
+        self.assertIn("cached_at", auth_login_support)
+        self.assertIn("now - cached_at >= kChatRouteClusterCacheTtl", auth_login_support)
+        self.assertNotIn("static const auto kCachedCluster", auth_login_support)
+
     def test_chat_login_ticket_has_one_time_jti_consumption(self):
         ticket = read(CHAT_LOGIN_TICKET)
         auth_service = read(AUTH_SERVICE)
         session = read(CHAT_SESSION_SERVICE)
+        session_repository = read(CHAT_SESSION_REPOSITORY)
         redis_header = read(CHAT_REDIS_HEADER)
         redis_source = read(CHAT_REDIS)
 
@@ -560,9 +594,11 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn('"jti"', ticket)
         self.assertIn("claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());", auth_service)
         self.assertIn("ConsumeLoginTicketJti", session)
-        self.assertIn("chat_login_ticket_jti:", session)
-        self.assertIn("SetNxEx", session)
-        self.assertLess(session.index("DecodeAndVerifyTicket"), session.index("ConsumeLoginTicketJti(ticket_claims)"))
+        self.assertIn("chat_login_ticket_jti:", session_repository)
+        self.assertIn("SetNxEx", session_repository)
+        self.assertLess(
+            session.index("DecodeAndVerifyTicket"), session.index("ConsumeLoginTicketJti(ticket_claims.jti")
+        )
 
         self.assertIn("bool SetNxEx", redis_header)
         self.assertIn('"NX"', redis_source)
@@ -616,6 +652,121 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("x-forwarded-for", source)
         self.assertIn("x-real-ip", source)
 
+    def test_auth_public_dtos_define_input_validation_contract(self):
+        dtos = read(AUTH_PUBLIC_DTOS)
+        header = read(AUTH_PUBLIC_DTOS_HEADER)
+
+        for token in (
+            "enum class AuthInputField",
+            "Email",
+            "User",
+            "Passwd",
+            "Confirm",
+            "Icon",
+            "Nick",
+            "Desc",
+            "VarifyCode",
+            "RefreshToken",
+            "ClientVer",
+            "AuthInputMaxLength",
+            "IsValidAuthEmail",
+            "IsValidAuthRefreshTokenShape",
+            "ValidateAuthEmailRequest",
+            "ValidateAuthRegisterRequest",
+            "ValidateAuthResetPasswordRequest",
+            "ValidateAuthLoginRequest",
+            "ValidateAuthRefreshRequest",
+            "ValidateAuthLogoutRequest",
+            "ValidateProfileUpdateRequest",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, header)
+
+        for token in (
+            "constexpr std::size_t kMaxEmailLength = 254;",
+            "constexpr std::size_t kMaxPasswordLength = 128;",
+            "constexpr std::size_t kMaxIconLength = 512;",
+            "constexpr std::size_t kMaxNickLength = 32;",
+            "constexpr std::size_t kMaxDescLength = 255;",
+            "constexpr std::size_t kMaxVerifyCodeLength = 16;",
+            "constexpr std::size_t kMaxRefreshTokenLength = 128;",
+            "constexpr std::size_t kMaxClientVersionLength = 32;",
+            "return InvalidEmail();",
+            "return InvalidRefreshToken();",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, dtos)
+
+    def test_auth_handlers_validate_and_rate_limit_before_side_effects(self):
+        source = read(AUTH_SERVICE)
+
+        get_code = function_body(source, "bool AuthService::HandleGetVarifyCode")
+        self.assertLess(get_code.index("ValidateAuthEmailRequest"), get_code.index("EnforceAuthRequestRateLimit"))
+        self.assertLess(get_code.index("EnforceAuthRequestRateLimit"), get_code.index("RequestVerifyCode(email)"))
+
+        register = function_body(source, "bool AuthService::HandleUserRegister")
+        self.assertLess(register.index("ValidateAuthRegisterRequest"), register.index("EnforceAuthRequestRateLimit"))
+        self.assertLess(register.index("EnforceAuthRequestRateLimit"), register.index("GetVerificationCode(email"))
+        self.assertLess(
+            register.index("ValidateAuthRegisterRequest"), register.index("RegisterUser(name, email, pwd, icon)")
+        )
+
+        reset = function_body(source, "bool AuthService::HandleResetPwd")
+        self.assertLess(reset.index("ValidateAuthResetPasswordRequest"), reset.index("EnforceAuthRequestRateLimit"))
+        self.assertLess(reset.index("EnforceAuthRequestRateLimit"), reset.index("GetVerificationCode(email"))
+        self.assertLess(reset.index("ValidateAuthResetPasswordRequest"), reset.index("UpdatePassword(email, pwd)"))
+
+        login = function_body(source, "bool AuthService::HandleUserLogin")
+        self.assertLess(login.index("ValidateAuthLoginRequest"), login.index("CheckLoginRateLimit(email, request)"))
+        self.assertLess(login.index("ValidateAuthLoginRequest"), login.index("CheckPassword(email, pwd, dbUser)"))
+
+        refresh = function_body(source, "bool AuthService::HandleAuthRefresh")
+        self.assertLess(refresh.index("ValidateAuthRefreshRequest"), refresh.index("EnforceAuthRequestRateLimit"))
+        self.assertLess(refresh.index("EnforceAuthRequestRateLimit"), refresh.index("RotateRefreshToken"))
+        self.assertIn("AuthRefreshTokenRateLimitSubject(refresh_request.refresh_token)", refresh)
+
+        logout = function_body(source, "bool AuthService::HandleAuthLogout")
+        self.assertLess(logout.index("ValidateAuthLogoutRequest"), logout.index("GetHttpToken"))
+        self.assertLess(logout.index("ValidateAuthLogoutRequest"), logout.index("RevokeRefreshToken"))
+
+    def test_auth_request_rate_limiter_adds_missing_endpoint_buckets_and_safe_failure_mode(self):
+        source = read(AUTH_RATE_LIMITER)
+        header = read(AUTH_RATE_LIMITER_HEADER)
+
+        for token in (
+            "enum class AuthRateLimitAction",
+            "GetVarifyCode",
+            "Register",
+            "ResetPassword",
+            "AuthRefresh",
+            "CheckAuthRequestRateLimit",
+            "BuildAuthRateLimitKey",
+            "ParseAuthRateLimitRedisFailureBehavior",
+            "BoundedFailOpen",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, header)
+
+        for token in (
+            'constexpr const char* kRequestSection = "AuthRequestRateLimit";',
+            'constexpr const char* kRequestPrefix = "auth_req:";',
+            "kDefaultVerifyCodeEmailMaxRequests",
+            "kDefaultVerifyCodeIpMaxRequests",
+            "kDefaultRegisterEmailMaxRequests",
+            "kDefaultRegisterIpMaxRequests",
+            "kDefaultResetPasswordEmailMaxRequests",
+            "kDefaultResetPasswordIpMaxRequests",
+            "kDefaultAuthRefreshSubjectMaxRequests",
+            "kDefaultAuthRefreshIpMaxRequests",
+            "BuildAuthRateLimitKey(action, subject_bucket",
+            "BuildAuthRateLimitKey(action, AuthRateLimitBucket::Ip",
+            "ConfiguredRedisFailureBehavior() != AuthRateLimitRedisFailureBehavior::BoundedFailOpen",
+            "result.redis_error = true;",
+            "IncrementLocalFallbackCounter",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, source)
+
     def test_success_clears_email_bucket_but_not_shared_ip_bucket(self):
         source = read(AUTH_RATE_LIMITER)
         clear_body = function_body(source, "void ClearLoginFailureCounters")
@@ -652,7 +803,7 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("reply->set_error(static_cast<int>(VarifyError::RedisErr));", ip_error_block)
         self.assertIn("return grpc::Status::OK;", ip_error_block)
 
-    def test_chat_auth_secret_is_env_injected_and_warns_on_dev_default(self):
+    def test_chat_auth_secret_is_env_injected_and_documented_fail_closed(self):
         ini_config = read(INI_CONFIG)
         auth_login = read(AUTH_LOGIN_SUPPORT)
         chat_config = read(CHAT_SESSION_CONFIG)
@@ -669,16 +820,26 @@ class SecurityHardeningContractTests(unittest.TestCase):
                 self.assertIn("IsWellKnownDevHmacSecret", source)
                 self.assertIn("MEMOCHAT_CHATAUTH_HMACSECRET", source)
 
+    def test_env_example_documents_fail_closed_secret_model(self):
+        env_example = read(ENV_EXAMPLE)
+
+        self.assertIn("MEMOCHAT_CHATAUTH_HMACSECRET=", env_example)
+        self.assertIn("MEMOCHAT_AUTH_REFRESH_PEPPER=", env_example)
+        self.assertIn("MEMOCHAT_ALLOW_DEV_SECRETS=0", env_example)
+        self.assertNotIn("MEMOCHAT_REQUIRE_PROD_SECRETS", env_example)
+        self.assertNotIn("MEMOCHAT_ENV=dev", env_example)
+
     def test_production_secret_guard_fails_closed_before_accepting_traffic(self):
         auth_secret = read(AUTH_SECRET)
         gate_domain = read(GATE_DOMAIN_SERVER)
         chat_server = read(CHAT_SERVER)
 
         self.assertIn("IsProductionSecretEnforcementEnabled", auth_secret)
-        self.assertIn("MEMOCHAT_REQUIRE_PROD_SECRETS", auth_secret)
-        self.assertIn("MEMOCHAT_ENV", auth_secret)
+        self.assertIn("MEMOCHAT_ALLOW_DEV_SECRETS", auth_secret)
+        self.assertIn("return !IsDevSecretsAllowed();", auth_secret)
         self.assertIn("RequireNonDefaultChatAuthSecretInProduction", auth_secret)
-        self.assertIn("ChatAuth.HmacSecret must be non-default in production", auth_secret)
+        self.assertIn("ChatAuth.HmacSecret must be non-default; set", auth_secret)
+        self.assertIn("ChatAuth.HmacSecret must be at least 32 bytes", auth_secret)
 
         self.assertIn('#include "auth/AuthSecret.hpp"', gate_domain)
         self.assertIn('GetValue("ChatAuth", "HmacSecret")', gate_domain)
@@ -696,13 +857,47 @@ class SecurityHardeningContractTests(unittest.TestCase):
             chat_server.index("builder.AddListeningPort"),
         )
 
+    def test_service_ini_files_do_not_commit_weak_dependency_credentials(self):
+        for path in SERVER_CORE.rglob("*.ini"):
+            text = read(path)
+            with self.subTest(path=path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIsNone(re.search(r"(?m)^(?:Passwd|Password)\s*=\s*(?:123456|password)\s*$", text))
+                self.assertNotIn("mongodb://memochat_app:123456@", text)
+
+    def test_ci_scans_for_secrets_and_runtime_configs_remain_ignored(self):
+        ci = read(CI_WORKFLOW)
+        gitignore = read(GITIGNORE)
+
+        self.assertIn("secret-scan:", ci)
+        self.assertIn("Reject known weak dependency credentials", ci)
+        self.assertIn("git grep -nE", ci)
+        for token in (
+            "weak_password=",
+            "weak_mongodb=",
+            "disabled_tls=",
+            "mutable_prod_tag=",
+            "Passwd|Password",
+            "mongodb://",
+            "newTag:[[:space:]]*latest",
+            ":!.github/workflows/ci.yml",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, ci)
+
+        self.assertIn("Memo_ops/runtime/", gitignore)
+        self.assertIn("infra/Memo_ops/runtime/", gitignore)
+        self.assertIn("/.claude/worktrees/", gitignore)
+        self.assertNotIn("!Memo_ops/runtime/services/**/config.ini", gitignore)
+        self.assertNotIn("!infra/Memo_ops/runtime/services/**/config.ini", gitignore)
+
     def test_refresh_tokens_are_opaque_hashed_and_never_stored_plaintext(self):
         refresh_source = read(REFRESH_TOKEN)
         for token in (
             "randombytes_buf",
             "selector",
             "verifier",
-            "sodium-generichash-v1$",
+            "sodium-generichash-keyed-v2$",
+            "MEMOCHAT_AUTH_REFRESH_PEPPER",
             "crypto_generichash",
             "sodium_memcmp",
             "HashRefreshTokenMetadata",

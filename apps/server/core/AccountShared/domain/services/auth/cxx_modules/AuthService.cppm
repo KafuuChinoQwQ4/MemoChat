@@ -34,6 +34,16 @@ const char* QuicTransport()
     return "quic";
 }
 
+const char* WebSocketTransport()
+{
+    return "websocket";
+}
+
+const char* WebTransportTransport()
+{
+    return "webtransport";
+}
+
 const char* TcpTransport()
 {
     return "tcp";

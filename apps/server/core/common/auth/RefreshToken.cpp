@@ -1,18 +1,25 @@
 #include "auth/RefreshToken.hpp"
 
+#include "auth/AuthSecret.hpp"
+
 #include <sodium.h>
 
 #include <array>
 #include <cstddef>
+#include <cstdlib>
+#include <string_view>
 
 namespace memochat::auth
 {
 namespace
 {
-constexpr std::string_view kHashPrefix = "sodium-generichash-v1$";
+constexpr std::string_view kHashPrefix = "sodium-generichash-keyed-v2$";
+constexpr std::string_view kDevRefreshPepper = "memochat-dev-refresh-pepper-local-only-32-bytes";
 constexpr std::size_t kSelectorBytes = 18;
 constexpr std::size_t kVerifierBytes = 32;
 constexpr std::size_t kDigestBytes = 32;
+constexpr std::size_t kPepperKeyBytes = 32;
+constexpr std::size_t kMinPepperBytes = 32;
 
 bool EnsureSodiumInitialized()
 {
@@ -54,13 +61,38 @@ bool HashMaterial(std::string_view material, std::string& out_hash)
         return false;
     }
 
+    std::string_view pepper;
+    if (const char* configured = std::getenv("MEMOCHAT_AUTH_REFRESH_PEPPER"); configured != nullptr)
+    {
+        pepper = configured;
+    }
+    if (pepper.size() < kMinPepperBytes)
+    {
+        if (!memochat::auth::IsDevSecretsAllowed())
+        {
+            return false;
+        }
+        pepper = kDevRefreshPepper;
+    }
+
+    std::array<unsigned char, kPepperKeyBytes> pepper_key{};
+    if (crypto_generichash(pepper_key.data(),
+                           pepper_key.size(),
+                           reinterpret_cast<const unsigned char*>(pepper.data()),
+                           pepper.size(),
+                           nullptr,
+                           0) != 0)
+    {
+        return false;
+    }
+
     std::array<unsigned char, kDigestBytes> digest{};
     if (crypto_generichash(digest.data(),
                            digest.size(),
                            reinterpret_cast<const unsigned char*>(material.data()),
                            material.size(),
-                           nullptr,
-                           0) != 0)
+                           pepper_key.data(),
+                           pepper_key.size()) != 0)
     {
         return false;
     }

@@ -12,9 +12,20 @@ namespace memochat::runtime
 struct IniSection
 {
     std::map<std::string, std::string> values;
+    std::string section_name; ///< Populated by IniConfig::operator[] so GetValue can check env overrides.
 
     std::string operator[](const std::string& key) const;
+
+    /**
+     * Look up a config value.
+     * Priority: environment variable MEMOCHAT_<SECTION>_<KEY>  >  INI file value.
+     * The env key is derived by upper-casing section + key and replacing non-alphanumeric
+     * characters with '_', matching IniConfig::EnvKeyFor().
+     */
     std::string GetValue(const std::string& key) const;
+
+private:
+    static std::string BuildEnvKey(const std::string& section, const std::string& key);
 };
 
 class IniConfig

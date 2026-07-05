@@ -10,6 +10,8 @@ bool FeatureGroupChatEnabled();
 bool IsRegisteredUidValid(int uid);
 const char* FallbackTransport();
 const char* QuicTransport();
+const char* WebSocketTransport();
+const char* WebTransportTransport();
 const char* TcpTransport();
 const char* PreferredTransport(bool has_quic_host, bool has_quic_port);
 } // namespace memochat::tests::account::auth_service
@@ -42,6 +44,8 @@ TEST(AuthServiceAlgorithmsTest, TransportLiteralsAndSelection)
 
     EXPECT_STREQ(FallbackTransport(), "tcp");
     EXPECT_STREQ(QuicTransport(), "quic");
+    EXPECT_STREQ(WebSocketTransport(), "websocket");
+    EXPECT_STREQ(WebTransportTransport(), "webtransport");
     EXPECT_STREQ(TcpTransport(), "tcp");
 
     // QUIC is preferred only when both a QUIC host and QUIC port are present.

@@ -32,6 +32,16 @@ const char* QuicTransport()
     return memochat::account::auth_service::modules::QuicTransport();
 }
 
+const char* WebSocketTransport()
+{
+    return memochat::account::auth_service::modules::WebSocketTransport();
+}
+
+const char* WebTransportTransport()
+{
+    return memochat::account::auth_service::modules::WebTransportTransport();
+}
+
 const char* TcpTransport()
 {
     return memochat::account::auth_service::modules::TcpTransport();

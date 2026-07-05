@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace memochat::auth
 {
@@ -27,23 +28,24 @@ inline std::string LowerAscii(std::string value)
     return value;
 }
 
-inline bool IsProductionSecretEnforcementEnabled()
+inline bool IsTruthyEnvValue(std::string value)
 {
-    if (const char* required = std::getenv("MEMOCHAT_REQUIRE_PROD_SECRETS"); required != nullptr)
-    {
-        const auto value = LowerAscii(required);
-        if (value == "1" || value == "true" || value == "yes" || value == "on")
-        {
-            return true;
-        }
-    }
+    value = LowerAscii(std::move(value));
+    return value == "1" || value == "true" || value == "yes" || value == "on";
+}
 
-    if (const char* env = std::getenv("MEMOCHAT_ENV"); env != nullptr)
+inline bool IsDevSecretsAllowed()
+{
+    if (const char* allowed = std::getenv("MEMOCHAT_ALLOW_DEV_SECRETS"); allowed != nullptr)
     {
-        const auto value = LowerAscii(env);
-        return value == "prod" || value == "production";
+        return IsTruthyEnvValue(allowed);
     }
     return false;
+}
+
+inline bool IsProductionSecretEnforcementEnabled()
+{
+    return !IsDevSecretsAllowed();
 }
 
 inline void RequireNonDefaultChatAuthSecretInProduction(std::string_view service_name, std::string_view secret)
@@ -52,11 +54,16 @@ inline void RequireNonDefaultChatAuthSecretInProduction(std::string_view service
     {
         return;
     }
-    if (!secret.empty() && !IsWellKnownDevHmacSecret(secret))
+    if (secret.empty() || IsWellKnownDevHmacSecret(secret))
     {
-        return;
+        throw std::runtime_error(std::string(service_name) +
+                                 " refuses to start: ChatAuth.HmacSecret must be non-default; set "
+                                 "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development");
     }
-    throw std::runtime_error(std::string(service_name) +
-                             " refuses to start: ChatAuth.HmacSecret must be non-default in production");
+    if (secret.size() < 32)
+    {
+        throw std::runtime_error(std::string(service_name) +
+                                 " refuses to start: ChatAuth.HmacSecret must be at least 32 bytes");
+    }
 }
 } // namespace memochat::auth

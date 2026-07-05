@@ -43,20 +43,23 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     }
 
     const auto profile_request = gateauthsupport::ProfileUpdateRequestFromJsonValue(req);
-    const auto uid = profile_request.uid;
     const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
     const auto icon = profile_request.icon;
 
-    if (uid <= 0 || nick.empty())
+    if (!gateauthsupport::ValidateProfileUpdateRequest(profile_request).ok())
     {
         result.error = profile_algo::ProfileErrorCode();
         result.message = profile_algo::InvalidUidOrNickMessage();
         return result;
     }
-    if (!memochat::auth::ValidateUserToken(uid, token))
+    // H-8 verified: uid is derived exclusively from the validated HTTP token via
+    // ResolveUserIdFromToken; any uid field in the request DTO is never used to
+    // drive database operations, so no IDOR vulnerability exists here.
+    int uid = 0;
+    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid";
@@ -93,13 +96,23 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     return result;
 }
 
-ProfileResult HandleGetUserInfo(int uid)
+ProfileResult HandleGetUserInfo(const std::string& token)
 {
     ProfileResult result;
-    if (uid <= 0)
+    if (token.empty())
     {
         result.error = profile_algo::ProfileErrorCode();
         result.message = profile_algo::InvalidUidMessage();
+        return result;
+    }
+    // H-8 verified: uid is derived exclusively from the validated HTTP token via
+    // ResolveUserIdFromToken; no uid is accepted from caller-supplied data,
+    // so no IDOR vulnerability exists here.
+    int uid = 0;
+    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
+    {
+        result.error = ErrorCodes::TokenInvalid;
+        result.message = "token invalid";
         return result;
     }
     ::UserInfo user_info;

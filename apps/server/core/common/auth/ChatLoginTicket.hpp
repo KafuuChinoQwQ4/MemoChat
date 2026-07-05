@@ -14,6 +14,7 @@
 #include <mutex>
 #pragma comment(lib, "bcrypt.lib")
 #else
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #endif
@@ -285,12 +286,19 @@ inline bool DecodeAndVerifyTicket(const std::string& ticket,
     }
 
     std::string expected_mac;
-    if (!HmacSha256(secret, payload, expected_mac) || expected_mac != signature)
+    if (!HmacSha256(secret, payload, expected_mac))
     {
         if (error_code)
-        {
             *error_code = "signature";
-        }
+        return false;
+    }
+    // Constant-time comparison prevents timing side-channel on HMAC bytes.
+    const bool mac_ok = (expected_mac.size() == signature.size()) &&
+                        CRYPTO_memcmp(expected_mac.data(), signature.data(), expected_mac.size()) == 0;
+    if (!mac_ok)
+    {
+        if (error_code)
+            *error_code = "signature";
         return false;
     }
 
