@@ -1,0 +1,15 @@
+/* Dark theme — override the same token names */
+[data-theme="dark"] {
+  --surface-bg: rgba(28, 30, 36, 0.95);
+  --surface-elevated: rgba(40, 43, 52, 0.80);
+  --text-primary: #e8e8e8;
+  --text-secondary: #9a9a9a;
+  --text-disabled: #555555;
+  --glass-fill: rgba(255, 255, 255, 0.07);
+  --glass-stroke: rgba(255, 255, 255, 0.20);
+  --glass-btn-text: #c0c0c0;
+  --glass-btn-bg: rgba(255, 255, 255, 0.07);
+  --glass-btn-bg-hover: rgba(255, 255, 255, 0.12);
+  --glass-btn-bg-press: rgba(255, 255, 255, 0.18);
+  --divider: rgba(255, 255, 255, 0.08);
+}

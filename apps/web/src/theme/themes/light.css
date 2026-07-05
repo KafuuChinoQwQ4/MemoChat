@@ -1,0 +1,12 @@
+/* Light theme (default) — overrides :root tokens */
+[data-theme="light"],
+:root {
+  --surface-bg: rgba(240, 242, 245, 0.95);
+  --surface-elevated: rgba(255, 255, 255, 0.80);
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --text-disabled: #b0b0b0;
+  --glass-fill: rgba(255, 255, 255, 0.15);
+  --glass-stroke: rgba(255, 255, 255, 0.50);
+  --divider: rgba(0, 0, 0, 0.08);
+}
