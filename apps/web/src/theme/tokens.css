@@ -1,33 +1,34 @@
-/* MemoChat Liquid Glass Design Token System */
+/* MemoChat Design Token System */
 
 :root {
   /* ── Glass surface ─────────────────────────────────────────── */
-  --glass-blur: 18px;
-  --glass-radius: 10px;
-  --glass-fill: rgba(255, 255, 255, 0.15);
-  --glass-stroke: rgba(255, 255, 255, 0.50);
-  --glass-sheen-height: 42%;
+  --glass-blur: 20px;
+  --glass-radius: 12px;
+  --glass-fill: rgba(255, 255, 255, 0.18);
+  --glass-stroke: rgba(255, 255, 255, 0.55);
+  --glass-sheen-height: 40%;
 
   /* Capability detection — set to 0 to disable blur effects */
   --glass-blur-enabled: 1;
 
   /* ── Button ────────────────────────────────────────────────── */
-  --glass-btn-text: #5f6673;
-  --glass-btn-bg: rgba(0, 0, 0, 0.07);
-  --glass-btn-bg-hover: rgba(0, 0, 0, 0.12);
-  --glass-btn-bg-press: rgba(0, 0, 0, 0.20);
+  --glass-btn-text: #525c6a;
+  --glass-btn-bg: rgba(0, 0, 0, 0.06);
+  --glass-btn-bg-hover: rgba(0, 0, 0, 0.10);
+  --glass-btn-bg-press: rgba(0, 0, 0, 0.16);
 
   /* ── TextField ─────────────────────────────────────────────── */
-  --glass-input-border: rgba(120, 181, 237, 0);
-  --glass-input-border-focus: rgba(120, 181, 237, 0.84);
+  --glass-input-bg: rgba(255, 255, 255, 0.65);
+  --glass-input-border: rgba(0, 0, 0, 0.09);
+  --glass-input-border-focus: rgba(88, 158, 212, 0.80);
 
   /* ── Panel ─────────────────────────────────────────────────── */
   --panel-radius: 16px;
 
   /* ── Interaction tint ──────────────────────────────────────── */
-  --tint-hover: rgba(143, 179, 219, 0.16);
-  --tint-press: rgba(143, 179, 219, 0.22);
-  --tint-selected: rgba(143, 179, 219, 0.26);
+  --tint-hover: rgba(120, 165, 206, 0.13);
+  --tint-press: rgba(120, 165, 206, 0.21);
+  --tint-selected: rgba(120, 165, 206, 0.22);
 
   /* ── Color ─────────────────────────────────────────────────── */
   --color-danger: #e84141;
@@ -47,5 +48,8 @@
   /* ── Animation ─────────────────────────────────────────────── */
   --glass-btn-scale-hover: 1.02;
   --glass-btn-scale-press: 0.96;
-  --glass-btn-duration: 110ms;
+  --glass-btn-duration: 120ms;
+  --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --enter-duration: 200ms;
 }

@@ -6,12 +6,12 @@ interface AgentStore {
   streaming: boolean
   currentStreamText: string
   error: string | null
-  setSessionId(id: string | null): void
-  setStreaming(v: boolean): void
-  appendStreamChunk(chunk: string): void
-  finalizeStream(): void
-  setError(msg: string | null): void
-  reset(): void
+  setSessionId: (id: string | null) => void
+  setStreaming: (v: boolean) => void
+  appendStreamChunk: (chunk: string) => void
+  finalizeStream: () => void
+  setError: (msg: string | null) => void
+  reset: () => void
 }
 
 export const useAgentStore = create<AgentStore>((set) => ({

@@ -1,4 +1,4 @@
-/* Global reset + base — imports tokens then sets up baseline */
+/* Global reset + base */
 @import "./tokens.css";
 @import "./themes/light.css";
 @import "./themes/dark.css";
@@ -12,6 +12,36 @@
   padding: 0;
 }
 
+/* ── Animated background ──────────────────────────────────────── */
+@keyframes bg-drift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── Component entrance ───────────────────────────────────────── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Streaming cursor ─────────────────────────────────────────── */
+@keyframes mc-spin {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
 html {
   font-family: var(--font-family-zh);
   font-size: 14px;
@@ -19,9 +49,21 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--text-primary);
-  background: var(--surface-bg);
   height: 100%;
-  overflow: hidden; /* App is shell-based, no page scroll */
+  overflow: hidden;
+
+  /* Subtle animated gradient background — light mode */
+  background: linear-gradient(-45deg, #edf1f6, #f2eff7, #f6f0ec, #eef5f1);
+  background-size: 400% 400%;
+  animation: bg-drift 28s ease infinite;
+}
+
+/* Dark mode override */
+[data-theme="dark"] html,
+html[data-theme="dark"] {
+  background: linear-gradient(-45deg, #161a22, #1a1822, #1c1a20, #171c22);
+  background-size: 400% 400%;
+  animation: bg-drift 28s ease infinite;
 }
 
 body {
@@ -32,23 +74,26 @@ body {
   height: 100%;
 }
 
-/* Scrollbar styling */
+/* ── Scrollbar ────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.13);
   border-radius: 2px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.22);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 a {
@@ -66,4 +111,12 @@ select {
 img {
   display: block;
   max-width: 100%;
+}
+
+/* ── Utility: entrance animation ─────────────────────────────── */
+.enter-fade-up {
+  animation: fade-up var(--enter-duration) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.enter-fade {
+  animation: fade-in var(--enter-duration) ease both;
 }

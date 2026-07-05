@@ -1,11 +1,9 @@
 /**
- * AppShell — the main authenticated shell layout.
- * Three-column grid: icon sidebar | list panel (injected by active tab) | content.
- * Registers chat routes once on mount.
+ * AppShell — authenticated shell layout.
+ * 72px glass sidebar + feature outlet area.
  */
 import { useEffect, useRef } from "react"
 import { Outlet } from "react-router-dom"
-import { ThreeColumnShell } from "@/shared/ui/layout/ThreeColumnShell"
 import { IconSidebar } from "./IconSidebar"
 import { useGateway } from "@/app/providers/GatewayProvider"
 import { registerChatRoutes } from "@/app/dispatch/registerChatRoutes"
@@ -18,9 +16,7 @@ export function AppShell() {
   useEffect(() => {
     if (routesRegistered.current) return
     routesRegistered.current = true
-    // Wire incoming opcodes → entity store actions
     const unregisterRoutes = registerChatRoutes(gateway.dispatcher)
-    // Watch WS reconnect events
     const stopCoordinator = startConnectionCoordinator()
     return () => {
       unregisterRoutes()
@@ -28,26 +24,31 @@ export function AppShell() {
     }
   }, [gateway])
 
-  // Each feature tab renders its own list panel + content area.
-  // AppShell only provides the 72px icon sidebar; the Outlet fills the remaining space.
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
-      {/* 72px icon sidebar */}
-      <nav style={{
-        width: "var(--sidebar-w)",
-        flexShrink: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: "8px 0",
-        gap: 4,
-        background: "rgba(255,255,255,0.08)",
-        borderRight: "1px solid var(--divider)",
-      }}>
+      {/* 72px glass icon sidebar */}
+      <nav
+        style={{
+          width: "var(--sidebar-w)",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: "10px 0 8px",
+          gap: 4,
+          background: "var(--sidebar-bg)",
+          backdropFilter: "blur(24px) saturate(1.6)",
+          WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+          borderRight: "1px solid var(--sidebar-border)",
+          /* Subtle inner glow on right edge */
+          boxShadow: "inset -1px 0 0 rgba(255,255,255,0.12)",
+          zIndex: 10,
+        }}
+      >
         <IconSidebar />
       </nav>
 
-      {/* Feature content — fills remaining width, manages its own list panel + content split */}
+      {/* Feature content */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
         <Outlet />
       </div>

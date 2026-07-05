@@ -1,16 +1,18 @@
-/* glass.module.css — Liquid Glass primitive styles, token-only (no literal rgba) */
+/* glass.module.css — Liquid Glass primitives, all values from tokens */
 
+/* ── Surface ───────────────────────────────────────────────────── */
 .surface {
   position: relative;
   border-radius: var(--glass-radius);
   background: var(--glass-fill);
   border: 1px solid var(--glass-stroke);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
   overflow: hidden;
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
 
-/* Top-edge sheen pseudo-element */
+/* Top-edge sheen — warm white highlight */
 .surface::before {
   content: "";
   position: absolute;
@@ -18,30 +20,53 @@
   border-radius: inherit;
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.36) 0%,
-    rgba(255, 255, 255, 0.08) var(--glass-sheen-height),
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.10) var(--glass-sheen-height),
     transparent var(--glass-sheen-height)
   );
   pointer-events: none;
   z-index: 0;
 }
 
-/* Subtle glow ring */
+/* Inner glow ring — subtle white border */
 .surface::after {
   content: "";
   position: absolute;
   inset: -0.5px;
   border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.30);
   pointer-events: none;
   z-index: 0;
 }
 
+/* ── Elevated ─────────────────────────────────────────────────── */
 .elevated {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.08);
 }
 
-/* GlassButton */
+/* ── Hover lift — optional, apply to interactive surfaces ──────── */
+.hoverable:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.07),
+    0 8px 20px rgba(0, 0, 0, 0.10),
+    0 20px 40px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Entrance animation ───────────────────────────────────────── */
+.enter {
+  animation: _fade-up var(--enter-duration) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes _fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── GlassButton ──────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -55,62 +80,92 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background var(--glass-btn-duration) ease,
-              transform var(--glass-btn-duration) ease,
-              border-color var(--glass-btn-duration) ease;
+  transition:
+    background var(--glass-btn-duration) ease,
+    transform  var(--glass-btn-duration) ease,
+    border-color var(--glass-btn-duration) ease,
+    box-shadow var(--glass-btn-duration) ease;
   user-select: none;
   white-space: nowrap;
   outline: none;
+  /* Subtle inset sheen on buttons */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30);
 }
 .btn:hover:not(:disabled) {
   background: var(--glass-btn-bg-hover);
   transform: scale(var(--glass-btn-scale-hover));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .btn:active:not(:disabled) {
   background: var(--glass-btn-bg-press);
   transform: scale(var(--glass-btn-scale-press));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 .btn:disabled {
-  opacity: 0.4;
+  opacity: 0.38;
   cursor: not-allowed;
 }
+
 .btnPrimary {
   background: var(--color-brand-green);
   color: #fff;
   border-color: transparent;
+  box-shadow: 0 2px 10px rgba(7, 193, 96, 0.28);
 }
 .btnPrimary:hover:not(:disabled) {
   background: var(--color-brand-green-dark);
-}
-.btnDanger {
-  background: rgba(232, 65, 65, 0.12);
-  color: var(--color-badge);
-  border-color: rgba(232, 65, 65, 0.25);
+  box-shadow: 0 4px 14px rgba(7, 193, 96, 0.34);
 }
 
-/* GlassTextField */
+.btnDanger {
+  background: rgba(232, 65, 65, 0.10);
+  color: var(--color-badge);
+  border-color: rgba(232, 65, 65, 0.22);
+}
+.btnDanger:hover:not(:disabled) {
+  background: rgba(232, 65, 65, 0.16);
+}
+
+/* ── GlassTextField ───────────────────────────────────────────── */
 .textField {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .textFieldInput {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.6);
+  padding: 9px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-input-border);
+  background: var(--glass-input-bg);
   color: var(--text-primary);
   font-size: 14px;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   outline: none;
   width: 100%;
+  /* Subtle inset shadow for depth */
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 .textFieldInput:focus {
   border-color: var(--glass-input-border-focus);
-  box-shadow: 0 0 0 3px rgba(120, 181, 237, 0.18);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.04),
+    0 0 0 3px rgba(88, 158, 212, 0.16);
+  background: rgba(255, 255, 255, 0.80);
+}
+[data-theme="dark"] .textFieldInput {
+  background: var(--glass-input-bg);
+  border-color: var(--glass-input-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.20);
+}
+[data-theme="dark"] .textFieldInput:focus {
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.18),
+    0 0 0 3px rgba(88, 158, 212, 0.18);
 }
 
-/* GlassScrollArea */
+/* ── GlassScrollArea ──────────────────────────────────────────── */
 .scrollArea {
   overflow-y: auto;
   overflow-x: hidden;

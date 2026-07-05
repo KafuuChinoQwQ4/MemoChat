@@ -15,10 +15,10 @@ interface SettingsState {
 }
 
 interface SettingsActions {
-  setTheme(theme: ThemeMode): void
-  toggleTheme(): void
-  setBlurEnabled(v: boolean): void
-  setLocale(locale: string): void
+  setTheme: (theme: ThemeMode) => void
+  toggleTheme: () => void
+  setBlurEnabled: (v: boolean) => void
+  setLocale: (locale: string) => void
 }
 
 export const useSettingsStore = create<SettingsState & SettingsActions>()(
