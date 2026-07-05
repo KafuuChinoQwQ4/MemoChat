@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include "CSession.hpp"
+#include "IChatSessionHost.hpp"
 #include <memory>
 #include <unordered_map>
 #include <mutex>
@@ -9,16 +10,18 @@
 #include <exec/task.hpp> // exec::task<> —— accept/timer 循环协程返回类型
 
 using boost::asio::ip::tcp;
-class CServer : public std::enable_shared_from_this<CServer>
+class CServer
+    : public std::enable_shared_from_this<CServer>
+    , public IChatSessionHost
 {
 public:
     CServer(boost::asio::io_context& io_context, short port);
     ~CServer();
     void Start();
-    void ClearSession(std::string);
+    void ClearSession(std::string) override;
 
     std::shared_ptr<CSession> GetSession(std::string);
-    bool CheckValid(std::string);
+    bool CheckValid(std::string) override;
     void StartTimer();
     void StopTimer();
 

@@ -33,6 +33,7 @@ set(CHATSERVER_CLIENT_SOURCES
 set(CHATSERVER_CONFIG_SOURCES
     config/ChatSessionConfig.cpp
     config/ConfigMgr.cpp
+    config/LogicSystemConfig.cpp
     config/MessageServiceConfig.cpp
     config/RelationQueryServiceConfig.cpp
     config/RelationServiceConfig.cpp
@@ -57,6 +58,7 @@ set(CHATSERVER_MESSAGING_SOURCES
 
 set(CHATSERVER_PERSISTENCE_SOURCES
     persistence/ChatMessageRepository.cpp
+    persistence/ChatOutboxRepairScheduler.cpp
     persistence/ChatRelationRepository.cpp
     persistence/ChatOutboxService.cpp
     persistence/ChatSessionRepository.cpp
@@ -79,12 +81,22 @@ set(CHATSERVER_PERSISTENCE_SOURCES
 
 set(CHATSERVER_TRANSPORT_SOURCES
     transport/CServer.cpp
+    transport/ChatSessionCleanupSupport.cpp
     transport/CSession.cpp
+    transport/ChatFrameCodec.cpp
+    transport/ChatFrameDispatch.cpp
     transport/ChatIngressCoordinator.cpp
     transport/ChatServiceImpl.cpp
     transport/MsgNode.cpp
     transport/QuicChatServer.cpp
     transport/QuicSession.cpp
+    transport/TcpSession.cpp
+    transport/UnavailableWebTransportProvider.cpp
+    transport/WebSocketChatServer.cpp
+    transport/WebSocketSession.cpp
+    transport/WebTransportChatServer.cpp
+    transport/WebTransportProviderFactory.cpp
+    transport/WebTransportSession.cpp
 )
 
 set(CHATSERVER_ORCHESTRATION_SOURCES
@@ -119,7 +131,11 @@ set(CHATSERVER_DELIVERY_PAYLOAD_SOURCES
 
 set(CHATSERVER_MESSAGE_SOURCES
     domain/message/ChatMessageInternalGrpcService.cpp
+    domain/message/GroupManagementService.cpp
+    domain/message/GroupMembershipService.cpp
+    domain/message/GroupMessageHistoryService.cpp
     domain/message/GroupMessageService.cpp
+    domain/message/GroupMessageWorkflow.cpp
     domain/message/GroupResponseFormatter.cpp
     domain/message/MessageDeliveryPayload.cpp
     domain/message/MessageServiceFactory.cpp
@@ -323,6 +339,17 @@ target_link_libraries(ChatTransportCore PUBLIC
     ChatConfigCore
     ChatInfrastructureCore
 )
+target_compile_definitions(ChatTransportCore PUBLIC
+    MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER=${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED}
+)
+if(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED)
+    target_sources(ChatTransportCore PRIVATE
+        transport/LibwebsocketsWebTransportProvider.cpp
+    )
+    target_link_libraries(ChatTransportCore PRIVATE
+        ${MEMOCHAT_LWS_WEBTRANSPORT_TARGET}
+    )
+endif()
 
 add_library(ChatOrchestrationCore STATIC
     ${CHATSERVER_ORCHESTRATION_SOURCES}

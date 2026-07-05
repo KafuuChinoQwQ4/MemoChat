@@ -2,8 +2,8 @@
 
 #include "ChatRuntime.hpp"
 #include "const.hpp"
+#include "IChatSession.hpp"
 #include "json/GlazeCompat.hpp"
-#include "transport/CSession.hpp"
 
 #include <utility>
 
@@ -151,42 +151,42 @@ MessageCommandResult MessageGrpcServiceAdapter::DissolveGroup(const MessageComma
     return _client.DissolveGroup(request);
 }
 
-void MessageGrpcServiceAdapter::HandleTextChatMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleTextChatMessage(const std::shared_ptr<IChatSession>& session,
                                                       short msg_id,
                                                       const std::string& msg_data)
 {
     SendSessionCommandResult(session, TextChatMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleForwardPrivateMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleForwardPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                             short msg_id,
                                                             const std::string& msg_data)
 {
     SendSessionCommandResult(session, ForwardPrivateMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandlePrivateReadAck(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandlePrivateReadAck(const std::shared_ptr<IChatSession>& session,
                                                      short msg_id,
                                                      const std::string& msg_data)
 {
     SendSessionCommandResult(session, PrivateReadAck(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleEditPrivateMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleEditPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                          short msg_id,
                                                          const std::string& msg_data)
 {
     SendSessionCommandResult(session, EditPrivateMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleRevokePrivateMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleRevokePrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                            short msg_id,
                                                            const std::string& msg_data)
 {
     SendSessionCommandResult(session, RevokePrivateMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandlePrivateHistory(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandlePrivateHistory(const std::shared_ptr<IChatSession>& session,
                                                      short msg_id,
                                                      const std::string& msg_data)
 {
@@ -198,135 +198,136 @@ void MessageGrpcServiceAdapter::BuildGroupListJson(int uid, memochat::json::Json
     _client.BuildGroupListJson(uid, out);
 }
 
-void MessageGrpcServiceAdapter::HandleCreateGroup(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleCreateGroup(const std::shared_ptr<IChatSession>& session,
                                                   short msg_id,
                                                   const std::string& msg_data)
 {
     SendSessionCommandResult(session, CreateGroup(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleGetGroupList(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleGetGroupList(const std::shared_ptr<IChatSession>& session,
                                                    short msg_id,
                                                    const std::string& msg_data)
 {
     SendSessionCommandResult(session, GetGroupList(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleInviteGroupMember(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleInviteGroupMember(const std::shared_ptr<IChatSession>& session,
                                                         short msg_id,
                                                         const std::string& msg_data)
 {
     SendSessionCommandResult(session, InviteGroupMember(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleApplyJoinGroup(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleApplyJoinGroup(const std::shared_ptr<IChatSession>& session,
                                                      short msg_id,
                                                      const std::string& msg_data)
 {
     SendSessionCommandResult(session, ApplyJoinGroup(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleReviewGroupApply(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleReviewGroupApply(const std::shared_ptr<IChatSession>& session,
                                                        short msg_id,
                                                        const std::string& msg_data)
 {
     SendSessionCommandResult(session, ReviewGroupApply(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleGroupChatMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleGroupChatMessage(const std::shared_ptr<IChatSession>& session,
                                                        short msg_id,
                                                        const std::string& msg_data)
 {
     SendSessionCommandResult(session, GroupChatMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleGroupHistory(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleGroupHistory(const std::shared_ptr<IChatSession>& session,
                                                    short msg_id,
                                                    const std::string& msg_data)
 {
     SendSessionCommandResult(session, GroupHistory(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleEditGroupMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleEditGroupMessage(const std::shared_ptr<IChatSession>& session,
                                                        short msg_id,
                                                        const std::string& msg_data)
 {
     SendSessionCommandResult(session, EditGroupMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleRevokeGroupMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleRevokeGroupMessage(const std::shared_ptr<IChatSession>& session,
                                                          short msg_id,
                                                          const std::string& msg_data)
 {
     SendSessionCommandResult(session, RevokeGroupMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleForwardGroupMessage(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleForwardGroupMessage(const std::shared_ptr<IChatSession>& session,
                                                           short msg_id,
                                                           const std::string& msg_data)
 {
     SendSessionCommandResult(session, ForwardGroupMessage(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleGroupReadAck(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleGroupReadAck(const std::shared_ptr<IChatSession>& session,
                                                    short msg_id,
                                                    const std::string& msg_data)
 {
     SendSessionCommandResult(session, GroupReadAck(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleUpdateGroupAnnouncement(const std::shared_ptr<IChatSession>& session,
                                                               short msg_id,
                                                               const std::string& msg_data)
 {
     SendSessionCommandResult(session, UpdateGroupAnnouncement(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleUpdateGroupIcon(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleUpdateGroupIcon(const std::shared_ptr<IChatSession>& session,
                                                       short msg_id,
                                                       const std::string& msg_data)
 {
     SendSessionCommandResult(session, UpdateGroupIcon(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleSetGroupAdmin(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleSetGroupAdmin(const std::shared_ptr<IChatSession>& session,
                                                     short msg_id,
                                                     const std::string& msg_data)
 {
     SendSessionCommandResult(session, SetGroupAdmin(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleMuteGroupMember(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleMuteGroupMember(const std::shared_ptr<IChatSession>& session,
                                                       short msg_id,
                                                       const std::string& msg_data)
 {
     SendSessionCommandResult(session, MuteGroupMember(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleKickGroupMember(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleKickGroupMember(const std::shared_ptr<IChatSession>& session,
                                                       short msg_id,
                                                       const std::string& msg_data)
 {
     SendSessionCommandResult(session, KickGroupMember(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleQuitGroup(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleQuitGroup(const std::shared_ptr<IChatSession>& session,
                                                 short msg_id,
                                                 const std::string& msg_data)
 {
     SendSessionCommandResult(session, QuitGroup(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-void MessageGrpcServiceAdapter::HandleDissolveGroup(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::HandleDissolveGroup(const std::shared_ptr<IChatSession>& session,
                                                     short msg_id,
                                                     const std::string& msg_data)
 {
     SendSessionCommandResult(session, DissolveGroup(BuildSessionCommandRequest(session, msg_id, msg_data)));
 }
 
-MessageCommandRequest MessageGrpcServiceAdapter::BuildSessionCommandRequest(const std::shared_ptr<CSession>& session,
-                                                                            short msg_id,
-                                                                            const std::string& msg_data) const
+MessageCommandRequest
+MessageGrpcServiceAdapter::BuildSessionCommandRequest(const std::shared_ptr<IChatSession>& session,
+                                                      short msg_id,
+                                                      const std::string& msg_data) const
 {
     MessageCommandRequest request;
     request.request_msg_id = msg_id;
@@ -335,18 +336,18 @@ MessageCommandRequest MessageGrpcServiceAdapter::BuildSessionCommandRequest(cons
     request.trace_id = TraceIdFromPayload(msg_data);
     if (session)
     {
-        request.session_uid = session->GetUserId();
-        request.session_id = session->GetSessionId();
+        request.session_uid = session->userId();
+        request.session_id = session->sessionId();
     }
     return request;
 }
 
-void MessageGrpcServiceAdapter::SendSessionCommandResult(const std::shared_ptr<CSession>& session,
+void MessageGrpcServiceAdapter::SendSessionCommandResult(const std::shared_ptr<IChatSession>& session,
                                                          const MessageCommandResult& result) const
 {
     if (!session || result.response_msg_id == 0)
     {
         return;
     }
-    session->Send(result.payload_json, result.response_msg_id);
+    session->send(result.payload_json, result.response_msg_id);
 }

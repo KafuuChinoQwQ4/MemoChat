@@ -17,7 +17,7 @@ environment that matches the /data Qt 6.8.3 Linux kit.
 
 Options:
   --exe PATH    Run a specific MemoChatQml executable.
-  --diagnose   Print font, Qt platform, OpenGL, and Vulkan diagnostics.
+  --diagnose    Print font, Qt platform, OpenGL, and Vulkan diagnostics.
 USAGE
 }
 

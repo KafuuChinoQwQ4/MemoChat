@@ -12,6 +12,8 @@ namespace memochat::chatserver
 {
 
 class QuicChatServer;
+class WebSocketChatServer;
+class WebTransportChatServer;
 
 class ChatIngressCoordinator
 {
@@ -24,11 +26,15 @@ public:
 
     std::shared_ptr<CServer> tcpServer() const;
     std::shared_ptr<QuicChatServer> quicServer() const;
+    std::shared_ptr<WebSocketChatServer> webSocketServer() const;
+    std::shared_ptr<WebTransportChatServer> webTransportServer() const;
 
 private:
     boost::asio::io_context& _io_context;
     std::shared_ptr<CServer> _tcp_server;
     std::shared_ptr<QuicChatServer> _quic_server;
+    std::shared_ptr<WebSocketChatServer> _websocket_server;
+    std::shared_ptr<WebTransportChatServer> _webtransport_server;
 };
 
 } // namespace memochat::chatserver

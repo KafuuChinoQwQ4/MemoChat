@@ -280,6 +280,16 @@ ChatNodeDescriptor EtcdClusterDiscovery::ParseNodeValue(const std::string& json)
         node.tcp_port = std::to_string(pt.get<int>("tcpPort", 0));
         node.quic_host = pt.get<std::string>("host", "");
         node.quic_port = std::to_string(pt.get<int>("quicPort", 0));
+        node.ws_enabled = pt.get<bool>("wsEnabled", false);
+        node.ws_host = pt.get<std::string>("wsHost", node.tcp_host);
+        node.ws_port = pt.get<std::string>("wsPort", "");
+        node.ws_path = pt.get<std::string>("wsPath", "/ws");
+        node.ws_tls = pt.get<bool>("wsTls", false);
+        node.wt_enabled = pt.get<bool>("wtEnabled", false);
+        node.wt_host = pt.get<std::string>("wtHost", node.tcp_host);
+        node.wt_port = pt.get<std::string>("wtPort", "");
+        node.wt_path = pt.get<std::string>("wtPath", "/chat");
+        node.wt_tls = pt.get<bool>("wtTls", false);
         node.rpc_host = pt.get<std::string>("host", "");
         node.rpc_port = std::to_string(pt.get<int>("rpcPort", 0));
         node.enabled = pt.get<bool>("healthy", true);

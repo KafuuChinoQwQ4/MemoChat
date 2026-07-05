@@ -16,6 +16,7 @@ class IGroupMessageService;
 class IMessageRepository;
 class IMessageServiceConfig;
 class IOnlineRouteStore;
+class IOutboxRepairScheduler;
 class IPrivateMessageService;
 class IRelationBootstrapCache;
 class IRelationQueryService;
@@ -70,6 +71,7 @@ private:
     std::unique_ptr<IRelationBootstrapCache> _relation_bootstrap_cache;
     std::unique_ptr<IRelationQueryServiceConfig> _relation_query_service_config;
     std::unique_ptr<IRelationServiceConfig> _relation_service_config;
+    std::unique_ptr<IOutboxRepairScheduler> _outbox_repair_scheduler;
     std::shared_ptr<IAsyncTaskBus> _task_bus;
     std::shared_ptr<IAsyncEventBus> _async_event_bus;
 

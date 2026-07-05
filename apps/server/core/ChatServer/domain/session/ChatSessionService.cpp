@@ -3,17 +3,17 @@
 #include "ChatGrpcClient.hpp"
 #include "ChatHistoryOutputDtos.hpp"
 #include "CServer.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 #include "LogicSystem.hpp"
-#include "RedisMgr.hpp"
+#include "SessionSendSupport.hpp"
 #include "auth/ChatLoginTicket.hpp"
+#include "json/GlazeCompat.hpp"
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
-#include <algorithm>
-#include "json/GlazeCompat.hpp"
 #include <thread>
 
 namespace
@@ -33,19 +33,18 @@ std::string JsonValueToWireString(const memochat::json::JsonValue& v)
     return memochat::json::writeString(builder, v);
 }
 
-bool ConsumeLoginTicketJti(const memochat::auth::ChatLoginTicketClaims& claims)
+int LoginTicketJtiTtlSec(const memochat::auth::ChatLoginTicketClaims& claims)
 {
     if (claims.jti.empty())
     {
-        return false;
+        return 0;
     }
     const int64_t remaining_ms = claims.expire_at_ms - NowMsLocal();
     if (remaining_ms <= 0)
     {
-        return false;
+        return 0;
     }
-    const int ttl_sec = static_cast<int>(std::clamp<int64_t>((remaining_ms + 999) / 1000, 1, 300));
-    return RedisMgr::GetInstance()->SetNxEx("chat_login_ticket_jti:" + claims.jti, std::to_string(claims.uid), ttl_sec);
+    return static_cast<int>(std::clamp<int64_t>((remaining_ms + 999) / 1000, 1, 300));
 }
 } // namespace
 
@@ -66,7 +65,7 @@ ChatSessionService::ChatSessionService(LogicSystem& logic,
 {
 }
 
-void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
+void ChatSessionService::HandleLogin(const std::shared_ptr<IChatSession>& session,
                                      short msg_id,
                                      const std::string& msg_data)
 {
@@ -85,7 +84,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     memolog::TraceContext::SetTraceId(trace_id);
     memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
     memolog::TraceContext::SetUid(std::to_string(uid));
-    memolog::TraceContext::SetSessionId(session->GetSessionId());
+    memolog::TraceContext::SetSessionId(session->sessionId());
     Defer clear_trace(
         []()
         {
@@ -98,7 +97,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
         memolog::LogInfo("chat.login.received",
                          "chat login request received",
                          {{"uid", std::to_string(uid)},
-                          {"session_id", session->GetSessionId()},
+                          {"session_id", session->sessionId()},
                           {"tcp_msg_id", std::to_string(msg_id)}});
     }
 
@@ -106,7 +105,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     Defer defer(
         [&rtvalue, session]()
         {
-            session->Send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
+            session->send(JsonValueToWireString(rtvalue), MSG_CHAT_LOGIN_RSP);
         });
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = 3;
@@ -163,7 +162,9 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
                           {"self_server", self_server_name}});
         return;
     }
-    if (!ConsumeLoginTicketJti(ticket_claims))
+    const int ticket_jti_ttl_sec = LoginTicketJtiTtlSec(ticket_claims);
+    if (!_session_repository ||
+        !_session_repository->ConsumeLoginTicketJti(ticket_claims.jti, ticket_claims.uid, ticket_jti_ttl_sec))
     {
         rtvalue["error"] = ErrorCodes::ChatTicketInvalid;
         memolog::LogWarn("chat.login.failed",
@@ -199,7 +200,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     const auto server_name = self_server_name;
     auto attach_session = [&]()
     {
-        session->SetUserId(uid);
+        session->setUserId(uid);
         if (_session_registry)
         {
             _session_registry->BindSession(uid, session);
@@ -208,7 +209,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
         {
             _online_route_store->RepairOnlineRoute(uid, session);
         }
-        session->MarkOnlineRouteRefreshed(std::time(nullptr));
+        session->markOnlineRouteRefreshed(std::time(nullptr));
     };
     {
         if (!_session_config || _session_config->FeatureFlagDefaultTrue("chat_login_duplicate_session_check"))
@@ -234,8 +235,8 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
                     auto old_session = _session_registry ? _session_registry->FindSession(uid) : nullptr;
                     if (old_session)
                     {
-                        old_session->NotifyOffline(uid);
-                        _logic._p_server->ClearSession(old_session->GetSessionId());
+                        SendChatSessionOfflineNotification(old_session, uid);
+                        _logic._p_server->ClearSession(old_session->sessionId());
                     }
                 }
                 else
@@ -259,7 +260,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
         memolog::LogInfo("chat.login.succeeded",
                          "chat login success",
                          {{"uid", std::to_string(uid)},
-                          {"session_id", session->GetSessionId()},
+                          {"session_id", session->sessionId()},
                           {"login_protocol_version", "3"},
                           {"ticket_verify_ms", std::to_string(ticket_verify_ms)},
                           {"session_attach_ms", std::to_string(session_attach_ms)},
@@ -293,7 +294,7 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<CSession>& session,
     }
 }
 
-void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>& session,
+void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<IChatSession>& session,
                                                  short msg_id,
                                                  const std::string& msg_data)
 {
@@ -310,7 +311,7 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     memolog::TraceContext::SetRequestId(memolog::TraceContext::NewId());
     if (session)
     {
-        memolog::TraceContext::SetSessionId(session->GetSessionId());
+        memolog::TraceContext::SetSessionId(session->sessionId());
     }
     Defer clear_trace(
         []()
@@ -321,13 +322,13 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     memochat::json::JsonValue rtvalue;
     rtvalue["trace_id"] = trace_id;
     rtvalue["protocol_version"] = root.get("protocol_version", 3).asInt();
-    const int uid = session ? session->GetUserId() : 0;
+    const int uid = session ? session->userId() : 0;
     if (uid <= 0)
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;
         if (session)
         {
-            session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
+            session->send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
         }
         return;
     }
@@ -341,7 +342,7 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
     }
     if (session)
     {
-        session->Send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
+        session->send(JsonValueToWireString(rtvalue), ID_GET_RELATION_BOOTSTRAP_RSP);
     }
     memolog::LogInfo("chat.relation_bootstrap.succeeded",
                      "relation bootstrap fetched",
@@ -351,16 +352,16 @@ void ChatSessionService::HandleRelationBootstrap(const std::shared_ptr<CSession>
                       {"relation_bootstrap_mode", "explicit_pull"}});
 }
 
-void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& session, short, const std::string&)
+void ChatSessionService::HandleHeartbeat(const std::shared_ptr<IChatSession>& session, short, const std::string&)
 {
     if (!session)
     {
         return;
     }
 
-    session->UpdateHeartbeat();
+    session->updateHeartbeat();
 
-    const auto uid = session->GetUserId();
+    const auto uid = session->userId();
     if (uid > 0)
     {
         const auto uid_str = std::to_string(uid);
@@ -373,16 +374,16 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
             {
                 _online_route_store->RepairOnlineRoute(uid, session);
             }
-            session->MarkOnlineRouteRefreshed(now);
+            session->markOnlineRouteRefreshed(now);
             if (_session_registry)
             {
                 _session_registry->BindSession(uid, session);
             }
             memolog::LogInfo("chat.heartbeat.session_repair",
                              "repaired session mapping",
-                             {{"uid", uid_str}, {"session_id", session->GetSessionId()}});
+                             {{"uid", uid_str}, {"session_id", session->sessionId()}});
         }
-        else if (session->TryMarkOnlineRouteRefreshDue(now,
+        else if (session->tryMarkOnlineRouteRefreshDue(now,
                                                        _session_config ? _session_config->HeartbeatRouteRefreshSec()
                                                                        : 15))
         {
@@ -395,10 +396,10 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<CSession>& sessio
 
     memochat::json::JsonValue rtvalue;
     rtvalue["error"] = ErrorCodes::Success;
-    session->Send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
+    session->send(JsonValueToWireString(rtvalue), ID_HEARTBEAT_RSP);
 }
 
-void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& session, int uid)
+void ChatSessionService::PushOfflineMessages(const std::shared_ptr<IChatSession>& session, int uid)
 {
     try
     {
@@ -415,7 +416,7 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
 
         memolog::LogInfo("chat.login.offline_push_start",
                          "starting offline message push",
-                         {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
+                         {{"uid", std::to_string(uid)}, {"session_id", session->sessionId()}});
 
         int pushed_total = 0;
         int64_t pagination_cursor_ts = 0;
@@ -475,7 +476,7 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
                                                                                          sender_public_user_id,
                                                                                      .text_array = text_array});
 
-                session->Send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+                session->send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
                 pushed_total += static_cast<int>(sender_msgs.size());
 
                 memolog::LogInfo("chat.login.offline_push_batch",
@@ -500,7 +501,7 @@ void ChatSessionService::PushOfflineMessages(const std::shared_ptr<CSession>& se
         memolog::LogInfo("chat.login.offline_push_done",
                          "offline message push completed",
                          {{"uid", std::to_string(uid)},
-                          {"session_id", session->GetSessionId()},
+                          {"session_id", session->sessionId()},
                           {"pushed_total", std::to_string(pushed_total)}});
     }
     catch (const std::exception& e)

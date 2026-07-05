@@ -13,6 +13,7 @@ public:
 
     virtual std::string AcquireDuplicateLoginLock(int uid) = 0;
     virtual void ReleaseDuplicateLoginLock(int uid, const std::string& lock_identifier) = 0;
+    virtual bool ConsumeLoginTicketJti(const std::string& jti, int uid, int ttl_sec) = 0;
     virtual bool GetUndeliveredPrivateMessages(int uid,
                                                int64_t before_ts,
                                                const std::string& before_msg_id,

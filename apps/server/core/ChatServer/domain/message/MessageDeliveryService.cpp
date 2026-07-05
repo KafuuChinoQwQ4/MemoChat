@@ -2,7 +2,7 @@
 
 #include "ChatGrpcClient.hpp"
 #include "ChatRuntime.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 #include "delivery/MessageDeliveryTaskPayload.hpp"
 #include "MessageDeliveryPayload.hpp"
 #include "ports/OnlineRouteResolver.hpp"
@@ -104,7 +104,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
             auto route = ResolveOnlineRoute(uid, _session_registry, _online_route_store);
             if (route.kind == OnlineRouteKind::Local && route.session)
             {
-                route.session->Send(payload_str, msgid);
+                route.session->send(payload_str, msgid);
                 continue;
             }
 
@@ -187,7 +187,7 @@ bool MessageDeliveryService::TryPushPayload(const std::vector<int>& recipients,
         const auto route = ResolveOnlineRoute(uid, _session_registry, _online_route_store);
         if (route.kind == OnlineRouteKind::Local && route.session)
         {
-            route.session->Send(payload_str, msgid);
+            route.session->send(payload_str, msgid);
             continue;
         }
         if (route.kind == OnlineRouteKind::Remote)

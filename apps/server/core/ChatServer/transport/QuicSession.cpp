@@ -1,16 +1,15 @@
 #include "QuicSession.hpp"
 
-#include "LogicSystem.hpp"
-#include "MsgNode.hpp"
+#include "ChatSessionCleanupSupport.hpp"
+#include "ChatFrameDispatch.hpp"
 
-#include <cstring>
 #include <iostream>
 
 QuicSession::QuicSession(boost::asio::io_context& io_context, SendCallback send_callback, CloseCallback close_callback)
-    : CSession(io_context, nullptr)
-    , _send_callback(std::move(send_callback))
+    : _send_callback(std::move(send_callback))
     , _close_callback(std::move(close_callback))
 {
+    (void) io_context;
 }
 
 QuicSession::~QuicSession() = default;
@@ -27,7 +26,7 @@ void QuicSession::Send(std::string msg, short msgid)
     }
     if (!_send_callback || !_send_callback(msg, msgid))
     {
-        std::cout << "quic session send failed, session id is " << GetSessionId() << std::endl;
+        std::cout << "quic session send failed, session id is " << sessionId() << std::endl;
         Close();
     }
 }
@@ -50,20 +49,70 @@ void QuicSession::Close()
     _closed = true;
     if (_close_callback)
     {
-        _close_callback(GetSessionId());
+        _close_callback(sessionId());
     }
-    DealExceptionSession();
+    if (userId() > 0)
+    {
+        if (auto self = weak_from_this().lock())
+        {
+            memochat::chatserver::CleanupExceptionSession(std::static_pointer_cast<IChatSession>(self));
+        }
+    }
+}
+
+std::string QuicSession::transportName() const
+{
+    return "quic";
 }
 
 void QuicSession::HandleInboundMessage(short msgid, const std::string& payload)
 {
-    auto recv_node = std::make_shared<RecvNode>(static_cast<short>(payload.size()), msgid);
-    if (!payload.empty())
-    {
-        std::memcpy(recv_node->_data, payload.data(), payload.size());
-    }
-    recv_node->_cur_len = static_cast<short>(payload.size());
-    recv_node->_data[recv_node->_total_len] = '\0';
-    UpdateHeartbeat();
-    LogicSystem::GetInstance()->PostMsgToQue(std::make_shared<LogicNode>(SharedSelf(), recv_node));
+    memochat::chatserver::transport::PostInboundChatFrame(std::static_pointer_cast<IChatSession>(shared_from_this()),
+                                                          msgid,
+                                                          payload);
+}
+
+std::string QuicSession::sessionId() const
+{
+    return _state.sessionId();
+}
+
+int QuicSession::userId() const
+{
+    return _state.userId();
+}
+
+void QuicSession::setUserId(int uid)
+{
+    _state.setUserId(uid);
+}
+
+void QuicSession::send(std::string payload, short msg_id)
+{
+    Send(std::move(payload), msg_id);
+}
+
+void QuicSession::close()
+{
+    Close();
+}
+
+bool QuicSession::isHeartbeatExpired(std::time_t now) const
+{
+    return _state.isHeartbeatExpired(now);
+}
+
+void QuicSession::updateHeartbeat()
+{
+    _state.updateHeartbeat();
+}
+
+bool QuicSession::tryMarkOnlineRouteRefreshDue(std::time_t now, int interval_seconds)
+{
+    return _state.tryMarkOnlineRouteRefreshDue(now, interval_seconds);
+}
+
+void QuicSession::markOnlineRouteRefreshed(std::time_t now)
+{
+    _state.markOnlineRouteRefreshed(now);
 }

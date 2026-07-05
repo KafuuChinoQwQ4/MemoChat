@@ -1,0 +1,29 @@
+{
+  "name": "libwebsockets",
+  "version-date": "2026-06-30",
+  "description": "Libwebsockets with HTTP/3 WebTransport APIs for the optional MemoChat ChatServer WebTransport provider.",
+  "homepage": "https://libwebsockets.org/",
+  "license": "MIT",
+  "supports": "!windows | mingw",
+  "dependencies": [
+    "libgnutls",
+    {
+      "name": "libuv",
+      "platform": "!emscripten"
+    },
+    {
+      "name": "pkgconf",
+      "host": true
+    },
+    "pthreads",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    "zlib"
+  ]
+}

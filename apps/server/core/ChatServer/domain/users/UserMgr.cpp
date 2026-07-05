@@ -1,18 +1,20 @@
 #include "UserMgr.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 #include "logging/Logger.hpp"
+
+#include <utility>
 
 UserMgr::~UserMgr()
 {
     _uid_to_session.clear();
 }
 
-std::shared_ptr<CSession> UserMgr::GetSession(int uid)
+std::shared_ptr<IChatSession> UserMgr::GetSession(int uid)
 {
     return FindSession(uid);
 }
 
-void UserMgr::SetUserSession(int uid, std::shared_ptr<CSession> session)
+void UserMgr::SetUserSession(int uid, std::shared_ptr<IChatSession> session)
 {
     BindSession(uid, std::move(session));
 }
@@ -22,7 +24,7 @@ void UserMgr::RmvUserSession(int uid, std::string session_id)
     UnbindSession(uid, session_id);
 }
 
-std::shared_ptr<CSession> UserMgr::FindSession(int uid)
+std::shared_ptr<IChatSession> UserMgr::FindSession(int uid)
 {
     if (uid <= 0)
     {
@@ -51,11 +53,11 @@ std::shared_ptr<CSession> UserMgr::FindSession(int uid)
 
     memolog::LogInfo("usermgr.get_session",
                      "session found in local map",
-                     {{"uid", std::to_string(uid)}, {"session_id", iter->second->GetSessionId()}});
+                     {{"uid", std::to_string(uid)}, {"session_id", iter->second->sessionId()}});
     return iter->second;
 }
 
-void UserMgr::BindSession(int uid, std::shared_ptr<CSession> session)
+void UserMgr::BindSession(int uid, std::shared_ptr<IChatSession> session)
 {
     if (uid <= 0 || !session)
     {
@@ -65,7 +67,7 @@ void UserMgr::BindSession(int uid, std::shared_ptr<CSession> session)
     std::lock_guard<std::mutex> lock(_session_mtx);
     memolog::LogInfo("usermgr.set_session",
                      "setting session",
-                     {{"uid", std::to_string(uid)}, {"session_id", session->GetSessionId()}});
+                     {{"uid", std::to_string(uid)}, {"session_id", session->sessionId()}});
     _uid_to_session[uid] = session;
 }
 
@@ -87,7 +89,7 @@ void UserMgr::UnbindSession(int uid, const std::string& session_id)
             return;
         }
 
-        auto session_id_ = iter->second->GetSessionId();
+        auto session_id_ = iter->second->sessionId();
 
         if (session_id_ != session_id)
         {

@@ -6,7 +6,7 @@ class RedisOnlineRouteStore : public IOnlineRouteStore
 {
 public:
     std::string SelfServerName() const override;
-    void RepairOnlineRoute(int uid, const std::shared_ptr<CSession>& session) override;
+    void RepairOnlineRoute(int uid, const std::shared_ptr<IChatSession>& session) override;
     std::string FindUserServer(int uid) override;
     std::string ResolveServerFromOnlineSets(int uid) override;
     void SetUserServer(int uid, const std::string& server_name) override;

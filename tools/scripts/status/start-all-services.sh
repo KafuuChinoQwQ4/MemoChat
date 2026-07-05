@@ -196,6 +196,10 @@ fi
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
 export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
+export MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-0}"
+export MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}"
+export MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-0}"
+export MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER:-0}"
 # This script is the local developer runtime path. Runtime configs may carry the
 # well-known dev ChatAuth secret; production/staging should keep this unset/0.
 export MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-1}"
@@ -542,6 +546,13 @@ service_pid_matches_runtime() {
 }
 
 ensure_runtime() {
+    if [[ "$AUTO_DEPLOY" -ne 0 ]]; then
+        echo "[STEP] Deploy runtime files"
+        "${SCRIPT_DIR}/deploy_services.sh"
+        echo
+        return 0
+    fi
+
     local missing=0
     if is_truthy "$START_CORE_SERVICES"; then
         [[ -x "$(runtime_executable_path "AIServer")" ]] || missing=1
@@ -585,13 +596,9 @@ ensure_runtime() {
     if [[ "$missing" -eq 0 ]]; then
         return 0
     fi
-    if [[ "$AUTO_DEPLOY" -eq 0 ]]; then
-        echo "[FAIL] Runtime files missing under ${RUNTIME_DIR}" >&2
-        echo "       Run ${SCRIPT_DIR}/deploy_services.sh first." >&2
-        exit 1
-    fi
-    echo "[WARN] C++ runtime missing, deploying services..."
-    "${SCRIPT_DIR}/deploy_services.sh"
+    echo "[FAIL] Runtime files missing under ${RUNTIME_DIR}" >&2
+    echo "       Run ${SCRIPT_DIR}/deploy_services.sh first or omit --no-deploy." >&2
+    exit 1
 }
 
 runtime_executable_path() {
@@ -840,6 +847,10 @@ launch_svc() {
             MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
             MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
             MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}" \
+            MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-0}" \
+            MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}" \
+            MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-0}" \
+            MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER:-0}" \
             MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-}" \
             MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}" \
             MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}" \
@@ -925,8 +936,15 @@ ensure_quic_cert() {
     local svc_dir="$1"
     local crt="${svc_dir}/server.crt"
     local key="${svc_dir}/server.key"
+    local cert_days=3650
+    local force_regenerate=0
 
-    if [[ -f "$crt" && -f "$key" ]]; then
+    if is_truthy "${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}"; then
+        cert_days=13
+        force_regenerate=1
+    fi
+
+    if [[ "$force_regenerate" -eq 0 && -f "$crt" && -f "$key" ]]; then
         return 0
     fi
     if ! command -v openssl >/dev/null 2>&1; then
@@ -935,17 +953,31 @@ ensure_quic_cert() {
     fi
 
     mkdir -p -- "$svc_dir"
-    echo "  [*] Generating QUIC certificate for $(basename -- "$svc_dir")"
-    openssl req -x509 -newkey rsa:2048 -nodes \
-        -keyout "$key" \
-        -out "$crt" \
-        -days 3650 \
-        -subj "/CN=127.0.0.1" \
-        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
-        >/dev/null 2>&1 || {
-            echo "  [WARN] Failed to generate QUIC certificate for ${svc_dir}"
+    echo "  [*] Generating QUIC certificate for $(basename -- "$svc_dir") (${cert_days} days)"
+    if is_truthy "${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}"; then
+        openssl ecparam -name prime256v1 -genkey -noout -out "$key" >/dev/null 2>&1 &&
+            openssl req -x509 -new -key "$key" \
+                -out "$crt" \
+                -days "$cert_days" \
+                -sha256 \
+                -subj "/CN=127.0.0.1" \
+                -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+                >/dev/null 2>&1 || {
+            echo "  [WARN] Failed to generate QUIC/WebTransport certificate for ${svc_dir}"
             return 0
         }
+    else
+        openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$key" \
+            -out "$crt" \
+            -days "$cert_days" \
+            -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+            >/dev/null 2>&1 || {
+                echo "  [WARN] Failed to generate QUIC certificate for ${svc_dir}"
+                return 0
+            }
+    fi
     chmod 600 "$key" || true
 }
 

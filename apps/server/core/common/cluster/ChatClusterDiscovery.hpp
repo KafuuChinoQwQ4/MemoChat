@@ -22,6 +22,16 @@ struct ChatNodeDescriptor
     std::string tcp_port;
     std::string quic_host;
     std::string quic_port;
+    bool ws_enabled = false;
+    std::string ws_host;
+    std::string ws_port;
+    std::string ws_path;
+    bool ws_tls = false;
+    bool wt_enabled = false;
+    std::string wt_host;
+    std::string wt_port;
+    std::string wt_path;
+    bool wt_tls = false;
     std::string rpc_host;
     std::string rpc_port;
     bool enabled = true;
@@ -106,6 +116,33 @@ inline bool ParseEnabledFlag(const std::string& raw)
     return lower == "1" || lower == "true" || lower == "yes" || lower == "on";
 }
 
+inline bool ParseOptionalFlag(const std::string& raw, bool fallback)
+{
+    const std::string value = TrimCopy(raw);
+    if (value.empty())
+    {
+        return fallback;
+    }
+
+    std::string lower = value;
+    std::transform(lower.begin(),
+                   lower.end(),
+                   lower.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    if (lower == "1" || lower == "true" || lower == "yes" || lower == "on")
+    {
+        return true;
+    }
+    if (lower == "0" || lower == "false" || lower == "no" || lower == "off")
+    {
+        return false;
+    }
+    return fallback;
+}
+
 inline std::string
 ReadRequiredValue(const ConfigValueGetter& getter, const std::string& section, const std::string& key)
 {
@@ -151,6 +188,8 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
     std::unordered_set<std::string> seen_names;
     std::set<std::pair<std::string, std::string>> tcp_endpoints;
     std::set<std::pair<std::string, std::string>> quic_endpoints;
+    std::set<std::pair<std::string, std::string>> ws_endpoints;
+    std::set<std::pair<std::string, std::string>> wt_endpoints;
     std::set<std::pair<std::string, std::string>> rpc_endpoints;
 
     for (const auto& section : node_sections)
@@ -161,6 +200,16 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
         node.tcp_port = ReadRequiredValue(getter, section, "TcpPort");
         node.quic_host = ReadOptionalValue(getter, section, "QuicHost");
         node.quic_port = ReadOptionalValue(getter, section, "QuicPort");
+        node.ws_enabled = ParseOptionalFlag(getter(section, "WsEnabled"), false);
+        node.ws_host = ReadOptionalValue(getter, section, "WsHost");
+        node.ws_port = ReadOptionalValue(getter, section, "WsPort");
+        node.ws_path = ReadOptionalValue(getter, section, "WsPath");
+        node.ws_tls = ParseOptionalFlag(getter(section, "WsTls"), false);
+        node.wt_enabled = ParseOptionalFlag(getter(section, "WtEnabled"), false);
+        node.wt_host = ReadOptionalValue(getter, section, "WtHost");
+        node.wt_port = ReadOptionalValue(getter, section, "WtPort");
+        node.wt_path = ReadOptionalValue(getter, section, "WtPath");
+        node.wt_tls = ParseOptionalFlag(getter(section, "WtTls"), false);
         node.rpc_host = ReadRequiredValue(getter, section, "RpcHost");
         node.rpc_port = ReadRequiredValue(getter, section, "RpcPort");
         node.enabled = ParseEnabledFlag(getter(section, "Enabled"));
@@ -182,6 +231,48 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
             if (!quic_endpoints.insert(quic_endpoint).second)
             {
                 throw std::runtime_error("duplicate chat quic endpoint: " + node.quic_host + ":" + node.quic_port);
+            }
+        }
+
+        if (node.ws_enabled)
+        {
+            if (node.ws_host.empty())
+            {
+                node.ws_host = node.tcp_host;
+            }
+            if (node.ws_path.empty())
+            {
+                node.ws_path = "/ws";
+            }
+            if (node.ws_port.empty())
+            {
+                throw std::runtime_error("missing enabled websocket endpoint port: " + node.name);
+            }
+            const auto ws_endpoint = std::make_pair(node.ws_host, node.ws_port);
+            if (!ws_endpoints.insert(ws_endpoint).second)
+            {
+                throw std::runtime_error("duplicate chat websocket endpoint: " + node.ws_host + ":" + node.ws_port);
+            }
+        }
+
+        if (node.wt_enabled)
+        {
+            if (node.wt_host.empty())
+            {
+                node.wt_host = node.tcp_host;
+            }
+            if (node.wt_path.empty())
+            {
+                node.wt_path = "/chat";
+            }
+            if (node.wt_port.empty())
+            {
+                throw std::runtime_error("missing enabled webtransport endpoint port: " + node.name);
+            }
+            const auto wt_endpoint = std::make_pair(node.wt_host, node.wt_port);
+            if (!wt_endpoints.insert(wt_endpoint).second)
+            {
+                throw std::runtime_error("duplicate chat webtransport endpoint: " + node.wt_host + ":" + node.wt_port);
             }
         }
 
@@ -298,6 +389,8 @@ inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGe
         node.tcp_port = tcp_port;
         node.quic_host = quic_port.empty() ? "" : node.tcp_host;
         node.quic_port = quic_port;
+        node.ws_enabled = false;
+        node.wt_enabled = false;
         node.rpc_host = node.tcp_host;
         node.rpc_port = rpc_port;
         node.enabled = true;

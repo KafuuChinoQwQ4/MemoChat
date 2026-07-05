@@ -17,7 +17,7 @@
 
 #include <gtest/gtest.h>
 
-#include "CSession.hpp"
+#include "TcpSession.hpp"
 
 #include <boost/asio.hpp>
 
@@ -81,10 +81,10 @@ TEST(CSessionLifetime, ReadLoopReleasesSessionOnPeerClose)
     {
         // _server=nullptr → ReadLoop 读到 head 后 CheckValid 短路,走干净
         // Close();co_return; 分支,不触达任何业务单例。
-        auto session = std::make_shared<CSession>(session_ctx, /*server=*/nullptr);
+        auto session = std::make_shared<TcpSession>(session_ctx, /*server=*/nullptr);
         weak = session;
 
-        // CSession 构造时 _socket 默认构造在 session_ctx 上;把已连接的 server_sock
+        // TcpSession 构造时 _socket 默认构造在 session_ctx 上;把已连接的 server_sock
         // 移交给 session 的 _socket(同一 io_context,移动赋值合法)。
         session->GetSocket() = std::move(server_sock);
 

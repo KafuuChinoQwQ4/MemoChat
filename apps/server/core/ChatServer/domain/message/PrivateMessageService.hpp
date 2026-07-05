@@ -11,7 +11,7 @@
 #include <memory>
 #include <string>
 
-class CSession;
+class IChatSession;
 
 class PrivateMessageService : public IPrivateMessageService
 {
@@ -30,21 +30,24 @@ public:
     MessageCommandResult RevokePrivateMessage(const MessageCommandRequest& request) override;
     MessageCommandResult PrivateHistory(const MessageCommandRequest& request) override;
 
-    void
-    HandleTextChatMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleForwardPrivateMessage(const std::shared_ptr<CSession>& session,
+    void HandleTextChatMessage(const std::shared_ptr<IChatSession>& session,
+                               short msg_id,
+                               const std::string& msg_data) override;
+    void HandleForwardPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                      short msg_id,
                                      const std::string& msg_data) override;
-    void
-    HandlePrivateReadAck(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleEditPrivateMessage(const std::shared_ptr<CSession>& session,
+    void HandlePrivateReadAck(const std::shared_ptr<IChatSession>& session,
+                              short msg_id,
+                              const std::string& msg_data) override;
+    void HandleEditPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                   short msg_id,
                                   const std::string& msg_data) override;
-    void HandleRevokePrivateMessage(const std::shared_ptr<CSession>& session,
+    void HandleRevokePrivateMessage(const std::shared_ptr<IChatSession>& session,
                                     short msg_id,
                                     const std::string& msg_data) override;
-    void
-    HandlePrivateHistory(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
+    void HandlePrivateHistory(const std::shared_ptr<IChatSession>& session,
+                              short msg_id,
+                              const std::string& msg_data) override;
 
 private:
     ISessionRegistry* _session_registry = nullptr;

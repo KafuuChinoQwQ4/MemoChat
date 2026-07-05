@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-class CSession;
+class IChatSession;
 
 // Transport-role interface for in-process group message dispatch.
 //
@@ -22,40 +22,43 @@ public:
     virtual ~IGroupMessageService() = default;
 
     virtual void
-    HandleCreateGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleCreateGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleGetGroupList(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleGetGroupList(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
+    virtual void HandleInviteGroupMember(const std::shared_ptr<IChatSession>& session,
+                                         short msg_id,
+                                         const std::string& msg_data) = 0;
     virtual void
-    HandleInviteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleApplyJoinGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleApplyJoinGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleReviewGroupApply(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleReviewGroupApply(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleGroupChatMessage(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleGroupChatMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleGroupHistory(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleGroupHistory(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleEditGroupMessage(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
+    virtual void HandleRevokeGroupMessage(const std::shared_ptr<IChatSession>& session,
+                                          short msg_id,
+                                          const std::string& msg_data) = 0;
+    virtual void HandleForwardGroupMessage(const std::shared_ptr<IChatSession>& session,
+                                           short msg_id,
+                                           const std::string& msg_data) = 0;
     virtual void
-    HandleEditGroupMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
-    virtual void
-    HandleRevokeGroupMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
-    virtual void
-    HandleForwardGroupMessage(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
-    virtual void
-    HandleGroupReadAck(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
-    virtual void HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session,
+    HandleGroupReadAck(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
+    virtual void HandleUpdateGroupAnnouncement(const std::shared_ptr<IChatSession>& session,
                                                short msg_id,
                                                const std::string& msg_data) = 0;
     virtual void
-    HandleUpdateGroupIcon(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleUpdateGroupIcon(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleSetGroupAdmin(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleSetGroupAdmin(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleMuteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleMuteGroupMember(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleKickGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleKickGroupMember(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleQuitGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleQuitGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
     virtual void
-    HandleDissolveGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) = 0;
+    HandleDissolveGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) = 0;
 };

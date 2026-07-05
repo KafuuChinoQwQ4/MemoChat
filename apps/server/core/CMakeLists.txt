@@ -6,6 +6,7 @@ option(BUILD_SERVER_SERVICES "Build backend service executables" ON)
 option(MEMOCHAT_AUTO_DEPLOY_RUNTIME "Copy built server executables into infra/Memo_ops/runtime/services during build" OFF)
 option(MEMOCHAT_ENABLE_CPP26_REFLECTION "Enable experimental C++26 static reflection for supported server targets" OFF)
 option(MEMOCHAT_ENABLE_GNU_MODULES "Enable project-owned GNU C++ module CMI construction for selected server targets" OFF)
+option(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER "Build ChatServer WebTransport provider with an HTTP/3-capable libwebsockets" OFF)
 
 # Require at least C++23 for std::expected, std::unreachable, std::byteswap (glaze library requires C++23).
 # Must be set BEFORE any add_subdirectory() calls so it takes effect for all targets.
@@ -175,6 +176,64 @@ if(TARGET libpqxx::pqxx)
     set(MEMOCHAT_PQXX_TARGET libpqxx::pqxx)
 else()
     message(FATAL_ERROR "libpqxx target not found")
+endif()
+
+set(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED 0)
+if(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER)
+    find_package(libwebsockets CONFIG REQUIRED)
+    if(TARGET websockets)
+        set(MEMOCHAT_LWS_WEBTRANSPORT_TARGET websockets)
+    elseif(TARGET websockets_shared)
+        set(MEMOCHAT_LWS_WEBTRANSPORT_TARGET websockets_shared)
+    else()
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER requires a libwebsockets CMake target named websockets or websockets_shared.")
+    endif()
+
+    get_target_property(_MEMOCHAT_LWS_WEBTRANSPORT_INCLUDES ${MEMOCHAT_LWS_WEBTRANSPORT_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+    if(NOT _MEMOCHAT_LWS_WEBTRANSPORT_INCLUDES)
+        set(_MEMOCHAT_LWS_WEBTRANSPORT_INCLUDES "")
+    endif()
+
+    include(CheckCXXSourceCompiles)
+    set(_MEMOCHAT_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+    set(_MEMOCHAT_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
+    set(CMAKE_REQUIRED_INCLUDES ${_MEMOCHAT_LWS_WEBTRANSPORT_INCLUDES})
+    set(CMAKE_REQUIRED_LIBRARIES ${MEMOCHAT_LWS_WEBTRANSPORT_TARGET})
+    check_cxx_source_compiles([=[
+#include <libwebsockets.h>
+extern "C" {
+#include <libwebsockets/lws-webtransport.h>
+}
+
+#if !defined(LWS_WITH_HTTP3)
+#error "libwebsockets was not built with HTTP/3"
+#endif
+
+#if !defined(LWS_ROLE_WT)
+#error "libwebsockets was not built with WebTransport role support"
+#endif
+
+int main()
+{
+    (void) &lws_wt_create_stream;
+    (void) &lws_wt_is_session;
+    (void) &lws_hdr_total_length;
+    (void) &lws_hdr_copy;
+    (void) WSI_TOKEN_HTTP_COLON_PATH;
+    return 0;
+}
+]=] MEMOCHAT_LWS_WEBTRANSPORT_READY)
+    set(CMAKE_REQUIRED_INCLUDES "${_MEMOCHAT_REQUIRED_INCLUDES}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_MEMOCHAT_REQUIRED_LIBRARIES}")
+
+    if(NOT MEMOCHAT_LWS_WEBTRANSPORT_READY)
+        message(FATAL_ERROR "MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER requires libwebsockets built with LWS_WITH_HTTP3 and LWS_ROLE_WT.")
+    endif()
+
+    set(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED 1)
+    message(STATUS "ChatServer WebTransport provider: libwebsockets HTTP/3 WebTransport enabled")
+else()
+    message(STATUS "ChatServer WebTransport provider: libwebsockets disabled; unavailable provider remains the default")
 endif()
 
 if(TARGET unofficial-sodium::sodium)

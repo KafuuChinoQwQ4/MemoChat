@@ -259,7 +259,8 @@ struct GroupHandlerCase
     short response_msg_id;
     std::string payload;
     std::string expected_payload;
-    std::function<void(MessageGrpcServiceAdapter&, const std::shared_ptr<CSession>&, short, const std::string&)> call;
+    std::function<void(MessageGrpcServiceAdapter&, const std::shared_ptr<IChatSession>&, short, const std::string&)>
+        call;
 };
 } // namespace
 
@@ -703,7 +704,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"name":"team","trace_id":"trace-create"})",
          R"({"error":0,"group":"create"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -715,7 +716,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"trace_id":"trace-list"})",
          R"({"error":0,"group":"list"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -727,7 +728,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"touid":2,"trace_id":"trace-invite"})",
          R"({"error":0,"group":"invite"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -739,7 +740,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"trace_id":"trace-apply"})",
          R"({"error":0,"group":"apply"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -751,7 +752,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"apply_id":3,"agree":true,"trace_id":"trace-review"})",
          R"({"error":0,"group":"review"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -763,7 +764,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"announcement":"hello","trace_id":"trace-announcement"})",
          R"({"error":0,"group":"announcement"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -775,7 +776,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"icon":"icon.png","trace_id":"trace-icon"})",
          R"({"error":0,"group":"icon"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -787,7 +788,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"target_uid":2,"is_admin":true,"trace_id":"trace-admin"})",
          R"({"error":0,"group":"admin"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -799,7 +800,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"target_uid":2,"mute_until":123,"trace_id":"trace-mute"})",
          R"({"error":0,"group":"mute"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -811,7 +812,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"target_uid":2,"trace_id":"trace-kick"})",
          R"({"error":0,"group":"kick"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -823,7 +824,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"trace_id":"trace-quit"})",
          R"({"error":0,"group":"quit"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {
@@ -835,7 +836,7 @@ TEST(MessageGrpcServiceAdapterTest, GroupManagementHandlersSendRemoteResultsToSe
          R"({"fromuid":1,"groupid":9,"trace_id":"trace-dissolve"})",
          R"({"error":0,"group":"dissolve"})",
          [](MessageGrpcServiceAdapter& adapter,
-            const std::shared_ptr<CSession>& session,
+            const std::shared_ptr<IChatSession>& session,
             short msg_id,
             const std::string& payload)
          {

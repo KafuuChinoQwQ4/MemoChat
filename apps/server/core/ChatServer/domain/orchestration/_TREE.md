@@ -13,10 +13,11 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `ChatHandlerRegistrars.cpp` | 各类消息处理器注册实现 |
-| `ChatHandlerRegistrars.h` | 处理器注册声明 |
+| `ChatHandlerRegistrars.hpp` | 处理器注册声明 |
 | `ChatRuntimeComposition.cpp` | ChatServer 运行时对象图装配实现 |
-| `ChatRuntimeComposition.h` | ChatServer 运行时对象图装配声明 |
+| `ChatRuntimeComposition.hpp` | ChatServer 运行时对象图装配声明 |
+| `LogicNode.hpp` | 入站聊天消息分发队列节点，携带 transport-neutral session 与已解码消息节点 |
 | `LogicSystem.cpp` | 逻辑系统（请求分派调度）实现 |
-| `LogicSystem.h` | 逻辑系统声明 |
+| `LogicSystem.hpp` | 逻辑系统声明 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -1,0 +1,271 @@
+diff --git a/lib/roles/h2/ops-h2.c b/lib/roles/h2/ops-h2.c
+index 000000000..000000000 100644
+--- a/lib/roles/h2/ops-h2.c
++++ b/lib/roles/h2/ops-h2.c
+@@ -53,8 +53,8 @@ const struct http2_settings lws_h2_defaults = { {
+ 	 * including the length of the name and value in octets plus an
+ 	 * overhead of 32 octets for each header field.
+ 	 */
+ 	/* H2SET_RESERVED7 */				   0,
+-	/* H2SET_ENABLE_CONNECT_PROTOCOL */		   0,
++	/* H2SET_ENABLE_CONNECT_PROTOCOL */		   1,
+ }};
+
+ /* these are the "lws defaults"... they can be overridden in plat */
+diff --git a/lib/roles/h3/ops-h3.c b/lib/roles/h3/ops-h3.c
+index 000000000..000000000 100644
+--- a/lib/roles/h3/ops-h3.c
++++ b/lib/roles/h3/ops-h3.c
+@@ -1407,9 +1407,26 @@ rops_check_upgrades_h3(struct lws *wsi)
+ 		extern const struct lws_role_ops role_ops_wt;
+ 		lws_mux_mark_immortal(wsi);
+ 		lws_metrics_tag_wsi_add(wsi, "upg", "wt_over_h3");
++
++		{
++			unsigned char response[LWS_PRE + 64], *start = response + LWS_PRE,
++				      *hp = start, *end = response + sizeof(response);
++			size_t hlen;
++			int n;
++
++			if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &hp, end) ||
++			    lws_finalize_http_header(wsi, &hp, end))
++				return LWS_UPG_RET_BAIL;
++
++			hlen = lws_ptr_diff_size_t(hp, start);
++			n = lws_write(wsi, start, hlen, LWS_WRITE_HTTP_HEADERS);
++			if (n != (int)hlen)
++				return LWS_UPG_RET_BAIL;
++		}
+
+ 		/* Switch role to WebTransport */
+ 		lws_role_transition(wsi, LWSIFR_SERVER, LRS_ESTABLISHED, &role_ops_wt);
++		wsi->wt.is_session = 1;
+
+ 		if (wsi->a.protocol && wsi->a.protocol->callback) {
+ 			if (wsi->a.protocol->callback(wsi, LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED, wsi->user_space, NULL, 0))
+diff --git a/lib/roles/quic/parse-quic.c b/lib/roles/quic/parse-quic.c
+index 000000000..000000000 100644
+--- a/lib/roles/quic/parse-quic.c
++++ b/lib/roles/quic/parse-quic.c
+@@ -22,6 +22,10 @@
+
+ #include "private-lib-core.h"
+ #include "roles/quic/private-lib-roles-quic.h"
++#if defined(LWS_ROLE_WT)
++#include <libwebsockets/lws-webtransport.h>
++#include "roles/wt/private-lib-roles-wt.h"
++#endif
+
+ /*
+  * Safely parse a QUIC Variable-Length Integer (RFC 9000, Section 16).
+@@ -64,6 +68,21 @@ lws_quic_parse_varint(const uint8_t *buf, size_t len, uint64_t *val)
+ 	return 0;
+ }
+
++#if defined(LWS_ROLE_WT)
++static struct lws *
++lws_quic_find_wt_session(struct lws *nwsi, uint64_t quarter_session_id)
++{
++	if (quarter_session_id > UINT_MAX / 4)
++		return NULL;
++
++	lws_start_foreach_ll(struct lws *, child, nwsi->mux.child_list) {
++		if (child->mux.my_sid == (unsigned int)(quarter_session_id * 4) && child->wt.is_session)
++			return child;
++	} lws_end_foreach_ll(child, mux.sibling_list);
++	return NULL;
++}
++#endif
++
+ /*
+  * Calculates the exact offset of the Packet Number field and the payload length.
+  * Returns the offset in bytes, or 0 if the packet is malformed/truncated.
+@@ -209,8 +228,13 @@ lws_quic_rx_reassemble(struct lws *nwsi, struct lws *wsi_child, struct lws_quic_
+ #endif
+ 			if (wsi_child && wsi_child->a.protocol && wsi_child->a.protocol->callback) {
+ 				/* Application Stream Data */
+-				enum lws_callback_reasons reason = lwsi_role_client(wsi_child) ?
+-					LWS_CALLBACK_QT_CLIENT_RECEIVE : LWS_CALLBACK_QT_SERVER_RECEIVE;
++				int role_idx = lwsi_role_server(wsi_child) ? 1 : 0;
++				enum lws_callback_reasons reason =
++					(enum lws_callback_reasons)wsi_child->role_ops->rx_cb[role_idx];
++				if (!reason) {
++					reason = lwsi_role_client(wsi_child) ?
++						LWS_CALLBACK_QT_CLIENT_RECEIVE : LWS_CALLBACK_QT_SERVER_RECEIVE;
++				}
+ 				int n = wsi_child->a.protocol->callback(wsi_child, reason, wsi_child->user_space, buf, len);
+ 				if (n == 0) {
+ 					/* Data consumed by application, replenish rx credit to generate MAX_DATA! */
+@@ -282,8 +307,13 @@ lws_quic_rx_reassemble(struct lws *nwsi, struct lws *wsi_child, struct lws_quic_
+ 						} else
+ #endif
+ 						if (wsi_child->a.protocol && wsi_child->a.protocol->callback) {
+-							enum lws_callback_reasons reason = lwsi_role_client(wsi_child) ?
+-								LWS_CALLBACK_QT_CLIENT_RECEIVE : LWS_CALLBACK_QT_SERVER_RECEIVE;
++							int role_idx = lwsi_role_server(wsi_child) ? 1 : 0;
++							enum lws_callback_reasons reason =
++								(enum lws_callback_reasons)wsi_child->role_ops->rx_cb[role_idx];
++							if (!reason) {
++								reason = lwsi_role_client(wsi_child) ?
++									LWS_CALLBACK_QT_CLIENT_RECEIVE : LWS_CALLBACK_QT_SERVER_RECEIVE;
++							}
+ 							int n = wsi_child->a.protocol->callback(wsi_child, reason, wsi_child->user_space, c->data, c->len);
+ 							if (n == 0) {
+ 								/* Data consumed by application, replenish rx credit to generate MAX_DATA! */
+@@ -965,6 +994,26 @@ lws_quic_rx_parse(struct lws *nwsi, uint8_t *payload, size_t payload_len, int lev
+
+ 				struct lws *wsi_child = lws_quic_stream_find(nwsi, stream_id);
+
++#if defined(LWS_ROLE_WT)
++				struct lws *wt_session_wsi = NULL;
++				size_t wt_header_len = 0;
++				if (!wsi_child && offset == 0 && nwsi->h3.h3n && len) {
++					uint64_t wt_stream_type, wt_qsid;
++					size_t wt_stream_type_len =
++						lws_quic_parse_varint(&payload[pos], (size_t)len, &wt_stream_type);
++					if (wt_stream_type_len &&
++					    (wt_stream_type == LWS_WT_STREAM_TYPE_BIDI ||
++					     wt_stream_type == LWS_WT_STREAM_TYPE_UNIDI)) {
++						size_t wt_qsid_len = lws_quic_parse_varint(&payload[pos + wt_stream_type_len],
++							(size_t)len - wt_stream_type_len, &wt_qsid);
++						if (wt_qsid_len) {
++							wt_session_wsi = lws_quic_find_wt_session(nwsi, wt_qsid);
++							wt_header_len = wt_session_wsi ? wt_stream_type_len + wt_qsid_len : 0;
++						}
++					}
++				}
++#endif
++
+ 				int is_locally_initiated = lwsi_role_client(nwsi) ? !(stream_id & 1) : (stream_id & 1);
+
+ 				if (is_locally_initiated) {
+@@ -999,7 +1050,11 @@ lws_quic_rx_parse(struct lws *nwsi, uint8_t *payload, size_t payload_len, int lev
+ 					wsi_child->mux.my_sid = (unsigned int)stream_id;
+
+ 					/* Inherit the role from the network WSI, but use H3 role if H3 ALPN was negotiated */
+-#if defined(LWS_ROLE_H3)
++#if defined(LWS_ROLE_H3) && defined(LWS_ROLE_WT)
++					lws_role_transition(wsi_child, lwsi_role_client(nwsi) ? LWSIFR_CLIENT : LWSIFR_SERVER,
++							    LRS_ESTABLISHED,
++							    wt_session_wsi ? &role_ops_wt : (nwsi->h3.h3n ? &role_ops_h3 : nwsi->role_ops));
++#elif defined(LWS_ROLE_H3)
+ 					lws_role_transition(wsi_child, lwsi_role_client(nwsi) ? LWSIFR_CLIENT : LWSIFR_SERVER, LRS_ESTABLISHED, nwsi->h3.h3n ? &role_ops_h3 : nwsi->role_ops);
+ #else
+ 					lws_role_transition(wsi_child, lwsi_role_client(nwsi) ? LWSIFR_CLIENT : LWSIFR_SERVER, LRS_ESTABLISHED, nwsi->role_ops);
+@@ -1029,9 +1084,16 @@ lws_quic_rx_parse(struct lws *nwsi, uint8_t *payload, size_t payload_len, int lev
+ 						return -1;
+ 					}
+
++#if defined(LWS_ROLE_WT)
++					if (wt_session_wsi)
++						wsi_child->parent = wt_session_wsi;
++#endif
++
+ #if defined(LWS_ROLE_H3)
+-					wsi_child->h3.h3n = nwsi->h3.h3n;
+-					wsi_child->h3.qpack_tx_encoder = nwsi->h3.qpack_tx_encoder;
++					if (wsi_child->role_ops == &role_ops_h3) {
++						wsi_child->h3.h3n = nwsi->h3.h3n;
++						wsi_child->h3.qpack_tx_encoder = nwsi->h3.qpack_tx_encoder;
++					}
+ #endif
+
+ 					if (lwsi_role_client(nwsi)) {
+@@ -1094,6 +1156,16 @@ lws_quic_rx_parse(struct lws *nwsi, uint8_t *payload, size_t payload_len, int lev
+ 				}
+
+ 				/* Deliver stream data via Reassembly Buffer */
++#if defined(LWS_ROLE_WT)
++				if (wsi_child && wt_header_len) {
++					pos += wt_header_len;
++					len -= wt_header_len;
++					offset += wt_header_len;
++					if (wsi_child->quic.qs && wsi_child->quic.qs->rx_offset < offset)
++						wsi_child->quic.qs->rx_offset = offset;
++				}
++#endif
++
+ 				if (wsi_child && wsi_child->quic.qs) {
+ 					if (fin) {
+ 				if (wsi_child->quic.qs->fin_received && wsi_child->quic.qs->rx_final_size != offset + len) {
+diff --git a/lib/roles/wt/ops-wt.c b/lib/roles/wt/ops-wt.c
+index 000000000..000000000 100644
+--- a/lib/roles/wt/ops-wt.c
++++ b/lib/roles/wt/ops-wt.c
+@@ -24,6 +24,9 @@
+ #include <libwebsockets/lws-webtransport.h>
+ #include <private-lib-core.h>
+
++struct lws *
++lws_get_quic_network_wsi(struct lws *wsi);
++
+ static lws_handling_result_t
+ rops_handle_POLLIN_wt(struct lws_context_per_thread *pt, struct lws *wsi,
+ 		      struct lws_pollfd *pollfd)
+@@ -39,7 +42,7 @@ static int
+ rops_write_role_protocol_wt(struct lws *wsi, unsigned char *buf, size_t len,
+ 			    enum lws_write_protocol *wp)
+ {
+-	struct lws *nwsi = lws_get_network_wsi(wsi);
++	struct lws *nwsi = lws_get_quic_network_wsi(wsi);
+
+ 	if (!nwsi)
+ 		return -1;
+@@ -83,6 +86,19 @@ rops_write_role_protocol_wt(struct lws *wsi, unsigned char *buf, size_t len,
+ 		write_role_protocol(wsi, buf, len, wp);
+ }
+
++static int
++rops_callback_on_writable_wt(struct lws *wsi)
++{
++	struct lws *nwsi = lws_get_quic_network_wsi(wsi);
++
++	lws_wsi_mux_mark_parents_needing_writeable(wsi);
++
++	if (nwsi && nwsi != wsi)
++		return lws_callback_on_writable(nwsi);
++
++	return 0;
++}
++
+ static int
+ rops_close_kill_connection_wt(struct lws *wsi, enum lws_close_status reason)
+ {
+@@ -182,28 +198,29 @@ static const lws_rops_t rops_table_wt[] = {
+ 	/*  1 */ { .handle_POLLIN	  = rops_handle_POLLIN_wt },
+ 	/*  2 */ { .write_role_protocol	  = rops_write_role_protocol_wt },
+ 	/*  3 */ { .close_kill_connection = rops_close_kill_connection_wt },
++	/*  4 */ { .callback_on_writable  = rops_callback_on_writable_wt },
+ };
+
+ const struct lws_role_ops role_ops_wt = {
+ 	/* role name */			"wt",
+ 	/* alpn id */			"wt",
+
+ 	/* rops_table */		rops_table_wt,
+ 	/* rops_idx */			{
+ 	  /* LWS_ROPS_check_upgrades */
+ 	  /* LWS_ROPS_pt_init_destroy */		0x00,
+ 	  /* LWS_ROPS_init_vhost */
+ 	  /* LWS_ROPS_destroy_vhost */			0x00,
+ 	  /* LWS_ROPS_service_flag_pending */
+-	  /* LWS_ROPS_handle_POLLIN */			0x10,
++	  /* LWS_ROPS_handle_POLLIN */			0x01,
+ 	  /* LWS_ROPS_handle_POLLOUT */
+ 	  /* LWS_ROPS_perform_user_POLLOUT */		0x00,
+ 	  /* LWS_ROPS_callback_on_writable */
+-	  /* LWS_ROPS_tx_credit */			0x00,
++	  /* LWS_ROPS_tx_credit */			0x40,
+ 	  /* LWS_ROPS_write_role_protocol */
+-	  /* LWS_ROPS_encapsulation_parent */		0x02,
++	  /* LWS_ROPS_encapsulation_parent */		0x20,
+ 	  /* LWS_ROPS_alpn_negotiated */
+ 	  /* LWS_ROPS_close_via_role_protocol */	0x00,
+ 	  /* LWS_ROPS_close_role */
+-	  /* LWS_ROPS_close_kill_connection */		0x30,
++	  /* LWS_ROPS_close_kill_connection */		0x03,
+ 	  /* LWS_ROPS_destroy_role */
+ 	  /* LWS_ROPS_adoption_bind */			0x00,
+ 	  /* LWS_ROPS_client_bind */
+ 	  /* LWS_ROPS_issue_keepalive */		0x00,
+ 	},

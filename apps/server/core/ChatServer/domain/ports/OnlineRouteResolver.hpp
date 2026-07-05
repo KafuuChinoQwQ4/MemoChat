@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-class CSession;
+class IChatSession;
 
 namespace memochat::chat::routing
 {
@@ -28,7 +28,7 @@ enum class OnlineRouteKind
 struct OnlineRouteDecision
 {
     OnlineRouteKind kind = OnlineRouteKind::Offline;
-    std::shared_ptr<CSession> session;
+    std::shared_ptr<IChatSession> session;
     std::string redis_server;
     bool local_session_found = false;
 };

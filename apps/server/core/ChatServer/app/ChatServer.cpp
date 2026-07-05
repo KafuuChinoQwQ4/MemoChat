@@ -2,6 +2,7 @@
 //
 
 #include "LogicSystem.hpp"
+#include "LogicSystemConfig.hpp"
 #include "SnowflakeUtil.hpp"
 #include <csignal>
 #include <thread>
@@ -259,7 +260,8 @@ int main(int argc, char** argv)
                                   });
             });
 
-        LogicSystem::GetInstance()->SetServer(pointer_server);
+        LogicSystem::SetWorkerConfig(LogicSystemConfig{});
+        LogicSystem::GetInstance()->SetServer(pointer_server.get());
         io_context.run();
 
         grpc_server_thread.join();

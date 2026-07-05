@@ -50,7 +50,7 @@ std::string RedisOnlineRouteStore::SelfServerName() const
     return ConfigMgr::Inst()["SelfServer"]["Name"];
 }
 
-void RedisOnlineRouteStore::RepairOnlineRoute(int uid, const std::shared_ptr<CSession>& session)
+void RedisOnlineRouteStore::RepairOnlineRoute(int uid, const std::shared_ptr<IChatSession>& session)
 {
     if (!online_route_modules::ShouldCheckRepairSession(uid, session != nullptr))
     {

@@ -12,6 +12,7 @@
 | `AsyncEventDispatcherAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 异步事件分发器算法 module 的桥接 consumer |
 | `AsyncEventDispatcherAlgorithmsTest.cpp` | 验证异步事件分发器发布、轮询、payload guard、刷新和日志字面量算法 |
 | `ChatEnvelopeCodecTest.cpp` | 验证 Chat 内部任务/事件 envelope 的 typed JSON 编解码、分区键和重试边界 |
+| `ChatFrameCodecTest.cpp` | 验证 ChatServer transport 固定帧编解码、半包和合包处理 |
 | `ChatConfigTest.cpp` | 验证 ChatServer 配置目标通过 C++ module 算法处理 feature flag、整数边界和服务后端归一化 |
 | `ChatGroupCommandDtosTest.cpp` | 验证 Chat 群组简单命令 request DTO 的兼容字段提取和字段清单 |
 | `ChatHandlerRegistrarAlgorithmsConsumer.cpp` | 测试侧导入 ChatHandlerRegistrars 编排注册算法 module 的桥接 consumer |
@@ -120,6 +121,10 @@
 | `SendPathGoldenTest.cpp` | 锁定私聊/群聊发送路径响应根 JSON 的 golden 输出 |
 | `TaskDispatcherAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 任务分发器算法 module 的桥接 consumer |
 | `TaskDispatcherAlgorithmsTest.cpp` | 验证任务分发器 task 类型、错误字面量、ack 和 outbox guard 算法 |
+| `TaskDispatcherRuntimeTest.cpp` | 验证任务分发器消费异常不会逃逸并打崩运行时 worker 线程 |
+| `WebSocketIngressTest.cpp` | 验证 WebSocket 接入的真实握手、二进制帧解码、文本帧拒绝和停机关闭 |
+| `WebTransportProviderTest.cpp` | 验证 WebTransport provider 接入层的启动、会话注册、发送回调和关闭清理 |
+| `WebTransportSessionTest.cpp` | 验证 WebTransport 聊天帧会话的 provider 发送、半包/合包接收和异常关闭 |
 | `main.cpp` | GTest 测试入口（main 函数） |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

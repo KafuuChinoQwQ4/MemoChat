@@ -1,12 +1,12 @@
 #include "OnlineRouteSessionSupport.hpp"
 
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 
-std::string ExtractOnlineRouteSessionId(const std::shared_ptr<CSession>& session)
+std::string ExtractOnlineRouteSessionId(const std::shared_ptr<IChatSession>& session)
 {
     if (!session)
     {
         return std::string();
     }
-    return session->GetSessionId();
+    return session->sessionId();
 }

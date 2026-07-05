@@ -1,7 +1,7 @@
 #pragma once
 #include "Singleton.hpp"
 #include "json/GlazeCompat.hpp"
-#include "ports/IOutboxRepairScheduler.hpp"
+#include "ports/ILogicSystemConfig.hpp"
 
 #include <array>
 #include <atomic>
@@ -14,17 +14,16 @@
 #include <mutex>
 #include <string>
 
-class CSession;
-class CServer;
+class IChatSession;
+class IChatSessionHost;
 class ChatRuntimeComposition;
 class LogicNode;
 class MessageDeliveryService;
 
-typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
+typedef std::function<void(std::shared_ptr<IChatSession>, const short& msg_id, const std::string& msg_data)>
+    FunCallBack;
 
-class LogicSystem
-    : public Singleton<LogicSystem>
-    , public IOutboxRepairScheduler
+class LogicSystem : public Singleton<LogicSystem>
 {
     friend class Singleton<LogicSystem>;
     friend class ChatSessionService;
@@ -32,7 +31,7 @@ class LogicSystem
 public:
     ~LogicSystem();
     void PostMsgToQue(std::shared_ptr<LogicNode> msg);
-    void SetServer(std::shared_ptr<CServer> pserver);
+    void SetServer(IChatSessionHost* host);
     MessageDeliveryService& MessageDelivery();
     bool PublishTask(const std::string& task_type,
                      const std::string& routing_key,
@@ -42,7 +41,10 @@ public:
                      std::string* error = nullptr);
     bool
     PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr);
-    bool ExpediteOutboxRepair(int64_t outbox_id) override;
+
+    // Must be called by the infrastructure layer before the first GetInstance()
+    // so the domain constructor never needs to name the concrete config type.
+    static void SetWorkerConfig(const ILogicSystemConfig& cfg);
 
     static constexpr size_t kDefaultWorkerCount = 4;
     static constexpr size_t kMaxWorkerCount = 16;
@@ -72,7 +74,7 @@ private:
     std::atomic<size_t> _next_worker{0};
 
     std::map<short, FunCallBack> _fun_callbacks;
-    std::shared_ptr<CServer> _p_server;
+    IChatSessionHost* _p_server{nullptr};
     std::unique_ptr<ChatRuntimeComposition> _composition;
 
     // Bounded queue metrics

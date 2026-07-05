@@ -56,6 +56,11 @@ bool ReadMongoThenPostgres(MongoMgr& mongo,
 }
 } // namespace
 
+ChatMessageRepository::ChatMessageRepository()
+    : ChatMessageRepository(*PostgresMgr::GetInstance(), *MongoMgr::GetInstance())
+{
+}
+
 ChatMessageRepository::ChatMessageRepository(PostgresMgr& pg, MongoMgr& mongo)
     : _pg(pg)
     , _mongo(mongo)

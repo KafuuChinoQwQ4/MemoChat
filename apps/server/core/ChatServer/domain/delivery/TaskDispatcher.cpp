@@ -8,6 +8,7 @@
 #include "logging/TraceContext.hpp"
 
 #include <chrono>
+#include <exception>
 #include "json/GlazeCompat.hpp"
 #include <thread>
 
@@ -73,7 +74,41 @@ void TaskDispatcher::DealTasks()
     {
         ConsumedTask task;
         std::string consume_error;
-        const bool handled = _task_bus && _task_bus->ConsumeOnce(TaskRoutingKeys(), task, &consume_error);
+        bool handled = false;
+        try
+        {
+            handled = _task_bus && _task_bus->ConsumeOnce(TaskRoutingKeys(), task, &consume_error);
+        }
+        catch (const std::bad_alloc& error)
+        {
+            memolog::LogError("chat.task.dispatcher.consume_bad_alloc",
+                              "task dispatcher stopped after task bus allocation failure",
+                              {{"error", error.what()}});
+            break;
+        }
+        catch (const std::exception& error)
+        {
+            memolog::LogWarn("chat.task.dispatcher.consume_exception",
+                             "task dispatcher caught task bus exception",
+                             {{"error", error.what()}});
+            if (_stop_requested())
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
+            continue;
+        }
+        catch (...)
+        {
+            memolog::LogWarn("chat.task.dispatcher.consume_unknown_exception",
+                             "task dispatcher caught unknown task bus exception");
+            if (_stop_requested())
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
+            continue;
+        }
         if (!handled)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));

@@ -66,6 +66,12 @@
         "msquic",
         "openssl"
       ]
+    },
+    "webtransport-provider": {
+      "description": "Experimental ChatServer WebTransport provider dependency via libwebsockets HTTP/3.",
+      "dependencies": [
+        "libwebsockets"
+      ]
     }
   }
 }

@@ -3,6 +3,6 @@
 #include <memory>
 #include <string>
 
-class CSession;
+class IChatSession;
 
-std::string ExtractOnlineRouteSessionId(const std::shared_ptr<CSession>& session);
+std::string ExtractOnlineRouteSessionId(const std::shared_ptr<IChatSession>& session);
