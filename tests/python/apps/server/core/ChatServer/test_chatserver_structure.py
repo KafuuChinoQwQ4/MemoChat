@@ -1017,7 +1017,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertNotIn("TcpSession", quic_session)
         self.assertNotIn("GetSocket", quic_session)
 
-    def test_webtransport_local_config_uses_generated_tls_files(self):
+    def test_webtransport_local_config_is_enabled_and_uses_generated_tls_files(self):
         for config_name, sections in {
             "config.ini": ("chatserver1",),
             "chatserver1.ini": ("chatserver1",),
@@ -1030,7 +1030,8 @@ class ChatServerStructureTests(unittest.TestCase):
                         self,
                         text,
                         section,
-                        "WtEnabled=false",
+                        "WsEnabled=true",
+                        "WtEnabled=true",
                         "WtCertFile=server.crt",
                         "WtKeyFile=server.key",
                     )

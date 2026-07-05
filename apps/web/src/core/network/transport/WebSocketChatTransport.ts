@@ -1,5 +1,5 @@
 /**
- * WebSocketChatTransport — connects to the WS↔TCP bridge.
+ * WebSocketChatTransport — connects to the ChatServer WebSocket ingress.
  *
  * Frame protocol: binary, ArrayBuffer, same uint16+uint16+JSON encoding as the C++ client.
  * Owns heartbeat (1023 every 25 s) + watchdog (2 missed 1024 acks → reconnect).

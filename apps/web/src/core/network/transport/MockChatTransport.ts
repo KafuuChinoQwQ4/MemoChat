@@ -3,7 +3,7 @@
  *
  * Enabled via VITE_USE_MOCK_TRANSPORT=1.
  * Replays a queue of ArrayBuffer frames (fixed test fixtures) as if they arrived
- * from the real bridge. Allows full chat feature development without a live server.
+ * from the real transport. Allows full chat feature development without a live server.
  */
 import { encodeChatFrame } from "@/core/network/codec/ChatFrameCodec"
 import { ChatFrameParser } from "@/core/network/codec/ChatFrameParser"

@@ -1,9 +1,9 @@
 /**
  * BrowserChatTransport — browser transport selector for WebSocket/WebTransport.
  *
- * WebSocket remains the default browser path. WebTransport is attempted only
- * when the login endpoint selection asks for it and the browser exposes the
- * WebTransport API; a WebSocket endpoint is used as fallback when available.
+ * WebTransport is the preferred browser path when advertised and supported;
+ * WebSocket remains the fallback endpoint for browsers or local runtimes that
+ * cannot complete WebTransport.
  */
 import type { ReqId } from "@/core/network/opcodes/reqIds"
 import { logger } from "@/core/common/logger"

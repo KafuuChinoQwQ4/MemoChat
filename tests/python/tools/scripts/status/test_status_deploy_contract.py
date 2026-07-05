@@ -253,14 +253,24 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertLess(start.index("launch_detached_service()"), start.index("launch_svc()"))
         self.assertLess(start.index("command -v setsid"), start.index('exec nohup env "$@" "./${exe_name}"'))
 
-    def test_linux_local_startup_defaults_to_tcp_chat_transport(self):
+    def test_linux_local_startup_defaults_to_all_chat_transports_with_fallback(self):
         start = read(START_SERVICES_SCRIPT)
 
-        self.assertIn('export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"', start)
-        self.assertIn('MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"', start)
-        self.assertIn("experimental local path", start)
+        for token in (
+            'export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"',
+            'export MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-1}"',
+            'export MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-1}"',
+            'export MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-1}"',
+            'export MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER:-1}"',
+            'MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"',
+            'MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-1}"',
+            'MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-1}"',
+        ):
+            self.assertIn(token, start)
+        self.assertIn("Start every chat ingress by default", start)
+        self.assertIn("degrade through their", start)
         self.assertLess(
-            start.index('export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"'),
+            start.index('export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"'),
             start.index("START_CORE_SERVICES="),
         )
 

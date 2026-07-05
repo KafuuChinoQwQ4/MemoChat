@@ -6,7 +6,7 @@ import type { ReqId } from "@/core/network/opcodes/reqIds"
 import type { ServerInfo } from "./transport.types"
 
 export interface ChatTransport {
-  /** Attempt to connect to the WS bridge */
+  /** Attempt to connect to the selected browser chat transport. */
   connect(info: ServerInfo): void
   /** Send an opcode frame with JSON payload */
   send(reqId: ReqId, payload: string): void
