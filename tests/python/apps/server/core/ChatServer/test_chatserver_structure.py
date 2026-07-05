@@ -2198,6 +2198,9 @@ class ChatServerStructureTests(unittest.TestCase):
         relation_source = (DOMAIN_RELATION_DIR / "ChatRelationService.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "CSession.hpp"', relation_source)
         self.assertNotIn("SendRelationCommandResult", relation_source)
+        dialog_list_body = extract_function(relation_source, "RelationCommandResult ChatRelationService::GetDialogList")
+        self.assertIn("ResolveAuthenticatedUid(request_dto.uid, request.session_uid)", dialog_list_body)
+        self.assertNotIn("const int uid = request_dto.uid;", dialog_list_body)
 
         relation_session_header = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.hpp").read_text(encoding="utf-8")
         self.assertIn("ports/IRelationSessionService.hpp", relation_session_header)

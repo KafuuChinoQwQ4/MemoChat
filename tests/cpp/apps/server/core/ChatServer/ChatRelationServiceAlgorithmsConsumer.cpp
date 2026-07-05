@@ -57,6 +57,11 @@ bool ShouldRejectPositiveUid(int uid)
     return memochat::chat::relation_service::modules::ShouldRejectPositiveUid(uid);
 }
 
+int ResolveAuthenticatedUid(int payload_uid, int session_uid)
+{
+    return memochat::chat::relation_service::modules::ResolveAuthenticatedUid(payload_uid, session_uid);
+}
+
 bool ShouldRejectDeleteFriend(int uid, int friend_uid)
 {
     return memochat::chat::relation_service::modules::ShouldRejectDeleteFriend(uid, friend_uid);

@@ -57,6 +57,11 @@ bool ShouldRejectPositiveUid(int uid)
     return uid <= 0;
 }
 
+int ResolveAuthenticatedUid(int payload_uid, int session_uid)
+{
+    return session_uid > 0 ? session_uid : payload_uid;
+}
+
 bool ShouldRejectDeleteFriend(int uid, int friend_uid)
 {
     return uid <= 0 || friend_uid <= 0 || uid == friend_uid;

@@ -539,7 +539,7 @@ RelationCommandResult ChatRelationService::GetDialogList(const RelationCommandRe
     reader.parse(request.payload_json, root);
     const ChatRelationDtos::ChatDialogListRequestDto request_dto =
         ChatRelationDtos::ChatDialogListRequestFromJsonValue(root);
-    const int uid = request_dto.uid;
+    const int uid = relation_service_modules::ResolveAuthenticatedUid(request_dto.uid, request.session_uid);
 
     ChatRelationDtos::ChatDialogListResponseDto response{.error = ErrorCodes::Success, .uid = uid};
 

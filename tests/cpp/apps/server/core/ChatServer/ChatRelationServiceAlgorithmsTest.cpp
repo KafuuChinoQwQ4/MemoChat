@@ -13,6 +13,7 @@ bool ShouldRejectSearchUserRequest(bool has_user_id, bool user_id_empty);
 bool ShouldRejectSearchUserResult(bool found_user, int uid);
 bool ShouldFilterFriendUids(int viewer_uid, bool has_author_uids);
 bool ShouldRejectPositiveUid(int uid);
+int ResolveAuthenticatedUid(int payload_uid, int session_uid);
 bool ShouldRejectDeleteFriend(int uid, int friend_uid);
 bool ShouldRejectDialogType(bool matches_private, bool matches_group);
 bool ShouldRejectPrivateDialogTarget(int peer_uid, bool is_private_friend);
@@ -59,6 +60,10 @@ TEST(ChatRelationServiceAlgorithmsTest, ClassifiesFriendAndUidGuards)
     EXPECT_TRUE(ShouldRejectPositiveUid(0));
     EXPECT_TRUE(ShouldRejectPositiveUid(-5));
     EXPECT_FALSE(ShouldRejectPositiveUid(7));
+
+    EXPECT_EQ(ResolveAuthenticatedUid(12, 0), 12);
+    EXPECT_EQ(ResolveAuthenticatedUid(0, 34), 34);
+    EXPECT_EQ(ResolveAuthenticatedUid(12, 34), 34);
 
     EXPECT_TRUE(ShouldRejectDeleteFriend(0, 10));
     EXPECT_TRUE(ShouldRejectDeleteFriend(10, 0));
