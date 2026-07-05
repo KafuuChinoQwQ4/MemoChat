@@ -8,6 +8,7 @@ REPO_ROOT = repo_root()
 APP_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml/app"
 APP_CONTROLLER_HEADER = APP_DIR / "controller/AppController.h"
 APP_CONTROLLER_CPP = APP_DIR / "controller/AppController.cpp"
+APP_CONTROLLER_MODELS = APP_DIR / "controller/AppControllerModels.cpp"
 APP_CONNECTION_PORT_BINDER = APP_DIR / "composition/AppConnectionPortBinder.cpp"
 APP_POST_LOGIN_PORT_BINDER = APP_DIR / "composition/AppPostLoginBootstrapPortBinder.cpp"
 APP_SESSION_LOGOUT_PORT_BINDER = APP_DIR / "composition/AppSessionLogoutPortBinder.cpp"
@@ -285,6 +286,20 @@ class AppControllerConnectionBoundaryTests(unittest.TestCase):
         self.assertNotIn("missingCredential", policy_source)
         self.assertIn("toInt(3)", login_response)
         self.assertNotIn("toInt(2)", login_response)
+
+    def test_post_login_bootstrap_waits_for_authenticated_chat_transport(self):
+        models = read(APP_CONTROLLER_MODELS)
+        dialogs = extract_cpp_function(models, "void AppController::bootstrapDialogs")
+        groups = extract_cpp_function(models, "void AppController::bootstrapGroups")
+
+        for body, request_token in (
+            (dialogs, "requestDialogList();"),
+            (groups, "refreshGroupList();"),
+        ):
+            with self.subTest(request=request_token):
+                self.assertIn("if (!isChatTransportReady())", body)
+                self.assertIn("return;", body[body.index("if (!isChatTransportReady())") :])
+                self.assertLess(body.index("if (!isChatTransportReady())"), body.index(request_token))
 
 
 if __name__ == "__main__":
