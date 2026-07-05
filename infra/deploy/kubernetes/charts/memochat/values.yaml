@@ -10,6 +10,49 @@ namespaces:
   ops: memochat-ops
   observability: memochat-observability
 
+mesh:
+  enabled: false
+  provider: istio
+  istio:
+    injectionLabel: enabled
+    mtlsMode: STRICT
+    authorizationPolicy:
+      enabled: true
+      allowedNamespaces: []
+    destinationRule:
+      enabled: true
+      host: ""
+
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    name: memochat-vault
+    kind: ClusterSecretStore
+  store:
+    create: false
+    provider: vault
+    vault:
+      server: ""
+      path: secret
+      version: v2
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: memochat-prod
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets
+  remoteRefs:
+    app:
+      key: memochat/prod/app
+    ops:
+      key: memochat/prod/ops
+    etcd:
+      key: memochat/prod/etcd
+    etcdTls:
+      key: memochat/prod/etcd-tls
+
 observability:
   enabled: true
   namespace: memochat-observability
@@ -331,5 +374,12 @@ envoy:
 
 secrets:
   chatAuthSecret: ""
+  authRefreshPepper: ""
   livekitApiKey: ""
   livekitApiSecret: ""
+  minioAccessKey: ""
+  minioSecretKey: ""
+  aiInternalApiKey: ""
+  aiProviderAdminKey: ""
+  r18PicacgApiKey: ""
+  r18PicacgHmacKey: ""

@@ -3,6 +3,10 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ .Values.namespaces.prod }}
+  labels:
+    {{- if and .Values.mesh.enabled (eq .Values.mesh.provider "istio") }}
+    istio-injection: {{ .Values.mesh.istio.injectionLabel | quote }}
+    {{- end }}
 ---
 apiVersion: v1
 kind: Namespace

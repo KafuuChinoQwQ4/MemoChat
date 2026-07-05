@@ -20,6 +20,7 @@ id_rsa*
 id_ed25519*
 *.ppk
 *.pub
+/.claude/worktrees/
 
 # ---- Sensitive files (must ignore *.key/*.pfx, keep only checked-in certs) ----
 /.secrets/
@@ -56,8 +57,6 @@ infra/Memo_ops/runtime/services/GateServerDrogon/server.pfx
 Memo_ops/runtime/
 !Memo_ops/runtime/services/
 !Memo_ops/runtime/services/**/
-!Memo_ops/runtime/services/**/config.ini
-!Memo_ops/runtime/services/MemoOpsQml/memoops-qml.ini
 Memo_ops/runtime/services/*/logs/
 Memo_ops/runtime/services/*/uploads/
 Memo_ops/runtime/pids/
@@ -67,8 +66,6 @@ Memo_ops/runtime/artifacts/
 infra/Memo_ops/runtime/
 !infra/Memo_ops/runtime/services/
 !infra/Memo_ops/runtime/services/**/
-!infra/Memo_ops/runtime/services/**/config.ini
-!infra/Memo_ops/runtime/services/MemoOpsQml/memoops-qml.ini
 infra/Memo_ops/runtime/services/*/logs/
 infra/Memo_ops/runtime/services/*/uploads/
 infra/Memo_ops/runtime/pids/
@@ -160,6 +157,8 @@ CMakeFiles/
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
+compile_commands_modules.json
+/output_*.ts
 Testing/
 CTestTestfile.cmake
 

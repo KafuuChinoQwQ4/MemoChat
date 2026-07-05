@@ -11,7 +11,7 @@
 | [`deploy/`](deploy/_TREE.md) | 部署编排：容器镜像、Helm/k8s 清单、本地 compose 与可观测性配置。 |
 | [`docker/`](docker/_TREE.md) | 通用服务端 Dockerfile。 |
 | [`observability/`](observability/_TREE.md) | 可观测性栈配置（ELK 日志栈 + OTel 指标/链路栈）。 |
-| [`ports/`](ports/_TREE.md) | vcpkg 自定义端口（h2o、nghttp2）。 |
+| [`ports/`](ports/_TREE.md) | vcpkg 自定义端口与 overlay ports（Glaze、libwebsockets、nghttp2、stdexec 等）。 |
 
 ## 文件
 
