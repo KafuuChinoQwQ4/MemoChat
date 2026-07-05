@@ -34,6 +34,15 @@ void ChatSessionRepository::ReleaseDuplicateLoginLock(int uid, const std::string
     RedisMgr::GetInstance()->releaseLock(DuplicateLoginLockKey(uid), lock_identifier);
 }
 
+bool ChatSessionRepository::ConsumeLoginTicketJti(const std::string& jti, int uid, int ttl_sec)
+{
+    if (jti.empty() || uid <= 0 || ttl_sec <= 0)
+    {
+        return false;
+    }
+    return RedisMgr::GetInstance()->SetNxEx("chat_login_ticket_jti:" + jti, std::to_string(uid), ttl_sec);
+}
+
 bool ChatSessionRepository::GetUndeliveredPrivateMessages(int uid,
                                                           int64_t before_ts,
                                                           const std::string& before_msg_id,

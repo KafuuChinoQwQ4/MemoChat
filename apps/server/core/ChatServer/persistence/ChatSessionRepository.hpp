@@ -7,6 +7,7 @@ class ChatSessionRepository : public IChatSessionRepository
 public:
     std::string AcquireDuplicateLoginLock(int uid) override;
     void ReleaseDuplicateLoginLock(int uid, const std::string& lock_identifier) override;
+    bool ConsumeLoginTicketJti(const std::string& jti, int uid, int ttl_sec) override;
     bool GetUndeliveredPrivateMessages(int uid,
                                        int64_t before_ts,
                                        const std::string& before_msg_id,

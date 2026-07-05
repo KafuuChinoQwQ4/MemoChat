@@ -1,30 +1,30 @@
 #include "ChatRelationSessionAdapter.hpp"
 
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 
 namespace
 {
 RelationCommandRequest
-BuildRelationCommandRequest(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+BuildRelationCommandRequest(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data)
 {
     RelationCommandRequest request;
     request.request_msg_id = msg_id;
     request.payload_json = msg_data;
     if (session)
     {
-        request.session_uid = session->GetUserId();
-        request.session_id = session->GetSessionId();
+        request.session_uid = session->userId();
+        request.session_id = session->sessionId();
     }
     return request;
 }
 
-void SendRelationCommandResult(const std::shared_ptr<CSession>& session, const RelationCommandResult& result)
+void SendRelationCommandResult(const std::shared_ptr<IChatSession>& session, const RelationCommandResult& result)
 {
     if (!session)
     {
         return;
     }
-    session->Send(result.payload_json, result.response_msg_id);
+    session->send(result.payload_json, result.response_msg_id);
 }
 } // namespace
 
@@ -33,7 +33,7 @@ ChatRelationSessionAdapter::ChatRelationSessionAdapter(IRelationService* relatio
 {
 }
 
-void ChatRelationSessionAdapter::HandleSearchUser(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleSearchUser(const std::shared_ptr<IChatSession>& session,
                                                   short msg_id,
                                                   const std::string& msg_data)
 {
@@ -45,7 +45,7 @@ void ChatRelationSessionAdapter::HandleSearchUser(const std::shared_ptr<CSession
                               _relation_service->SearchUser(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandleAddFriendApply(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleAddFriendApply(const std::shared_ptr<IChatSession>& session,
                                                       short msg_id,
                                                       const std::string& msg_data)
 {
@@ -58,7 +58,7 @@ void ChatRelationSessionAdapter::HandleAddFriendApply(const std::shared_ptr<CSes
         _relation_service->AddFriendApply(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandleAuthFriendApply(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleAuthFriendApply(const std::shared_ptr<IChatSession>& session,
                                                        short msg_id,
                                                        const std::string& msg_data)
 {
@@ -71,7 +71,7 @@ void ChatRelationSessionAdapter::HandleAuthFriendApply(const std::shared_ptr<CSe
         _relation_service->AuthFriendApply(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandleDeleteFriend(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleDeleteFriend(const std::shared_ptr<IChatSession>& session,
                                                     short msg_id,
                                                     const std::string& msg_data)
 {
@@ -83,7 +83,7 @@ void ChatRelationSessionAdapter::HandleDeleteFriend(const std::shared_ptr<CSessi
                               _relation_service->DeleteFriend(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandleGetDialogList(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleGetDialogList(const std::shared_ptr<IChatSession>& session,
                                                      short msg_id,
                                                      const std::string& msg_data)
 {
@@ -95,7 +95,7 @@ void ChatRelationSessionAdapter::HandleGetDialogList(const std::shared_ptr<CSess
                               _relation_service->GetDialogList(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandleSyncDraft(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandleSyncDraft(const std::shared_ptr<IChatSession>& session,
                                                  short msg_id,
                                                  const std::string& msg_data)
 {
@@ -107,7 +107,7 @@ void ChatRelationSessionAdapter::HandleSyncDraft(const std::shared_ptr<CSession>
                               _relation_service->SyncDraft(BuildRelationCommandRequest(session, msg_id, msg_data)));
 }
 
-void ChatRelationSessionAdapter::HandlePinDialog(const std::shared_ptr<CSession>& session,
+void ChatRelationSessionAdapter::HandlePinDialog(const std::shared_ptr<IChatSession>& session,
                                                  short msg_id,
                                                  const std::string& msg_data)
 {

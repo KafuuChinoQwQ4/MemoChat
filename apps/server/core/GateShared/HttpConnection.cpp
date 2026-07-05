@@ -38,6 +38,25 @@ std::string TrimAsciiLocal(std::string_view value)
     return std::string(value);
 }
 
+std::string SanitizeHttpHeaderValueLocal(std::string_view value)
+{
+    std::string sanitized;
+    sanitized.reserve(value.size());
+    for (const unsigned char ch : value)
+    {
+        if (ch == '\r' || ch == '\n')
+        {
+            continue;
+        }
+        if ((ch < 0x20 && ch != '\t') || ch == 0x7f)
+        {
+            continue;
+        }
+        sanitized.push_back(static_cast<char>(ch));
+    }
+    return TrimAsciiLocal(sanitized);
+}
+
 bool OriginEqualsLocal(std::string_view lhs, std::string_view rhs)
 {
     return TrimAsciiLocal(lhs) == TrimAsciiLocal(rhs);
@@ -86,7 +105,8 @@ std::string AllowedCorsOriginForRequestLocal(const http::request<http::dynamic_b
     {
         return {};
     }
-    const std::string_view value(origin->value().data(), origin->value().size());
+    const std::string value =
+        SanitizeHttpHeaderValueLocal(std::string_view(origin->value().data(), origin->value().size()));
     if (!IsCorsOriginAllowedLocal(value))
     {
         return {};
@@ -218,7 +238,8 @@ void HttpConnection::Start()
                 auto trace_it = self->_request.find("X-Trace-Id");
                 if (trace_it != self->_request.end())
                 {
-                    self->_trace_id = std::string(trace_it->value().data(), trace_it->value().size());
+                    self->_trace_id = SanitizeHttpHeaderValueLocal(
+                        std::string_view(trace_it->value().data(), trace_it->value().size()));
                 }
                 if (self->_trace_id.empty())
                 {
@@ -227,7 +248,8 @@ void HttpConnection::Start()
                 auto request_it = self->_request.find("X-Request-Id");
                 if (request_it != self->_request.end())
                 {
-                    self->_request_id = std::string(request_it->value().data(), request_it->value().size());
+                    self->_request_id = SanitizeHttpHeaderValueLocal(
+                        std::string_view(request_it->value().data(), request_it->value().size()));
                 }
                 if (self->_request_id.empty())
                 {
@@ -267,24 +289,14 @@ unsigned char ToHex(unsigned char x)
 
 unsigned char FromHex(unsigned char x)
 {
-    unsigned char y;
     if (x >= 'A' && x <= 'Z')
-    {
-        y = x - 'A' + 10;
-    }
-    else if (x >= 'a' && x <= 'z')
-    {
-        y = x - 'a' + 10;
-    }
-    else if (x >= '0' && x <= '9')
-    {
-        y = x - '0';
-    }
-    else
-    {
-        assert(0);
-    }
-    return y;
+        return x - 'A' + 10;
+    if (x >= 'a' && x <= 'z')
+        return x - 'a' + 10;
+    if (x >= '0' && x <= '9')
+        return x - '0';
+    // Invalid hex digit — treat as 0 rather than UB.
+    return 0;
 }
 
 std::string UrlEncode(const std::string& str)
@@ -323,10 +335,17 @@ std::string UrlDecode(const std::string& str)
         }
         else if (str[i] == '%')
         {
-            assert(i + 2 < length);
-            unsigned char high = FromHex((unsigned char) str[++i]);
-            unsigned char low = FromHex((unsigned char) str[++i]);
-            strTemp += high * 16 + low;
+            // Bounds-check: require at least two chars after '%'.
+            // A malformed trailing '%' or '%X' is silently dropped rather than
+            // causing an out-of-bounds read (which is UB in release builds).
+            if (i + 2 >= length)
+            {
+                break;
+            }
+            const unsigned char high = FromHex(static_cast<unsigned char>(str[i + 1]));
+            const unsigned char low = FromHex(static_cast<unsigned char>(str[i + 2]));
+            strTemp += static_cast<char>(high * 16 + low);
+            i += 2;
         }
         else
         {
@@ -510,7 +529,9 @@ void HttpConnection::CheckDeadline()
 {
     auto self = shared_from_this();
 
-    deadline_.expires_after(std::chrono::seconds(600));
+    // 30 s deadline — prevents slow-loris resource exhaustion.
+    // 600 s was the previous value; even a simple HTTP request completes within seconds.
+    deadline_.expires_after(std::chrono::seconds(30));
     deadline_.async_wait(
         [self](beast::error_code ec)
         {

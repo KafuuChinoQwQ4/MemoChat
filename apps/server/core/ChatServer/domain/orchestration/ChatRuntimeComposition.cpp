@@ -3,11 +3,10 @@
 #include "AsyncEventDispatcher.hpp"
 #include "ChatDeliveryRuntime.hpp"
 #include "ChatMessageRepository.hpp"
-#include "MongoMgr.hpp"
-#include "PostgresMgr.hpp"
 #include "ChatRelationRepository.hpp"
 #include "ChatRelationSessionAdapter.hpp"
 #include "ChatRuntime.hpp"
+#include "ChatOutboxRepairScheduler.hpp"
 #include "ChatSessionConfig.hpp"
 #include "ChatSessionRepository.hpp"
 #include "ChatSessionService.hpp"
@@ -44,8 +43,8 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
     _relation_query_service_config = std::make_unique<RelationQueryServiceConfig>();
     _relation_service_config = std::make_unique<RelationServiceConfig>();
     _message_service_config = std::make_unique<MessageServiceConfig>();
-    _message_repository =
-        std::make_unique<ChatMessageRepository>(*PostgresMgr::GetInstance(), *MongoMgr::GetInstance());
+    _message_repository = std::make_unique<ChatMessageRepository>();
+    _outbox_repair_scheduler = std::make_unique<ChatOutboxRepairScheduler>();
 
     const auto task_bus_backend = memochat::chatruntime::TaskBusBackend();
     const bool rabbitmq_available = RabbitMqTaskBus::BuildAvailable();
@@ -145,7 +144,7 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
             return DeliveryRuntimeStopRequested();
         },
         _message_delivery_service.get(),
-        &_logic);
+        _outbox_repair_scheduler.get());
     _message_delivery_service->SetTaskPublisher(_task_dispatcher.get());
 
     _private_message_service = CreatePrivateMessageService(*_message_service_config,

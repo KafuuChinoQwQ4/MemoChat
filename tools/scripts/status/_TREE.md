@@ -13,7 +13,6 @@
 | `ensure_minio_buckets.sh` | 确保 MinIO 所需 bucket 存在 |
 | `migrate_phase2_account_split.sh` | Phase2 账号库拆分迁移 |
 | `migrate_phase2_db_split.sh` | Phase2 数据库拆分迁移 |
-| `run-linux-full-stack.sh` | 启动 Linux 全栈服务 |
 | `run-service-console.ps1` | 以控制台方式运行单个服务 |
 | `runtime_topology.sh` | 打印运行时服务拓扑 |
 | `smoke_aigateway_runtime.sh` | AI Gateway 运行时冒烟 |
@@ -24,7 +23,7 @@
 | `smoke_relation_query_grpc_runtime.sh` | Relation 查询服务 gRPC 运行时冒烟 |
 | `smoke_relation_service_grpc_runtime.sh` | Relation 服务 gRPC 运行时冒烟 |
 | `start-all-services.bat` | 启动全部服务（批处理） |
-| `start-all-services.sh` | 启动全部服务（shell） |
+| `start-all-services.sh` | 启动全部服务（shell，默认部署当前 build 并透传 transport 门禁） |
 | `start-local-k8s.ps1` | 启动本地 k8s 集群 |
 | `start-memochat-qml-wslg.sh` | 在 WSLg 下启动 MemoChat QML 客户端 |
 | `status-local-k8s.ps1` | 查看本地 k8s 状态 |

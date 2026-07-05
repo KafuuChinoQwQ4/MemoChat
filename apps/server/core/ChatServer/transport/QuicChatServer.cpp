@@ -1,5 +1,6 @@
 #include "QuicChatServer.hpp"
 
+#include "ChatFrameCodec.hpp"
 #include "ConfigMgr.hpp"
 #include "MsgNode.hpp"
 #include "QuicSession.hpp"
@@ -40,25 +41,10 @@ std::string ReadConfigOrDefault(const char* section, const char* key, const char
 }
 
 #if MEMOCHAT_ENABLE_MSQUIC
-// Optimized frame encoder: pre-allocates vector capacity to reduce reallocations.
-// Frame format: [msg_id(2B big-endian)][payload_len(2B big-endian)][payload]
-// This matches the TCP protocol for cross-transport compatibility.
 std::vector<uint8_t> EncodeFrame(short msgid, const std::string& payload)
 {
-    std::vector<uint8_t> frame;
-    // Pre-reserve to avoid reallocations (major perf gain for high-throughput paths)
-    frame.reserve(HEAD_TOTAL_LEN + payload.size());
-    frame.resize(HEAD_TOTAL_LEN);
-    const short network_id = boost::asio::detail::socket_ops::host_to_network_short(msgid);
-    const short network_len =
-        boost::asio::detail::socket_ops::host_to_network_short(static_cast<short>(payload.size()));
-    std::memcpy(frame.data(), &network_id, HEAD_ID_LEN);
-    std::memcpy(frame.data() + HEAD_ID_LEN, &network_len, HEAD_DATA_LEN);
-    if (!payload.empty())
-    {
-        frame.insert(frame.end(), payload.begin(), payload.end());
-    }
-    return frame;
+    auto frame = memochat::chatserver::transport::ChatFrameCodec::Encode(msgid, payload);
+    return frame.value_or(std::vector<uint8_t>{});
 }
 #endif
 } // namespace
@@ -74,25 +60,43 @@ struct QuicChatServer::Impl
 
     struct StreamContext;
 
+    struct OwnerLifetime
+    {
+        std::mutex mutex;
+        QuicChatServer* owner = nullptr;
+        bool alive = false;
+    };
+
     struct ConnectionContext
     {
-        QuicChatServer* owner = nullptr;
         HQUIC handle = nullptr;
         HQUIC stream = nullptr;
         std::shared_ptr<QuicSession> session;
-        std::unique_ptr<StreamContext> stream_context;
+        std::shared_ptr<StreamContext> stream_context;
         const QUIC_API_TABLE* api = nullptr;
+        std::weak_ptr<OwnerLifetime> owner_lifetime;
+        std::atomic_bool closing = false;
     };
 
     struct StreamContext
     {
-        ConnectionContext* connection = nullptr;
+        std::weak_ptr<ConnectionContext> connection;
         std::vector<uint8_t> recv_buffer;
         bool recv_pending = false;
         short msg_id = 0;
         short msg_len = 0;
         bool send_ready = false;
         std::vector<std::pair<short, std::string>> pending_sends;
+    };
+
+    struct ConnectionCallbackContext
+    {
+        std::shared_ptr<ConnectionContext> connection;
+    };
+
+    struct StreamCallbackContext
+    {
+        std::shared_ptr<StreamContext> stream;
     };
 
     const QUIC_API_TABLE* api = nullptr;
@@ -103,16 +107,36 @@ struct QuicChatServer::Impl
     std::string alpn = kDefaultAlpn;
     std::string cert_file;
     std::string key_file;
+    std::shared_ptr<OwnerLifetime> owner_lifetime = std::make_shared<OwnerLifetime>();
 
     static QUIC_STATUS QUIC_API ListenerCallback(HQUIC listener, void* context, QUIC_LISTENER_EVENT* event);
     static QUIC_STATUS QUIC_API ConnectionCallback(HQUIC connection, void* context, QUIC_CONNECTION_EVENT* event);
     static QUIC_STATUS QUIC_API StreamCallback(HQUIC stream, void* context, QUIC_STREAM_EVENT* event);
 
+    void attachOwner(QuicChatServer* owner);
+    void detachOwner();
     bool ensureInitialized(QuicChatServer* owner, std::string* error);
     void shutdownHandles();
-    static void closeConnectionHandles(Impl* impl, ConnectionContext* ctx);
+    static void closeConnectionHandles(const std::shared_ptr<ConnectionContext>& ctx);
     static void dispatchFrames(StreamContext* stream_context);
     static void flushPendingSends(StreamContext* stream_context);
+
+    template <typename Callback>
+    static bool withOwner(const std::weak_ptr<OwnerLifetime>& owner_lifetime, Callback&& callback)
+    {
+        auto lifetime = owner_lifetime.lock();
+        if (!lifetime)
+        {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(lifetime->mutex);
+        if (!lifetime->alive || lifetime->owner == nullptr)
+        {
+            return false;
+        }
+        callback(*lifetime->owner);
+        return true;
+    }
 };
 #else
 struct QuicChatServer::Impl
@@ -121,6 +145,24 @@ struct QuicChatServer::Impl
     bool ensureInitialized(QuicChatServer* owner, std::string* error);
     void shutdownHandles();
 };
+#endif
+
+#if MEMOCHAT_ENABLE_MSQUIC
+void QuicChatServer::Impl::attachOwner(QuicChatServer* owner)
+{
+    std::lock_guard<std::mutex> lock(owner_lifetime->mutex);
+    owner_lifetime->owner = owner;
+    owner_lifetime->alive = owner != nullptr;
+}
+#endif
+
+#if MEMOCHAT_ENABLE_MSQUIC
+void QuicChatServer::Impl::detachOwner()
+{
+    std::lock_guard<std::mutex> lock(owner_lifetime->mutex);
+    owner_lifetime->alive = false;
+    owner_lifetime->owner = nullptr;
+}
 #endif
 
 #if MEMOCHAT_ENABLE_MSQUIC
@@ -365,20 +407,20 @@ void QuicChatServer::Impl::shutdownHandles()
 #endif
 
 #if MEMOCHAT_ENABLE_MSQUIC
-void QuicChatServer::Impl::closeConnectionHandles(Impl* impl, ConnectionContext* ctx)
+void QuicChatServer::Impl::closeConnectionHandles(const std::shared_ptr<ConnectionContext>& ctx)
 {
-    if (ctx == nullptr || impl == nullptr || impl->api == nullptr)
+    if (ctx == nullptr || ctx->api == nullptr)
     {
         return;
     }
     if (ctx->stream != nullptr)
     {
-        impl->api->StreamClose(ctx->stream);
+        ctx->api->StreamClose(ctx->stream);
         ctx->stream = nullptr;
     }
     if (ctx->handle != nullptr)
     {
-        impl->api->ConnectionClose(ctx->handle);
+        ctx->api->ConnectionClose(ctx->handle);
         ctx->handle = nullptr;
     }
 }
@@ -387,7 +429,13 @@ void QuicChatServer::Impl::closeConnectionHandles(Impl* impl, ConnectionContext*
 #if MEMOCHAT_ENABLE_MSQUIC
 void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
 {
-    if (stream_context == nullptr || stream_context->connection == nullptr || !stream_context->connection->session)
+    if (stream_context == nullptr)
+    {
+        return;
+    }
+
+    auto connection = stream_context->connection.lock();
+    if (connection == nullptr || !connection->session)
     {
         return;
     }
@@ -411,7 +459,7 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
 
             if (msg_len < 0 || msg_len > MAX_LENGTH)
             {
-                stream_context->connection->session->Close();
+                connection->session->Close();
                 return;
             }
 
@@ -421,7 +469,7 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
             stream_context->msg_len = msg_len;
         }
 
-        if (static_cast<short>(buffer.size()) < stream_context->msg_len)
+        if (buffer.size() < static_cast<std::size_t>(stream_context->msg_len))
         {
             return;
         }
@@ -429,7 +477,7 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
         std::string payload(buffer.begin(), buffer.begin() + stream_context->msg_len);
         buffer.erase(buffer.begin(), buffer.begin() + stream_context->msg_len);
         stream_context->recv_pending = false;
-        stream_context->connection->session->HandleInboundMessage(stream_context->msg_id, payload);
+        connection->session->HandleInboundMessage(stream_context->msg_id, payload);
     }
 }
 #endif
@@ -437,9 +485,14 @@ void QuicChatServer::Impl::dispatchFrames(StreamContext* stream_context)
 #if MEMOCHAT_ENABLE_MSQUIC
 void QuicChatServer::Impl::flushPendingSends(StreamContext* stream_context)
 {
-    if (stream_context == nullptr || stream_context->connection == nullptr ||
-        stream_context->connection->api == nullptr || stream_context->connection->stream == nullptr ||
-        !stream_context->send_ready)
+    if (stream_context == nullptr || !stream_context->send_ready)
+    {
+        return;
+    }
+
+    auto connection = stream_context->connection.lock();
+    if (connection == nullptr || connection->api == nullptr || connection->stream == nullptr ||
+        connection->closing.load())
     {
         return;
     }
@@ -450,17 +503,14 @@ void QuicChatServer::Impl::flushPendingSends(StreamContext* stream_context)
         send_ctx->bytes = EncodeFrame(msgid, payload);
         send_ctx->buffer.Buffer = send_ctx->bytes.data();
         send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
-        const QUIC_STATUS send_status = stream_context->connection->api->StreamSend(stream_context->connection->stream,
-                                                                                    &send_ctx->buffer,
-                                                                                    1,
-                                                                                    QUIC_SEND_FLAG_NONE,
-                                                                                    send_ctx);
+        const QUIC_STATUS send_status =
+            connection->api->StreamSend(connection->stream, &send_ctx->buffer, 1, QUIC_SEND_FLAG_NONE, send_ctx);
         if (QUIC_FAILED(send_status))
         {
             delete send_ctx;
-            if (stream_context->connection->session)
+            if (connection->session)
             {
-                stream_context->connection->session->Close();
+                connection->session->Close();
             }
             return;
         }
@@ -472,8 +522,8 @@ void QuicChatServer::Impl::flushPendingSends(StreamContext* stream_context)
 #if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context, QUIC_LISTENER_EVENT* event)
 {
-    auto* owner = static_cast<QuicChatServer*>(context);
-    if (owner == nullptr || owner->_impl == nullptr || event == nullptr)
+    auto* lifetime = static_cast<OwnerLifetime*>(context);
+    if (lifetime == nullptr || event == nullptr)
     {
         return QUIC_STATUS_INVALID_STATE;
     }
@@ -483,29 +533,39 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
         return QUIC_STATUS_SUCCESS;
     }
 
+    std::lock_guard<std::mutex> owner_lock(lifetime->mutex);
+    auto* owner = lifetime->owner;
+    if (!lifetime->alive || owner == nullptr || owner->_impl == nullptr)
+    {
+        return QUIC_STATUS_INVALID_STATE;
+    }
+
     auto* impl = owner->_impl.get();
-    auto* connection_context = new ConnectionContext();
-    connection_context->owner = owner;
+    auto connection_context = std::make_shared<ConnectionContext>();
     connection_context->handle = event->NEW_CONNECTION.Connection;
     connection_context->api = impl->api;
+    connection_context->owner_lifetime = impl->owner_lifetime;
+    std::weak_ptr<ConnectionContext> weak_connection = connection_context;
     connection_context->session = std::make_shared<QuicSession>(
         owner->_io_context,
-        [connection_context](const std::string& payload, short msgid) -> bool
+        [weak_connection](const std::string& payload, short msgid) -> bool
         {
-            if (connection_context->stream == nullptr || connection_context->api == nullptr)
+            auto connection = weak_connection.lock();
+            if (connection == nullptr || connection->closing.load() || connection->stream == nullptr ||
+                connection->api == nullptr)
             {
                 return false;
             }
-            auto* ctx = connection_context->stream_context.get();
-            if (ctx == nullptr)
+            auto stream_context = connection->stream_context;
+            if (stream_context == nullptr)
             {
                 return false;
             }
 
             QUIC_SEND_FLAGS flags = QUIC_SEND_FLAG_NONE;
-            if (!ctx->send_ready)
+            if (!stream_context->send_ready)
             {
-                ctx->pending_sends.emplace_back(msgid, payload);
+                stream_context->pending_sends.emplace_back(msgid, payload);
                 return true;
             }
 
@@ -515,7 +575,7 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
             send_ctx->buffer.Length = static_cast<uint32_t>(send_ctx->bytes.size());
 
             const QUIC_STATUS send_status =
-                connection_context->api->StreamSend(connection_context->stream, &send_ctx->buffer, 1, flags, send_ctx);
+                connection->api->StreamSend(connection->stream, &send_ctx->buffer, 1, flags, send_ctx);
             if (QUIC_FAILED(send_status))
             {
                 delete send_ctx;
@@ -523,26 +583,31 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
             }
             return true;
         },
-        [owner](const std::string& session_id)
+        [owner_lifetime = connection_context->owner_lifetime](const std::string& session_id)
         {
-            owner->cleanupClosedSession(session_id);
+            Impl::withOwner(owner_lifetime,
+                            [&session_id](QuicChatServer& live_owner)
+                            {
+                                live_owner.cleanupClosedSession(session_id);
+                            });
         });
 
     {
         std::lock_guard<std::mutex> lock(owner->_session_mutex);
-        owner->_sessions.emplace(connection_context->session->GetSessionId(), connection_context->session);
+        owner->_sessions.emplace(connection_context->session->sessionId(), connection_context->session);
     }
 
+    auto* callback_context = new ConnectionCallbackContext{connection_context};
     impl->api->SetCallbackHandler(event->NEW_CONNECTION.Connection,
                                   reinterpret_cast<void*>(ConnectionCallback),
-                                  connection_context);
+                                  callback_context);
 
     const QUIC_STATUS status =
         impl->api->ConnectionSetConfiguration(event->NEW_CONNECTION.Connection, impl->configuration);
     if (QUIC_FAILED(status))
     {
-        owner->cleanupClosedSession(connection_context->session->GetSessionId());
-        delete connection_context;
+        owner->cleanupClosedSession(connection_context->session->sessionId());
+        connection_context->closing = true;
         return status;
     }
 
@@ -554,45 +619,69 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
 QUIC_STATUS
 QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, void* context, QUIC_CONNECTION_EVENT* event)
 {
-    auto* ctx = static_cast<ConnectionContext*>(context);
-    if (ctx == nullptr || ctx->owner == nullptr || ctx->owner->_impl == nullptr || event == nullptr)
+    auto* callback_context = static_cast<ConnectionCallbackContext*>(context);
+    if (callback_context == nullptr || callback_context->connection == nullptr || event == nullptr)
     {
         return QUIC_STATUS_INVALID_STATE;
     }
 
-    auto* impl = ctx->owner->_impl.get();
+    auto ctx = callback_context->connection;
+    if (ctx->handle == nullptr)
+    {
+        ctx->handle = connection;
+    }
+
     switch (event->Type)
     {
         case QUIC_CONNECTION_EVENT_CONNECTED:
             memolog::LogInfo("quic.connection.connected",
                              "ChatServer QUIC connection established",
-                             {{"session_id", ctx->session ? ctx->session->GetSessionId() : ""}});
+                             {{"session_id", ctx->session ? ctx->session->sessionId() : ""}});
             return QUIC_STATUS_SUCCESS;
         case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:
+        {
             ctx->stream = event->PEER_STREAM_STARTED.Stream;
-            ctx->stream_context = std::make_unique<StreamContext>();
+            ctx->stream_context = std::make_shared<StreamContext>();
             ctx->stream_context->connection = ctx;
             ctx->stream_context->send_ready = true;
-            impl->api->SetCallbackHandler(ctx->stream,
-                                          reinterpret_cast<void*>(StreamCallback),
-                                          ctx->stream_context.get());
-            impl->api->StreamStart(ctx->stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
+            auto* stream_callback_context = new StreamCallbackContext{ctx->stream_context};
+            ctx->api->SetCallbackHandler(ctx->stream, reinterpret_cast<void*>(StreamCallback), stream_callback_context);
+            const QUIC_STATUS stream_status = ctx->api->StreamStart(ctx->stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
+            if (QUIC_FAILED(stream_status))
+            {
+                delete stream_callback_context;
+                ctx->stream = nullptr;
+                ctx->stream_context.reset();
+                if (ctx->session)
+                {
+                    ctx->session->Close();
+                }
+                return stream_status;
+            }
             Impl::flushPendingSends(ctx->stream_context.get());
             return QUIC_STATUS_SUCCESS;
+        }
         case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
         case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
+            ctx->closing = true;
             if (ctx->session)
             {
                 ctx->session->Close();
             }
             return QUIC_STATUS_SUCCESS;
         case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
+            ctx->closing = true;
             if (ctx->session)
             {
-                ctx->owner->cleanupClosedSession(ctx->session->GetSessionId());
+                const auto session_id = ctx->session->sessionId();
+                Impl::withOwner(ctx->owner_lifetime,
+                                [&session_id](QuicChatServer& live_owner)
+                                {
+                                    live_owner.cleanupClosedSession(session_id);
+                                });
             }
-            closeConnectionHandles(impl, ctx);
-            delete ctx;
+            closeConnectionHandles(ctx);
+            delete callback_context;
             return QUIC_STATUS_SUCCESS;
         default:
             return QUIC_STATUS_SUCCESS;
@@ -603,17 +692,18 @@ QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, void* contex
 #if MEMOCHAT_ENABLE_MSQUIC
 QUIC_STATUS QUIC_API QuicChatServer::Impl::StreamCallback(HQUIC stream, void* context, QUIC_STREAM_EVENT* event)
 {
-    auto* stream_context = static_cast<StreamContext*>(context);
-    if (stream_context == nullptr || event == nullptr)
+    auto* callback_context = static_cast<StreamCallbackContext*>(context);
+    if (callback_context == nullptr || callback_context->stream == nullptr || event == nullptr)
     {
         return QUIC_STATUS_INVALID_STATE;
     }
 
+    auto stream_context = callback_context->stream;
     switch (event->Type)
     {
         case QUIC_STREAM_EVENT_START_COMPLETE:
             stream_context->send_ready = true;
-            flushPendingSends(stream_context);
+            flushPendingSends(stream_context.get());
             return QUIC_STATUS_SUCCESS;
         case QUIC_STREAM_EVENT_RECEIVE:
             for (uint32_t i = 0; i < event->RECEIVE.BufferCount; ++i)
@@ -623,18 +713,30 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::StreamCallback(HQUIC stream, void* co
                                                    one.Buffer,
                                                    one.Buffer + one.Length);
             }
-            dispatchFrames(stream_context);
+            dispatchFrames(stream_context.get());
             return QUIC_STATUS_SUCCESS;
         case QUIC_STREAM_EVENT_SEND_COMPLETE:
             delete static_cast<SendContext*>(event->SEND_COMPLETE.ClientContext);
             return QUIC_STATUS_SUCCESS;
         case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
         case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
-        case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
-            if (stream_context->connection != nullptr && stream_context->connection->session)
+            if (auto connection = stream_context->connection.lock(); connection != nullptr && connection->session)
             {
-                stream_context->connection->session->Close();
+                connection->session->Close();
             }
+            return QUIC_STATUS_SUCCESS;
+        case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
+            if (auto connection = stream_context->connection.lock(); connection != nullptr)
+            {
+                connection->stream = nullptr;
+                if (connection->session)
+                {
+                    connection->session->Close();
+                }
+                connection->stream_context.reset();
+            }
+            (void) stream;
+            delete callback_context;
             return QUIC_STATUS_SUCCESS;
         default:
             return QUIC_STATUS_SUCCESS;
@@ -647,11 +749,18 @@ QuicChatServer::QuicChatServer(boost::asio::io_context& io_context)
 {
 #if MEMOCHAT_ENABLE_MSQUIC
     _impl = std::make_unique<Impl>();
+    _impl->attachOwner(this);
 #endif
 }
 
 QuicChatServer::~QuicChatServer()
 {
+#if MEMOCHAT_ENABLE_MSQUIC
+    if (_impl != nullptr)
+    {
+        _impl->detachOwner();
+    }
+#endif
     Stop();
 #if MEMOCHAT_ENABLE_MSQUIC
     _impl.reset();
@@ -675,6 +784,7 @@ bool QuicChatServer::Start(const std::string& host, const std::string& port, std
     if (_impl == nullptr)
     {
         _impl = std::make_unique<Impl>();
+        _impl->attachOwner(this);
     }
     if (!_impl->ensureInitialized(this, error))
     {
@@ -684,7 +794,10 @@ bool QuicChatServer::Start(const std::string& host, const std::string& port, std
         return false;
     }
 
-    QUIC_STATUS status = _impl->api->ListenerOpen(_impl->registration, &Impl::ListenerCallback, this, &_impl->listener);
+    QUIC_STATUS status = _impl->api->ListenerOpen(_impl->registration,
+                                                  &Impl::ListenerCallback,
+                                                  _impl->owner_lifetime.get(),
+                                                  &_impl->listener);
     if (QUIC_FAILED(status))
     {
         if (error)

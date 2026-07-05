@@ -2896,8 +2896,8 @@ DEPFILE
         self.assertIn("redisContext* getRawConnection()", redis_mgr_header)
         self.assertIn("void returnConnection(redisContext* ctx)", redis_mgr_header)
         self.assertNotIn('#include "CSession.hpp"', consumer)
-        self.assertIn('#include "CSession.hpp"', session_support)
-        self.assertIn("class CSession;", session_support_header)
+        self.assertIn('#include "IChatSession.hpp"', session_support)
+        self.assertIn("class IChatSession;", session_support_header)
         self.assertIsNone(
             re.search(r"^\s*import\s+memochat\.chat\.online_route_store_algorithms\s*;", session_support, flags=re.M)
         )

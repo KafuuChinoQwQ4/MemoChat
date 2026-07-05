@@ -5,6 +5,7 @@
 #include <boost/asio.hpp>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 
 using boost::asio::ip::tcp;
@@ -30,13 +31,25 @@ struct VarintCodec
     {
         uint32_t v = 0;
         uint32_t shift = 0;
-        while (in < end)
+        while (in < end && shift < 32)
         {
             uint8_t b = *in++;
-            v |= (b & 0x7F) << shift;
+            if (shift == 28 && (b & 0xF0) != 0)
+            {
+                in = end;
+                return std::numeric_limits<uint32_t>::max();
+            }
+            v |= (static_cast<uint32_t>(b & 0x7F)) << shift;
             if ((b & 0x80) == 0)
+            {
                 break;
+            }
             shift += 7;
+        }
+        if (shift >= 32)
+        {
+            in = end;
+            return std::numeric_limits<uint32_t>::max();
         }
         return v;
     }
@@ -53,7 +66,7 @@ struct FrameCodec
     // Returns encoded size (header + payload). header is 1-3 bytes.
     static inline size_t encodedSize(size_t payload_len, size_t msg_id)
     {
-        uint8_t scratch[6];
+        uint8_t scratch[10];
         uint32_t len_bytes = VarintCodec::encode(static_cast<uint32_t>(payload_len), scratch);
         uint32_t id_bytes = VarintCodec::encode(static_cast<uint32_t>(msg_id), scratch + len_bytes);
         return 1 + len_bytes + id_bytes + payload_len;

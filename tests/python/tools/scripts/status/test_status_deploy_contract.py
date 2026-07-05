@@ -15,7 +15,6 @@ RELATION_SERVICE_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_rel
 MESSAGE_SERVICE_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_message_service_grpc_runtime.sh"
 DEFAULT_GRPC_SMOKE_SCRIPT = REPO_ROOT / "tools/scripts/status/smoke_chatserver_default_grpc_runtime.sh"
 START_QML_SCRIPT = REPO_ROOT / "tools/scripts/status/start-memochat-qml-wslg.sh"
-RUN_FULL_STACK_SCRIPT = REPO_ROOT / "tools/scripts/status/run-linux-full-stack.sh"
 GPT_SOVITS_VOICE_SCRIPT = REPO_ROOT / "tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh"
 LOCAL_COMPOSE = REPO_ROOT / "infra/deploy/local/docker-compose.yml"
 AI_DOCKER_COMPOSE = REPO_ROOT / "apps/server/core/AIOrchestrator/docker-compose.yml"
@@ -192,45 +191,26 @@ class StatusDeployContractTests(unittest.TestCase):
             launcher.rindex("maybe_fallback_wslg_rendering"),
         )
 
-    def test_linux_full_stack_launcher_chains_build_deploy_backend_and_client(self):
-        source = read(RUN_FULL_STACK_SCRIPT)
+    def test_linux_start_services_deploys_runtime_when_auto_deploy_enabled(self):
+        source = read(START_SERVICES_SCRIPT)
 
         for token in (
             'source "$ENV_FILE"',
-            'cmake --preset "$PRESET"',
-            'cmake --build --preset "$PRESET" --parallel "$BUILD_PARALLEL"',
-            'docker compose -f "$AI_COMPOSE_FILE" up -d --build',
-            '"${SCRIPT_DIR}/deploy_services.sh" --build-bin "$BUILD_BIN"',
-            '"${SCRIPT_DIR}/start-all-services.sh" --no-deploy',
-            '"${SCRIPT_DIR}/start-memochat-qml-wslg.sh" --exe "$CLIENT_EXE"',
-            'CLIENT_EXE="$(project_path "$CLIENT_EXE")"',
-            "linux-full-gcc16",
-            "build-linux-full-gcc16",
-            "apps/server/core/AIOrchestrator/docker-compose.yml",
-            "MEMOCHAT_BUILD_PARALLEL",
-            "MEMOCHAT_REQUIRE_GPT_SOVITS",
-            "MEMOCHAT_AI_BASE_URL",
-            "MEMOCHAT_AI_VOICE_WAIT_SECONDS",
-            "ensure_ai_voice_ready",
-            "/pet/diagnostics/voice?probe_endpoint=true",
-            "--skip-build",
-            "--skip-ai-build",
-            "--skip-deploy",
-            "--skip-backend",
-            "--no-client",
-            "--client-diagnose",
+            '--no-deploy',
+            'if [[ "$AUTO_DEPLOY" -ne 0 ]]; then',
+            '"${SCRIPT_DIR}/deploy_services.sh"',
+            'Run ${SCRIPT_DIR}/deploy_services.sh first or omit --no-deploy.',
         ):
             self.assertIn(token, source)
 
         self.assertIn("set -Eeuo pipefail", source)
-        self.assertIn('exec "${client_args[@]}"', source)
+        self.assertLess(source.index('if [[ "$AUTO_DEPLOY" -ne 0 ]]; then'), source.index("local missing=0"))
 
     def test_linux_runtime_scripts_generate_and_share_ai_internal_key_for_local_launches(self):
         start = read(START_SERVICES_SCRIPT)
-        full_stack = read(RUN_FULL_STACK_SCRIPT)
         ai_compose = read(AI_DOCKER_COMPOSE)
 
-        for label, source in (("start", start), ("full_stack", full_stack)):
+        for label, source in (("start", start),):
             with self.subTest(script=label):
                 self.assertIn("ensure_ai_internal_api_key()", source)
                 self.assertIn('if [[ -n "${MEMOCHAT_AI_INTERNAL_API_KEY:-}" ]]', source)
@@ -241,15 +221,7 @@ class StatusDeployContractTests(unittest.TestCase):
 
         self.assertIn('MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}"', start)
         self.assertIn("ensure_ai_internal_api_key\nexport_minio_runtime_credentials", start)
-        self.assertIn(
-            'AI_VOICE_WAIT_SECONDS="${MEMOCHAT_AI_VOICE_WAIT_SECONDS:-$AI_VOICE_WAIT_SECONDS}"\nensure_ai_internal_api_key',
-            full_stack,
-        )
         self.assertLess(start.index("ensure_ai_internal_api_key"), start.index("export_minio_runtime_credentials"))
-        self.assertLess(
-            full_stack.index("ensure_ai_internal_api_key"),
-            full_stack.index('docker compose -f "$AI_COMPOSE_FILE" up -d --build'),
-        )
         self.assertIn("MEMOCHAT_AI_INTERNAL_API_KEY=${MEMOCHAT_AI_INTERNAL_API_KEY:-}", ai_compose)
 
     def test_linux_local_startup_allows_documented_dev_chat_auth_secret(self):
@@ -869,6 +841,18 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn('for row in "${MEMOCHAT_STOP_PORT_GROUP_ORDER[@]}"', stop)
         self.assertIn('stop_group_tcp_ports "$label" "$group"', stop)
         self.assertIn('stop_group_udp_ports "$label" "$group"', stop)
+
+    def test_webtransport_startup_uses_short_lived_generated_certificate(self):
+        start = read(START_SERVICES_SCRIPT)
+
+        self.assertIn('if is_truthy "${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}"; then', start)
+        self.assertIn("cert_days=13", start)
+        self.assertIn("force_regenerate=1", start)
+        self.assertIn("openssl ecparam -name prime256v1 -genkey -noout", start)
+        self.assertIn("openssl req -x509 -new -key", start)
+        self.assertIn("-sha256", start)
+        self.assertIn('-days "$cert_days"', start)
+        self.assertNotIn("-days 3650", start)
 
     def test_linux_runtime_topology_manifest_owns_start_and_stop_order(self):
         start = read(START_SERVICES_SCRIPT)

@@ -84,6 +84,7 @@
         "MEMOCHAT_ENABLE_GNU_MODULES": "ON",
         "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
         "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "ON",
+        "MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER": "OFF",
         "MEMOCHAT_LIVE2D_SDK_ROOT": "/data/third_party/live2d/CubismSdkForNative-current",
         "VCPKG_TARGET_TRIPLET": "x64-linux-release",
         "VCPKG_HOST_TRIPLET": "x64-linux-release",
@@ -92,6 +93,15 @@
         "VCPKG_MANIFEST_FEATURES": "server",
         "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF",
         "VCPKG_BUILD_TYPE": "release"
+      }
+    },
+    {
+      "name": "linux-full-gcc16-webtransport-provider",
+      "displayName": "Linux GCC16: Full + WebTransport Provider",
+      "inherits": "linux-full-gcc16",
+      "cacheVariables": {
+        "MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER": "ON",
+        "VCPKG_MANIFEST_FEATURES": "server;webtransport-provider"
       }
     }
   ],
@@ -107,6 +117,12 @@
       "name": "linux-full-gcc16",
       "displayName": "Build Linux Full",
       "configurePreset": "linux-full-gcc16",
+      "jobs": 12
+    },
+    {
+      "name": "linux-full-gcc16-webtransport-provider",
+      "displayName": "Build Linux Full + WebTransport Provider",
+      "configurePreset": "linux-full-gcc16-webtransport-provider",
       "jobs": 12
     }
   ],

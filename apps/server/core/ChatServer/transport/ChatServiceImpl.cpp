@@ -1,6 +1,7 @@
 ﻿#include "ChatServiceImpl.hpp"
 #include "UserMgr.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
+#include "SessionSendSupport.hpp"
 #include "logging/GrpcTrace.hpp"
 #include "logging/Telemetry.hpp"
 #include "logging/TraceContext.hpp"
@@ -68,7 +69,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
         rtvalue["user_id"] = apply_info->user_id;
     }
 
-    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_ADD_FRIEND_REQ);
+    session->send(JsonToWireString(rtvalue), ID_NOTIFY_ADD_FRIEND_REQ);
     return Status::OK;
 }
 
@@ -122,7 +123,7 @@ Status ChatServiceImpl::NotifyAuthFriend(ServerContext* context, const AuthFrien
         rtvalue["error"] = ErrorCodes::UidInvalid;
     }
 
-    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_AUTH_FRIEND_REQ);
+    session->send(JsonToWireString(rtvalue), ID_NOTIFY_AUTH_FRIEND_REQ);
     return Status::OK;
 }
 
@@ -190,7 +191,7 @@ ChatServiceImpl::NotifyTextChatMsg(::grpc::ServerContext* context, const TextCha
     }
     rtvalue["text_array"] = text_array;
 
-    session->Send(JsonToWireString(rtvalue), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+    session->send(JsonToWireString(rtvalue), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
     return Status::OK;
 }
 
@@ -284,8 +285,8 @@ Status ChatServiceImpl::NotifyKickUser(::grpc::ServerContext* context, const Kic
         return Status::OK;
     }
 
-    session->NotifyOffline(uid);
-    _p_server->ClearSession(session->GetSessionId());
+    SendChatSessionOfflineNotification(session, uid);
+    _p_server->ClearSession(session->sessionId());
 
     return Status::OK;
 }
@@ -313,7 +314,7 @@ Status ChatServiceImpl::NotifyGroupMessage(::grpc::ServerContext* context,
         {
             continue;
         }
-        session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
+        session->send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
         delivered++;
     }
     response->set_error(ErrorCodes::Success);
@@ -344,7 +345,7 @@ Status ChatServiceImpl::NotifyGroupEvent(::grpc::ServerContext* context,
         {
             continue;
         }
-        session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
+        session->send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
         delivered++;
     }
     response->set_error(ErrorCodes::Success);
@@ -375,7 +376,7 @@ Status ChatServiceImpl::NotifyGroupMemberBatch(::grpc::ServerContext* context,
         {
             continue;
         }
-        session->Send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
+        session->send(request->payload_json(), static_cast<short>(request->tcp_msgid()));
         delivered++;
     }
     response->set_error(ErrorCodes::Success);

@@ -19,13 +19,13 @@ using namespace memochat::chat::routing;
 
 struct FakeSessionRegistry final : ISessionRegistry
 {
-    std::shared_ptr<CSession> session; // nullptr → 没有本地 session
+    std::shared_ptr<IChatSession> session; // nullptr → 没有本地 session
 
-    std::shared_ptr<CSession> FindSession(int) override
+    std::shared_ptr<IChatSession> FindSession(int) override
     {
         return session;
     }
-    void BindSession(int, std::shared_ptr<CSession>) override
+    void BindSession(int, std::shared_ptr<IChatSession>) override
     {
     }
     void UnbindSession(int, const std::string&) override
@@ -55,7 +55,7 @@ struct FakeRouteStore final : IOnlineRouteStore
     {
         return online_set_server;
     }
-    void RepairOnlineRoute(int, const std::shared_ptr<CSession>&) override
+    void RepairOnlineRoute(int, const std::shared_ptr<IChatSession>&) override
     {
         ++repair_calls;
     }

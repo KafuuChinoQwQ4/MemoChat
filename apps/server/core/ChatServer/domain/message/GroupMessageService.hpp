@@ -8,7 +8,11 @@
 #include <memory>
 #include <string>
 
-class CSession;
+class IChatSession;
+class GroupManagementService;
+class GroupMembershipService;
+class GroupMessageHistoryService;
+class GroupMessageWorkflow;
 class GroupMessageService : public IGroupMessageService
 {
 public:
@@ -16,6 +20,7 @@ public:
                         IRelationRepository* relation_repository,
                         IDeliveryGateway* delivery_gateway,
                         IEventPublisher* event_publisher);
+    ~GroupMessageService() override;
 
     void BuildGroupListJson(int uid, memochat::json::JsonValue& out) override;
     MessageCommandResult CreateGroup(const MessageCommandRequest& request) override;
@@ -37,51 +42,65 @@ public:
     MessageCommandResult QuitGroup(const MessageCommandRequest& request) override;
     MessageCommandResult DissolveGroup(const MessageCommandRequest& request) override;
     void
-    HandleCreateGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleGetGroupList(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleInviteGroupMember(const std::shared_ptr<CSession>& session,
+    HandleCreateGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) override;
+    void HandleGetGroupList(const std::shared_ptr<IChatSession>& session,
+                            short msg_id,
+                            const std::string& msg_data) override;
+    void HandleInviteGroupMember(const std::shared_ptr<IChatSession>& session,
                                  short msg_id,
                                  const std::string& msg_data) override;
-    void
-    HandleApplyJoinGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleReviewGroupApply(const std::shared_ptr<CSession>& session,
+    void HandleApplyJoinGroup(const std::shared_ptr<IChatSession>& session,
+                              short msg_id,
+                              const std::string& msg_data) override;
+    void HandleReviewGroupApply(const std::shared_ptr<IChatSession>& session,
                                 short msg_id,
                                 const std::string& msg_data) override;
-    void HandleGroupChatMessage(const std::shared_ptr<CSession>& session,
+    void HandleGroupChatMessage(const std::shared_ptr<IChatSession>& session,
                                 short msg_id,
                                 const std::string& msg_data) override;
-    void
-    HandleGroupHistory(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleEditGroupMessage(const std::shared_ptr<CSession>& session,
+    void HandleGroupHistory(const std::shared_ptr<IChatSession>& session,
+                            short msg_id,
+                            const std::string& msg_data) override;
+    void HandleEditGroupMessage(const std::shared_ptr<IChatSession>& session,
                                 short msg_id,
                                 const std::string& msg_data) override;
-    void HandleRevokeGroupMessage(const std::shared_ptr<CSession>& session,
+    void HandleRevokeGroupMessage(const std::shared_ptr<IChatSession>& session,
                                   short msg_id,
                                   const std::string& msg_data) override;
-    void HandleForwardGroupMessage(const std::shared_ptr<CSession>& session,
+    void HandleForwardGroupMessage(const std::shared_ptr<IChatSession>& session,
                                    short msg_id,
                                    const std::string& msg_data) override;
-    void
-    HandleGroupReadAck(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleUpdateGroupAnnouncement(const std::shared_ptr<CSession>& session,
+    void HandleGroupReadAck(const std::shared_ptr<IChatSession>& session,
+                            short msg_id,
+                            const std::string& msg_data) override;
+    void HandleUpdateGroupAnnouncement(const std::shared_ptr<IChatSession>& session,
                                        short msg_id,
                                        const std::string& msg_data) override;
+    void HandleUpdateGroupIcon(const std::shared_ptr<IChatSession>& session,
+                               short msg_id,
+                               const std::string& msg_data) override;
+    void HandleSetGroupAdmin(const std::shared_ptr<IChatSession>& session,
+                             short msg_id,
+                             const std::string& msg_data) override;
+    void HandleMuteGroupMember(const std::shared_ptr<IChatSession>& session,
+                               short msg_id,
+                               const std::string& msg_data) override;
+    void HandleKickGroupMember(const std::shared_ptr<IChatSession>& session,
+                               short msg_id,
+                               const std::string& msg_data) override;
     void
-    HandleUpdateGroupIcon(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleSetGroupAdmin(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleMuteGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleKickGroupMember(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void HandleQuitGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
-    void
-    HandleDissolveGroup(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data) override;
+    HandleQuitGroup(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data) override;
+    void HandleDissolveGroup(const std::shared_ptr<IChatSession>& session,
+                             short msg_id,
+                             const std::string& msg_data) override;
 
 private:
     IMessageRepository* _message_repository = nullptr;
     IRelationRepository* _relation_repository = nullptr;
     IDeliveryGateway* _delivery_gateway = nullptr;
     IEventPublisher* _event_publisher = nullptr;
+    std::unique_ptr<GroupMembershipService> _membership_service;
+    std::unique_ptr<GroupMessageWorkflow> _workflow_service;
+    std::unique_ptr<GroupMessageHistoryService> _history_service;
+    std::unique_ptr<GroupManagementService> _management_service;
 };

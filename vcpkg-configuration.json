@@ -3,6 +3,7 @@
   "registries": [],
   "overlay-ports": [
     "infra/ports/glaze",
+    "infra/ports/libwebsockets",
     "infra/ports/nghttp2",
     "infra/ports/stdexec"
   ]

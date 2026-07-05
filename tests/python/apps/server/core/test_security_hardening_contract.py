@@ -124,8 +124,8 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("request.session_uid > 0 ? request.session_uid : payload_uid", private)
         self.assertNotRegex(private, r'const\s+(?:auto|int)\s+uid\s*=\s*root\["fromuid"\]')
 
-        self.assertIn("AuthenticatedGroupRequestUidLocal", group)
-        self.assertIn("request.session_uid > 0 ? request.session_uid : payload_uid", group)
+        self.assertIn("BuildGroupMessageCommandRequestLocal", group)
+        self.assertIn("request.session_uid = session->userId();", group)
         self.assertNotRegex(group, r"const\s+int\s+(?:uid|from_uid|owner_uid|reviewer_uid)\s*=\s*command\.")
 
     def test_profile_and_moments_routes_validate_redis_tokens_before_mutation(self):

@@ -29,7 +29,7 @@ class FormatSourcesContractTests(unittest.TestCase):
         paths = {path.as_posix() for path in files}
 
         self.assertIn("apps/server/core/ChatServer/app/ChatServer.cpp", paths)
-        self.assertIn("apps/server/core/common/json/GlazeCompat.h", paths)
+        self.assertIn("apps/server/core/common/json/GlazeCompat.hpp", paths)
 
     def test_python_source_scan_uses_project_source_roots(self):
         files = self.format_sources.iter_source_files(REPO_ROOT, self.format_sources.PYTHON_SUFFIXES)

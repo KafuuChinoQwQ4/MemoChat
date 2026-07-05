@@ -81,11 +81,17 @@ bool GateHttp3JsonSupport::HandleJsonPost(
     }
     catch (const std::exception& e)
     {
+        // Log internally but never forward e.what() to the client — it may
+        // contain DB schema names, query fragments, or internal paths.
+        std::cerr << "[GateHttp3JsonSupport] unhandled exception"
+                  << " trace_id=" << connection->GetTraceId() << " request_id=" << connection->GetRequestId()
+                  << " what=" << e.what() << std::endl;
+
         root = memochat::json::glaze_empty_object();
         root["trace_id"] = connection->GetTraceId();
         root["request_id"] = connection->GetRequestId();
         root["error"] = json_support_modules::ErrorCode();
-        root["message"] = e.what();
+        root["message"] = "Internal server error";
         std::string resp = memochat::json::writeString(root);
         connection->SendResponse(json_support_modules::InternalErrorStatus(),
                                  resp,

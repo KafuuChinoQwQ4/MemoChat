@@ -2,43 +2,30 @@
 
 #include "ChatHandlerRegistrars.hpp"
 #include "ChatRuntimeComposition.hpp"
-#include "ConfigMgr.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
+#include "LogicNode.hpp"
 #include "MessageDeliveryService.hpp"
-#include "PostgresMgr.hpp"
 #include "const.hpp"
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
+#include "ports/ILogicSystemConfig.hpp"
 
 #include <algorithm>
 #include <exception>
 #include <string>
 
-namespace
+// Worker count resolved by SetWorkerConfig() before the singleton is constructed.
+// Falls back to kDefaultWorkerCount if SetWorkerConfig was never called.
+static std::size_t s_configured_worker_count = LogicSystem::kDefaultWorkerCount;
+
+void LogicSystem::SetWorkerConfig(const ILogicSystemConfig& cfg)
 {
-size_t ConfigSizeLocal(const std::string& section,
-                       const std::string& key,
-                       size_t default_value,
-                       size_t min_value,
-                       size_t max_value)
-{
-    const auto raw = ConfigMgr::Inst().GetValue(section, key);
-    if (raw.empty())
-    {
-        return default_value;
-    }
-    try
-    {
-        const auto value = static_cast<size_t>(std::stoul(raw));
-        return std::clamp(value, min_value, max_value);
-    }
-    catch (...)
-    {
-        return default_value;
-    }
+    s_configured_worker_count = cfg.WorkerCount(kDefaultWorkerCount, 1, kMaxWorkerCount);
 }
 
-void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::string& msg_data)
+namespace
+{
+void BindTcpTraceContext(const std::shared_ptr<IChatSession>& session, const std::string& msg_data)
 {
     memochat::json::JsonReader reader;
     memochat::json::JsonValue root;
@@ -49,7 +36,7 @@ void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::st
         memolog::TraceContext::SetSpanId("");
         if (session)
         {
-            memolog::TraceContext::SetSessionId(session->GetSessionId());
+            memolog::TraceContext::SetSessionId(session->sessionId());
         }
         return;
     }
@@ -77,7 +64,7 @@ void BindTcpTraceContext(const std::shared_ptr<CSession>& session, const std::st
     }
     if (session)
     {
-        memolog::TraceContext::SetSessionId(session->GetSessionId());
+        memolog::TraceContext::SetSessionId(session->sessionId());
     }
 }
 
@@ -86,31 +73,32 @@ bool IsPreAuthMessage(short msg_id)
     return msg_id == MSG_CHAT_LOGIN || msg_id == ID_HEART_BEAT_REQ;
 }
 
-bool RejectUnauthenticatedBusinessMessage(const std::shared_ptr<CSession>& session, short msg_id)
+bool RejectUnauthenticatedBusinessMessage(const std::shared_ptr<IChatSession>& session, short msg_id)
 {
     if (IsPreAuthMessage(msg_id))
     {
         return false;
     }
-    if (session && session->GetUserId() > 0)
+    if (session && session->userId() > 0)
     {
         return false;
     }
     memolog::LogWarn(
         "chat.message.unauthenticated",
         "reject unauthenticated chat business message",
-        {{"msg_id", std::to_string(msg_id)}, {"session_id", session ? session->GetSessionId() : std::string()}});
+        {{"msg_id", std::to_string(msg_id)}, {"session_id", session ? session->sessionId() : std::string()}});
     if (session)
     {
-        session->Close();
+        session->close();
     }
     return true;
 }
 
-std::string
-NormalizeAuthenticatedCallerFields(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+std::string NormalizeAuthenticatedCallerFields(const std::shared_ptr<IChatSession>& session,
+                                               short msg_id,
+                                               const std::string& msg_data)
 {
-    if (IsPreAuthMessage(msg_id) || !session || session->GetUserId() <= 0)
+    if (IsPreAuthMessage(msg_id) || !session || session->userId() <= 0)
     {
         return msg_data;
     }
@@ -122,7 +110,7 @@ NormalizeAuthenticatedCallerFields(const std::shared_ptr<CSession>& session, sho
         return msg_data;
     }
 
-    const int session_uid = session->GetUserId();
+    const int session_uid = session->userId();
     bool changed = false;
     const char* caller_fields[] = {"uid", "fromuid", "owner_uid", "from_uid", "reviewer_uid", "viewer_uid"};
     for (const char* field : caller_fields)
@@ -157,11 +145,10 @@ NormalizeAuthenticatedCallerFields(const std::shared_ptr<CSession>& session, sho
 
 LogicSystem::LogicSystem()
     : _b_stop(false)
-    , _p_server(nullptr)
 {
     _composition = std::make_unique<ChatRuntimeComposition>(*this);
     RegisterCallBacks();
-    _num_workers = ConfigSizeLocal("LogicSystem", "WorkerCount", kDefaultWorkerCount, 1, kMaxWorkerCount);
+    _num_workers = s_configured_worker_count;
     _worker_conds = std::make_unique<std::condition_variable[]>(_num_workers);
     for (size_t i = 0; i < _num_workers; ++i)
     {
@@ -218,9 +205,9 @@ void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg)
     }
 }
 
-void LogicSystem::SetServer(std::shared_ptr<CServer> pserver)
+void LogicSystem::SetServer(IChatSessionHost* host)
 {
-    _p_server = pserver;
+    _p_server = host;
 }
 
 MessageDeliveryService& LogicSystem::MessageDelivery()
@@ -244,11 +231,6 @@ bool LogicSystem::PublishTask(const std::string& task_type,
         return false;
     }
     return _composition->PublishTask(task_type, routing_key, payload, delay_ms, max_retries, error);
-}
-
-bool LogicSystem::ExpediteOutboxRepair(int64_t outbox_id)
-{
-    return PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry(outbox_id);
 }
 
 size_t LogicSystem::dispatchToWorker(const std::shared_ptr<LogicNode>& msg)

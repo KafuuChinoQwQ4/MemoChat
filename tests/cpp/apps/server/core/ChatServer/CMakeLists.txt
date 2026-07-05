@@ -345,6 +345,28 @@ endif()
 
 gtest_discover_tests(chatserver_task_dispatcher_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(chatserver_task_dispatcher_runtime_gtest
+    main.cpp
+    TaskDispatcherRuntimeTest.cpp
+)
+
+target_link_libraries(chatserver_task_dispatcher_runtime_gtest PRIVATE
+    GTest_TestLib
+    ChatDeliveryCore
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_task_dispatcher_runtime_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain/delivery
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/messaging
+)
+
+add_dependencies(gtest_tests chatserver_task_dispatcher_runtime_gtest)
+
+gtest_discover_tests(chatserver_task_dispatcher_runtime_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 add_executable(chatserver_envelope_codec_gtest
     ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/app/ChatRuntime.cpp
     ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/config/ConfigMgr.cpp
@@ -1814,6 +1836,96 @@ target_include_directories(chatserver_cserver_lifetime_gtest PRIVATE
 add_dependencies(gtest_tests chatserver_cserver_lifetime_gtest)
 
 gtest_discover_tests(chatserver_cserver_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chatserver_frame_codec_gtest
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport/ChatFrameCodec.cpp
+    main.cpp
+    ChatFrameCodecTest.cpp
+)
+
+target_link_libraries(chatserver_frame_codec_gtest PRIVATE
+    GTest_TestLib
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_frame_codec_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_frame_codec_gtest)
+
+gtest_discover_tests(chatserver_frame_codec_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chatserver_websocket_ingress_gtest
+    main.cpp
+    WebSocketIngressTest.cpp
+)
+
+target_link_libraries(chatserver_websocket_ingress_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_websocket_ingress_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_websocket_ingress_gtest)
+
+gtest_discover_tests(chatserver_websocket_ingress_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chatserver_webtransport_session_gtest
+    main.cpp
+    WebTransportSessionTest.cpp
+)
+
+target_link_libraries(chatserver_webtransport_session_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_webtransport_session_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_webtransport_session_gtest)
+
+gtest_discover_tests(chatserver_webtransport_session_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(chatserver_webtransport_provider_gtest
+    main.cpp
+    WebTransportProviderTest.cpp
+)
+
+target_link_libraries(chatserver_webtransport_provider_gtest PRIVATE
+    GTest_TestLib
+    ChatServerCore
+    memochat_proto
+    memochat_server_deps
+)
+
+target_include_directories(chatserver_webtransport_provider_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/infrastructure
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/transport
+)
+
+add_dependencies(gtest_tests chatserver_webtransport_provider_gtest)
+
+gtest_discover_tests(chatserver_webtransport_provider_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
 add_executable(chatserver_msg_node_algorithms_gtest
     main.cpp

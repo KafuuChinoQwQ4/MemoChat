@@ -8,6 +8,7 @@ class MongoMgr;
 class ChatMessageRepository : public IMessageRepository
 {
 public:
+    ChatMessageRepository();
     ChatMessageRepository(PostgresMgr& pg, MongoMgr& mongo);
 
     bool SavePrivateMessage(const PrivateMessageInfo& msg) override;

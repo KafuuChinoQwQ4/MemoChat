@@ -5,7 +5,7 @@
 #include "ChatHistoryOutputDtos.hpp"
 #include "ChatMessageCommandDtos.hpp"
 #include "ChatRuntime.hpp"
-#include "CSession.hpp"
+#include "IChatSession.hpp"
 #include "MessageServiceUtil.hpp"
 #include "ports/OnlineRouteResolver.hpp"
 #include "logging/Logger.hpp"
@@ -29,6 +29,9 @@ using memochat::chat::routing::OnlineRouteDecision;
 using memochat::chat::routing::OnlineRouteKind;
 using memochat::chat::routing::OnlineRouteResultName;
 using memochat::chat::routing::ResolveOnlineRoute;
+
+constexpr std::size_t kMaxChatMessageContentBytes = 4096;
+constexpr int kMaxHistoryLimit = 200;
 
 std::string JsonToCompactStringLocal(const memochat::json::JsonValue& value)
 {
@@ -84,7 +87,7 @@ bool KafkaBackendEnabledLocal()
 }
 
 MessageCommandRequest
-BuildMessageCommandRequestLocal(const std::shared_ptr<CSession>& session, short msg_id, const std::string& msg_data)
+BuildMessageCommandRequestLocal(const std::shared_ptr<IChatSession>& session, short msg_id, const std::string& msg_data)
 {
     MessageCommandRequest request;
     request.request_msg_id = msg_id;
@@ -92,8 +95,8 @@ BuildMessageCommandRequestLocal(const std::shared_ptr<CSession>& session, short 
     request.server_name = memochat::chatruntime::SelfServerName();
     if (session)
     {
-        request.session_uid = session->GetUserId();
-        request.session_id = session->GetSessionId();
+        request.session_uid = session->userId();
+        request.session_id = session->sessionId();
     }
     return request;
 }
@@ -103,13 +106,13 @@ int AuthenticatedRequestUidLocal(const MessageCommandRequest& request, int paylo
     return request.session_uid > 0 ? request.session_uid : payload_uid;
 }
 
-void SendMessageCommandResultLocal(const std::shared_ptr<CSession>& session, const MessageCommandResult& result)
+void SendMessageCommandResultLocal(const std::shared_ptr<IChatSession>& session, const MessageCommandResult& result)
 {
     if (!session || result.response_msg_id == 0)
     {
         return;
     }
-    session->Send(result.payload_json, result.response_msg_id);
+    session->send(result.payload_json, result.response_msg_id);
 }
 } // namespace
 
@@ -187,7 +190,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
         {
             msg.created_at = NowMs();
         }
-        if (msg.msg_id.empty() || msg.content.empty())
+        if (msg.msg_id.empty() || msg.content.empty() || msg.content.size() > kMaxChatMessageContentBytes)
         {
             rtdto.error = ErrorCodes::Error_Json;
             return result();
@@ -284,7 +287,7 @@ MessageCommandResult PrivateMessageService::TextChatMessage(const MessageCommand
     return result();
 }
 
-void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandleTextChatMessage(const std::shared_ptr<IChatSession>& session,
                                                   short msg_id,
                                                   const std::string& msg_data)
 {
@@ -430,7 +433,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     }
     if (route.kind == OnlineRouteKind::Local && route.session)
     {
-        route.session->Send(rtvalue
+        route.session->send(rtvalue
                                 .and_then(
                                     [](auto&& v)
                                     {
@@ -471,7 +474,7 @@ MessageCommandResult PrivateMessageService::ForwardPrivateMessage(const MessageC
     return result();
 }
 
-void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandleForwardPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                         short msg_id,
                                                         const std::string& msg_data)
 {
@@ -515,7 +518,7 @@ MessageCommandResult PrivateMessageService::PrivateReadAck(const MessageCommandR
     return result();
 }
 
-void PrivateMessageService::HandlePrivateReadAck(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandlePrivateReadAck(const std::shared_ptr<IChatSession>& session,
                                                  short msg_id,
                                                  const std::string& msg_data)
 {
@@ -581,7 +584,7 @@ MessageCommandResult PrivateMessageService::EditPrivateMessage(const MessageComm
     return result();
 }
 
-void PrivateMessageService::HandleEditPrivateMessage(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandleEditPrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                      short msg_id,
                                                      const std::string& msg_data)
 {
@@ -649,7 +652,7 @@ MessageCommandResult PrivateMessageService::RevokePrivateMessage(const MessageCo
     return result();
 }
 
-void PrivateMessageService::HandleRevokePrivateMessage(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandleRevokePrivateMessage(const std::shared_ptr<IChatSession>& session,
                                                        short msg_id,
                                                        const std::string& msg_data)
 {
@@ -667,7 +670,7 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     const int peer_uid = command.peer_uid;
     const int64_t before_ts = command.before_ts;
     const std::string& before_msg_id = command.before_msg_id;
-    const int limit = command.limit;
+    const int requested_limit = command.limit;
 
     memochat::json::JsonValue rtvalue =
         ChatHistoryCommand::ToJsonValue(ChatHistoryCommand::ChatPrivateHistoryResponseDto{.error = ErrorCodes::Success,
@@ -679,11 +682,12 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
         return MessageCommandResult{ID_PRIVATE_HISTORY_RSP, JsonToWireString(rtvalue)};
     };
 
-    if (uid <= 0 || peer_uid <= 0 || limit <= 0)
+    if (uid <= 0 || peer_uid <= 0 || requested_limit <= 0)
     {
         rtvalue["error"] = ErrorCodes::Error_Json;
         return result();
     }
+    const int limit = std::clamp(requested_limit, 1, kMaxHistoryLimit);
 
     std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
     bool has_more = false;
@@ -725,7 +729,7 @@ MessageCommandResult PrivateMessageService::PrivateHistory(const MessageCommandR
     return result();
 }
 
-void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<CSession>& session,
+void PrivateMessageService::HandlePrivateHistory(const std::shared_ptr<IChatSession>& session,
                                                  short msg_id,
                                                  const std::string& msg_data)
 {

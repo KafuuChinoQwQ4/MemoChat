@@ -1,6 +1,7 @@
 #include "CServer.hpp"
 #include <iostream>
 #include "AsioIOServicePool.hpp"
+#include "TcpSession.hpp"
 #include "UserMgr.hpp"
 #include "RedisMgr.hpp"
 #include "ConfigMgr.hpp"
@@ -41,7 +42,7 @@ exec::task<void> CServer::AcceptLoop(std::shared_ptr<CServer> self)
         try
         {
             auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
-            std::shared_ptr<CSession> new_session = std::make_shared<CSession>(io_context, this);
+            auto new_session = std::make_shared<TcpSession>(io_context, this);
 
             try
             {

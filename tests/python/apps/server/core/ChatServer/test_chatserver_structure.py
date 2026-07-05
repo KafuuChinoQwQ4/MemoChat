@@ -32,24 +32,58 @@ EXPECTED_GROUPS = {
         "CServer.hpp",
         "CSession.cpp",
         "CSession.hpp",
+        "ChatFrameCodec.cpp",
+        "ChatFrameCodec.hpp",
+        "ChatFrameDispatch.cpp",
+        "ChatFrameDispatch.hpp",
         "ChatIngressCoordinator.cpp",
         "ChatIngressCoordinator.hpp",
+        "ChatSessionCleanupSupport.cpp",
+        "ChatSessionCleanupSupport.hpp",
+        "ChatSessionState.hpp",
         "ChatServiceImpl.cpp",
         "ChatServiceImpl.hpp",
+        "IChatSession.hpp",
+        "IWebTransportProvider.hpp",
+        "IWebTransportSession.hpp",
+        "LibwebsocketsWebTransportProvider.cpp",
+        "LibwebsocketsWebTransportProvider.hpp",
         "MsgNode.cpp",
         "MsgNode.hpp",
         "QuicChatServer.cpp",
         "QuicChatServer.hpp",
         "QuicSession.cpp",
         "QuicSession.hpp",
+        "TcpSession.cpp",
+        "TcpSession.hpp",
+        "UnavailableWebTransportProvider.cpp",
+        "UnavailableWebTransportProvider.hpp",
+        "WebSocketChatServer.cpp",
+        "WebSocketChatServer.hpp",
+        "WebSocketSession.cpp",
+        "WebSocketSession.hpp",
+        "WebTransportChatServer.cpp",
+        "WebTransportChatServer.hpp",
+        "WebTransportProviderFactory.cpp",
+        "WebTransportProviderFactory.hpp",
+        "WebTransportSession.cpp",
+        "WebTransportSession.hpp",
     },
     "domain": {
         "delivery/ChatDeliveryRuntime.cpp",
         "delivery/ChatDeliveryRuntime.hpp",
         "delivery/TaskDispatcher.cpp",
         "delivery/TaskDispatcher.hpp",
+        "message/GroupManagementService.cpp",
+        "message/GroupManagementService.hpp",
+        "message/GroupMembershipService.cpp",
+        "message/GroupMembershipService.hpp",
+        "message/GroupMessageHistoryService.cpp",
+        "message/GroupMessageHistoryService.hpp",
         "message/GroupMessageService.cpp",
         "message/GroupMessageService.hpp",
+        "message/GroupMessageWorkflow.cpp",
+        "message/GroupMessageWorkflow.hpp",
         "message/ChatMessageInternalGrpcService.cpp",
         "message/ChatMessageInternalGrpcService.hpp",
         "message/MessageDeliveryService.cpp",
@@ -104,6 +138,8 @@ EXPECTED_GROUPS = {
         "PostgresPool.hpp",
         "ChatMessageRepository.cpp",
         "ChatMessageRepository.hpp",
+        "ChatOutboxRepairScheduler.cpp",
+        "ChatOutboxRepairScheduler.hpp",
         "ChatRelationRepository.cpp",
         "ChatRelationRepository.hpp",
         "RedisRelationBootstrapCache.cpp",
@@ -223,6 +259,7 @@ EXPECTED_MICROSERVICE_TARGETS = {
     "ChatInfrastructureCore": {"infrastructure/AsioIOServicePool.cpp"},
     "ChatPersistenceCore": {
         "persistence/ChatOutboxService.cpp",
+        "persistence/ChatOutboxRepairScheduler.cpp",
         "persistence/ChatSessionRepository.cpp",
         "persistence/DistLock.cpp",
         "persistence/MongoDao.cpp",
@@ -254,12 +291,22 @@ EXPECTED_MICROSERVICE_TARGETS = {
     },
     "ChatTransportCore": {
         "transport/CServer.cpp",
+        "transport/ChatSessionCleanupSupport.cpp",
         "transport/CSession.cpp",
+        "transport/ChatFrameCodec.cpp",
+        "transport/ChatFrameDispatch.cpp",
         "transport/ChatIngressCoordinator.cpp",
         "transport/ChatServiceImpl.cpp",
         "transport/MsgNode.cpp",
         "transport/QuicChatServer.cpp",
         "transport/QuicSession.cpp",
+        "transport/TcpSession.cpp",
+        "transport/UnavailableWebTransportProvider.cpp",
+        "transport/WebSocketChatServer.cpp",
+        "transport/WebSocketSession.cpp",
+        "transport/WebTransportChatServer.cpp",
+        "transport/WebTransportProviderFactory.cpp",
+        "transport/WebTransportSession.cpp",
     },
     "ChatOrchestrationCore": {
         "domain/orchestration/ChatHandlerRegistrars.cpp",
@@ -283,7 +330,11 @@ EXPECTED_MICROSERVICE_TARGETS = {
     },
     "ChatMessageCore": {
         "domain/message/ChatMessageInternalGrpcService.cpp",
+        "domain/message/GroupManagementService.cpp",
+        "domain/message/GroupMembershipService.cpp",
+        "domain/message/GroupMessageHistoryService.cpp",
         "domain/message/GroupMessageService.cpp",
+        "domain/message/GroupMessageWorkflow.cpp",
         "domain/message/MessageDeliveryService.cpp",
         "domain/message/MessageServiceFactory.cpp",
         "domain/message/PrivateMessageService.cpp",
@@ -884,6 +935,106 @@ class ChatServerStructureTests(unittest.TestCase):
 
         self.assertEqual([], missing)
 
+    def test_browser_transports_are_modular_and_share_frame_codec(self):
+        transport_dir = CHATSERVER_DIR / "transport"
+        ws_server = (transport_dir / "WebSocketChatServer.cpp").read_text(encoding="utf-8")
+        ws_session_header = (transport_dir / "WebSocketSession.hpp").read_text(encoding="utf-8")
+        ws_session = (transport_dir / "WebSocketSession.cpp").read_text(encoding="utf-8")
+        wt_server = (transport_dir / "WebTransportChatServer.cpp").read_text(encoding="utf-8")
+        wt_session_header = (transport_dir / "WebTransportSession.hpp").read_text(encoding="utf-8")
+        wt_session = (transport_dir / "WebTransportSession.cpp").read_text(encoding="utf-8")
+        frame_dispatch_header = (transport_dir / "ChatFrameDispatch.hpp").read_text(encoding="utf-8")
+        wt_provider = (transport_dir / "IWebTransportProvider.hpp").read_text(encoding="utf-8")
+        wt_session_interface = (transport_dir / "IWebTransportSession.hpp").read_text(encoding="utf-8")
+        wt_factory = (transport_dir / "WebTransportProviderFactory.cpp").read_text(encoding="utf-8")
+        lws_provider = (transport_dir / "LibwebsocketsWebTransportProvider.cpp").read_text(encoding="utf-8")
+        wt_unavailable = (transport_dir / "UnavailableWebTransportProvider.cpp").read_text(encoding="utf-8")
+        quic_session = (transport_dir / "QuicSession.hpp").read_text(encoding="utf-8")
+        chatserver_cmake = read_cmake()
+        server_core_cmake = (SERVER_CORE_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+
+        self.assertIn('#include "ChatFrameCodec.hpp"', ws_session)
+        self.assertIn("ChatFrameCodec::Encode", ws_session)
+        self.assertIn("ChatFrameCodec::DecodeOne", ws_session)
+        self.assertIn('#include "ChatFrameCodec.hpp"', wt_session)
+        self.assertIn("ChatFrameCodec::Encode", wt_session)
+        self.assertIn("ChatFrameCodec::DecodeOne", wt_session)
+        self.assertIn("AcceptStreamBytes", wt_session)
+        self.assertIn("std::shared_ptr<IChatSession>", ws_session_header)
+        self.assertIn("std::shared_ptr<IChatSession>", wt_session_header)
+        self.assertNotIn("std::shared_ptr<CSession>&, short, std::string_view", ws_session_header)
+        self.assertNotIn("std::shared_ptr<CSession>&, short, std::string_view", wt_session_header)
+        self.assertNotIn('#include "CSession.hpp"', ws_session_header)
+        self.assertNotIn('#include "CSession.hpp"', wt_session_header)
+        self.assertNotIn(": public CSession", ws_session_header)
+        self.assertNotIn(": public CSession", wt_session_header)
+        self.assertNotIn(": public CSession", quic_session)
+        self.assertIn("ChatSessionState", ws_session_header)
+        self.assertIn("ChatSessionState", wt_session_header)
+        self.assertIn("ChatSessionState", quic_session)
+        self.assertIn("std::shared_ptr<IChatSession>", frame_dispatch_header)
+        self.assertNotIn("std::shared_ptr<CSession>", frame_dispatch_header)
+        self.assertNotIn("class CSession", frame_dispatch_header)
+        self.assertIn("class IWebTransportProvider", wt_provider)
+        self.assertIn('#include "IWebTransportSession.hpp"', wt_provider)
+        self.assertNotIn('#include "WebTransportSession.hpp"', wt_provider)
+        self.assertIn("class IWebTransportSession", wt_session_interface)
+        self.assertIn("acceptStreamBytes", wt_session_interface)
+        self.assertIn("std::shared_ptr<IWebTransportSession>", wt_provider)
+        self.assertIn("WebTransportProviderSessionHooks", wt_provider)
+        self.assertIn("cert_file", wt_provider)
+        self.assertIn("private_key_file", wt_provider)
+        self.assertIn("openProviderSession", wt_server)
+        self.assertIn("CreateDefaultWebTransportProvider", wt_server)
+        self.assertNotIn("webtransport_h3_library_not_configured", wt_server)
+        self.assertIn("webtransport_h3_library_not_configured", wt_unavailable)
+        self.assertIn("UnavailableWebTransportProvider", wt_factory)
+        self.assertIn("LibwebsocketsWebTransportProvider", wt_factory)
+        self.assertIn("lws_wt_create_stream", lws_provider)
+        self.assertIn("sessionPathMatches", lws_provider)
+        self.assertIn("WSI_TOKEN_HTTP_COLON_PATH", lws_provider)
+        self.assertIn("webtransport.provider.lws.bad_path", lws_provider)
+        self.assertIn("ensureWritableStreamLocked", lws_provider)
+        self.assertIn("lws_write", lws_provider)
+        self.assertIn("acceptStreamBytes", lws_provider)
+        self.assertIn("ShouldBindToNamedInterface", lws_provider)
+        self.assertIn('host == "127.0.0.1"', lws_provider)
+        self.assertIn(
+            "info.iface = ShouldBindToNamedInterface(_options.host) ? _options.host.c_str() : nullptr;", lws_provider
+        )
+        self.assertIn("MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER", server_core_cmake)
+        self.assertIn("LWS_WITH_HTTP3", server_core_cmake)
+        self.assertIn("LWS_ROLE_WT", server_core_cmake)
+        self.assertIn("lws_hdr_total_length", server_core_cmake)
+        self.assertIn("WSI_TOKEN_HTTP_COLON_PATH", server_core_cmake)
+        self.assertIn("MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED", chatserver_cmake)
+        self.assertIn("transport/LibwebsocketsWebTransportProvider.cpp", chatserver_cmake)
+        self.assertIn("boost::beast::websocket::stream", (transport_dir / "WebSocketSession.hpp").read_text())
+        self.assertNotIn("WebTransport", ws_server)
+        self.assertNotIn("WebTransport", ws_session)
+        self.assertNotIn("websocket::stream", wt_server)
+        self.assertNotIn("websocket::stream", wt_session)
+        self.assertNotIn("TcpSession", quic_session)
+        self.assertNotIn("GetSocket", quic_session)
+
+    def test_webtransport_local_config_uses_generated_tls_files(self):
+        for config_name, sections in {
+            "config.ini": ("chatserver1",),
+            "chatserver1.ini": ("chatserver1",),
+            "chatserver2.ini": ("chatserver1", "chatserver2"),
+        }.items():
+            text = (CHATSERVER_DIR / config_name).read_text(encoding="utf-8")
+            for section in sections:
+                with self.subTest(config=config_name, section=section):
+                    assert_ini_section_has(
+                        self,
+                        text,
+                        section,
+                        "WtEnabled=false",
+                        "WtCertFile=server.crt",
+                        "WtKeyFile=server.key",
+                    )
+
     def test_chatserver_root_keeps_only_compatibility_and_config_artifacts(self):
         root_files = {path.name for path in CHATSERVER_DIR.iterdir() if path.is_file()}
         unexpected = sorted(root_files - ROOT_ALLOWLIST)
@@ -1171,21 +1322,42 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_outbox_repair_scheduler->ExpediteOutboxRepair(outbox_id)", task_source)
         self.assertNotIn("_outbox_repair_handler(", task_source)
 
-        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.hpp").read_text(encoding="utf-8")
-        self.assertIn("ports/IOutboxRepairScheduler.hpp", logic_header)
+        adapter_header = CHATSERVER_DIR / "persistence" / "ChatOutboxRepairScheduler.hpp"
+        adapter_source_path = CHATSERVER_DIR / "persistence" / "ChatOutboxRepairScheduler.cpp"
+        self.assertTrue(adapter_header.is_file(), "outbox repair scheduler adapter header is missing")
+        self.assertTrue(adapter_source_path.is_file(), "outbox repair scheduler adapter source is missing")
+
+        adapter_header_source = adapter_header.read_text(encoding="utf-8")
+        adapter_source = adapter_source_path.read_text(encoding="utf-8")
+        self.assertIn("ports/IOutboxRepairScheduler.hpp", adapter_header_source)
         self.assertRegex(
-            logic_header,
-            r"class\s+LogicSystem\s*:\s*public\s+Singleton<LogicSystem>\s*,\s*public\s+IOutboxRepairScheduler",
+            adapter_header_source,
+            r"class\s+ChatOutboxRepairScheduler\s+final\s*:\s*public\s+IOutboxRepairScheduler",
         )
-        self.assertIn("bool ExpediteOutboxRepair(int64_t outbox_id) override", logic_header)
+        self.assertIn('#include "PostgresMgr.hpp"', adapter_source)
+        self.assertIn("PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry(outbox_id)", adapter_source)
+
+        logic_header = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.hpp").read_text(encoding="utf-8")
+        logic_source = (DOMAIN_ORCHESTRATION_DIR / "LogicSystem.cpp").read_text(encoding="utf-8")
+        self.assertNotIn("ports/IOutboxRepairScheduler.hpp", logic_header)
+        self.assertNotRegex(logic_header, r"public\s+IOutboxRepairScheduler")
+        self.assertNotIn("bool ExpediteOutboxRepair(int64_t outbox_id) override", logic_header)
+        self.assertNotIn('#include "PostgresMgr.hpp"', logic_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->ExpediteChatOutboxEventRetry", logic_source)
 
         composition_source = runtime_composition_source()
+        composition_header = runtime_composition_header()
+        self.assertIn("class IOutboxRepairScheduler;", composition_header)
+        self.assertIn("std::unique_ptr<IOutboxRepairScheduler> _outbox_repair_scheduler", composition_header)
+        self.assertIn('#include "ChatOutboxRepairScheduler.hpp"', composition_source)
+        self.assertIn("_outbox_repair_scheduler = std::make_unique<ChatOutboxRepairScheduler>()", composition_source)
         wiring_block = text_between(
             composition_source,
             "_task_dispatcher = std::make_unique<TaskDispatcher>",
             "_message_delivery_service->SetTaskPublisher",
         )
-        self.assertIn("&_logic", wiring_block)
+        self.assertIn("_outbox_repair_scheduler.get()", wiring_block)
+        self.assertNotIn("&_logic", wiring_block)
         self.assertNotIn("return ExpediteOutboxRepair(outbox_id);", wiring_block)
 
     def test_delivery_route_uses_session_and_online_route_ports(self):
@@ -1198,7 +1370,9 @@ class ChatServerStructureTests(unittest.TestCase):
 
         session_port_source = session_port.read_text(encoding="utf-8")
         self.assertIn("class ISessionRegistry", session_port_source)
-        self.assertRegex(session_port_source, r"virtual\s+std::shared_ptr<CSession>\s+FindSession")
+        self.assertRegex(session_port_source, r"virtual\s+std::shared_ptr<IChatSession>\s+FindSession")
+        self.assertIn("class IChatSession;", session_port_source)
+        self.assertNotIn("CSession", session_port_source)
         self.assertRegex(session_port_source, r"virtual\s+void\s+BindSession")
         self.assertRegex(session_port_source, r"virtual\s+void\s+UnbindSession")
 
@@ -1216,9 +1390,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertRegex(
             usermgr_header, r"class\s+UserMgr\s*:\s*public\s+Singleton<UserMgr>\s*,\s*public\s+ISessionRegistry"
         )
-        self.assertIn("std::shared_ptr<CSession> FindSession(int uid) override", usermgr_header)
-        self.assertIn("void BindSession(int uid, std::shared_ptr<CSession> session) override", usermgr_header)
+        self.assertIn("std::shared_ptr<IChatSession> FindSession(int uid) override", usermgr_header)
+        self.assertIn("void BindSession(int uid, std::shared_ptr<IChatSession> session) override", usermgr_header)
         self.assertIn("void UnbindSession(int uid, const std::string& session_id) override", usermgr_header)
+        self.assertNotIn("std::shared_ptr<CSession>", usermgr_header)
 
         route_adapter_source = route_adapter.read_text(encoding="utf-8")
         self.assertIn("ports/IOnlineRouteStore.hpp", route_adapter_source)
@@ -1645,24 +1820,29 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("IMessageRepository* message_repository", group_header)
         self.assertIn("IMessageRepository* _message_repository", group_header)
 
-        group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
-        self.assertIn("_message_repository->SaveGroupMessage", group_source)
-        self.assertIn("_message_repository->FindGroupMessageByClientId", group_source)
-        self.assertIn("_message_repository->GetGroupHistory", group_source)
-        self.assertIn("_message_repository->UpdateGroupMessageContent", group_source)
-        self.assertIn("_message_repository->RevokeGroupMessage", group_source)
-        self.assertIn("_message_repository->UpsertGroupReadState", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->SaveGroupMessage", group_source)
-        self.assertNotIn("MongoMgr::GetInstance()->SaveGroupMessage", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->GetGroupHistory", group_source)
-        self.assertNotIn("MongoMgr::GetInstance()->GetGroupHistory", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->GetGroupMessageByMsgId", group_source)
-        self.assertNotIn("MongoMgr::GetInstance()->GetGroupMessageByMsgId", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->UpdateGroupMessageContent", group_source)
-        self.assertNotIn("MongoMgr::GetInstance()->UpdateGroupMessageContent", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->RevokeGroupMessage", group_source)
-        self.assertNotIn("MongoMgr::GetInstance()->RevokeGroupMessage", group_source)
-        self.assertNotIn("PostgresMgr::GetInstance()->UpsertGroupReadState", group_source)
+        group_facade_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
+        group_workflow_source = (DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp").read_text(encoding="utf-8")
+        group_history_source = (DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp").read_text(encoding="utf-8")
+        self.assertIn("_workflow_service->GroupChatMessage(request)", group_facade_source)
+        self.assertIn("_history_service->GroupHistory(request)", group_facade_source)
+        self.assertIn("_message_repository->SaveGroupMessage", group_workflow_source)
+        self.assertIn("_message_repository->FindGroupMessageByClientId", group_workflow_source)
+        self.assertIn("_message_repository->GetGroupHistory", group_history_source)
+        self.assertIn("_message_repository->UpdateGroupMessageContent", group_workflow_source)
+        self.assertIn("_message_repository->RevokeGroupMessage", group_workflow_source)
+        self.assertIn("_message_repository->UpsertGroupReadState", group_history_source)
+        group_repository_source = group_workflow_source + "\n" + group_history_source
+        self.assertNotIn("PostgresMgr::GetInstance()->SaveGroupMessage", group_repository_source)
+        self.assertNotIn("MongoMgr::GetInstance()->SaveGroupMessage", group_repository_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->GetGroupHistory", group_repository_source)
+        self.assertNotIn("MongoMgr::GetInstance()->GetGroupHistory", group_repository_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->GetGroupMessageByMsgId", group_repository_source)
+        self.assertNotIn("MongoMgr::GetInstance()->GetGroupMessageByMsgId", group_repository_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->UpdateGroupMessageContent", group_repository_source)
+        self.assertNotIn("MongoMgr::GetInstance()->UpdateGroupMessageContent", group_repository_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->RevokeGroupMessage", group_repository_source)
+        self.assertNotIn("MongoMgr::GetInstance()->RevokeGroupMessage", group_repository_source)
+        self.assertNotIn("PostgresMgr::GetInstance()->UpsertGroupReadState", group_repository_source)
 
         composition_source = runtime_composition_source()
         constructor_block = text_between(
@@ -2025,7 +2205,8 @@ class ChatServerStructureTests(unittest.TestCase):
             relation_session_header,
             r"class\s+ChatRelationSessionAdapter\s+final\s*:\s*public\s+IRelationSessionService",
         )
-        self.assertIn("HandleSearchUser(const std::shared_ptr<CSession>& session", relation_session_header)
+        self.assertIn("HandleSearchUser(const std::shared_ptr<IChatSession>& session", relation_session_header)
+        self.assertNotIn("std::shared_ptr<CSession>", relation_session_header)
 
         relation_session_adapter = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.cpp").read_text(encoding="utf-8")
         self.assertIn("BuildRelationCommandRequest(session, msg_id, msg_data)", relation_session_adapter)
@@ -2038,7 +2219,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "_relation_service->PinDialog(BuildRelationCommandRequest(session, msg_id, msg_data))",
             relation_session_adapter,
         )
-        self.assertIn('#include "CSession.hpp"', relation_session_adapter)
+        self.assertIn('#include "IChatSession.hpp"', relation_session_adapter)
+        self.assertNotIn('#include "CSession.hpp"', relation_session_adapter)
         self.assertIn("ChatRelationSessionAdapter::HandleSearchUser", relation_session_adapter)
         self.assertNotIn("ChatRelationService::HandleSearchUser", relation_session_adapter)
 
@@ -2628,7 +2810,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn(
             "MessageCommandResult TextChatMessage(const MessageCommandRequest& request) override", private_header
         )
-        self.assertIn("HandleTextChatMessage(const std::shared_ptr<CSession>& session", private_header)
+        self.assertIn("HandleTextChatMessage(const std::shared_ptr<IChatSession>& session", private_header)
+        self.assertNotIn("std::shared_ptr<CSession>", private_header)
         self.assertIn("override", private_header)
 
         group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
@@ -2638,7 +2821,8 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn(
             "MessageCommandResult GroupChatMessage(const MessageCommandRequest& request) override", group_header
         )
-        self.assertIn("HandleGroupChatMessage(const std::shared_ptr<CSession>& session", group_header)
+        self.assertIn("HandleGroupChatMessage(const std::shared_ptr<IChatSession>& session", group_header)
+        self.assertNotIn("std::shared_ptr<CSession>", group_header)
         self.assertIn("override", group_header)
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
@@ -2862,6 +3046,16 @@ class ChatServerStructureTests(unittest.TestCase):
 
         cmake = read_cmake()
         self.assertIn("domain/message/MessageServiceFactory.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES"))
+        self.assertIn(
+            "domain/message/GroupManagementService.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES")
+        )
+        self.assertIn(
+            "domain/message/GroupMembershipService.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES")
+        )
+        self.assertIn(
+            "domain/message/GroupMessageHistoryService.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES")
+        )
+        self.assertIn("domain/message/GroupMessageWorkflow.cpp", cmake_set_values(cmake, "CHATSERVER_MESSAGE_SOURCES"))
 
         composition_source = runtime_composition_source()
         self.assertIn('#include "MessageServiceFactory.hpp"', composition_source)
@@ -2892,14 +3086,21 @@ class ChatServerStructureTests(unittest.TestCase):
 
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
-        for source in (private_source, group_source):
+        group_workflow_source = (DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp").read_text(encoding="utf-8")
+        group_history_source = (DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp").read_text(encoding="utf-8")
+        for source in (private_source, group_source, group_workflow_source, group_history_source):
             self.assertNotIn('#include "LogicSystem.hpp"', source)
             self.assertNotIn('#include "MessageDeliveryService.hpp"', source)
             self.assertNotIn("_logic.", source)
             self.assertNotIn("MessageDelivery().PushPayload", source)
             self.assertNotIn("PublishAsyncEvent", source)
-            self.assertIn("_delivery_gateway->PushPayload", source)
-            self.assertIn("_event_publisher->PublishEvent", source)
+        self.assertIn("_delivery_gateway->PushPayload", private_source)
+        self.assertIn("_event_publisher->PublishEvent", private_source)
+        self.assertIn("_delivery_gateway->PushPayload", group_workflow_source)
+        self.assertIn("_event_publisher->PublishEvent", group_workflow_source)
+        self.assertIn("_delivery_gateway->PushPayload", group_history_source)
+        self.assertIn("_workflow_service->GroupChatMessage(request)", group_source)
+        self.assertIn("_history_service->GroupHistory(request)", group_source)
 
         composition_source = runtime_composition_source()
         service_wiring_block = text_between(
@@ -2919,6 +3120,14 @@ class ChatServerStructureTests(unittest.TestCase):
             DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupManagementService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupManagementService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMembershipService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMembershipService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp",
         )
         forbidden_tokens = (
             '#include "LogicSystem.hpp"',
@@ -2955,6 +3164,14 @@ class ChatServerStructureTests(unittest.TestCase):
         private_source = (DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp").read_text(encoding="utf-8")
         group_header = (DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp").read_text(encoding="utf-8")
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
+        group_management_header = (DOMAIN_MESSAGE_DIR / "GroupManagementService.hpp").read_text(encoding="utf-8")
+        group_management_source = (DOMAIN_MESSAGE_DIR / "GroupManagementService.cpp").read_text(encoding="utf-8")
+        group_membership_header = (DOMAIN_MESSAGE_DIR / "GroupMembershipService.hpp").read_text(encoding="utf-8")
+        group_membership_source = (DOMAIN_MESSAGE_DIR / "GroupMembershipService.cpp").read_text(encoding="utf-8")
+        group_history_header = (DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.hpp").read_text(encoding="utf-8")
+        group_history_source = (DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp").read_text(encoding="utf-8")
+        group_workflow_header = (DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.hpp").read_text(encoding="utf-8")
+        group_workflow_source = (DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp").read_text(encoding="utf-8")
 
         for token in (
             "ports/IMessageRepository.hpp",
@@ -2980,13 +3197,68 @@ class ChatServerStructureTests(unittest.TestCase):
             "ports/IEventPublisher.hpp",
         ):
             self.assertIn(token, group_header)
+        self.assertIn("class GroupManagementService;", group_header)
+        self.assertIn("class GroupMembershipService;", group_header)
+        self.assertIn("class GroupMessageHistoryService;", group_header)
+        self.assertIn("class GroupMessageWorkflow;", group_header)
+        self.assertIn("std::unique_ptr<GroupManagementService> _management_service", group_header)
+        self.assertIn("std::unique_ptr<GroupMembershipService> _membership_service", group_header)
+        self.assertIn("std::unique_ptr<GroupMessageHistoryService> _history_service", group_header)
+        self.assertIn("std::unique_ptr<GroupMessageWorkflow> _workflow_service", group_header)
+        self.assertIn("IRelationRepository* relation_repository", group_management_header)
+        self.assertIn("IDeliveryGateway* delivery_gateway", group_management_header)
+        self.assertIn("IRelationRepository* relation_repository", group_membership_header)
+        self.assertIn("IDeliveryGateway* delivery_gateway", group_membership_header)
+        self.assertIn("IMessageRepository* message_repository", group_history_header)
+        self.assertIn("IRelationRepository* relation_repository", group_history_header)
+        self.assertIn("IDeliveryGateway* delivery_gateway", group_history_header)
+        self.assertIn("IMessageRepository* message_repository", group_workflow_header)
+        self.assertIn("IRelationRepository* relation_repository", group_workflow_header)
+        self.assertIn("IDeliveryGateway* delivery_gateway", group_workflow_header)
+        self.assertIn("IEventPublisher* event_publisher", group_workflow_header)
+        for token in (
+            "_membership_service->",
+            "_workflow_service->",
+            "_history_service->",
+            "_management_service->",
+        ):
+            self.assertIn(token, group_source)
         for token in (
             "_message_repository->",
             "_relation_repository->",
             "_delivery_gateway->PushPayload",
             "_event_publisher->PublishEvent",
         ):
-            self.assertIn(token, group_source)
+            self.assertIn(token, group_workflow_source)
+        for token in (
+            "_message_repository->",
+            "_relation_repository->",
+            "_delivery_gateway->PushPayload",
+        ):
+            self.assertIn(token, group_history_source)
+        for token in (
+            "_relation_repository->",
+            "_delivery_gateway->PushPayload",
+            "UpdateGroupAnnouncement",
+            "UpdateGroupIcon",
+            "SetGroupAdmin",
+            "MuteGroupMember",
+            "KickGroupMember",
+            "QuitGroup",
+            "DissolveGroup",
+        ):
+            self.assertIn(token, group_management_source)
+        for token in (
+            "_relation_repository->",
+            "_delivery_gateway->PushPayload",
+            "BuildGroupListJson",
+            "CreateGroup",
+            "GetGroupList",
+            "InviteGroupMember",
+            "ApplyJoinGroup",
+            "ReviewGroupApply",
+        ):
+            self.assertIn(token, group_membership_source)
 
         self.assertIn('#include "ChatGrpcClient.hpp"', private_source)
         self.assertIn("ChatGrpcClient::GetInstance()->NotifyTextChatMsg", private_source)
@@ -3002,6 +3274,14 @@ class ChatServerStructureTests(unittest.TestCase):
             DOMAIN_MESSAGE_DIR / "PrivateMessageService.cpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.hpp",
             DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupManagementService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupManagementService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMembershipService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMembershipService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.hpp",
+            DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp",
         )
         delivery_paths = (
             DOMAIN_MESSAGE_DIR / "MessageDeliveryService.hpp",
@@ -3370,10 +3650,26 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("ports/IRelationRepository.hpp", group_header)
         self.assertIn("IRelationRepository* relation_repository", group_header)
         self.assertIn("IRelationRepository* _relation_repository", group_header)
+        self.assertIn("GroupManagementService", group_header)
+        self.assertIn("GroupMembershipService", group_header)
+        self.assertIn("GroupMessageHistoryService", group_header)
+        self.assertIn("GroupMessageWorkflow", group_header)
 
         group_source = (DOMAIN_MESSAGE_DIR / "GroupMessageService.cpp").read_text(encoding="utf-8")
+        group_management_source = (DOMAIN_MESSAGE_DIR / "GroupManagementService.cpp").read_text(encoding="utf-8")
+        group_membership_source = (DOMAIN_MESSAGE_DIR / "GroupMembershipService.cpp").read_text(encoding="utf-8")
+        group_history_source = (DOMAIN_MESSAGE_DIR / "GroupMessageHistoryService.cpp").read_text(encoding="utf-8")
+        group_workflow_source = (DOMAIN_MESSAGE_DIR / "GroupMessageWorkflow.cpp").read_text(encoding="utf-8")
         self.assertNotIn('#include "PostgresMgr.hpp"', group_source)
         self.assertNotIn("PostgresMgr::GetInstance()", group_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', group_management_source)
+        self.assertNotIn("PostgresMgr::GetInstance()", group_management_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', group_membership_source)
+        self.assertNotIn("PostgresMgr::GetInstance()", group_membership_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', group_history_source)
+        self.assertNotIn("PostgresMgr::GetInstance()", group_history_source)
+        self.assertNotIn('#include "PostgresMgr.hpp"', group_workflow_source)
+        self.assertNotIn("PostgresMgr::GetInstance()", group_workflow_source)
         for method in (
             "GetUserGroupList",
             "GetPendingGroupApplyForReviewer",
@@ -3389,6 +3685,25 @@ class ChatServerStructureTests(unittest.TestCase):
             "ReviewGroupApply",
             "GetUserRoleInGroup",
             "IsGroupMember",
+        ):
+            owner_source = (
+                group_workflow_source if method in ("GetUserRoleInGroup", "IsGroupMember") else group_membership_source
+            )
+            self.assertRegex(owner_source, rf"_relation_repository\s*->\s*{re.escape(method)}")
+        self.assertRegex(group_history_source, r"_relation_repository\s*->\s*IsGroupMember")
+        self.assertRegex(group_history_source, r"_relation_repository\s*->\s*GetGroupMemberList")
+        self.assertRegex(group_history_source, r"_relation_repository\s*->\s*GetGroupById")
+        self.assertRegex(group_history_source, r"_relation_repository\s*->\s*GetUserByUid")
+        for method in (
+            "GroupChatMessage",
+            "EditGroupMessage",
+            "RevokeGroupMessage",
+            "ForwardGroupMessage",
+        ):
+            self.assertIn(f"_workflow_service->{method}(request)", group_source)
+        for method in ("GroupHistory", "GroupReadAck"):
+            self.assertIn(f"_history_service->{method}(request)", group_source)
+        for method in (
             "UpdateGroupAnnouncement",
             "UpdateGroupIcon",
             "SetGroupAdmin",
@@ -3397,7 +3712,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "QuitGroup",
             "DissolveGroup",
         ):
-            self.assertRegex(group_source, rf"_relation_repository\s*->\s*{re.escape(method)}")
+            self.assertRegex(group_management_source, rf"_relation_repository\s*->\s*{re.escape(method)}")
+            self.assertIn(f"_management_service->{method}(request)", group_source)
 
         composition_source = runtime_composition_source()
         constructor_block = text_between(
@@ -3527,7 +3843,8 @@ class ChatServerStructureTests(unittest.TestCase):
         ):
             self.assertNotIn(stale_include, logic_source)
 
-        self.assertIn("ConfigSizeLocal", logic_source)
+        self.assertIn("SetWorkerConfig", logic_source)
+        self.assertIn("s_configured_worker_count", logic_source)
         self.assertIn("BindTcpTraceContext", logic_source)
 
     def test_runtime_role_controls_ingress_and_worker_lifecycle(self):
