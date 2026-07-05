@@ -195,7 +195,9 @@ fi
 
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
-export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}"
+# QUIC is still an experimental local path. Keep local startup TCP-only unless
+# MEMOCHAT_ENABLE_QUIC=1 is explicitly requested for QUIC debugging.
+export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"
 export MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-0}"
 export MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}"
 export MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-0}"
@@ -689,6 +691,37 @@ verify_started_pid() {
     return 1
 }
 
+launch_detached_service() {
+    local svc_dir="$1"
+    local exe_name="$2"
+    local out_log="$3"
+    local err_log="$4"
+    local pid_file="$5"
+    shift 5
+
+    if command -v setsid >/dev/null 2>&1; then
+        setsid bash -c '
+            set -Eeuo pipefail
+            svc_dir="$1"
+            exe_name="$2"
+            out_log="$3"
+            err_log="$4"
+            pid_file="$5"
+            shift 5
+            cd "$svc_dir"
+            nohup env "$@" "./${exe_name}" >>"$out_log" 2>>"$err_log" </dev/null &
+            echo $! > "$pid_file"
+        ' bash "$svc_dir" "$exe_name" "$out_log" "$err_log" "$pid_file" "$@"
+        LAUNCHED_SERVICE_PID="$(cat "$pid_file")"
+    else
+        (
+            cd "$svc_dir"
+            exec nohup env "$@" "./${exe_name}"
+        ) >>"$out_log" 2>>"$err_log" </dev/null &
+        LAUNCHED_SERVICE_PID=$!
+    fi
+}
+
 gpt_sovits_ready() {
     curl -fsS "${GPT_SOVITS_API_URL%/}/docs" >/dev/null 2>&1
 }
@@ -841,27 +874,23 @@ launch_svc() {
     : > "$err_log"
 
     echo "  [*] Starting ${svc_name}..."
-    (
-        cd "$svc_dir"
-        exec nohup env \
-            MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
-            MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
-            MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-1}" \
-            MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-0}" \
-            MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}" \
-            MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-0}" \
-            MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER:-0}" \
-            MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-}" \
-            MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}" \
-            MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}" \
-            MEMOCHAT_MINIO_ACCESSKEY="${MEMOCHAT_MINIO_ACCESSKEY:-}" \
-            MEMOCHAT_MINIO_SECRETKEY="${MEMOCHAT_MINIO_SECRETKEY:-}" \
-            MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}" \
-            MEMOCHAT_INSTANCE_NAME="$instance_name" \
-            "./${exe_name}"
-    ) >>"$out_log" 2>>"$err_log" </dev/null &
+    launch_detached_service "$svc_dir" "$exe_name" "$out_log" "$err_log" "$pid_file" \
+        MEMOCHAT_ENABLE_KAFKA="$MEMOCHAT_ENABLE_KAFKA" \
+        MEMOCHAT_ENABLE_RABBITMQ="$MEMOCHAT_ENABLE_RABBITMQ" \
+        MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}" \
+        MEMOCHAT_ENABLE_WS="${MEMOCHAT_ENABLE_WS:-0}" \
+        MEMOCHAT_ENABLE_WEBTRANSPORT="${MEMOCHAT_ENABLE_WEBTRANSPORT:-0}" \
+        MEMOCHAT_ADVERTISE_WEBTRANSPORT="${MEMOCHAT_ADVERTISE_WEBTRANSPORT:-0}" \
+        MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER:-0}" \
+        MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-}" \
+        MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}" \
+        MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}" \
+        MEMOCHAT_MINIO_ACCESSKEY="${MEMOCHAT_MINIO_ACCESSKEY:-}" \
+        MEMOCHAT_MINIO_SECRETKEY="${MEMOCHAT_MINIO_SECRETKEY:-}" \
+        MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}" \
+        MEMOCHAT_INSTANCE_NAME="$instance_name"
 
-    local pid=$!
+    local pid="$LAUNCHED_SERVICE_PID"
     echo "$pid" > "$pid_file"
     echo "  [OK] ${svc_name} started pid=${pid}"
 

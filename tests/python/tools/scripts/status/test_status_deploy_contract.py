@@ -196,10 +196,10 @@ class StatusDeployContractTests(unittest.TestCase):
 
         for token in (
             'source "$ENV_FILE"',
-            '--no-deploy',
+            "--no-deploy",
             'if [[ "$AUTO_DEPLOY" -ne 0 ]]; then',
             '"${SCRIPT_DIR}/deploy_services.sh"',
-            'Run ${SCRIPT_DIR}/deploy_services.sh first or omit --no-deploy.',
+            "Run ${SCRIPT_DIR}/deploy_services.sh first or omit --no-deploy.",
         ):
             self.assertIn(token, source)
 
@@ -231,6 +231,36 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn('MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-}"', start)
         self.assertLess(
             start.index('export MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-1}"'),
+            start.index("START_CORE_SERVICES="),
+        )
+
+    def test_linux_start_detaches_services_from_launcher_process_group(self):
+        start = read(START_SERVICES_SCRIPT)
+
+        for token in (
+            "launch_detached_service()",
+            "command -v setsid",
+            "setsid bash -c",
+            'nohup env "$@" "./${exe_name}" >>"$out_log" 2>>"$err_log" </dev/null &',
+            'echo $! > "$pid_file"',
+            'exec nohup env "$@" "./${exe_name}"',
+            'LAUNCHED_SERVICE_PID="$(cat "$pid_file")"',
+            "LAUNCHED_SERVICE_PID=$!",
+            'local pid="$LAUNCHED_SERVICE_PID"',
+        ):
+            self.assertIn(token, start)
+
+        self.assertLess(start.index("launch_detached_service()"), start.index("launch_svc()"))
+        self.assertLess(start.index("command -v setsid"), start.index('exec nohup env "$@" "./${exe_name}"'))
+
+    def test_linux_local_startup_defaults_to_tcp_chat_transport(self):
+        start = read(START_SERVICES_SCRIPT)
+
+        self.assertIn('export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"', start)
+        self.assertIn('MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"', start)
+        self.assertIn("experimental local path", start)
+        self.assertLess(
+            start.index('export MEMOCHAT_ENABLE_QUIC="${MEMOCHAT_ENABLE_QUIC:-0}"'),
             start.index("START_CORE_SERVICES="),
         )
 
