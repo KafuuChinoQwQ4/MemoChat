@@ -2,7 +2,7 @@
 export interface ServerInfo {
   /** Preferred browser chat transport for this connection attempt. */
   transport: "websocket" | "webtransport"
-  /** WebSocket URL, e.g. wss://localhost:8444/ws. Used directly or as WebTransport fallback. */
+  /** WebSocket URL, e.g. ws://localhost:8444/ws. Used directly or as WebTransport fallback. */
   wsUrl?: string
   /** WebTransport URL, e.g. https://localhost:8445/chat. */
   wtUrl?: string

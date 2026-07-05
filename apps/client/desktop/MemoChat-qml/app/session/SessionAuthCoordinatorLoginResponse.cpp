@@ -4,6 +4,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
+#include <optional>
+
 namespace
 {
 constexpr int kDefaultChatConnectTimeoutMs = 1200;
@@ -18,6 +20,20 @@ ChatTransportKind parseTransportKind(const QString& value)
         return ChatTransportKind::Quic;
     }
     return ChatTransportKind::Tcp;
+}
+
+std::optional<ChatTransportKind> parseDesktopEndpointTransportKind(const QString& value)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("quic"))
+    {
+        return ChatTransportKind::Quic;
+    }
+    if (normalized == QStringLiteral("tcp"))
+    {
+        return ChatTransportKind::Tcp;
+    }
+    return std::nullopt;
 }
 } // namespace
 
@@ -90,8 +106,13 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
     for (const auto& endpointValue : endpointArray)
     {
         const QJsonObject endpointObj = endpointValue.toObject();
+        const auto endpointTransport = parseDesktopEndpointTransportKind(endpointObj.value("transport").toString());
+        if (!endpointTransport)
+        {
+            continue;
+        }
         ChatEndpoint endpoint;
-        endpoint.transport = parseTransportKind(endpointObj.value("transport").toString());
+        endpoint.transport = *endpointTransport;
         endpoint.host = endpointObj.value("host").toString();
         endpoint.port = endpointObj.value("port").toString();
         endpoint.serverName = endpointObj.value("server_name").toString();

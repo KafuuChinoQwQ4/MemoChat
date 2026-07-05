@@ -25,8 +25,8 @@ Options:
   --build       Run production build (dist/) instead of dev server.
   --preview     Serve the production build with vite preview.
   --open        Open the browser automatically after starting.
-  --mock        Force VITE_USE_MOCK_TRANSPORT=1 (no WS bridge required).
-  --real        Force VITE_USE_MOCK_TRANSPORT=0 (requires WS↔TCP bridge).
+  --mock        Force VITE_USE_MOCK_TRANSPORT=1 (no real chat transport required).
+  --real        Force VITE_USE_MOCK_TRANSPORT=0 (requires ChatServer WebSocket/WebTransport).
   --diagnose    Print environment diagnostics and exit.
   -h, --help    Show this help.
 

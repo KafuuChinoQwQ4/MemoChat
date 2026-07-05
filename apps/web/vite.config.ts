@@ -48,9 +48,9 @@ export default defineConfig({
       "/api": { target: "https://localhost:8443", secure: false, changeOrigin: true },
       "/ai": { target: "https://localhost:8443", secure: false, changeOrigin: true },
       "/media": { target: "https://localhost:8443", secure: false, changeOrigin: true },
-      // WebSocket bridge (TCP↔WS)
+      // WebSocket chat ingress
       "/ws": {
-        target: "wss://localhost:8444",
+        target: "ws://localhost:8444",
         ws: true,
         secure: false,
         changeOrigin: true,

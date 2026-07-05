@@ -17,27 +17,27 @@ function endpoint(transport: string, priority: number, overrides: Partial<Endpoi
 }
 
 describe("selectBrowserChatEndpoint", () => {
-  it("keeps websocket as the default browser chat transport", () => {
+  it("prefers webtransport by default and keeps websocket fallback", () => {
     const selected = selectBrowserChatEndpoint([
       endpoint("webtransport", 1),
       endpoint("websocket", 2),
-    ], false)
-
-    expect(selected?.primary.transport).toBe("websocket")
-    expect(selected?.websocketFallback).toBeUndefined()
-  })
-
-  it("uses webtransport first when explicitly preferred and keeps websocket fallback", () => {
-    const selected = selectBrowserChatEndpoint([
-      endpoint("websocket", 2),
-      endpoint("webtransport", 1),
     ], true)
 
     expect(selected?.primary.transport).toBe("webtransport")
     expect(selected?.websocketFallback?.transport).toBe("websocket")
   })
 
-  it("does not select a webtransport-only endpoint by default", () => {
+  it("can keep websocket first when webtransport is not preferred", () => {
+    const selected = selectBrowserChatEndpoint([
+      endpoint("websocket", 2),
+      endpoint("webtransport", 1),
+    ], false)
+
+    expect(selected?.primary.transport).toBe("websocket")
+    expect(selected?.websocketFallback).toBeUndefined()
+  })
+
+  it("does not select a webtransport-only endpoint when webtransport is not preferred", () => {
     const selected = selectBrowserChatEndpoint([
       endpoint("tcp", 1),
       endpoint("webtransport", 2),
@@ -46,7 +46,7 @@ describe("selectBrowserChatEndpoint", () => {
     expect(selected).toBeNull()
   })
 
-  it("can select a webtransport-only endpoint when explicitly preferred", () => {
+  it("can select a webtransport-only endpoint when webtransport is preferred", () => {
     const selected = selectBrowserChatEndpoint([
       endpoint("tcp", 1),
       endpoint("webtransport", 2),
