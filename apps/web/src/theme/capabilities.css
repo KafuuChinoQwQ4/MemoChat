@@ -1,0 +1,11 @@
+/* Fallback when backdrop-filter is not supported */
+.no-blur {
+  --glass-blur: 0px;
+  /* Raise opacity to compensate for missing blur */
+  --glass-fill: rgba(255, 255, 255, 0.72);
+  --glass-sheen-height: 42%;
+}
+
+.no-blur[data-theme="dark"] {
+  --glass-fill: rgba(28, 30, 36, 0.82);
+}

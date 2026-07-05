@@ -1,0 +1,118 @@
+/* glass.module.css — Liquid Glass primitive styles, token-only (no literal rgba) */
+
+.surface {
+  position: relative;
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-stroke);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  overflow: hidden;
+}
+
+/* Top-edge sheen pseudo-element */
+.surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.36) 0%,
+    rgba(255, 255, 255, 0.08) var(--glass-sheen-height),
+    transparent var(--glass-sheen-height)
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle glow ring */
+.surface::after {
+  content: "";
+  position: absolute;
+  inset: -0.5px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.elevated {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* GlassButton */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: var(--glass-radius);
+  border: 1px solid var(--glass-stroke);
+  background: var(--glass-btn-bg);
+  color: var(--glass-btn-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--glass-btn-duration) ease,
+              transform var(--glass-btn-duration) ease,
+              border-color var(--glass-btn-duration) ease;
+  user-select: none;
+  white-space: nowrap;
+  outline: none;
+}
+.btn:hover:not(:disabled) {
+  background: var(--glass-btn-bg-hover);
+  transform: scale(var(--glass-btn-scale-hover));
+}
+.btn:active:not(:disabled) {
+  background: var(--glass-btn-bg-press);
+  transform: scale(var(--glass-btn-scale-press));
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btnPrimary {
+  background: var(--color-brand-green);
+  color: #fff;
+  border-color: transparent;
+}
+.btnPrimary:hover:not(:disabled) {
+  background: var(--color-brand-green-dark);
+}
+.btnDanger {
+  background: rgba(232, 65, 65, 0.12);
+  color: var(--color-badge);
+  border-color: rgba(232, 65, 65, 0.25);
+}
+
+/* GlassTextField */
+.textField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.textFieldInput {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  outline: none;
+  width: 100%;
+}
+.textFieldInput:focus {
+  border-color: var(--glass-input-border-focus);
+  box-shadow: 0 0 0 3px rgba(120, 181, 237, 0.18);
+}
+
+/* GlassScrollArea */
+.scrollArea {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
