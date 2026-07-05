@@ -1,0 +1,161 @@
+# H-12: mTLS between all MemoChat microservices
+#
+# Per-service DestinationRules that instruct the Envoy sidecar to use
+# ISTIO_MUTUAL TLS when initiating connections to each MemoChat service.
+# ISTIO_MUTUAL reuses the certificate that Istio auto-provisions for the
+# workload — no manual certificate management required.
+#
+# API: networking.istio.io/v1beta1 (Istio 1.20+)
+
+# ── Gateway server (WebSocket / HTTP ingress point) ───────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-gateserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-gateserver.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Chat server (persistent chat sessions, StatefulSet) ───────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-chatserver
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-chatserver.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Account service (account CRUD, profile) ───────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-accountservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-accountservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Login service (auth / JWT issuance) ───────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-loginservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-loginservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Register service (new-user registration) ──────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-registerservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-registerservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Media service (file upload / download, MinIO gateway) ─────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-mediaservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-mediaservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Moments service (social feed / posts) ─────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-momentsservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-momentsservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── Call service (LiveKit signalling / WebRTC) ────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-callservice
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-callservice.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── R18 / content-moderation service ─────────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: memochat-r18service
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: memochat-r18service.memochat.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

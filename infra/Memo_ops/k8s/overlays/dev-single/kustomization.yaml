@@ -63,7 +63,7 @@ configMapGenerator:
     behavior: merge
     literals:
       - LOG_LEVEL=debug
-      - ETCD_ENDPOINTS=http://memochat-etcd:2379
+      - ETCD_ENDPOINTS=https://memochat-etcd:2379
 
 images:
   - name: memochat/gateserver

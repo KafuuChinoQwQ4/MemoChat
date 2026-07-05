@@ -41,10 +41,22 @@ spec:
         app.kubernetes.io/name: memochat
         app.kubernetes.io/component: varifyserver
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: varifyserver
           image: memochat/varifyserver:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 50051
               name: grpc

@@ -1,0 +1,41 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: memochat-strict-mtls
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: memochat-istio-mutual
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  host: "*.memochat.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: memochat-namespace-only
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - memochat

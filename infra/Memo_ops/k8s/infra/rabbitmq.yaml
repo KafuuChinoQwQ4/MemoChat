@@ -45,9 +45,21 @@ spec:
       labels:
         app.kubernetes.io/name: rabbitmq
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: rabbitmq
           image: bitnami/rabbitmq:3.12
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 5672
               name: amqp

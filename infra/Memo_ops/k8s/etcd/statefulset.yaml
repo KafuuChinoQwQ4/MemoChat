@@ -39,9 +39,21 @@ spec:
         app.kubernetes.io/name: etcd
         app.kubernetes.io/component: etcd
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: etcd
           image: bitnami/etcd:3.5.9
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 2379
               name: client
@@ -56,15 +68,33 @@ spec:
                   name: memochat-etcd-secrets
                   key: root-password
             - name: ETCD_ADVERTISE_CLIENT_URLS
-              value: "http://$(HOSTNAME).memochat-etcd:2379"
+              value: "https://$(HOSTNAME).memochat-etcd:2379"
+            - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+              value: "https://$(HOSTNAME).memochat-etcd:2380"
             - name: ETCD_INITIAL_CLUSTER_STATE
               value: "new"
             - name: ETCD_INITIAL_CLUSTER_TOKEN
               value: "memochat-etcd-cluster"
             - name: ETCD_LISTEN_CLIENT_URLS
-              value: "http://0.0.0.0:2379"
+              value: "https://0.0.0.0:2379"
             - name: ETCD_LISTEN_PEER_URLS
-              value: "http://0.0.0.0:2380"
+              value: "https://0.0.0.0:2380"
+            - name: ETCD_CERT_FILE
+              value: /etc/etcd/tls/tls.crt
+            - name: ETCD_KEY_FILE
+              value: /etc/etcd/tls/tls.key
+            - name: ETCD_TRUSTED_CA_FILE
+              value: /etc/etcd/tls/ca.crt
+            - name: ETCD_CLIENT_CERT_AUTH
+              value: "true"
+            - name: ETCD_PEER_CERT_FILE
+              value: /etc/etcd/tls/tls.crt
+            - name: ETCD_PEER_KEY_FILE
+              value: /etc/etcd/tls/tls.key
+            - name: ETCD_PEER_TRUSTED_CA_FILE
+              value: /etc/etcd/tls/ca.crt
+            - name: ETCD_PEER_CLIENT_CERT_AUTH
+              value: "true"
           resources:
             requests:
               cpu: 100m
@@ -75,6 +105,9 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /bitnami/etcd
+            - name: etcd-tls
+              mountPath: /etc/etcd/tls
+              readOnly: true
           livenessProbe:
             exec:
               command:
@@ -89,6 +122,10 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
+      volumes:
+        - name: etcd-tls
+          secret:
+            secretName: memochat-etcd-tls
   volumeClaimTemplates:
     - metadata:
         name: data

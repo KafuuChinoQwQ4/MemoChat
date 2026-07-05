@@ -11,6 +11,29 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Reject known weak dependency credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          weak_password='(Passwd|Password)[[:space:]]*=[[:space:]]*(123456|password)'
+          weak_mongodb='mongodb://[^[:space:]]+:123456@'
+          disabled_tls='sslmode:[[:space:]]*disable'
+          mutable_prod_tag='newTag:[[:space:]]*latest'
+          if git grep -nE "$weak_password|$weak_mongodb|$disabled_tls|$mutable_prod_tag" -- \
+            ':!tests/**' \
+            ':!*.md' \
+            ':!.github/workflows/ci.yml'; then
+            echo "Known weak credential or mutable production tag pattern found" >&2
+            exit 1
+          fi
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

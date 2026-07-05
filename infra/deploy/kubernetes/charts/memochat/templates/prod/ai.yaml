@@ -36,6 +36,10 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
             - name: MEMOCHAT_REDIS_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_AI_INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-internal-api-key } }
+            - name: MEMOCHAT_AI_PROVIDER_ADMIN_KEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-provider-admin-key } }
           ports:
             - name: grpc
               containerPort: {{ .Values.aiServer.service.grpcPort }}
@@ -109,6 +113,10 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
             - name: MEMOCHAT_AI_NEO4J__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: neo4j-password } }
+            - name: MEMOCHAT_AI_INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-internal-api-key } }
+            - name: MEMOCHAT_AI_PROVIDER_ADMIN_KEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-provider-admin-key } }
             {{- with .Values.aiOrchestrator.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

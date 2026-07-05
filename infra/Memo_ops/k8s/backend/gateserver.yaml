@@ -41,10 +41,22 @@ spec:
         app.kubernetes.io/name: memochat
         app.kubernetes.io/component: gateserver
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: gateserver
           image: memochat/gateserver:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8080
               name: http
@@ -62,7 +74,7 @@ spec:
             - name: MEMOCHAT_CLUSTER_DISCOVERYMODE
               value: "etcd"
             - name: MEMOCHAT_CLUSTER_ETCDENDPOINTS
-              value: "http://memochat-etcd:2379"
+              value: "https://memochat-etcd:2379"
             - name: MEMOCHAT_POSTGRES_HOST
               value: "memochat-postgres"
             - name: MEMOCHAT_REDIS_HOST

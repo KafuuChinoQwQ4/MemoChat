@@ -8,7 +8,9 @@
 | --- | --- |
 | `configmap-ops-init.yaml` | MemoOps 初始化用 ConfigMap 模板。 |
 | `configmap-services.yaml` | 各服务通用配置 ConfigMap 模板。 |
+| `external-secrets.yaml` | External Secrets Operator/Vault SecretStore 与 ExternalSecret 模板。 |
 | `jobs.yaml` | 初始化/迁移类 Job 模板。 |
+| `mesh-istio.yaml` | Istio strict mTLS 与 namespace AuthorizationPolicy 模板。 |
 | `namespaces.yaml` | 命名空间模板。 |
 | `secret.yaml` | Secret 模板。 |
 

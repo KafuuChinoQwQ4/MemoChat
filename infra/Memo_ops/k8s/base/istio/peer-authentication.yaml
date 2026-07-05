@@ -1,0 +1,23 @@
+# H-12: mTLS between all MemoChat microservices
+#
+# Enforces STRICT mTLS for all service-to-service traffic in the memochat
+# namespace. Every sidecar must present a valid certificate; plain-text
+# connections are rejected.
+#
+# Applied via kustomize overlays. Staging/dev overlays may patch mode to
+# PERMISSIVE if needed during roll-out.
+
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: memochat-strict-mtls
+  namespace: memochat
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/part-of: memochat
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # No selector — applies to the entire namespace.
+  mtls:
+    mode: STRICT

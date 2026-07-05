@@ -1,0 +1,42 @@
+# P25: mTLS for staging — PERMISSIVE mode (migrate to STRICT after all sidecars confirmed)
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: memochat-strict-mtls
+  namespace: memochat-staging
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  mtls:
+    mode: PERMISSIVE
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: memochat-istio-mutual
+  namespace: memochat-staging
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  host: "*.memochat.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: memochat-namespace-only
+  namespace: memochat-staging
+  labels:
+    app.kubernetes.io/name: memochat
+    app.kubernetes.io/component: service-mesh
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - memochat-staging

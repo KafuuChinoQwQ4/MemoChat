@@ -112,11 +112,8 @@ jobs:
         run: |
           VERSION=$(date +%Y%m%d-%H%M%S)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          docker tag memochat/gateserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:latest
           docker tag memochat/gateserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:$VERSION
-          docker tag memochat/chatserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:latest
           docker tag memochat/chatserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:$VERSION
-          docker tag memochat/varifyserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:latest
           docker tag memochat/varifyserver:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:$VERSION
 
       - name: Login to Container Registry
@@ -128,12 +125,25 @@ jobs:
 
       - name: Push images
         run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:${{ env.VERSION }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:${{ env.VERSION }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:${{ env.VERSION }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver:$VERSION
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver:$VERSION
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver:$VERSION
+
+      - name: Resolve immutable image digests
+        id: image-digests
+        run: |
+          set -euo pipefail
+          GATESERVER_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/gateserver"
+          CHATSERVER_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/chatserver"
+          VARIFYSERVER_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/varifyserver"
+          {
+            echo "gateserver_image=$GATESERVER_IMAGE"
+            echo "chatserver_image=$CHATSERVER_IMAGE"
+            echo "varifyserver_image=$VARIFYSERVER_IMAGE"
+            echo "gateserver_digest=$(docker buildx imagetools inspect "$GATESERVER_IMAGE:$VERSION" --format '{{.Manifest.Digest}}')"
+            echo "chatserver_digest=$(docker buildx imagetools inspect "$CHATSERVER_IMAGE:$VERSION" --format '{{.Manifest.Digest}}')"
+            echo "varifyserver_digest=$(docker buildx imagetools inspect "$VARIFYSERVER_IMAGE:$VERSION" --format '{{.Manifest.Digest}}')"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
@@ -142,6 +152,36 @@ jobs:
         run: |
           echo "${{ secrets.PROD_KUBECONFIG }}" | base64 -d > kubeconfig
           echo "KUBECONFIG=$(pwd)/kubeconfig" >> $GITHUB_ENV
+
+      - name: Materialize production image digests
+        env:
+          GATESERVER_IMAGE: ${{ steps.image-digests.outputs.gateserver_image }}
+          GATESERVER_DIGEST: ${{ steps.image-digests.outputs.gateserver_digest }}
+          CHATSERVER_IMAGE: ${{ steps.image-digests.outputs.chatserver_image }}
+          CHATSERVER_DIGEST: ${{ steps.image-digests.outputs.chatserver_digest }}
+          VARIFYSERVER_IMAGE: ${{ steps.image-digests.outputs.varifyserver_image }}
+          VARIFYSERVER_DIGEST: ${{ steps.image-digests.outputs.varifyserver_digest }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          overlay = Path("infra/Memo_ops/k8s/overlays/prod/kustomization.yaml")
+          text = overlay.read_text(encoding="utf-8")
+          replacements = {
+              "  - name: memochat/gateserver\n    newTag: prod-digest-required":
+                  f"  - name: memochat/gateserver\n    newName: {os.environ['GATESERVER_IMAGE']}\n    digest: {os.environ['GATESERVER_DIGEST']}",
+              "  - name: memochat/chatserver\n    newTag: prod-digest-required":
+                  f"  - name: memochat/chatserver\n    newName: {os.environ['CHATSERVER_IMAGE']}\n    digest: {os.environ['CHATSERVER_DIGEST']}",
+              "  - name: memochat/varifyserver\n    newTag: prod-digest-required":
+                  f"  - name: memochat/varifyserver\n    newName: {os.environ['VARIFYSERVER_IMAGE']}\n    digest: {os.environ['VARIFYSERVER_DIGEST']}",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"missing production image placeholder: {old.splitlines()[0]}")
+              text = text.replace(old, new)
+          overlay.write_text(text, encoding="utf-8")
+          PY
 
       - name: Deploy to Production
         run: |
@@ -164,6 +204,6 @@ jobs:
       - name: Create deployment annotation
         run: |
           kubectl annotate deployment/memochat-gateserver -n memochat \
-            kubernetes.io/change-cause="Deployed at ${{ env.VERSION }} from ${{ github.sha }}"
+            kubernetes.io/change-cause="Deployed at $VERSION from ${{ github.sha }}"
           kubectl annotate statefulset/memochat-chatserver -n memochat \
-            kubernetes.io/change-cause="Deployed at ${{ env.VERSION }} from ${{ github.sha }}"
+            kubernetes.io/change-cause="Deployed at $VERSION from ${{ github.sha }}"

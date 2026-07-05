@@ -1,0 +1,48 @@
+{{- if and .Values.mesh.enabled (eq .Values.mesh.provider "istio") }}
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: memochat-strict-mtls
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  mtls:
+    mode: {{ .Values.mesh.istio.mtlsMode | default "STRICT" }}
+{{- if .Values.mesh.istio.destinationRule.enabled }}
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: memochat-istio-mutual
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  host: {{ default (printf "*.%s.svc.%s" .Values.namespaces.prod .Values.global.clusterDomain) .Values.mesh.istio.destinationRule.host | quote }}
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+{{- end }}
+{{- if .Values.mesh.istio.authorizationPolicy.enabled }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: memochat-namespace-only
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              {{- if .Values.mesh.istio.authorizationPolicy.allowedNamespaces }}
+              {{- toYaml .Values.mesh.istio.authorizationPolicy.allowedNamespaces | nindent 14 }}
+              {{- else }}
+              - {{ .Values.namespaces.prod | quote }}
+              {{- end }}
+{{- end }}
+{{- end }}

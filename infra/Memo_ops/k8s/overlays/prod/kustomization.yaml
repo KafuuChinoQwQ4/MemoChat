@@ -9,7 +9,21 @@ bases:
   - ../../backend
   - ../../infra
 
+resources:
+  - external-secrets.yaml
+  - mesh-istio.yaml
+
 patches:
+  - patch: |-
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: memochat
+        labels:
+          istio-injection: enabled
+    target:
+      kind: Namespace
+      name: memochat
   - patch: |-
       $patch: delete
       apiVersion: v1
@@ -64,13 +78,15 @@ configMapGenerator:
     behavior: merge
     literals:
       - LOG_LEVEL=warn
-      - ETCD_ENDPOINTS=http://memochat-etcd:2379
+      - ETCD_ENDPOINTS=https://memochat-etcd:2379
       - TELEMETRY_ENABLED=true
 
 images:
+  # Release automation must replace these placeholders with immutable image
+  # tags or digests before applying the production overlay.
   - name: memochat/gateserver
-    newTag: latest
+    newTag: prod-digest-required
   - name: memochat/chatserver
-    newTag: latest
+    newTag: prod-digest-required
   - name: memochat/varifyserver
-    newTag: latest
+    newTag: prod-digest-required

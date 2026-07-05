@@ -9,6 +9,10 @@ bases:
   - ../../backend
   - ../../infra
 
+resources:
+  - mesh-istio.yaml
+  - external-secrets.yaml
+
 patches:
   - patch: |-
       apiVersion: apps/v1
@@ -46,7 +50,7 @@ configMapGenerator:
     behavior: merge
     literals:
       - LOG_LEVEL=info
-      - ETCD_ENDPOINTS=http://memochat-etcd:2379
+      - ETCD_ENDPOINTS=https://memochat-etcd:2379
 
 images:
   - name: memochat/gateserver
