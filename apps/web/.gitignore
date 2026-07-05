@@ -1,0 +1,10 @@
+# Build output
+dist/
+dist-ssr/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local env files
+.env.local
+.env.*.local
