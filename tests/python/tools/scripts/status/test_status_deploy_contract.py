@@ -252,6 +252,16 @@ class StatusDeployContractTests(unittest.TestCase):
         )
         self.assertIn("MEMOCHAT_AI_INTERNAL_API_KEY=${MEMOCHAT_AI_INTERNAL_API_KEY:-}", ai_compose)
 
+    def test_linux_local_startup_allows_documented_dev_chat_auth_secret(self):
+        start = read(START_SERVICES_SCRIPT)
+
+        self.assertIn('export MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-1}"', start)
+        self.assertIn('MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-}"', start)
+        self.assertLess(
+            start.index('export MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-1}"'),
+            start.index("START_CORE_SERVICES="),
+        )
+
     def test_linux_start_requires_gpt_sovits_by_default(self):
         source = read(START_SERVICES_SCRIPT)
 
