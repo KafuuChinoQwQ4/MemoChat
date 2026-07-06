@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemoChat 项目架构概览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5d687a;
+      --line: #d7deea;
+      --client: #2d7d9a;
+      --edge: #7a5af8;
+      --gate: #c76a2b;
+      --chat: #26805e;
+      --ai: #bf3f65;
+      --infra: #566273;
+      --shadow: 0 16px 40px rgba(23, 32, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1440px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 28px 0 42px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .stamp {
+      min-width: 170px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .diagram-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .diagram-scroll {
+      overflow-x: auto;
+      padding: 22px 16px 28px;
+    }
+
+    .architecture-svg {
+      display: block;
+      width: min(100%, 1100px);
+      min-width: 900px;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    .cluster {
+      fill: #fbfcff;
+      stroke: #d9e0eb;
+      stroke-width: 1.5;
+    }
+
+    .node {
+      fill: #ffffff;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 10px 16px rgba(23, 32, 51, 0.08));
+    }
+
+    .node.client { stroke: var(--client); }
+    .node.edge { stroke: var(--edge); }
+    .node.gate { stroke: var(--gate); }
+    .node.chat { stroke: var(--chat); }
+    .node.ai { stroke: var(--ai); }
+    .node.infra { stroke: var(--infra); }
+
+    .cap {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      fill: #7a8494;
+    }
+
+    .svg-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0;
+      fill: var(--ink);
+    }
+
+    .svg-subtitle {
+      font-size: 13px;
+      fill: var(--muted);
+    }
+
+    .svg-item {
+      font-size: 14px;
+      fill: #334055;
+    }
+
+    .svg-small {
+      font-size: 12px;
+      fill: #5d687a;
+    }
+
+    .pill {
+      fill: #f3f6fa;
+      stroke: #dce3ee;
+      stroke-width: 1;
+    }
+
+    .pill-text {
+      font-size: 12px;
+      font-weight: 700;
+      fill: #3d4859;
+    }
+
+    .flow {
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.82;
+    }
+
+    .flow.http { stroke: var(--edge); }
+    .flow.chat { stroke: var(--chat); }
+    .flow.grpc { stroke: #6a7586; }
+    .flow.data { stroke: #8791a1; stroke-dasharray: 9 7; }
+    .flow.ai { stroke: var(--ai); }
+
+    .architecture-svg > .flow.data {
+      display: none;
+    }
+
+    .flow-label {
+      display: none;
+      font-size: 12px;
+      font-weight: 700;
+      fill: #3d4859;
+    }
+
+    .infra-box {
+      fill: #ffffff;
+      stroke: #cfd7e4;
+      stroke-width: 1.4;
+    }
+
+    .infra-title {
+      font-size: 13px;
+      font-weight: 800;
+      fill: #202a3c;
+    }
+
+    .infra-text {
+      font-size: 11.5px;
+      fill: #5d687a;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      box-shadow: 0 10px 28px rgba(23, 32, 51, 0.06);
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .routes {
+      display: grid;
+      gap: 12px;
+    }
+
+    .route {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid #e0e6ef;
+      border-radius: 8px;
+      background: #fbfcff;
+    }
+
+    .route strong {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      border-radius: 8px;
+      color: #ffffff;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .route p {
+      margin: 0;
+      color: #39465a;
+      font-size: 14px;
+    }
+
+    .tone-auth strong { background: var(--gate); }
+    .tone-chat strong { background: var(--chat); }
+    .tone-ai strong { background: var(--ai); }
+    .tone-media strong { background: var(--client); }
+
+    .module-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .module {
+      border: 1px solid #e0e6ef;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcff;
+    }
+
+    .module h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .module ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #4c596b;
+      font-size: 13px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 0.94em;
+      color: #29354a;
+    }
+
+    @media (max-width: 980px) {
+      main {
+        width: min(100% - 24px, 1440px);
+        padding-top: 18px;
+      }
+
+      header {
+        display: block;
+      }
+
+      .stamp {
+        margin-top: 12px;
+        text-align: left;
+      }
+
+      .content-grid,
+      .module-list {
+        grid-template-columns: 1fr;
+      }
+
+      .route {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>MemoChat 项目架构概览</h1>
+        <p class="subtitle">基于当前 checkout 的目录和边界文档整理：Qt/QML 桌面端通过 GateServer、ChatServer 和 AIOrchestrator 进入后端能力，数据、队列、对象存储、RAG 和观测依赖都在 Docker 基础设施层。</p>
+      </div>
+      <div class="stamp">Generated<br>2026-06-14</div>
+    </header>
+
+    <section class="diagram-panel" aria-label="MemoChat architecture diagram">
+      <div class="diagram-scroll">
+        <svg class="architecture-svg" viewBox="0 0 1320 960" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">MemoChat architecture overview</title>
+          <desc id="diagram-desc">High-level client, gateway, chat, AI, and infrastructure dependencies for MemoChat.</desc>
+          <defs>
+            <marker id="arrow-edge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a5af8"></path>
+            </marker>
+            <marker id="arrow-chat" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#26805e"></path>
+            </marker>
+            <marker id="arrow-grpc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#6a7586"></path>
+            </marker>
+            <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8791a1"></path>
+            </marker>
+            <marker id="arrow-ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#bf3f65"></path>
+            </marker>
+          </defs>
+
+          <rect x="24" y="24" width="1272" height="912" rx="18" class="cluster"></rect>
+          <text x="48" y="58" class="cap">High-level runtime map</text>
+          <text x="48" y="84" class="svg-subtitle">实线表示主要同步请求，虚线表示数据/队列/观测依赖；虚线或标注 optional 的节点属于兼容、异步或可选路径。</text>
+
+          <g aria-label="Client">
+            <rect x="45" y="120" width="290" height="420" rx="16" class="node client"></rect>
+            <text x="70" y="158" class="svg-title">Qt/QML Desktop Client</text>
+            <text x="70" y="183" class="svg-subtitle">apps/client/desktop/MemoChat-qml</text>
+
+            <rect x="70" y="214" width="240" height="48" rx="8" class="pill"></rect>
+            <text x="86" y="235" class="pill-text">QML Shell / Views</text>
+            <text x="86" y="252" class="svg-small">qml/linux, qml/app, features/*/view</text>
+
+            <rect x="70" y="277" width="240" height="58" rx="8" class="pill"></rect>
+            <text x="86" y="298" class="pill-text">App Shell + Composition</text>
+            <text x="86" y="315" class="svg-small">AppController, AppPortRegistry</text>
+            <text x="86" y="330" class="svg-small">session, connection, coordinators</text>
+
+            <rect x="70" y="350" width="240" height="64" rx="8" class="pill"></rect>
+            <text x="86" y="371" class="pill-text">Feature Modules</text>
+            <text x="86" y="388" class="svg-small">auth, chat, contact, group, profile</text>
+            <text x="86" y="403" class="svg-small">call, moments, agent, pet, settings</text>
+
+            <rect x="70" y="429" width="240" height="58" rx="8" class="pill"></rect>
+            <text x="86" y="450" class="pill-text">Shared / Core</text>
+            <text x="86" y="467" class="svg-small">gateway, media, network, session</text>
+            <text x="86" y="482" class="svg-small">resources, platform adapters</text>
+          </g>
+
+          <g aria-label="Gateway">
+            <rect x="382" y="120" width="240" height="150" rx="16" class="node edge"></rect>
+            <text x="407" y="158" class="svg-title">Envoy Gateway</text>
+            <text x="407" y="183" class="svg-subtitle">infra/deploy/local/compose</text>
+            <text x="407" y="214" class="svg-item">HTTP :80</text>
+            <text x="407" y="237" class="svg-item">TLS / HTTP3 :8443</text>
+            <text x="407" y="257" class="svg-small">生产入口；本地也可直连后端端口</text>
+
+            <rect x="382" y="320" width="240" height="220" rx="16" class="node gate"></rect>
+            <text x="407" y="358" class="svg-title">GateServer</text>
+            <text x="407" y="383" class="svg-subtitle">HTTP API / auth / media / AI proxy</text>
+            <text x="407" y="415" class="svg-item">RouteRegistry / H1 adapter</text>
+            <text x="407" y="438" class="svg-item">auth, profile, media, call</text>
+            <text x="407" y="461" class="svg-item">moments, R18, AI route modules</text>
+            <text x="407" y="484" class="svg-item">GateServerCore shared logic</text>
+            <text x="407" y="508" class="svg-small">HTTP/2 主要由 Envoy 终止</text>
+            <text x="407" y="526" class="svg-small">嵌入式 H2 为可选实验路径</text>
+          </g>
+
+          <g aria-label="Chat services">
+            <rect x="680" y="120" width="270" height="270" rx="16" class="node chat"></rect>
+            <text x="705" y="158" class="svg-title">ChatServer</text>
+            <text x="705" y="183" class="svg-subtitle">TCP / QUIC 长连接入口</text>
+            <text x="705" y="215" class="svg-item">transport: CServer, CSession</text>
+            <text x="705" y="238" class="svg-item">QuicChatServer, QuicSession</text>
+            <text x="705" y="261" class="svg-item">session auth, heartbeat</text>
+            <text x="705" y="284" class="svg-item">LogicSystem + handler registrars</text>
+            <text x="705" y="313" class="svg-small">使用 login_ticket / token 建立在线会话</text>
+
+            <rect x="1000" y="120" width="270" height="270" rx="16" class="node chat"></rect>
+            <text x="1025" y="158" class="svg-title">Chat Domain Workers</text>
+            <text x="1025" y="183" class="svg-subtitle">ChatServer 内部服务边界</text>
+            <text x="1025" y="215" class="svg-item">ChatMessageService</text>
+            <text x="1025" y="238" class="svg-item">ChatRelationServiceWorker</text>
+            <text x="1025" y="261" class="svg-item">ChatRelationQueryService</text>
+            <text x="1025" y="284" class="svg-item">ChatDeliveryWorker</text>
+            <text x="1025" y="313" class="svg-small">message / relation / delivery / outbox</text>
+          </g>
+
+          <g aria-label="Support services">
+            <rect x="680" y="435" width="270" height="165" rx="16" class="node gate"></rect>
+            <text x="705" y="473" class="svg-title">Auth Support Services</text>
+            <text x="705" y="498" class="svg-subtitle">VarifyServer + StatusServer</text>
+            <text x="705" y="529" class="svg-item">VarifyServer: email code, policy</text>
+            <text x="705" y="552" class="svg-item">rate limit, Redis code cache</text>
+            <text x="705" y="575" class="svg-small">StatusServer: chat route selection</text>
+
+            <rect x="1000" y="435" width="270" height="165" rx="16" class="node ai"></rect>
+            <text x="1025" y="473" class="svg-title">AIServer / AIOrchestrator</text>
+            <text x="1025" y="498" class="svg-subtitle">C++ bridge + Python FastAPI</text>
+            <text x="1025" y="529" class="svg-item">/chat, /chat/stream, /smart</text>
+            <text x="1025" y="552" class="svg-item">/kb, /models, /agent, /pet</text>
+            <text x="1025" y="575" class="svg-small">harness, RAG, tools, memory, metrics</text>
+          </g>
+
+          <g aria-label="Infrastructure">
+            <rect x="45" y="665" width="1225" height="225" rx="16" class="node infra"></rect>
+            <text x="70" y="704" class="svg-title">Docker Infrastructure Layer</text>
+            <text x="70" y="728" class="svg-subtitle">infra/deploy/local + AIOrchestrator/docker-compose.yml</text>
+
+            <rect x="70" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="130" y="776" text-anchor="middle" class="infra-title">Postgres</text>
+            <text x="130" y="798" text-anchor="middle" class="infra-text">账号 / 关系</text>
+            <text x="130" y="816" text-anchor="middle" class="infra-text">会话 / AI日志</text>
+
+            <rect x="202" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="262" y="776" text-anchor="middle" class="infra-title">Redis</text>
+            <text x="262" y="798" text-anchor="middle" class="infra-text">token / 验证码</text>
+            <text x="262" y="816" text-anchor="middle" class="infra-text">在线路由 / cache</text>
+
+            <rect x="334" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="394" y="776" text-anchor="middle" class="infra-title">MongoDB</text>
+            <text x="394" y="798" text-anchor="middle" class="infra-text">消息历史</text>
+            <text x="394" y="816" text-anchor="middle" class="infra-text">文档型数据</text>
+
+            <rect x="466" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="526" y="776" text-anchor="middle" class="infra-title">MinIO</text>
+            <text x="526" y="798" text-anchor="middle" class="infra-text">头像 / 文件</text>
+            <text x="526" y="816" text-anchor="middle" class="infra-text">图片 / 视频</text>
+
+            <rect x="598" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="658" y="776" text-anchor="middle" class="infra-title">RabbitMQ</text>
+            <text x="658" y="798" text-anchor="middle" class="infra-text">任务投递</text>
+            <text x="658" y="816" text-anchor="middle" class="infra-text">邮件 / side effects</text>
+
+            <rect x="730" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="790" y="776" text-anchor="middle" class="infra-title">Redpanda</text>
+            <text x="790" y="798" text-anchor="middle" class="infra-text">Kafka API</text>
+            <text x="790" y="816" text-anchor="middle" class="infra-text">异步事件流</text>
+
+            <rect x="862" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="922" y="776" text-anchor="middle" class="infra-title">Qdrant</text>
+            <text x="922" y="798" text-anchor="middle" class="infra-text">RAG 向量库</text>
+            <text x="922" y="816" text-anchor="middle" class="infra-text">semantic search</text>
+
+            <rect x="994" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="1054" y="776" text-anchor="middle" class="infra-title">Neo4j</text>
+            <text x="1054" y="798" text-anchor="middle" class="infra-text">图谱 / 记忆</text>
+            <text x="1054" y="816" text-anchor="middle" class="infra-text">graph recall</text>
+
+            <rect x="1126" y="752" width="120" height="84" rx="8" class="infra-box"></rect>
+            <text x="1186" y="776" text-anchor="middle" class="infra-title">Observability</text>
+            <text x="1186" y="798" text-anchor="middle" class="infra-text">Prom / Grafana</text>
+            <text x="1186" y="816" text-anchor="middle" class="infra-text">Loki / Tempo / OTel</text>
+
+            <rect x="70" y="850" width="1176" height="24" rx="8" class="pill"></rect>
+            <text x="86" y="867" class="svg-small">Call path optional infra: LiveKit + Coturn；AI path optional models/providers: Ollama / OpenAI-compatible / Kimi / Claude。</text>
+          </g>
+
+          <path class="flow http" marker-end="url(#arrow-edge)" d="M 335 222 C 352 222, 360 202, 382 198"></path>
+          <text x="340" y="188" class="flow-label">HTTP API</text>
+
+          <path class="flow http" marker-end="url(#arrow-edge)" d="M 502 270 L 502 320"></path>
+          <text x="518" y="302" class="flow-label">forward</text>
+
+          <path class="flow chat" marker-end="url(#arrow-chat)" d="M 335 300 C 470 300, 545 245, 680 245"></path>
+          <text x="388" y="410" class="flow-label">TCP / QUIC long connection</text>
+
+          <path class="flow grpc" marker-end="url(#arrow-grpc)" d="M 622 455 C 650 455, 650 515, 680 515"></path>
+          <text x="626" y="470" class="flow-label">gRPC / Redis code</text>
+
+          <path class="flow grpc" marker-end="url(#arrow-grpc)" d="M 622 365 C 642 345, 654 300, 680 276"></path>
+          <text x="622" y="330" class="flow-label">chat route</text>
+
+          <path class="flow chat" marker-end="url(#arrow-chat)" d="M 950 252 L 1000 252"></path>
+          <text x="956" y="240" class="flow-label">internal gRPC</text>
+
+          <path class="flow ai" marker-end="url(#arrow-ai)" d="M 622 420 C 770 395, 900 420, 1000 485"></path>
+          <text x="724" y="552" class="flow-label">AI proxy / AIServer bridge</text>
+
+          <path class="flow data" marker-end="url(#arrow-data)" d="M 500 540 C 500 615, 335 635, 262 752"></path>
+          <path class="flow data" marker-end="url(#arrow-data)" d="M 815 600 C 815 655, 640 690, 658 752"></path>
+          <path class="flow data" marker-end="url(#arrow-data)" d="M 820 390 C 820 520, 430 590, 394 752"></path>
+          <path class="flow data" marker-end="url(#arrow-data)" d="M 1135 600 C 1135 664, 962 685, 922 752"></path>
+          <path class="flow data" marker-end="url(#arrow-data)" d="M 1135 600 C 1160 670, 1065 690, 1054 752"></path>
+          <text x="548" y="636" class="flow-label">data / queue / object storage</text>
+
+          <g aria-label="Legend">
+            <rect x="1050" y="40" width="220" height="56" rx="8" class="pill"></rect>
+            <path class="flow http" marker-end="url(#arrow-edge)" d="M 1070 58 L 1115 58"></path>
+            <text x="1126" y="62" class="svg-small">main request</text>
+            <path class="flow data" marker-end="url(#arrow-data)" d="M 1070 80 L 1115 80"></path>
+            <text x="1126" y="84" class="svg-small">infra dependency</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <div class="content-grid">
+      <section class="section">
+        <h2>主链路</h2>
+        <div class="routes">
+          <div class="route tone-auth">
+            <strong>登录注册</strong>
+            <p>客户端走 Envoy/GateServer 的 HTTP API；GateServer 处理账号、token、profile、media 等入口，验证码走 VarifyServer 与 Redis，账号数据落 Postgres，登录后拿到 chat 路由和 <code>login_ticket</code>。</p>
+          </div>
+          <div class="route tone-chat">
+            <strong>聊天长连</strong>
+            <p>客户端按登录结果连接 ChatServer 的 TCP/QUIC 通道；ChatServer 负责在线会话、心跳、消息分发，并把 message、relation、delivery、outbox 等工作拆到内部 domain/worker 边界。</p>
+          </div>
+          <div class="route tone-ai">
+            <strong>AI/RAG</strong>
+            <p>AI 请求可以经 GateServer 的 AI route proxy，也可以经 AIServer 这个 C++ bridge；最终进入 Python FastAPI 的 AIOrchestrator，处理 <code>/chat</code>、<code>/smart</code>、<code>/kb</code>、<code>/agent</code>、<code>/pet</code> 等能力。</p>
+          </div>
+          <div class="route tone-media">
+            <strong>媒体通话</strong>
+            <p>头像、图片、视频、动态等对象存储走 MinIO/S3 抽象；通话控制在 GateServerCore 的 call 服务侧，运行时依赖 LiveKit/Coturn 这类可选实时音视频基础设施。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>模块边界</h2>
+        <div class="module-list">
+          <article class="module">
+            <h3>Client</h3>
+            <ul>
+              <li><code>AppController</code> 是 app shell，不承接 feature 业务循环。</li>
+              <li><code>features/*</code> 自己闭合 controller、viewmodel、model、service/cache。</li>
+            </ul>
+          </article>
+          <article class="module">
+            <h3>Gate</h3>
+            <ul>
+              <li>认证、资料、媒体、call、moments、AI proxy 的 HTTP 聚合入口。</li>
+              <li><code>GateServerCore</code> 复用账号、token、媒体、通话等共享逻辑。</li>
+            </ul>
+          </article>
+          <article class="module">
+            <h3>Chat</h3>
+            <ul>
+              <li>长连接入口和在线状态在 transport/session。</li>
+              <li>message、relation、delivery、persistence、messaging 已分层。</li>
+            </ul>
+          </article>
+          <article class="module">
+            <h3>AI</h3>
+            <ul>
+              <li>AIOrchestrator 是 FastAPI 编排层。</li>
+              <li>RAG 依赖 Qdrant/Neo4j，任务与事件可接 RabbitMQ/Redpanda。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
