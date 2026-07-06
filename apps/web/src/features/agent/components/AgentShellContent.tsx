@@ -1,28 +1,42 @@
 /**
  * AgentShellContent — AI chat interface with local conversation list + SSE streaming.
  */
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { useAgentStore } from "@/features/agent/store/agentStore"
+import {
+  providerAvatarDataUrl,
+  providerDisplayName,
+  providerPalette,
+} from "@/features/agent/runtime/agentProviderRuntime"
+import {
+  loadAgentConversationState,
+  saveAgentConversationState,
+  type AgentChatMessage,
+  type AgentConversation,
+  type AgentConversationState,
+} from "@/features/agent/runtime/agentConversationPersistence"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { ENDPOINTS } from "@/core/config/endpoints"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
+import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 import { useSessionStore } from "@/core/session/sessionStore"
 import { formatMessageTime } from "@/shared/lib/time"
 
-interface ChatMessage {
-  role: "user" | "assistant"
-  content: string
+interface AgentModel {
+  model_type: string
+  model_name: string
+  display_name?: string
+  supports_thinking?: boolean
 }
 
-interface AgentConversation {
-  id: string
-  title: string
-  updatedAt: number
-  messages: ChatMessage[]
+interface AgentModelListResponse {
+  code?: number
+  models?: AgentModel[]
+  default_model?: AgentModel | null
 }
 
 function createConversation(): AgentConversation {
@@ -34,9 +48,32 @@ function createConversation(): AgentConversation {
   }
 }
 
+function createConversationState(): AgentConversationState {
+  const conversation = createConversation()
+  return {
+    conversations: [conversation],
+    selectedConversationId: conversation.id,
+  }
+}
+
 function titleFromMessage(content: string): string {
   const normalized = content.replace(/\s+/g, " ").trim()
   return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized || "新对话"
+}
+
+function modelKey(model: Pick<AgentModel, "model_type" | "model_name">): string {
+  return `${model.model_type}:${model.model_name}`
+}
+
+function modelDisplay(model: AgentModel | null | undefined): string {
+  if (!model) return "默认模型"
+  return model.display_name?.trim() || model.model_name || modelKey(model)
+}
+
+function compactModelName(model: AgentModel | null | undefined): string {
+  if (!model) return "未选择模型"
+  const provider = providerDisplayName(model.model_name, model.model_type)
+  return `${provider} · ${model.model_name}`
 }
 
 function AgentReadyIcon() {
@@ -62,6 +99,115 @@ function AgentReadyIcon() {
   )
 }
 
+function ProviderAvatar({ modelName, modelType, size = 34 }: {
+  modelName?: string | null | undefined
+  modelType?: string | null | undefined
+  size?: number
+}) {
+  const palette = providerPalette(modelName, modelType)
+  return (
+    <div
+      title={palette.display}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        flexShrink: 0,
+        display: "grid",
+        placeItems: "center",
+        overflow: "hidden",
+        background: "rgba(255,255,255,0.36)",
+        border: "1px solid rgba(255,255,255,0.54)",
+        boxShadow: "0 8px 18px rgba(8,15,30,0.14)",
+      }}
+    >
+      <img
+        src={providerAvatarDataUrl(modelName, modelType)}
+        alt={palette.display}
+        draggable={false}
+        style={{ width: Math.round(size * 0.78), height: Math.round(size * 0.78), objectFit: "contain" }}
+      />
+    </div>
+  )
+}
+
+function MessageRow({
+  message,
+  userAvatar,
+  userName,
+  streaming = false,
+}: {
+  message: AgentChatMessage
+  userAvatar?: string | null | undefined
+  userName?: string | undefined
+  streaming?: boolean
+}) {
+  const isUser = message.role === "user"
+  const bubbleRadius = isUser ? "18px 18px 5px 18px" : "18px 18px 18px 5px"
+  const providerName = providerDisplayName(message.modelName, message.modelType)
+
+  return (
+    <div
+      style={{
+        marginBottom: 10,
+        display: "flex",
+        justifyContent: isUser ? "flex-end" : "flex-start",
+        alignItems: "flex-start",
+        gap: 8,
+        animation: "fade-up 180ms cubic-bezier(0.4,0,0.2,1) both",
+      }}
+    >
+      {!isUser && <ProviderAvatar modelName={message.modelName} modelType={message.modelType} />}
+      <GlassSurface
+        style={{
+          maxWidth: "min(72%, 560px)",
+          minWidth: streaming && message.content.length === 0 ? 88 : undefined,
+          padding: "10px 14px",
+          borderRadius: bubbleRadius,
+          background: isUser ? "var(--color-brand-green)" : undefined,
+          color: isUser ? "#fff" : "var(--text-primary)",
+          fontSize: 14,
+          lineHeight: 1.65,
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+          boxShadow: isUser
+            ? "0 2px 10px rgba(7,193,96,0.30)"
+            : "0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)",
+        }}
+      >
+        {!isUser && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 3 }}>
+            {providerName}
+          </div>
+        )}
+        {message.content}
+        {streaming && (
+          <span
+            style={{
+              display: "inline-block",
+              animation: "mc-spin 0.9s ease-in-out infinite",
+              marginLeft: 1,
+            }}
+          >
+            ▋
+          </span>
+        )}
+      </GlassSurface>
+      {isUser && (
+        <Avatar
+          src={userAvatar}
+          name={userName || "我"}
+          size={34}
+          style={{
+            border: "1px solid rgba(255,255,255,0.54)",
+            boxShadow: "0 8px 18px rgba(8,15,30,0.14)",
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 export function AgentShellContent() {
   const streaming          = useAgentStore((s) => s.streaming)
   const error              = useAgentStore((s) => s.error)
@@ -71,26 +217,108 @@ export function AgentShellContent() {
   const setError           = useAgentStore((s) => s.setError)
   const uid                = useSessionStore((s) => s.uid)
   const token              = useSessionStore((s) => s.token)
+  const profile            = useSessionStore((s) => s.profile)
 
-  const firstConversation = useRef(createConversation())
-  const [conversations, setConversations] = useState<AgentConversation[]>([firstConversation.current])
-  const [selectedConversationId, setSelectedConversationId] = useState(firstConversation.current.id)
+  const initialConversationState = useRef(createConversationState())
+  const [conversations, setConversations] = useState<AgentConversation[]>(initialConversationState.current.conversations)
+  const [selectedConversationId, setSelectedConversationId] = useState(initialConversationState.current.selectedConversationId)
+  const [persistenceOwnerUid, setPersistenceOwnerUid] = useState<number | null>(null)
   const [input, setInput] = useState("")
   const [currentReply, setCurrentReply] = useState("")
+  const [availableModels, setAvailableModels] = useState<AgentModel[]>([])
+  const [selectedModelKey, setSelectedModelKey] = useState("")
+  const [modelsLoading, setModelsLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const replyRef  = useRef("")
+  const replyFinalizedRef = useRef(false)
+  const streamModelRef = useRef<{ conversationId: string; modelType: string; modelName: string } | null>(null)
 
   const activeConversation =
     conversations.find((item) => item.id === selectedConversationId) ?? conversations[0]
   const activeMessages = activeConversation?.messages ?? []
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+  const selectedModel = useMemo(() => {
+    if (availableModels.length === 0) return null
+    return availableModels.find((model) => modelKey(model) === selectedModelKey) ?? availableModels[0] ?? null
+  }, [availableModels, selectedModelKey])
+  const currentStreamModel = streamModelRef.current
+  const userName = profile?.name?.trim() || (uid !== null ? `u${uid}` : "我")
 
   /* Auto-scroll on new content */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [activeMessages.length, currentReply, selectedConversationId])
 
-  function appendToConversation(id: string, message: ChatMessage) {
+  useEffect(() => {
+    const restored = uid !== null ? loadAgentConversationState(uid) : null
+    const nextState = restored ?? createConversationState()
+
+    setConversations(nextState.conversations)
+    setSelectedConversationId(nextState.selectedConversationId)
+    setInput("")
+    setCurrentReply("")
+    replyRef.current = ""
+    replyFinalizedRef.current = false
+    streamModelRef.current = null
+    setPersistenceOwnerUid(uid)
+  }, [uid])
+
+  useEffect(() => {
+    if (uid === null || persistenceOwnerUid !== uid) return
+    saveAgentConversationState(uid, {
+      conversations,
+      selectedConversationId,
+    })
+  }, [uid, persistenceOwnerUid, conversations, selectedConversationId])
+
+  useEffect(() => {
+    if (uid === null || !token) {
+      setAvailableModels([])
+      setSelectedModelKey("")
+      return
+    }
+
+    const controller = new AbortController()
+    let cancelled = false
+    setModelsLoading(true)
+
+    getGateway().http.get<AgentModelListResponse>(
+      ENDPOINTS.aiModelList,
+      {
+        signal: controller.signal,
+        headers: {
+          "X-User-Id": String(uid),
+          "X-User-Token": token,
+        },
+      },
+    ).then((response) => {
+      if (cancelled) return
+      const seen = new Set<string>()
+      const models = (response.models ?? []).filter((model) => {
+        if (!model.model_type || !model.model_name) return false
+        const key = modelKey(model)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      const defaultKey = response.default_model ? modelKey(response.default_model) : models[0] ? modelKey(models[0]) : ""
+      setAvailableModels(models)
+      setSelectedModelKey((current) => (current && seen.has(current) ? current : defaultKey))
+    }).catch((err) => {
+      if ((err as Error).name !== "AbortError") {
+        setError(err instanceof Error ? err.message : "模型列表加载失败")
+      }
+    }).finally(() => {
+      if (!cancelled) setModelsLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [uid, token, setError])
+
+  function appendToConversation(id: string, message: AgentChatMessage) {
     setConversations((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item
@@ -108,11 +336,24 @@ export function AgentShellContent() {
   }
 
   function finishAssistantReply() {
+    if (replyFinalizedRef.current) {
+      finalizeStream()
+      return
+    }
+    replyFinalizedRef.current = true
+
     const reply = replyRef.current
-    if (reply && activeConversation) {
-      appendToConversation(activeConversation.id, { role: "assistant", content: reply })
+    const streamModel = streamModelRef.current
+    if (reply && streamModel) {
+      appendToConversation(streamModel.conversationId, {
+        role: "assistant",
+        content: reply,
+        modelType: streamModel.modelType,
+        modelName: streamModel.modelName,
+      })
     }
     replyRef.current = ""
+    streamModelRef.current = null
     setCurrentReply("")
     finalizeStream()
   }
@@ -124,6 +365,8 @@ export function AgentShellContent() {
     setInput("")
     setCurrentReply("")
     replyRef.current = ""
+    replyFinalizedRef.current = false
+    streamModelRef.current = null
     setError(null)
   }
 
@@ -133,13 +376,24 @@ export function AgentShellContent() {
       setError("登录状态已失效，请重新登录")
       return
     }
-    const userMsg: ChatMessage = { role: "user", content: input.trim() }
+    const modelSnapshot = {
+      modelType: selectedModel?.model_type ?? "",
+      modelName: selectedModel?.model_name ?? "",
+    }
+    const userMsg: AgentChatMessage = {
+      role: "user",
+      content: input.trim(),
+      modelType: modelSnapshot.modelType,
+      modelName: modelSnapshot.modelName,
+    }
     const conversationId = activeConversation.id
     const requestMessages = [...activeMessages, userMsg]
     appendToConversation(conversationId, userMsg)
     setInput("")
     setCurrentReply("")
     replyRef.current = ""
+    replyFinalizedRef.current = false
+    streamModelRef.current = { conversationId, ...modelSnapshot }
     setError(null)
     setStreaming(true)
 
@@ -151,6 +405,8 @@ export function AgentShellContent() {
           uid,
           content: userMsg.content,
           stream: true,
+          model_type: modelSnapshot.modelType,
+          model_name: modelSnapshot.modelName,
           metadata: {
             messages: requestMessages.map((m) => ({ role: m.role, content: m.content })),
           },
@@ -194,6 +450,52 @@ export function AgentShellContent() {
             新建
           </GlassButton>
         </div>
+        <div style={{ padding: "0 12px 10px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 8px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.16)",
+              border: "1px solid rgba(255,255,255,0.26)",
+            }}
+          >
+            <ProviderAvatar
+              modelName={selectedModel?.model_name}
+              modelType={selectedModel?.model_type}
+              size={28}
+            />
+            <select
+              value={selectedModel ? modelKey(selectedModel) : ""}
+              disabled={modelsLoading || availableModels.length === 0 || streaming}
+              onChange={(event) => setSelectedModelKey(event.target.value)}
+              title={compactModelName(selectedModel)}
+              style={{
+                minWidth: 0,
+                flex: 1,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                color: "var(--text-primary)",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: modelsLoading || streaming ? "default" : "pointer",
+              }}
+            >
+              {availableModels.length === 0 ? (
+                <option value="">{modelsLoading ? "加载中" : "默认模型"}</option>
+              ) : (
+                availableModels.map((model) => (
+                  <option key={modelKey(model)} value={modelKey(model)}>
+                    {modelDisplay(model)}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        </div>
         <GlassScrollArea style={{ flex: 1, minHeight: 0, padding: "0 8px 10px" }}>
           {orderedConversations.map((item) => {
             const active = item.id === selectedConversationId
@@ -234,8 +536,8 @@ export function AgentShellContent() {
 
       <section style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", position: "relative" }}>
         {/* Message list */}
-        <GlassScrollArea style={{ flex: 1, minHeight: 0, padding: "18px 24px 10px" }}>
-          <div style={{ maxWidth: 820, margin: "0 auto", width: "100%" }}>
+        <GlassScrollArea style={{ flex: 1, minHeight: 0, padding: "18px 34px 10px" }}>
+          <div style={{ maxWidth: 1180, margin: "0 auto", width: "100%" }}>
 
             {/* Empty state */}
             {activeMessages.length === 0 && !streaming && (
@@ -274,74 +576,27 @@ export function AgentShellContent() {
 
             {/* Message bubbles */}
             {activeMessages.map((msg, i) => (
-              <div
+              <MessageRow
                 key={`${i}-${msg.role}`}
-                style={{
-                  marginBottom: 14,
-                  display: "flex",
-                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                  animation: "fade-up 180ms cubic-bezier(0.4,0,0.2,1) both",
-                }}
-              >
-                <GlassSurface
-                  style={{
-                    maxWidth: "72%",
-                    padding: "10px 14px",
-                    borderRadius: msg.role === "user"
-                      ? "18px 18px 5px 18px"
-                      : "18px 18px 18px 5px",
-                    background: msg.role === "user"
-                      ? "var(--color-brand-green)"
-                      : undefined,
-                    color: msg.role === "user" ? "#fff" : "var(--text-primary)",
-                    fontSize: 14,
-                    lineHeight: 1.65,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "anywhere",
-                    boxShadow: msg.role === "user"
-                      ? "0 2px 10px rgba(7,193,96,0.30)"
-                      : "0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)",
-                  }}
-                >
-                  {msg.content}
-                </GlassSurface>
-              </div>
+                message={msg}
+                userAvatar={profile?.icon}
+                userName={userName}
+              />
             ))}
 
             {/* Streaming reply */}
             {streaming && currentReply && (
-              <div
-                style={{
-                  marginBottom: 14,
-                  display: "flex",
-                  justifyContent: "flex-start",
-                  animation: "fade-up 180ms cubic-bezier(0.4,0,0.2,1) both",
+              <MessageRow
+                message={{
+                  role: "assistant",
+                  content: currentReply,
+                  modelType: currentStreamModel?.modelType ?? selectedModel?.model_type ?? "",
+                  modelName: currentStreamModel?.modelName ?? selectedModel?.model_name ?? "",
                 }}
-              >
-                <GlassSurface
-                  style={{
-                    maxWidth: "72%",
-                    padding: "10px 14px",
-                    borderRadius: "18px 18px 18px 5px",
-                    fontSize: 14,
-                    lineHeight: 1.65,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "anywhere",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06)",
-                  }}
-                >
-                  {currentReply}
-                  <span
-                    style={{
-                      display: "inline-block",
-                      animation: "mc-spin 0.9s ease-in-out infinite",
-                      marginLeft: 1,
-                    }}
-                  >
-                    ▋
-                  </span>
-                </GlassSurface>
-              </div>
+                userAvatar={profile?.icon}
+                userName={userName}
+                streaming
+              />
             )}
 
             {error && (
