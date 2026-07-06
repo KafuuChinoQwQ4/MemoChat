@@ -646,18 +646,9 @@ QUIC_API QuicChatServer::Impl::ConnectionCallback(HQUIC connection, void* contex
             ctx->stream_context->send_ready = true;
             auto* stream_callback_context = new StreamCallbackContext{ctx->stream_context};
             ctx->api->SetCallbackHandler(ctx->stream, reinterpret_cast<void*>(StreamCallback), stream_callback_context);
-            const QUIC_STATUS stream_status = ctx->api->StreamStart(ctx->stream, QUIC_STREAM_START_FLAG_IMMEDIATE);
-            if (QUIC_FAILED(stream_status))
-            {
-                delete stream_callback_context;
-                ctx->stream = nullptr;
-                ctx->stream_context.reset();
-                if (ctx->session)
-                {
-                    ctx->session->Close();
-                }
-                return stream_status;
-            }
+            // Peer-started streams are already active; calling StreamStart is
+            // only for locally opened streams and can leave MsQuic with a
+            // callback context that has been freed on the failure path.
             Impl::flushPendingSends(ctx->stream_context.get());
             return QUIC_STATUS_SUCCESS;
         }

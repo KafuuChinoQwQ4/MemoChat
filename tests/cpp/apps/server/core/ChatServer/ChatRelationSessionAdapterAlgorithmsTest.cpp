@@ -34,15 +34,15 @@ TEST(ChatRelationSessionAdapterAlgorithmsTest, PinsForwardingSurfaceCounts)
     EXPECT_EQ(rsa::SearchUserForwardCount(), 1u);
     EXPECT_EQ(rsa::FriendApplyForwardCount(), 2u);
     EXPECT_EQ(rsa::DeleteFriendForwardCount(), 1u);
-    EXPECT_EQ(rsa::DialogForwardCount(), 3u);
-    EXPECT_EQ(rsa::ForwardingSurfaceCount(), 7u);
+    EXPECT_EQ(rsa::DialogForwardCount(), 2u);
+    EXPECT_EQ(rsa::ForwardingSurfaceCount(), 6u);
 }
 
 TEST(ChatRelationSessionAdapterAlgorithmsTest, CompleteSurfaceRequiresExactCounts)
 {
-    EXPECT_TRUE(rsa::IsCompleteForwardingSurface(1, 2, 1, 3));
-    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(0, 2, 1, 3));
-    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 1, 1, 3));
-    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 2, 2, 3));
-    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 2, 1, 2));
+    EXPECT_TRUE(rsa::IsCompleteForwardingSurface(1, 2, 1, 2));
+    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(0, 2, 1, 2));
+    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 1, 1, 2));
+    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 2, 2, 2));
+    EXPECT_FALSE(rsa::IsCompleteForwardingSurface(1, 2, 1, 3));
 }

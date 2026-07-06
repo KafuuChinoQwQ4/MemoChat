@@ -28,6 +28,20 @@ class QuicLifetimeContractTests(unittest.TestCase):
         self.assertNotIn("[connection_context](const std::string& payload", source)
         self.assertNotIn("[owner](const std::string& session_id)", source)
 
+    def test_peer_started_streams_are_not_started_or_context_deleted_by_server(self):
+        source = QUIC_SERVER.read_text(encoding="utf-8")
+
+        peer_stream_case = source[
+            source.index("case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:") : source.index(
+                "case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:"
+            )
+        ]
+        self.assertIn("SetCallbackHandler(ctx->stream", peer_stream_case)
+        self.assertIn("flushPendingSends(ctx->stream_context.get())", peer_stream_case)
+        self.assertIn("Peer-started streams are already active", peer_stream_case)
+        self.assertNotIn("StreamStart(ctx->stream", peer_stream_case)
+        self.assertNotIn("delete stream_callback_context", peer_stream_case)
+
 
 if __name__ == "__main__":
     unittest.main()
