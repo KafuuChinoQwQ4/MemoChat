@@ -90,6 +90,18 @@ class FakeMemory:
         return None
 
 
+class SlowSaveMemory(FakeMemory):
+    def __init__(self):
+        self.save_started = asyncio.Event()
+        self.release_save = asyncio.Event()
+        self.save_completed = asyncio.Event()
+
+    async def save_after_response(self, uid: int, session_id: str, user_message: str, ai_message: str):
+        self.save_started.set()
+        await self.release_save.wait()
+        self.save_completed.set()
+
+
 class CacheHitMemory:
     def __init__(self):
         self.load_calls = 0
@@ -1397,7 +1409,9 @@ class HarnessStructureTests(unittest.TestCase):
         self.assertIn("await self._turn_graph.run_prepare(request, route)", prepare_source)
         self.assertIn("return self._prepared_from_graph_state(state)", prepare_source)
 
-        self.assertIn("await self._turn_graph.run_finish(", stream_source)
+        self.assertNotIn("await self._turn_graph.run_finish(", stream_source)
+        self.assertIn("await self._check_output_guardrails(", stream_source)
+        self.assertIn("self._schedule_stream_postprocessing(", stream_source)
         for duplicated_finish_step in (
             "await self._finish_response(",
             "self._guardrail_service.check_output(",
@@ -1495,16 +1509,74 @@ class HarnessRunTraceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([chunk["chunk"] for chunk in chunks], ["ans", "wer", ""])
         self.assertTrue(final["is_final"])
+        self.assertEqual(final["stream_phase"], "content_complete")
+        self.assertTrue(final["postprocess_pending"])
         self.assertEqual(final["skill"], "knowledge_copilot")
         self.assertIn("orchestration", layers)
         self.assertIn("guardrails", layers)
-        self.assertIn("memory", layers)
         self.assertIn("execution", layers)
-        self.assertIn("feedback", layers)
+        self.assertNotIn("feedback", layers)
         self.assertIn("plan", event_names)
         self.assertIn("tool_execution", event_names)
         self.assertIn("model_completion", event_names)
+        self.assertIn("load_context", event_names)
+        self.assertNotIn("save_context", event_names)
         self.assertEqual(guardrail_names, ["input", "tool_plan", "output"])
+
+        async def wait_completed():
+            for _ in range(40):
+                trace = service._trace_store.get_trace(final["trace_id"])
+                if trace is not None and trace.status == "completed":
+                    return trace
+                await asyncio.sleep(0.01)
+            raise AssertionError("stream postprocessing did not complete")
+
+        trace = await asyncio.wait_for(wait_completed(), timeout=1.0)
+        post_layers = [event.layer for event in trace.events]
+        self.assertIn("memory", post_layers)
+        self.assertIn("feedback", post_layers)
+
+    async def test_stream_turn_final_does_not_wait_for_memory_postprocessing(self):
+        memory = SlowSaveMemory()
+        service = AgentHarnessService(
+            planner=FakePlanner(),
+            llm_registry=FakeLLM(),
+            tool_executor=FakeToolExecutor(),
+            memory_service=memory,
+            trace_store=FakeTraceStore(),
+            feedback_evaluator=FakeFeedback(),
+            guardrail_service=GuardrailService(),
+        )
+        request = SimpleNamespace(
+            uid=1,
+            session_id="",
+            content="根据知识库回答",
+            model_type="",
+            model_name="",
+            deployment_preference="any",
+            target_lang="",
+            requested_tools=[],
+            tool_arguments={},
+        )
+
+        stream = service.stream_turn(request)
+        first = await stream.__anext__()
+        second = await stream.__anext__()
+        final = await asyncio.wait_for(stream.__anext__(), timeout=0.2)
+
+        self.assertEqual([first["chunk"], second["chunk"], final["chunk"]], ["ans", "wer", ""])
+        self.assertTrue(final["is_final"])
+        self.assertEqual(final["stream_phase"], "content_complete")
+        self.assertTrue(final["postprocess_pending"])
+        self.assertFalse(memory.save_completed.is_set())
+
+        with self.assertRaises(StopAsyncIteration):
+            await stream.__anext__()
+
+        await asyncio.wait_for(memory.save_started.wait(), timeout=1.0)
+        self.assertFalse(memory.save_completed.is_set())
+        memory.release_save.set()
+        await asyncio.wait_for(memory.save_completed.wait(), timeout=1.0)
 
     async def test_stream_turn_records_failed_stream_trace_and_final_payload(self):
         service = AgentHarnessService(

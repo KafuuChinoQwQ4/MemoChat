@@ -264,6 +264,191 @@ class AgentHarnessService:
             events=events,
         )
 
+    async def _check_output_guardrails(
+        self,
+        prepared: _PreparedTurn,
+        request,
+        response_content: str,
+        response_tokens: int,
+        model: str,
+    ) -> HarnessRunResult | None:
+        with trace_context(
+            "agent_output_guardrails",
+            run_type="chain",
+            inputs={"uid": request.uid, "skill": prepared.skill.name, "observation_count": len(prepared.observations)},
+            metadata=prepared.langsmith_metadata,
+            tags=["agent", "guardrails"],
+        ) as output_guardrail_run:
+            output_guardrails = self._guardrail_service.check_output(response_content, prepared.observations)
+            set_run_output(
+                output_guardrail_run,
+                {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)},
+            )
+            await self._add_guardrail_event(prepared.trace.trace_id, "output", output_guardrails)
+        if self._guardrail_service.has_blocking(output_guardrails):
+            return await self._finish_blocked_run(
+                prepared.trace.trace_id,
+                prepared.session_id,
+                prepared.skill.name,
+                "output",
+                output_guardrails,
+                observations=[observation.to_summary() for observation in prepared.observations],
+                tokens=response_tokens,
+                model=model,
+            )
+        return None
+
+    async def _complete_response_postprocessing(
+        self,
+        prepared: _PreparedTurn,
+        request,
+        response_content: str,
+        response_tokens: int,
+        model: str,
+    ) -> HarnessRunResult:
+        memory_save_started = _now_ms()
+        with trace_context(
+            "agent_memory_writeback",
+            run_type="chain",
+            inputs={"uid": request.uid, "session_id": prepared.session_id},
+            metadata=prepared.langsmith_metadata,
+            tags=["agent", "memory"],
+        ) as memory_save_run:
+            try:
+                await self._memory_service.save_after_response(
+                    request.uid,
+                    prepared.session_id,
+                    request.content,
+                    response_content,
+                )
+                set_run_output(memory_save_run, {"status": "ok"})
+            except Exception as exc:
+                set_run_error(memory_save_run, exc)
+                raise
+        await self._trace_store.add_event(
+            prepared.trace.trace_id,
+            TraceEvent(
+                layer="memory",
+                name="save_context",
+                status="ok",
+                summary="conversation persisted",
+                started_at=memory_save_started,
+                finished_at=_now_ms(),
+            ),
+        )
+
+        feedback_started = _now_ms()
+        feedback_summary = self._feedback_evaluator.build_summary(
+            prepared.skill.name,
+            prepared.observations,
+            response_content,
+        )
+        await self._trace_store.add_event(
+            prepared.trace.trace_id,
+            TraceEvent(
+                layer="feedback",
+                name="evaluate_response",
+                status="ok",
+                summary=feedback_summary,
+                started_at=feedback_started,
+                finished_at=_now_ms(),
+            ),
+        )
+        await self._trace_store.finish_run(
+            prepared.trace.trace_id,
+            status="completed",
+            response_content=response_content,
+            model=model,
+            feedback_summary=feedback_summary,
+            observations=[observation.to_summary() for observation in prepared.observations],
+        )
+        if self._semantic_cache is not None:
+            await self._semantic_cache.store(
+                request,
+                prepared.skill,
+                prepared.plan_steps,
+                answer=response_content,
+                model=model,
+                tokens=response_tokens,
+                trace_id=prepared.trace.trace_id,
+                feedback_summary=feedback_summary,
+                vector=prepared.semantic_lookup.vector if prepared.semantic_lookup is not None else None,
+            )
+
+        trace_ref = self._trace_store.get_trace(prepared.trace.trace_id)
+        events = trace_ref.events if trace_ref else []
+        return HarnessRunResult(
+            session_id=prepared.session_id,
+            content=response_content,
+            tokens=response_tokens,
+            model=model,
+            trace_id=prepared.trace.trace_id,
+            skill=prepared.skill.name,
+            feedback_summary=feedback_summary,
+            observations=[observation.to_summary() for observation in prepared.observations],
+            events=events,
+        )
+
+    def _schedule_stream_postprocessing(
+        self,
+        prepared: _PreparedTurn,
+        request,
+        response_content: str,
+        response_tokens: int,
+        model: str,
+    ) -> None:
+        async def _finish() -> None:
+            try:
+                await self._complete_response_postprocessing(
+                    prepared,
+                    request,
+                    response_content,
+                    response_tokens,
+                    model,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "harness.stream.postprocess_failed",
+                    trace_id=prepared.trace.trace_id,
+                    error=str(exc),
+                )
+                try:
+                    await self._trace_store.add_event(
+                        prepared.trace.trace_id,
+                        TraceEvent(
+                            layer="postprocess",
+                            name="stream_finish",
+                            status="failed",
+                            summary=type(exc).__name__,
+                            detail=str(exc)[:2000],
+                            started_at=_now_ms(),
+                            finished_at=_now_ms(),
+                        ),
+                    )
+                    await self._trace_store.finish_run(
+                        prepared.trace.trace_id,
+                        status="failed",
+                        response_content=response_content,
+                        model=model,
+                        feedback_summary=f"stream_postprocess_failed={exc}",
+                        observations=[observation.to_summary() for observation in prepared.observations],
+                    )
+                except Exception as trace_exc:
+                    logger.warning(
+                        "harness.stream.postprocess_trace_failed",
+                        trace_id=prepared.trace.trace_id,
+                        error=str(trace_exc),
+                    )
+
+        def _consume_background_result(done: asyncio.Task) -> None:
+            try:
+                done.result()
+            except asyncio.CancelledError:
+                logger.debug("harness.stream.postprocess_cancelled", trace_id=prepared.trace.trace_id)
+
+        task = asyncio.create_task(_finish())
+        task.add_done_callback(_consume_background_result)
+
     async def _finish_semantic_cache_hit(
         self,
         trace_id: str,
@@ -905,112 +1090,21 @@ class AgentHarnessService:
         response_tokens: int,
         model: str,
     ) -> HarnessRunResult:
-        with trace_context(
-            "agent_output_guardrails",
-            run_type="chain",
-            inputs={"uid": request.uid, "skill": prepared.skill.name, "observation_count": len(prepared.observations)},
-            metadata=prepared.langsmith_metadata,
-            tags=["agent", "guardrails"],
-        ) as output_guardrail_run:
-            output_guardrails = self._guardrail_service.check_output(response_content, prepared.observations)
-            set_run_output(
-                output_guardrail_run,
-                {"status": _guardrail_event_status(output_guardrails), "count": len(output_guardrails)},
-            )
-            await self._add_guardrail_event(prepared.trace.trace_id, "output", output_guardrails)
-        if self._guardrail_service.has_blocking(output_guardrails):
-            return await self._finish_blocked_run(
-                prepared.trace.trace_id,
-                prepared.session_id,
-                prepared.skill.name,
-                "output",
-                output_guardrails,
-                observations=[observation.to_summary() for observation in prepared.observations],
-                tokens=response_tokens,
-                model=model,
-            )
-
-        memory_save_started = _now_ms()
-        with trace_context(
-            "agent_memory_writeback",
-            run_type="chain",
-            inputs={"uid": request.uid, "session_id": prepared.session_id},
-            metadata=prepared.langsmith_metadata,
-            tags=["agent", "memory"],
-        ) as memory_save_run:
-            try:
-                await self._memory_service.save_after_response(
-                    request.uid,
-                    prepared.session_id,
-                    request.content,
-                    response_content,
-                )
-                set_run_output(memory_save_run, {"status": "ok"})
-            except Exception as exc:
-                set_run_error(memory_save_run, exc)
-                raise
-        await self._trace_store.add_event(
-            prepared.trace.trace_id,
-            TraceEvent(
-                layer="memory",
-                name="save_context",
-                status="ok",
-                summary="conversation persisted",
-                started_at=memory_save_started,
-                finished_at=_now_ms(),
-            ),
-        )
-
-        feedback_started = _now_ms()
-        feedback_summary = self._feedback_evaluator.build_summary(
-            prepared.skill.name,
-            prepared.observations,
+        blocked_result = await self._check_output_guardrails(
+            prepared,
+            request,
             response_content,
+            response_tokens,
+            model,
         )
-        await self._trace_store.add_event(
-            prepared.trace.trace_id,
-            TraceEvent(
-                layer="feedback",
-                name="evaluate_response",
-                status="ok",
-                summary=feedback_summary,
-                started_at=feedback_started,
-                finished_at=_now_ms(),
-            ),
-        )
-        await self._trace_store.finish_run(
-            prepared.trace.trace_id,
-            status="completed",
-            response_content=response_content,
-            model=model,
-            feedback_summary=feedback_summary,
-            observations=[observation.to_summary() for observation in prepared.observations],
-        )
-        if self._semantic_cache is not None:
-            await self._semantic_cache.store(
-                request,
-                prepared.skill,
-                prepared.plan_steps,
-                answer=response_content,
-                model=model,
-                tokens=response_tokens,
-                trace_id=prepared.trace.trace_id,
-                feedback_summary=feedback_summary,
-                vector=prepared.semantic_lookup.vector if prepared.semantic_lookup is not None else None,
-            )
-
-        trace_ref = self._trace_store.get_trace(prepared.trace.trace_id)
-        events = trace_ref.events if trace_ref else []
-        return HarnessRunResult(
-            session_id=prepared.session_id,
-            content=response_content,
-            tokens=response_tokens,
-            model=model,
-            trace_id=prepared.trace.trace_id,
-            skill=prepared.skill.name,
-            feedback_summary=feedback_summary,
-            observations=[observation.to_summary() for observation in prepared.observations],
-            events=events,
+        if blocked_result is not None:
+            return blocked_result
+        return await self._complete_response_postprocessing(
+            prepared,
+            request,
+            response_content,
+            response_tokens,
+            model,
         )
 
     async def run_turn(self, request) -> HarnessRunResult:
@@ -1086,24 +1180,49 @@ class AgentHarnessService:
             )
 
             response_tokens = max(len(accumulated) // 4, 0)
-            finish_state = await self._turn_graph.run_finish(
-                request,
+            blocked_result = await self._check_output_guardrails(
                 prepared,
+                request,
                 accumulated,
                 response_tokens,
                 model_name,
             )
-            result = finish_state["result"]
+            if blocked_result is not None:
+                yield {
+                    "chunk": blocked_result.content,
+                    "is_final": True,
+                    "msg_id": msg_id,
+                    "total_tokens": blocked_result.tokens,
+                    "trace_id": blocked_result.trace_id,
+                    "skill": blocked_result.skill,
+                    "feedback_summary": blocked_result.feedback_summary,
+                    "observations": blocked_result.observations,
+                    "events": [event.to_dict() for event in blocked_result.events],
+                    "stream_phase": "blocked",
+                    "postprocess_pending": False,
+                }
+                return
+
+            final_events = _trace_events_payload(self._trace_store, prepared.trace.trace_id)
+            self._schedule_stream_postprocessing(
+                prepared,
+                request,
+                accumulated,
+                response_tokens,
+                model_name,
+            )
             yield {
                 "chunk": "",
                 "is_final": True,
                 "msg_id": msg_id,
-                "total_tokens": result.tokens,
-                "trace_id": result.trace_id,
-                "skill": result.skill,
-                "feedback_summary": result.feedback_summary,
-                "observations": result.observations,
-                "events": _trace_events_payload(self._trace_store, result.trace_id),
+                "total_tokens": response_tokens,
+                "trace_id": prepared.trace.trace_id,
+                "skill": prepared.skill.name,
+                "feedback_summary": "postprocess_pending",
+                "observations": [observation.to_summary() for observation in prepared.observations],
+                "events": final_events,
+                "stream_phase": "content_complete",
+                "postprocess_pending": True,
             }
         except Exception as exc:
             logger.error("harness.stream.failed", error=str(exc))
