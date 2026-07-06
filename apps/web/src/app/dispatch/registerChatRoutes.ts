@@ -7,78 +7,304 @@ import type { ChatMessageDispatcher } from "@/core/network/dispatcher/ChatMessag
 import { ReqId } from "@/core/network/opcodes/reqIds"
 import { useEntityStore } from "@/core/entities/entityStore"
 import { useSessionStore } from "@/core/session/sessionStore"
+import { useChatStore } from "@/features/chat/store/chatStore"
 import { genClientMsgId } from "@/shared/lib/id"
 import type { RichMessage } from "@/core/entities/entityTypes"
 import { persistMessage } from "@/core/entities/persistence/chatDb"
+import { applyDialogListPayload, applyGroupListPayload } from "./chatListPayloads"
+
+type WireObject = Record<string, unknown>
+
+function parseWireObject(payload: string): WireObject | null {
+  try {
+    const parsed: unknown = JSON.parse(payload)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as WireObject
+      : null
+  } catch {
+    return null
+  }
+}
+
+function asWireObject(value: unknown): WireObject | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as WireObject
+    : null
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return undefined
+}
+
+function stringValue(value: unknown): string | undefined {
+  if (typeof value === "string") return value
+  if (typeof value === "number" && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
+function fieldNumber(row: WireObject, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = numberValue(row[key])
+    if (value !== undefined) return value
+  }
+  return 0
+}
+
+function fieldString(row: WireObject, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = stringValue(row[key])
+    if (value !== undefined) return value
+  }
+  return ""
+}
+
+function fieldBoolean(row: WireObject, key: string): boolean {
+  const value = row[key]
+  return value === true || value === 1 || value === "1" || value === "true"
+}
+
+function normalizeTimestamp(value: number): number {
+  if (value <= 0) return Date.now()
+  return value < 100_000_000_000 ? value * 1000 : value
+}
+
+function normalizeMsgType(value: string): RichMessage["msgType"] {
+  const msgType = value.toLowerCase()
+  if (msgType === "image" || msgType === "file" || msgType === "system") return msgType
+  return "text"
+}
+
+function optionalServerMsgId(row: WireObject): number | undefined {
+  return numberValue(row["server_msg_id"]) ?? numberValue(row["msg_id"])
+}
+
+function payloadClientMsgId(row: WireObject): string {
+  const rootId = fieldString(row, "client_msg_id", "msgid", "msg_id")
+  if (rootId) return rootId
+  const rows = messageRows(row)
+  for (const msgRow of rows) {
+    const msgId = fieldString(msgRow, "client_msg_id", "msgid", "msg_id")
+    if (msgId) return msgId
+  }
+  return ""
+}
+
+function privatePeerId(row: WireObject, ownerUid: number): number {
+  const explicitPeer = fieldNumber(row, "peer_uid", "peeruid")
+  if (explicitPeer > 0) return explicitPeer
+  const fromUid = fieldNumber(row, "from_uid", "fromuid")
+  const toUid = fieldNumber(row, "to_uid", "touid")
+  if (fromUid === ownerUid && toUid > 0) return toUid
+  if (toUid === ownerUid && fromUid > 0) return fromUid
+  return toUid > 0 ? toUid : fromUid
+}
+
+function messageRows(row: WireObject): WireObject[] {
+  const messages = row["messages"]
+  if (Array.isArray(messages)) {
+    return messages.map(asWireObject).filter((item): item is WireObject => item !== null)
+  }
+  const textArray = row["text_array"]
+  if (Array.isArray(textArray)) {
+    return textArray.map(asWireObject).filter((item): item is WireObject => item !== null)
+  }
+  const nestedMsg = asWireObject(row["msg"])
+  if (nestedMsg) {
+    return [nestedMsg]
+  }
+  return [row]
+}
+
+function privateRichMessage(row: WireObject, peerId: number, ownerUid: number): RichMessage | null {
+  const fromUid = fieldNumber(row, "from_uid", "fromuid")
+  if (fromUid <= 0 || peerId <= 0) return null
+  const clientMsgId = fieldString(row, "client_msg_id", "msgid", "msg_id") || genClientMsgId()
+  const msg: RichMessage = {
+    clientMsgId,
+    fromUid,
+    toId: peerId,
+    isGroup: false,
+    content: fieldString(row, "content", "text"),
+    msgType: normalizeMsgType(fieldString(row, "msg_type", "msgtype")),
+    timestamp: normalizeTimestamp(fieldNumber(row, "timestamp", "created_at", "createdAt")),
+    state: fromUid === ownerUid ? "sent" : "received",
+  }
+  const senderName = fieldString(row, "from_name", "from_nick", "sender_name")
+  if (senderName) msg.senderName = senderName
+  const senderIcon = fieldString(row, "from_icon", "sender_icon")
+  if (senderIcon) msg.senderIcon = senderIcon
+  const fromUserId = fieldString(row, "from_user_id", "fromUserId")
+  if (fromUserId) msg.fromUserId = fromUserId
+  const serverMsgId = optionalServerMsgId(row)
+  if (serverMsgId !== undefined) msg.serverMsgId = serverMsgId
+  if (fieldNumber(row, "deleted_at_ms", "deletedAtMs") > 0 || fieldBoolean(row, "is_revoke")) {
+    msg.isRevoked = true
+  }
+  const editedAt = fieldNumber(row, "edited_at_ms", "editedAtMs")
+  if (editedAt > 0) msg.editedAt = normalizeTimestamp(editedAt)
+  return msg
+}
+
+function groupRichMessage(row: WireObject, groupId: number, ownerUid: number): RichMessage | null {
+  const fromUid = fieldNumber(row, "from_uid", "fromuid")
+  if (fromUid <= 0 || groupId <= 0) return null
+  const clientMsgId = fieldString(row, "client_msg_id", "msgid", "msg_id") || genClientMsgId()
+  const msg: RichMessage = {
+    clientMsgId,
+    fromUid,
+    toId: groupId,
+    isGroup: true,
+    content: fieldString(row, "content", "text"),
+    msgType: normalizeMsgType(fieldString(row, "msg_type", "msgtype")),
+    timestamp: normalizeTimestamp(fieldNumber(row, "timestamp", "created_at", "createdAt")),
+    state: fromUid === ownerUid ? "sent" : "received",
+  }
+  const senderName = fieldString(row, "from_name", "from_nick", "sender_name")
+  if (senderName) msg.senderName = senderName
+  const senderIcon = fieldString(row, "from_icon", "sender_icon")
+  if (senderIcon) msg.senderIcon = senderIcon
+  const fromUserId = fieldString(row, "from_user_id", "fromUserId")
+  if (fromUserId) msg.fromUserId = fromUserId
+  const serverMsgId = optionalServerMsgId(row)
+  if (serverMsgId !== undefined) msg.serverMsgId = serverMsgId
+  if (fieldNumber(row, "deleted_at_ms", "deletedAtMs") > 0 || fieldBoolean(row, "is_revoke")) {
+    msg.isRevoked = true
+  }
+  const editedAt = fieldNumber(row, "edited_at_ms", "editedAtMs")
+  if (editedAt > 0) msg.editedAt = normalizeTimestamp(editedAt)
+  return msg
+}
+
+function sortedMessages(messages: RichMessage[]): RichMessage[] {
+  return [...messages].sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+    return a.clientMsgId.localeCompare(b.clientMsgId)
+  })
+}
+
+function persistMessages(ownerUid: number, peerId: number, messages: RichMessage[]): void {
+  if (ownerUid <= 0 || peerId <= 0 || messages.length === 0) return
+  void Promise.all(messages.map((msg) => persistMessage(ownerUid, peerId, msg))).catch(() => undefined)
+}
 
 export function registerChatRoutes(dispatcher: ChatMessageDispatcher): () => void {
   const unsubs: (() => void)[] = []
 
+  unsubs.push(dispatcher.subscribe(ReqId.ID_GET_GROUP_LIST_RSP, (frame) => {
+    applyGroupListPayload(frame.payload)
+  }))
+
+  unsubs.push(dispatcher.subscribe(ReqId.ID_GET_DIALOG_LIST_RSP, (frame) => {
+    applyDialogListPayload(frame.payload)
+  }))
+
   // Incoming private message
   unsubs.push(dispatcher.subscribe(ReqId.ID_NOTIFY_TEXT_CHAT_MSG_REQ, (frame) => {
-    const data = JSON.parse(frame.payload) as {
-      from_uid: number; to_uid: number; msg_id: number; content: string; timestamp: number
-    }
+    const data = parseWireObject(frame.payload)
+    if (!data || fieldNumber(data, "error") !== 0) return
     const ownerUid = useSessionStore.getState().uid ?? 0
-    const peerId = data.from_uid === ownerUid ? data.to_uid : data.from_uid
-    const msg: RichMessage = {
-      clientMsgId: genClientMsgId(),
-      serverMsgId: data.msg_id,
-      fromUid: data.from_uid,
-      toId: peerId,
-      isGroup: false,
-      content: data.content,
-      msgType: "text",
-      timestamp: data.timestamp,
-      state: "received",
+    const fromUid = fieldNumber(data, "from_uid", "fromuid")
+    const toUid = fieldNumber(data, "to_uid", "touid")
+    const peerId = fromUid === ownerUid ? toUid : fromUid
+    const messages = messageRows(data)
+      .map((row) => privateRichMessage({ ...data, ...row }, peerId, ownerUid))
+      .filter((msg): msg is RichMessage => msg !== null)
+    for (const msg of messages) {
+      useEntityStore.getState().appendMessage(peerId, msg)
     }
-    useEntityStore.getState().appendMessage(peerId, msg)
-    void persistMessage(ownerUid, peerId, msg)
+    persistMessages(ownerUid, peerId, messages)
   }))
 
   // Private chat ack (own message sent)
   unsubs.push(dispatcher.subscribe(ReqId.ID_TEXT_CHAT_MSG_RSP, (frame) => {
-    const data = JSON.parse(frame.payload) as {
-      error: number; client_msg_id?: string; msg_id: number; to_uid: number
-    }
-    if (data.error === 0 && data.client_msg_id) {
+    const data = parseWireObject(frame.payload)
+    if (!data) return
+    const ownerUid = useSessionStore.getState().uid ?? 0
+    const clientMsgId = payloadClientMsgId(data)
+    const peerId = privatePeerId(data, ownerUid)
+    const serverMsgId = numberValue(data["server_msg_id"]) ?? numberValue(data["msg_id"])
+    if (clientMsgId && peerId > 0) {
       useEntityStore.getState().updateMessageState(
-        data.to_uid, data.client_msg_id, "sent", data.msg_id,
+        peerId,
+        clientMsgId,
+        fieldNumber(data, "error") === 0 ? "sent" : "failed",
+        serverMsgId,
       )
     }
+  }))
+
+  // Private history
+  unsubs.push(dispatcher.subscribe(ReqId.ID_PRIVATE_HISTORY_RSP, (frame) => {
+    const data = parseWireObject(frame.payload)
+    useChatStore.getState().setLoadingHistory(false)
+    if (!data || fieldNumber(data, "error") !== 0) return
+    const ownerUid = useSessionStore.getState().uid ?? 0
+    const peerId = fieldNumber(data, "peer_uid", "peeruid")
+    if (peerId <= 0) return
+    const messages = sortedMessages(
+      messageRows(data)
+        .map((row) => privateRichMessage(row, peerId, ownerUid))
+        .filter((msg): msg is RichMessage => msg !== null),
+    )
+    useEntityStore.getState().prependMessages(peerId, messages)
+    useChatStore.getState().setHistoryFinished(!fieldBoolean(data, "has_more"))
+    persistMessages(ownerUid, peerId, messages)
   }))
 
   // Incoming group message
   unsubs.push(dispatcher.subscribe(ReqId.ID_NOTIFY_GROUP_CHAT_MSG_REQ, (frame) => {
-    const data = JSON.parse(frame.payload) as {
-      group_id: number; from_uid: number; msg_id: number; content: string; timestamp: number
-    }
+    const data = parseWireObject(frame.payload)
+    if (!data || fieldNumber(data, "error") !== 0) return
     const ownerUid = useSessionStore.getState().uid ?? 0
-    const msg: RichMessage = {
-      clientMsgId: genClientMsgId(),
-      serverMsgId: data.msg_id,
-      fromUid: data.from_uid,
-      toId: data.group_id,
-      isGroup: true,
-      content: data.content,
-      msgType: "text",
-      timestamp: data.timestamp,
-      state: "received",
+    const groupId = fieldNumber(data, "group_id", "groupid")
+    if (groupId <= 0) return
+    const messages = messageRows(data)
+      .map((row) => groupRichMessage({ ...data, ...row }, groupId, ownerUid))
+      .filter((msg): msg is RichMessage => msg !== null)
+    for (const msg of messages) {
+      useEntityStore.getState().appendMessage(groupId, msg)
     }
-    useEntityStore.getState().appendMessage(data.group_id, msg)
-    void persistMessage(ownerUid, data.group_id, msg)
+    persistMessages(ownerUid, groupId, messages)
   }))
 
   // Group chat ack
   unsubs.push(dispatcher.subscribe(ReqId.ID_GROUP_CHAT_MSG_RSP, (frame) => {
-    const data = JSON.parse(frame.payload) as {
-      error: number; client_msg_id?: string; msg_id: number; group_id: number
-    }
-    if (data.error === 0 && data.client_msg_id) {
+    const data = parseWireObject(frame.payload)
+    if (!data) return
+    const clientMsgId = payloadClientMsgId(data)
+    const groupId = fieldNumber(data, "group_id", "groupid")
+    const serverMsgId = numberValue(data["server_msg_id"]) ?? numberValue(data["msg_id"])
+    if (clientMsgId && groupId > 0) {
       useEntityStore.getState().updateMessageState(
-        data.group_id, data.client_msg_id, "sent", data.msg_id,
+        groupId,
+        clientMsgId,
+        fieldNumber(data, "error") === 0 ? "sent" : "failed",
+        serverMsgId,
       )
     }
+  }))
+
+  // Group history
+  unsubs.push(dispatcher.subscribe(ReqId.ID_GROUP_HISTORY_RSP, (frame) => {
+    const data = parseWireObject(frame.payload)
+    useChatStore.getState().setLoadingHistory(false)
+    if (!data || fieldNumber(data, "error") !== 0) return
+    const ownerUid = useSessionStore.getState().uid ?? 0
+    const groupId = fieldNumber(data, "group_id", "groupid")
+    if (groupId <= 0) return
+    const messages = sortedMessages(
+      messageRows(data)
+        .map((row) => groupRichMessage(row, groupId, ownerUid))
+        .filter((msg): msg is RichMessage => msg !== null),
+    )
+    useEntityStore.getState().prependMessages(groupId, messages)
+    useChatStore.getState().setHistoryFinished(!fieldBoolean(data, "has_more"))
+    persistMessages(ownerUid, groupId, messages)
   }))
 
   // Private message edit

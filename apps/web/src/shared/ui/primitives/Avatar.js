@@ -1,11 +1,20 @@
 import { jsx as _jsx } from "react/jsx-runtime";
-/** Avatar — displays user avatar with fallback initials */
-import { useMediaUrl } from "@/shared/hooks/useMediaUrl";
-import { cn } from "@/shared/lib/classnames";
-export function Avatar({ src, name, size = 40, className, onClick }) {
-    const url = useMediaUrl(src);
+/** Avatar — displays user avatar with a default image fallback */
+import { useEffect, useMemo, useState } from "react";
+import { useSessionStore } from "@/core/session/sessionStore";
+import { avatarUrl, DEFAULT_AVATAR_DATA_URL } from "@/shared/media/mediaUrl";
+export function Avatar({ src, name, size = 40, className, style, onClick }) {
+    const uid = useSessionStore((s) => s.uid);
+    const token = useSessionStore((s) => s.token);
+    const url = useMemo(() => avatarUrl(src), [src, token, uid]);
+    const [failedUrls, setFailedUrls] = useState(() => new Set());
     const initials = name ? name.slice(0, 2).toUpperCase() : "?";
-    return (_jsx("div", { className: cn("avatar", className), onClick: onClick, style: {
+    const displayUrl = url && !failedUrls.has(url) ? url : DEFAULT_AVATAR_DATA_URL;
+    const showImage = Boolean(displayUrl && !failedUrls.has(displayUrl));
+    useEffect(() => {
+        setFailedUrls(new Set());
+    }, [url]);
+    return (_jsx("div", { className: ["avatar", className].filter(Boolean).join(" "), onClick: onClick, style: {
             width: size,
             height: size,
             borderRadius: "50%",
@@ -19,5 +28,12 @@ export function Avatar({ src, name, size = 40, className, onClick }) {
             fontSize: size * 0.4,
             fontWeight: 600,
             color: "var(--text-secondary)",
-        }, children: url ? (_jsx("img", { src: url, alt: name, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => { e.currentTarget.style.display = "none"; } })) : (initials) }));
+            ...style,
+        }, children: showImage ? (_jsx("img", { src: displayUrl, alt: name ?? "avatar", draggable: false, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: () => {
+                setFailedUrls((current) => {
+                    const next = new Set(current);
+                    next.add(displayUrl);
+                    return next;
+                });
+            } })) : (initials) }));
 }

@@ -16,12 +16,14 @@ export type BrowserChatFallbackReason =
   | "webtransport_unsupported"
   | "webtransport_closed_before_ready"
   | "webtransport_error_before_ready"
+  | "webtransport_ready_timeout"
 
 export interface BrowserChatTransportDeps {
   createWebSocketTransport?: () => ChatTransport
   createWebTransportTransport?: () => ChatTransport
   isWebTransportSupported?: () => boolean
   logFallback?: (reason: BrowserChatFallbackReason, info: ServerInfo) => void
+  webTransportFallbackTimeoutMs?: number
 }
 
 interface ResolvedBrowserChatTransportDeps {
@@ -29,7 +31,10 @@ interface ResolvedBrowserChatTransportDeps {
   createWebTransportTransport: () => ChatTransport
   isWebTransportSupported: () => boolean
   logFallback: (reason: BrowserChatFallbackReason, info: ServerInfo) => void
+  webTransportFallbackTimeoutMs: number
 }
+
+const DEFAULT_WEBTRANSPORT_FALLBACK_TIMEOUT_MS = 3_000
 
 function defaultFallbackLogger(reason: BrowserChatFallbackReason, info: ServerInfo): void {
   logger.transport.warn("webtransport.fallback_to_websocket", {
@@ -47,6 +52,8 @@ function resolveDeps(deps: BrowserChatTransportDeps): ResolvedBrowserChatTranspo
     createWebTransportTransport: deps.createWebTransportTransport ?? (() => new WebTransportChatTransport()),
     isWebTransportSupported: deps.isWebTransportSupported ?? (() => WebTransportChatTransport.isSupported()),
     logFallback: deps.logFallback ?? defaultFallbackLogger,
+    webTransportFallbackTimeoutMs:
+      deps.webTransportFallbackTimeoutMs ?? DEFAULT_WEBTRANSPORT_FALLBACK_TIMEOUT_MS,
   }
 }
 
@@ -54,6 +61,7 @@ export class BrowserChatTransport implements ChatTransport {
   private readonly _deps: ResolvedBrowserChatTransportDeps
   private _active: ChatTransport | null = null
   private _fallbackStarted = false
+  private _fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(deps: BrowserChatTransportDeps = {}) {
     this._deps = resolveDeps(deps)
@@ -66,6 +74,7 @@ export class BrowserChatTransport implements ChatTransport {
 
   connect(info: ServerInfo): void {
     this._fallbackStarted = false
+    this._clearFallbackTimer()
     if (info.transport === "webtransport" && info.wtUrl) {
       if (this._deps.isWebTransportSupported()) {
         this._connectWith(this._deps.createWebTransportTransport(), info, true)
@@ -84,6 +93,7 @@ export class BrowserChatTransport implements ChatTransport {
   }
 
   close(): void {
+    this._clearFallbackTimer()
     this._active?.close()
     this._active = null
   }
@@ -99,7 +109,13 @@ export class BrowserChatTransport implements ChatTransport {
   private _connectWith(transport: ChatTransport, info: ServerInfo, allowFallback: boolean): void {
     this._active?.close()
     this._active = transport
-    transport.onReady = () => this.onReady?.()
+    if (allowFallback) {
+      this._startFallbackTimer(info)
+    }
+    transport.onReady = () => {
+      this._clearFallbackTimer()
+      this.onReady?.()
+    }
     transport.onMessage = (reqId, payload) => this.onMessage?.(reqId, payload)
     transport.onClose = (reason) => {
       if (
@@ -109,6 +125,7 @@ export class BrowserChatTransport implements ChatTransport {
       ) {
         return
       }
+      this._clearFallbackTimer()
       this.onClose?.(reason)
     }
     transport.onError = (err) => {
@@ -119,15 +136,35 @@ export class BrowserChatTransport implements ChatTransport {
       ) {
         return
       }
+      this._clearFallbackTimer()
       this.onError?.(err)
     }
     transport.connect(info)
+  }
+
+  private _startFallbackTimer(info: ServerInfo): void {
+    this._clearFallbackTimer()
+    if (!info.wsUrl || this._deps.webTransportFallbackTimeoutMs <= 0) {
+      return
+    }
+    this._fallbackTimer = setTimeout(() => {
+      if (this._active?.isConnected()) return
+      this._tryFallback(info, "webtransport_ready_timeout")
+    }, this._deps.webTransportFallbackTimeoutMs)
+  }
+
+  private _clearFallbackTimer(): void {
+    if (this._fallbackTimer !== null) {
+      clearTimeout(this._fallbackTimer)
+      this._fallbackTimer = null
+    }
   }
 
   private _tryFallback(info: ServerInfo, reason: BrowserChatFallbackReason): boolean {
     if (this._fallbackStarted || !info.wsUrl) {
       return false
     }
+    this._clearFallbackTimer()
     this._fallbackStarted = true
     this._deps.logFallback(reason, info)
     const previous = this._active

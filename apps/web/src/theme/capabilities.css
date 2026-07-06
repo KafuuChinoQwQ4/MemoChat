@@ -7,5 +7,6 @@
 }
 
 .no-blur[data-theme="dark"] {
-  --glass-fill: rgba(28, 30, 36, 0.82);
+  --glass-fill: rgba(17, 22, 29, 0.86);
+  --glass-stroke: rgba(255, 255, 255, 0.18);
 }

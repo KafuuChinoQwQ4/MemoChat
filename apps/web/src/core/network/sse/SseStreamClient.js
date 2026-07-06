@@ -17,12 +17,19 @@ export class SseStreamClient {
         this._controller = new AbortController();
         const { signal } = this._controller;
         try {
+            const headers = {
+                "Content-Type": "application/json",
+            };
+            if (opts.token) {
+                headers["Authorization"] = `Bearer ${opts.token}`;
+                headers["X-User-Token"] = opts.token;
+            }
+            if (opts.uid !== null && opts.uid !== undefined && opts.uid > 0) {
+                headers["X-User-Id"] = String(opts.uid);
+            }
             const res = await fetch(`${runtimeConfig.aiBaseUrl}${path}`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-                },
+                headers,
                 body: JSON.stringify(body),
                 signal,
             });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BrowserChatTransport, } from "./BrowserChatTransport";
 class FakeTransport {
     constructor() {
@@ -40,6 +40,9 @@ function serverInfo(overrides = {}) {
     };
 }
 describe("BrowserChatTransport", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
     it("uses websocket transport for the default browser path", () => {
         const websocket = new FakeTransport();
         const webtransport = new FakeTransport();
@@ -107,5 +110,30 @@ describe("BrowserChatTransport", () => {
         expect(websocket.connectCalls).toHaveLength(1);
         expect(websocket.connectCalls[0]?.transport).toBe("websocket");
         expect(logs).toEqual(["webtransport_error_before_ready"]);
+    });
+    it("falls back to websocket when webtransport stays pending before ready", () => {
+        vi.useFakeTimers();
+        const websocket = new FakeTransport();
+        const webtransport = new FakeTransport();
+        const logs = [];
+        const selector = new BrowserChatTransport({
+            createWebSocketTransport: () => websocket,
+            createWebTransportTransport: () => webtransport,
+            isWebTransportSupported: () => true,
+            logFallback: (reason) => logs.push(reason),
+            webTransportFallbackTimeoutMs: 25,
+        });
+        selector.connect(serverInfo({
+            transport: "webtransport",
+            wtUrl: "https://localhost:8445/chat",
+            webtransportServerName: "chatserver1",
+        }));
+        vi.advanceTimersByTime(24);
+        expect(websocket.connectCalls).toHaveLength(0);
+        vi.advanceTimersByTime(1);
+        expect(webtransport.closeCalls).toBe(1);
+        expect(websocket.connectCalls).toHaveLength(1);
+        expect(websocket.connectCalls[0]?.transport).toBe("websocket");
+        expect(logs).toEqual(["webtransport_ready_timeout"]);
     });
 });

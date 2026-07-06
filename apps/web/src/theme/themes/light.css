@@ -1,6 +1,5 @@
-/* Light theme (default) */
-[data-theme="light"],
-:root {
+/* Light theme */
+[data-theme="light"] {
   --surface-bg: #eef0f5;
   --surface-elevated: rgba(255, 255, 255, 0.85);
   --text-primary: #1c1e24;

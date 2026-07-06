@@ -21,6 +21,9 @@ export class ClientGateway implements IGateway {
   constructor() {
     this.dispatcher = new ChatMessageDispatcher()
     this.chatTransport = buildTransport()
+    this.chatTransport.onMessage = (reqId, payload) => {
+      this.dispatcher.dispatch({ reqId, length: payload.length, payload })
+    }
     this.http = new HttpClient(
       runtimeConfig.gateBaseUrl,
       () => useSessionStore.getState().token,

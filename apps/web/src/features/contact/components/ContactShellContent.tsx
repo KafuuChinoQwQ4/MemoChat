@@ -1,5 +1,5 @@
 /** ContactShellContent — friend list + apply list view */
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useEntityStore } from "@/core/entities/entityStore"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
@@ -8,32 +8,56 @@ import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 export function ContactShellContent() {
   const friendsMap = useEntityStore((s) => s.friends)
   const friends = useMemo(() => Array.from(friendsMap.values()), [friendsMap])
+  const [selectedUid, setSelectedUid] = useState<number | null>(null)
+  const selectedFriend = friends.find((f) => f.uid === selectedUid) ?? null
+
+  useEffect(() => {
+    if (friends.length === 0) {
+      setSelectedUid(null)
+      return
+    }
+    if (selectedUid === null || !friends.some((f) => f.uid === selectedUid)) {
+      setSelectedUid(friends[0]?.uid ?? null)
+    }
+  }, [friends, selectedUid])
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "280px minmax(0, 1fr)",
+        height: "100%",
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
       {/* Friend list sidebar */}
-      <GlassScrollArea style={{ width: 250, borderRight: "1px solid var(--divider)", flexShrink: 0 }}>
-        <div style={{ padding: "12px 12px 8px", fontWeight: 600, fontSize: 15 }}>联系人</div>
+      <GlassScrollArea style={{ borderRight: "1px solid var(--divider)", padding: "10px 8px" }}>
+        <div style={{ padding: "6px 10px 12px", fontWeight: 700, fontSize: 16 }}>联系人</div>
         {friends.map((f) => (
           <button
             key={f.uid}
+            onClick={() => setSelectedUid(f.uid)}
             style={{
               display: "flex",
               alignItems: "center",
               gap: 10,
-              padding: "8px 12px",
+              padding: "10px 12px",
               border: "none",
-              background: "transparent",
+              background: f.uid === selectedUid ? "var(--tint-selected)" : "transparent",
               cursor: "pointer",
               width: "100%",
               textAlign: "left",
-              borderRadius: 8,
+              borderRadius: 10,
+              color: "var(--text-primary)",
+              transition: "background 140ms ease, transform 120ms ease",
             }}
           >
             <Avatar src={f.icon} name={f.name} size={38} />
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 14 }}>{f.name}</div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{f.email}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.email}</div>
             </div>
           </button>
         ))}
@@ -43,9 +67,51 @@ export function ContactShellContent() {
       </GlassScrollArea>
 
       {/* Detail pane */}
-      <GlassSurface style={{ flex: 1, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-disabled)", fontSize: 14 }}>
-        选择联系人查看详情
-      </GlassSurface>
+      <div style={{ minWidth: 0, padding: 16, overflow: "hidden" }}>
+        <GlassSurface
+          elevated
+          style={{
+            height: "100%",
+            padding: 28,
+            display: "flex",
+            flexDirection: "column",
+            color: "var(--text-primary)",
+          }}
+        >
+          {selectedFriend ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <Avatar
+                  src={selectedFriend.icon}
+                  name={selectedFriend.name}
+                  size={64}
+                  style={{ boxShadow: "0 10px 30px rgba(0,0,0,0.10)" }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{selectedFriend.name}</div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-secondary)" }}>{selectedFriend.email}</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-disabled)" }}>UID: {selectedFriend.uid}</div>
+                </div>
+              </div>
+              <div style={{ height: 1, background: "var(--divider)", margin: "24px 0" }} />
+              <div style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--text-disabled)", marginBottom: 4 }}>备注</div>
+                  <div style={{ fontSize: 14 }}>{selectedFriend.desc?.trim() || "暂无备注"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--text-disabled)", marginBottom: 4 }}>账号状态</div>
+                  <div style={{ fontSize: 14 }}>已添加为好友</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ margin: "auto", color: "var(--text-disabled)", fontSize: 14 }}>
+              选择联系人查看详情
+            </div>
+          )}
+        </GlassSurface>
+      </div>
     </div>
   )
 }

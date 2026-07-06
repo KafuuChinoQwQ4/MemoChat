@@ -18,6 +18,7 @@ const ChatTab = lazy(() => import("@/features/chat/components/ChatShellContent")
 const ContactTab = lazy(() => import("@/features/contact/components/ContactShellContent").then((m) => ({ default: m.ContactShellContent })));
 const GroupTab = lazy(() => import("@/features/group/components/GroupShellContent").then((m) => ({ default: m.GroupShellContent })));
 const MomentsTab = lazy(() => import("@/features/moments/components/MomentsShellContent").then((m) => ({ default: m.MomentsShellContent })));
+const R18Tab = lazy(() => import("@/features/r18/components/R18ShellContent").then((m) => ({ default: m.R18ShellContent })));
 const AgentTab = lazy(() => import("@/features/agent/components/AgentShellContent").then((m) => ({ default: m.AgentShellContent })));
 const SettingsTab = lazy(() => import("@/features/settings/components/SettingsPane").then((m) => ({ default: m.SettingsPane })));
 function PageFallback() {
@@ -41,6 +42,7 @@ const router = createHashRouter([
                             { path: "contacts", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(ContactTab, {}) }) },
                             { path: "groups", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(GroupTab, {}) }) },
                             { path: "moments", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(MomentsTab, {}) }) },
+                            { path: "r18", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(R18Tab, {}) }) },
                             { path: "agent", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(AgentTab, {}) }) },
                             { path: "settings", element: _jsx(Suspense, { fallback: _jsx(PageFallback, {}), children: _jsx(SettingsTab, {}) }) },
                         ],

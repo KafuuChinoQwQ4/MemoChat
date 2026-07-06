@@ -59,19 +59,23 @@ html {
 }
 
 /* Dark mode override */
-[data-theme="dark"] html,
+html:not([data-theme="light"]),
 html[data-theme="dark"] {
-  background: linear-gradient(-45deg, #161a22, #1a1822, #1c1a20, #171c22);
-  background-size: 400% 400%;
-  animation: bg-drift 28s ease infinite;
+  background: var(--surface-bg);
+  background-color: #03050a;
+  background-attachment: fixed;
+  background-size: auto;
+  animation: none;
 }
 
 body {
   height: 100%;
+  background: transparent;
 }
 
 #root {
   height: 100%;
+  background: transparent;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@
  * postLoginBootstrap — exact login sequence per architecture plan §5.
  * 1. HTTP login → store session
  * 2. WS connect → send chat-login (1005) → wait for 1006
- * 3. Send relation bootstrap (1092) → wait for 1093
+ * 3. Send relation, group-list, and dialog-list bootstraps
  * 4. Start heartbeat
  * Errors: 1095/1096 → refresh; 1097 → re-fetch endpoints; 1098 → hard fail.
  */
@@ -15,6 +15,7 @@ import { runtimeConfig } from "@/core/config/runtimeConfig"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { logger } from "@/core/common/logger"
 import type { ServerInfo } from "@/core/network/transport/transport.types"
+import { applyDialogListPayload, applyGroupListPayload } from "@/app/dispatch/chatListPayloads"
 
 export interface LoginCredentials {
   email: string
@@ -158,8 +159,12 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
   session.setConnState("connecting")
   await connectAndChatLogin(gateway, res)
 
-  // Step 3: Relation bootstrap
+  // Step 3: Entity bootstrap
   await sendRelationBootstrap(gateway, res.uid)
+  await Promise.all([
+    sendGroupListBootstrap(gateway, res.uid),
+    sendDialogListBootstrap(gateway, res.uid),
+  ])
 
   logger.app.info("Bootstrap complete for uid", res.uid)
 }
@@ -227,7 +232,13 @@ async function sendRelationBootstrap(
   uid: number,
 ): Promise<void> {
   return new Promise((resolve) => {
-    const unsub = gateway.dispatcher.subscribe(ReqId.ID_GET_RELATION_BOOTSTRAP_RSP, (frame) => {
+    let unsub = () => {}
+    const timeout = setTimeout(() => {
+      unsub()
+      resolve()
+    }, 3_000)
+    unsub = gateway.dispatcher.subscribe(ReqId.ID_GET_RELATION_BOOTSTRAP_RSP, (frame) => {
+      clearTimeout(timeout)
       unsub()
       const data = JSON.parse(frame.payload) as {
         friend_list?: Array<{ uid: number; name: string; email: string; icon: string }>
@@ -251,7 +262,46 @@ async function sendRelationBootstrap(
       }
       resolve()
     })
-    setTimeout(resolve, 3_000) // don't block on timeout
     gateway.chatTransport.send(ReqId.ID_GET_RELATION_BOOTSTRAP_REQ, JSON.stringify({ uid }))
+  })
+}
+
+async function sendGroupListBootstrap(
+  gateway: ReturnType<typeof getGateway>,
+  uid: number,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let unsub = () => {}
+    const timeout = setTimeout(() => {
+      unsub()
+      resolve()
+    }, 3_000)
+    unsub = gateway.dispatcher.subscribe(ReqId.ID_GET_GROUP_LIST_RSP, (frame) => {
+      clearTimeout(timeout)
+      unsub()
+      applyGroupListPayload(frame.payload)
+      resolve()
+    })
+    gateway.chatTransport.send(ReqId.ID_GET_GROUP_LIST_REQ, JSON.stringify({ fromuid: uid }))
+  })
+}
+
+async function sendDialogListBootstrap(
+  gateway: ReturnType<typeof getGateway>,
+  uid: number,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let unsub = () => {}
+    const timeout = setTimeout(() => {
+      unsub()
+      resolve()
+    }, 3_000)
+    unsub = gateway.dispatcher.subscribe(ReqId.ID_GET_DIALOG_LIST_RSP, (frame) => {
+      clearTimeout(timeout)
+      unsub()
+      applyDialogListPayload(frame.payload)
+      resolve()
+    })
+    gateway.chatTransport.send(ReqId.ID_GET_DIALOG_LIST_REQ, JSON.stringify({ uid }))
   })
 }

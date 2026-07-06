@@ -22,6 +22,7 @@ export interface SseStreamOptions {
   onChunk: (chunk: SseChunk) => void
   onError?: (err: unknown) => void
   onComplete?: () => void
+  uid?: number | null | undefined
   /** Bearer token — pass undefined if not authenticated */
   token?: string | undefined
 }
@@ -38,12 +39,19 @@ export class SseStreamClient {
     const { signal } = this._controller
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+      if (opts.token) {
+        headers["Authorization"] = `Bearer ${opts.token}`
+        headers["X-User-Token"] = opts.token
+      }
+      if (opts.uid !== null && opts.uid !== undefined && opts.uid > 0) {
+        headers["X-User-Id"] = String(opts.uid)
+      }
       const res = await fetch(`${runtimeConfig.aiBaseUrl}${path}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-        },
+        headers,
         body: JSON.stringify(body),
         signal,
       })

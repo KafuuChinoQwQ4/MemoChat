@@ -27,9 +27,10 @@ export function DialogListPanel() {
       <div style={{ padding: "12px 12px 8px", fontWeight: 600, fontSize: 15 }}>消息</div>
       {dialogs.map((d) => {
         const isActive = d.peerId === selectedPeerId
+        const title = d.title ?? d.peerId.toString()
         return (
           <button
-            key={d.peerId}
+            key={d.dialogId ?? `${d.isGroup ? "g" : "u"}_${d.peerId}`}
             onClick={() => setSelectedConversation(d.peerId, d.isGroup)}
             style={{
               display: "flex",
@@ -45,10 +46,10 @@ export function DialogListPanel() {
               transition: "background 100ms ease",
             }}
           >
-            <Avatar src={undefined} name={d.peerId.toString()} size={40} />
+            <Avatar src={d.avatar} name={title} size={40} />
             <div style={{ flex: 1, overflow: "hidden" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 500, fontSize: 14, color: "var(--text-primary)" }}>{d.peerId}</span>
+                <span style={{ fontWeight: 500, fontSize: 14, color: "var(--text-primary)" }}>{title}</span>
                 <span style={{ fontSize: 11, color: "var(--text-disabled)" }}>{formatMessageTime(d.lastMsgTime)}</span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
