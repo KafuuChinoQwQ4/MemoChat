@@ -67,6 +67,22 @@ const INITIAL: EntitiesState = {
   dialogListFinished: false,
 }
 
+function richMessageKey(msg: RichMessage): string {
+  if (msg.serverMsgId !== undefined && msg.serverMsgId > 0) return `server:${msg.isGroup ? "g" : "p"}:${msg.serverMsgId}`
+  if (msg.clientMsgId) return `client:${msg.clientMsgId}`
+  return `fallback:${msg.fromUid}:${msg.toId}:${msg.timestamp}:${msg.content}`
+}
+
+function mergeMessages(existing: RichMessage[], incoming: RichMessage[]): RichMessage[] {
+  const byKey = new Map<string, RichMessage>()
+  for (const msg of existing) byKey.set(richMessageKey(msg), msg)
+  for (const msg of incoming) byKey.set(richMessageKey(msg), msg)
+  return Array.from(byKey.values()).sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+    return a.clientMsgId.localeCompare(b.clientMsgId)
+  })
+}
+
 export const useEntityStore = create<EntitiesState & EntitiesActions>((set, get) => ({
   ...INITIAL,
 
@@ -103,26 +119,19 @@ export const useEntityStore = create<EntitiesState & EntitiesActions>((set, get)
   appendMessage: (peerId, msg) =>
     set((s) => {
       const m = new Map(s.messages)
-      const arr = [...(m.get(peerId) ?? [])]
-      arr.push(msg)
-      m.set(peerId, arr)
+      m.set(peerId, mergeMessages(m.get(peerId) ?? [], [msg]))
       return { messages: m }
     }),
   prependMessages: (peerId, msgs) =>
     set((s) => {
       const m = new Map(s.messages)
-      const existing = m.get(peerId) ?? []
-      m.set(peerId, [...msgs, ...existing])
+      m.set(peerId, mergeMessages(m.get(peerId) ?? [], msgs))
       return { messages: m }
     }),
   upsertMessage: (peerId, msg) =>
     set((s) => {
       const m = new Map(s.messages)
-      const arr = [...(m.get(peerId) ?? [])]
-      const idx = arr.findIndex((x) => x.clientMsgId === msg.clientMsgId)
-      if (idx >= 0) arr[idx] = msg
-      else arr.push(msg)
-      m.set(peerId, arr)
+      m.set(peerId, mergeMessages(m.get(peerId) ?? [], [msg]))
       return { messages: m }
     }),
   updateMessageState: (peerId, clientMsgId, state, serverMsgId) =>

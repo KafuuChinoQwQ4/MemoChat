@@ -13,6 +13,7 @@ const NAV_ITEMS = [
     { path: "/app/contacts", label: "联系人", icon: "contacts" },
     { path: "/app/groups", label: "群组", icon: "groups" },
     { path: "/app/moments", label: "朋友圈", icon: "moments" },
+    { path: "/app/r18", label: "R18", icon: "r18" },
     { path: "/app/agent", label: "AI助手", icon: "agent" },
 ];
 function SimpleIcon({ name, size = 22 }) {
@@ -39,6 +40,8 @@ function SimpleIcon({ name, size = 22 }) {
             return (_jsxs("svg", { ...common, children: [_jsx("circle", { cx: "12", cy: "12", r: "7.2" }), _jsx("path", { d: "M4.8 12h14.4" }), _jsx("path", { d: "M12 4.8c2 2.1 3 4.5 3 7.2s-1 5.1-3 7.2" }), _jsx("path", { d: "M12 4.8c-2 2.1-3 4.5-3 7.2s1 5.1 3 7.2" })] }));
         case "agent":
             return (_jsxs("svg", { ...common, children: [_jsx("rect", { x: "6.2", y: "7.2", width: "11.6", height: "9.8", rx: "3" }), _jsx("path", { d: "M9.5 11.2h.1" }), _jsx("path", { d: "M14.4 11.2h.1" }), _jsx("path", { d: "M10 14.1c1.2.8 2.8.8 4 0" }), _jsx("path", { d: "M12 7.2V4.8" }), _jsx("path", { d: "M8.2 19.2h7.6" })] }));
+        case "r18":
+            return (_jsxs("svg", { ...common, children: [_jsx("path", { d: "M12 4.8 18.2 7v4.7c0 3.4-2.2 5.9-6.2 7.5-4-1.6-6.2-4.1-6.2-7.5V7Z" }), _jsx("path", { d: "M9.2 11.6h5.6" }), _jsx("path", { d: "M10.2 14.1h3.6" })] }));
         case "settings":
             return (_jsxs("svg", { ...common, children: [_jsx("circle", { cx: "12", cy: "12", r: "2.8" }), _jsx("path", { d: "M12 4.7v2" }), _jsx("path", { d: "M12 17.3v2" }), _jsx("path", { d: "m6.8 6.8 1.4 1.4" }), _jsx("path", { d: "m15.8 15.8 1.4 1.4" }), _jsx("path", { d: "M4.7 12h2" }), _jsx("path", { d: "M17.3 12h2" }), _jsx("path", { d: "m6.8 17.2 1.4-1.4" }), _jsx("path", { d: "m15.8 8.2 1.4-1.4" })] }));
         case "logout":

@@ -8,7 +8,7 @@ import { useSessionStore } from "@/core/session/sessionStore"
 import { cn } from "@/shared/lib/classnames"
 import { logoutTeardown } from "@/app/bootstrap/logoutTeardown"
 
-type IconName = "chat" | "contacts" | "groups" | "moments" | "agent" | "settings" | "logout"
+type IconName = "chat" | "contacts" | "groups" | "moments" | "r18" | "agent" | "settings" | "logout"
 
 interface NavItem {
   path: string
@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: "/app/contacts", label: "联系人", icon: "contacts" },
   { path: "/app/groups",   label: "群组",  icon: "groups"   },
   { path: "/app/moments",  label: "朋友圈", icon: "moments"  },
+  { path: "/app/r18",      label: "R18",   icon: "r18"      },
   { path: "/app/agent",    label: "AI助手", icon: "agent"    },
 ]
 
@@ -82,6 +83,14 @@ function SimpleIcon({ name, size = 22 }: { name: IconName; size?: number }) {
           <path d="M10 14.1c1.2.8 2.8.8 4 0" />
           <path d="M12 7.2V4.8" />
           <path d="M8.2 19.2h7.6" />
+        </svg>
+      )
+    case "r18":
+      return (
+        <svg {...common}>
+          <path d="M12 4.8 18.2 7v4.7c0 3.4-2.2 5.9-6.2 7.5-4-1.6-6.2-4.1-6.2-7.5V7Z" />
+          <path d="M9.2 11.6h5.6" />
+          <path d="M10.2 14.1h3.6" />
         </svg>
       )
     case "settings":

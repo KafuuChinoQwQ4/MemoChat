@@ -38,4 +38,9 @@ export const ENDPOINTS = {
     aiTaskResume: "/ai/task/resume",
     // Media
     mediaUpload: "/media/upload",
+    // R18
+    r18Sources: "/api/r18/sources",
+    r18Search: "/api/r18/search",
+    r18SourceEnable: "/api/r18/source/enable",
+    r18SourceDisable: "/api/r18/source/disable",
 };

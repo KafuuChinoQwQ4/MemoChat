@@ -3,33 +3,54 @@ import { genClientMsgId } from "@/shared/lib/id";
 export function createChatApi(transport, _http) {
     return {
         /** Send a private text message */
-        sendPrivateMessage(toUid, content) {
+        sendPrivateMessage(fromUid, toUid, content) {
             const clientMsgId = genClientMsgId();
+            const createdAt = Date.now();
             transport.send(ReqId.ID_TEXT_CHAT_MSG_REQ, JSON.stringify({
-                to_uid: toUid,
-                content,
-                client_msg_id: clientMsgId,
-                msg_type: "text",
+                fromuid: fromUid,
+                touid: toUid,
+                text_array: [{
+                        msgid: clientMsgId,
+                        content,
+                        created_at: createdAt,
+                    }],
             }));
             return clientMsgId;
         },
         /** Send a group text message */
-        sendGroupMessage(groupId, content) {
+        sendGroupMessage(fromUid, groupId, content) {
             const clientMsgId = genClientMsgId();
             transport.send(ReqId.ID_GROUP_CHAT_MSG_REQ, JSON.stringify({
-                group_id: groupId,
-                content,
-                client_msg_id: clientMsgId,
-                msg_type: "text",
+                fromuid: fromUid,
+                groupid: groupId,
+                msg: {
+                    msgid: clientMsgId,
+                    content,
+                    msgtype: "text",
+                },
             }));
             return clientMsgId;
         },
         /** Fetch private chat history */
-        fetchPrivateHistory(peerUid, beforeMsgId, count = 13) {
-            transport.send(ReqId.ID_PRIVATE_HISTORY_REQ, JSON.stringify({
+        fetchPrivateHistory(fromUid, peerUid, beforeTs = 0, beforeMsgId = "", limit = 50) {
+            const payload = {
+                fromuid: fromUid,
                 peer_uid: peerUid,
-                before_msg_id: beforeMsgId,
-                count,
+                before_ts: beforeTs,
+                limit,
+            };
+            if (beforeMsgId.trim())
+                payload["before_msg_id"] = beforeMsgId.trim();
+            transport.send(ReqId.ID_PRIVATE_HISTORY_REQ, JSON.stringify(payload));
+        },
+        /** Fetch group chat history */
+        fetchGroupHistory(fromUid, groupId, beforeSeq = 0, limit = 50) {
+            transport.send(ReqId.ID_GROUP_HISTORY_REQ, JSON.stringify({
+                fromuid: fromUid,
+                groupid: groupId,
+                before_ts: 0,
+                before_seq: beforeSeq,
+                limit,
             }));
         },
         /** Fetch dialog list */

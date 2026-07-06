@@ -20,9 +20,12 @@ export interface Group {
 }
 
 export interface DialogEntry {
+  dialogId?: string
   /** The peer uid (for private) or groupId (for group) */
   peerId: number
   isGroup: boolean
+  title?: string
+  avatar?: string
   lastMsgContent: string
   lastMsgTime: number
   unreadCount: number
@@ -44,6 +47,10 @@ export interface RichMessage {
   msgType: "text" | "image" | "file" | "system"
   timestamp: number
   state: MessageState
+  /** Optional sender fields carried by group notify/history payloads */
+  senderName?: string
+  senderIcon?: string
+  fromUserId?: string
   /** Set when message is edited */
   editedAt?: number
   /** Set when message is revoked */

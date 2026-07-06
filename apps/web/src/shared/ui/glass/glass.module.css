@@ -8,6 +8,8 @@
   border: 1px solid var(--glass-stroke);
   backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.6);
+  background-clip: padding-box;
+  isolation: isolate;
   overflow: hidden;
   transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
@@ -39,6 +41,11 @@
   z-index: 0;
 }
 
+.surface > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* ── Elevated ─────────────────────────────────────────────────── */
 .elevated {
   box-shadow:
@@ -54,6 +61,50 @@
     0 2px 4px rgba(0, 0, 0, 0.07),
     0 8px 20px rgba(0, 0, 0, 0.10),
     0 20px 40px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .surface {
+  background-color: var(--glass-fill);
+  background-image:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.024) 44%, rgba(255, 255, 255, 0.064)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.075),
+    0 20px 58px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .surface::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.070) 28%,
+    rgba(255, 255, 255, 0.026) 52%,
+    transparent 68%
+  );
+}
+
+[data-theme="dark"] .surface::after {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 0 28px rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="dark"] .elevated {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 16px 40px rgba(0, 0, 0, 0.38),
+    0 42px 92px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .hoverable:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.28),
+    0 20px 48px rgba(0, 0, 0, 0.38),
+    0 42px 88px rgba(0, 0, 0, 0.24);
 }
 
 /* ── Entrance animation ───────────────────────────────────────── */
@@ -159,10 +210,10 @@
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.20);
 }
 [data-theme="dark"] .textFieldInput:focus {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(10, 16, 22, 0.46);
   box-shadow:
     inset 0 1px 3px rgba(0, 0, 0, 0.18),
-    0 0 0 3px rgba(88, 158, 212, 0.18);
+    0 0 0 3px rgba(92, 190, 164, 0.18);
 }
 
 /* ── GlassScrollArea ──────────────────────────────────────────── */

@@ -1,25 +1,38 @@
 /* Dark theme */
-[data-theme="dark"] {
-  --surface-bg: #161a22;
-  --surface-elevated: rgba(36, 40, 52, 0.85);
-  --text-primary: #e2e4ea;
-  --text-secondary: #8e92a0;
-  --text-disabled: #505462;
-  --glass-fill: rgba(255, 255, 255, 0.07);
-  --glass-stroke: rgba(255, 255, 255, 0.14);
-  --glass-input-bg: rgba(255, 255, 255, 0.06);
-  --glass-input-border: rgba(255, 255, 255, 0.10);
-  --glass-btn-text: #b8bcc8;
-  --glass-btn-bg: rgba(255, 255, 255, 0.06);
-  --glass-btn-bg-hover: rgba(255, 255, 255, 0.11);
-  --glass-btn-bg-press: rgba(255, 255, 255, 0.17);
-  --divider: rgba(255, 255, 255, 0.07);
+[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  --surface-bg:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.024) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 88px),
+    linear-gradient(118deg, transparent 0%, rgba(64, 156, 132, 0.20) 18%, transparent 46%),
+    linear-gradient(252deg, transparent 3%, rgba(186, 115, 71, 0.16) 24%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0) 32%),
+    linear-gradient(148deg, #03050a 0%, #071019 40%, #101419 73%, #17170f 100%);
+  --surface-elevated: rgba(13, 18, 25, 0.62);
+  --text-primary: #f0f3f0;
+  --text-secondary: #aeb5bd;
+  --text-disabled: #626a76;
+  --glass-blur: 28px;
+  --glass-fill: rgba(246, 252, 255, 0.066);
+  --glass-stroke: rgba(255, 255, 255, 0.21);
+  --glass-sheen-height: 38%;
+  --glass-input-bg: rgba(6, 10, 15, 0.44);
+  --glass-input-border: rgba(255, 255, 255, 0.18);
+  --glass-input-border-focus: rgba(92, 190, 164, 0.78);
+  --glass-btn-text: #dde4e2;
+  --glass-btn-bg: rgba(255, 255, 255, 0.09);
+  --glass-btn-bg-hover: rgba(255, 255, 255, 0.15);
+  --glass-btn-bg-press: rgba(255, 255, 255, 0.22);
+  --divider: rgba(255, 255, 255, 0.12);
+  --tint-hover: rgba(92, 190, 164, 0.14);
+  --tint-press: rgba(92, 190, 164, 0.21);
+  --tint-selected: rgba(92, 190, 164, 0.23);
 
   /* Sidebar */
-  --sidebar-bg: rgba(255, 255, 255, 0.04);
-  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-bg: rgba(8, 12, 18, 0.44);
+  --sidebar-border: rgba(255, 255, 255, 0.16);
 
   /* List panel */
-  --list-panel-bg: rgba(255, 255, 255, 0.03);
-  --list-panel-border: rgba(255, 255, 255, 0.06);
+  --list-panel-bg: rgba(8, 12, 18, 0.34);
+  --list-panel-border: rgba(255, 255, 255, 0.13);
 }
