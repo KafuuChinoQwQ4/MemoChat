@@ -1,4 +1,5 @@
 import { useEntityStore } from "@/core/entities/entityStore";
+import { normalizeGroupPublicId } from "@/core/entities/displayIds";
 function groupRole(role) {
     if (role === 3)
         return "owner";
@@ -15,9 +16,11 @@ export function groupsFromPayload(payload) {
         const groupId = Number(row.groupid ?? 0);
         if (!Number.isFinite(groupId) || groupId <= 0)
             return null;
+        const groupCode = normalizeGroupPublicId(row.group_code);
         return {
             groupId,
-            name: row.name ?? `群组 ${groupId}`,
+            ...(groupCode ? { groupCode } : {}),
+            name: row.name ?? (groupCode ? `群组 ${groupCode}` : "未命名群聊"),
             icon: row.icon ?? "",
             memberCount: row.member_count ?? 0,
             announcement: row.announcement ?? "",

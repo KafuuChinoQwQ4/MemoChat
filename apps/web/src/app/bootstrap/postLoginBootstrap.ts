@@ -9,6 +9,7 @@
 import { useSessionStore } from "@/core/session/sessionStore"
 import type { ChatEndpointInfo } from "@/core/session/sessionTypes"
 import { useEntityStore } from "@/core/entities/entityStore"
+import { normalizePublicUserId } from "@/core/entities/displayIds"
 import { ReqId } from "@/core/network/opcodes/reqIds"
 import { ErrorCodes } from "@/core/network/opcodes/errorCodes"
 import { runtimeConfig } from "@/core/config/runtimeConfig"
@@ -16,6 +17,7 @@ import { getGateway } from "@/shared/gateway/ClientGateway"
 import { logger } from "@/core/common/logger"
 import type { ServerInfo } from "@/core/network/transport/transport.types"
 import { applyDialogListPayload, applyGroupListPayload } from "@/app/dispatch/chatListPayloads"
+import type { ApplyEntry, Friend } from "@/core/entities/entityTypes"
 
 export interface LoginCredentials {
   email: string
@@ -152,6 +154,7 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
       name: res.user_profile.name,
       email: res.user_profile.email,
       icon: res.user_profile.icon,
+      userId: res.user_profile.user_id,
     },
   })
 
@@ -241,23 +244,78 @@ async function sendRelationBootstrap(
       clearTimeout(timeout)
       unsub()
       const data = JSON.parse(frame.payload) as {
-        friend_list?: Array<{ uid: number; name: string; email: string; icon: string }>
-        apply_list?: Array<{ from_uid: number; to_uid: number; apply_msg: string; status: number; apply_time: number }>
+        friend_list?: Array<{
+          uid?: number
+          name?: string
+          email?: string
+          icon?: string
+          user_id?: string
+          nick?: string
+          desc?: string
+          back?: string
+          labels?: string[]
+        }>
+        apply_list?: Array<{
+          uid?: number
+          from_uid?: number
+          to_uid?: number
+          apply_msg?: string
+          status?: number
+          apply_time?: number
+          name?: string
+          user_id?: string
+          icon?: string
+          nick?: string
+          desc?: string
+          labels?: string[]
+        }>
       }
       if (data.friend_list) {
         useEntityStore.getState().setFriends(
-          data.friend_list.map((f) => ({ uid: f.uid, name: f.name, email: f.email, icon: f.icon })),
+          data.friend_list
+            .map((f): Friend | null => {
+              const friendUid = Number(f.uid ?? 0)
+              if (friendUid <= 0) return null
+              const displayName = (f.nick || f.name || normalizePublicUserId(f.user_id) || "未知用户").trim()
+              const item: Friend = {
+                uid: friendUid,
+                name: displayName,
+                email: (f.email || f.user_id || "").trim(),
+                icon: f.icon || "",
+              }
+              if (f.user_id) item.userId = f.user_id
+              if (f.nick) item.nick = f.nick
+              if (f.desc) item.desc = f.desc
+              if (f.back) item.back = f.back
+              if (Array.isArray(f.labels)) item.labels = f.labels
+              return item
+            })
+            .filter((f): f is Friend => f !== null),
         )
       }
       if (data.apply_list) {
         useEntityStore.getState().setApplyList(
-          data.apply_list.map((a) => ({
-            fromUid: a.from_uid,
-            toUid: a.to_uid,
-            applyMsg: a.apply_msg,
-            status: "pending" as const,
-            applyTime: a.apply_time,
-          })),
+          data.apply_list
+            .map((a): ApplyEntry | null => {
+              const fromUid = Number(a.from_uid ?? a.uid ?? 0)
+              if (fromUid <= 0) return null
+              const entry: ApplyEntry = {
+                fromUid,
+                applyMsg: a.apply_msg || a.desc || "请求添加你为好友",
+                status: a.status === 1 ? "accepted" : a.status === 2 ? "rejected" : "pending",
+                applyTime: Number(a.apply_time ?? Date.now()),
+              }
+              const toUid = Number(a.to_uid ?? 0)
+              if (toUid > 0) entry.toUid = toUid
+              if (a.name) entry.name = a.name
+              if (a.user_id) entry.userId = a.user_id
+              if (a.icon) entry.icon = a.icon
+              if (a.nick) entry.nick = a.nick
+              if (a.desc) entry.desc = a.desc
+              if (Array.isArray(a.labels)) entry.labels = a.labels
+              return entry
+            })
+            .filter((a): a is ApplyEntry => a !== null),
         )
       }
       resolve()

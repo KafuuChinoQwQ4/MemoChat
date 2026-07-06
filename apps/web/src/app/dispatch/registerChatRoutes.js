@@ -1,5 +1,6 @@
 import { ReqId } from "@/core/network/opcodes/reqIds";
 import { useEntityStore } from "@/core/entities/entityStore";
+import { normalizePublicUserId } from "@/core/entities/displayIds";
 import { useSessionStore } from "@/core/session/sessionStore";
 import { useChatStore } from "@/features/chat/store/chatStore";
 import { genClientMsgId } from "@/shared/lib/id";
@@ -57,6 +58,59 @@ function fieldString(row, ...keys) {
 function fieldBoolean(row, key) {
     const value = row[key];
     return value === true || value === 1 || value === "1" || value === "true";
+}
+function friendFromRelationRow(row, uidKeys) {
+    const uid = fieldNumber(row, ...uidKeys);
+    if (uid <= 0)
+        return null;
+    const publicUserId = normalizePublicUserId(fieldString(row, "user_id", "from_user_id"));
+    const name = fieldString(row, "nick", "name") || publicUserId || "未知用户";
+    const item = {
+        uid,
+        name,
+        email: fieldString(row, "email", "user_id", "from_user_id"),
+        icon: fieldString(row, "icon", "from_icon", "sender_icon"),
+    };
+    const userId = publicUserId;
+    if (userId)
+        item.userId = userId;
+    const nick = fieldString(row, "nick", "from_nick");
+    if (nick)
+        item.nick = nick;
+    const desc = fieldString(row, "desc");
+    if (desc)
+        item.desc = desc;
+    return item;
+}
+function applyEntryFromNotify(row) {
+    const fromUid = fieldNumber(row, "applyuid", "from_uid", "uid");
+    if (fromUid <= 0)
+        return null;
+    const entry = {
+        fromUid,
+        applyMsg: fieldString(row, "apply_msg", "desc") || "请求添加你为好友",
+        status: "pending",
+        applyTime: Date.now(),
+    };
+    const toUid = fieldNumber(row, "to_uid", "touid");
+    if (toUid > 0)
+        entry.toUid = toUid;
+    const name = fieldString(row, "nick", "name");
+    if (name)
+        entry.name = name;
+    const userId = fieldString(row, "user_id", "from_user_id");
+    if (userId)
+        entry.userId = userId;
+    const icon = fieldString(row, "icon", "from_icon");
+    if (icon)
+        entry.icon = icon;
+    const nick = fieldString(row, "nick");
+    if (nick)
+        entry.nick = nick;
+    const desc = fieldString(row, "desc");
+    if (desc)
+        entry.desc = desc;
+    return entry;
 }
 function normalizeTimestamp(value) {
     if (value <= 0)
@@ -198,6 +252,9 @@ export function registerChatRoutes(dispatcher) {
     unsubs.push(dispatcher.subscribe(ReqId.ID_GET_GROUP_LIST_RSP, (frame) => {
         applyGroupListPayload(frame.payload);
     }));
+    unsubs.push(dispatcher.subscribe(ReqId.ID_CREATE_GROUP_RSP, (frame) => {
+        applyGroupListPayload(frame.payload);
+    }));
     unsubs.push(dispatcher.subscribe(ReqId.ID_GET_DIALOG_LIST_RSP, (frame) => {
         applyDialogListPayload(frame.payload);
     }));
@@ -304,12 +361,35 @@ export function registerChatRoutes(dispatcher) {
             useEntityStore.getState().patchMessageContent(data.peer_uid, data.msg_id, data.content, data.edited_at);
         }
     }));
-    // Friend added notification
+    // Incoming friend apply notification
+    unsubs.push(dispatcher.subscribe(ReqId.ID_NOTIFY_ADD_FRIEND_REQ, (frame) => {
+        const data = parseWireObject(frame.payload);
+        if (!data || fieldNumber(data, "error") !== 0)
+            return;
+        const entry = applyEntryFromNotify(data);
+        if (entry) {
+            useEntityStore.getState().appendApply(entry);
+        }
+    }));
+    // Current user approved an incoming friend apply
+    unsubs.push(dispatcher.subscribe(ReqId.ID_AUTH_FRIEND_RSP, (frame) => {
+        const data = parseWireObject(frame.payload);
+        if (!data || fieldNumber(data, "error") !== 0)
+            return;
+        const friend = friendFromRelationRow(data, ["uid"]);
+        if (friend) {
+            useEntityStore.getState().upsertFriend(friend);
+        }
+    }));
+    // Friend added notification for the requester
     unsubs.push(dispatcher.subscribe(ReqId.ID_NOTIFY_AUTH_FRIEND_REQ, (frame) => {
-        const data = JSON.parse(frame.payload);
-        useEntityStore.getState().upsertFriend({
-            uid: data.uid, name: data.name, email: data.email, icon: data.icon,
-        });
+        const data = parseWireObject(frame.payload);
+        if (!data || fieldNumber(data, "error") !== 0)
+            return;
+        const friend = friendFromRelationRow(data, ["fromuid", "uid"]);
+        if (friend) {
+            useEntityStore.getState().upsertFriend(friend);
+        }
     }));
     return () => unsubs.forEach((u) => u());
 }

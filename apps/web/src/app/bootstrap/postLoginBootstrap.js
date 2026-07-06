@@ -8,6 +8,7 @@
  */
 import { useSessionStore } from "@/core/session/sessionStore";
 import { useEntityStore } from "@/core/entities/entityStore";
+import { normalizePublicUserId } from "@/core/entities/displayIds";
 import { ReqId } from "@/core/network/opcodes/reqIds";
 import { ErrorCodes } from "@/core/network/opcodes/errorCodes";
 import { runtimeConfig } from "@/core/config/runtimeConfig";
@@ -97,6 +98,7 @@ export async function postLoginBootstrap(creds) {
             name: res.user_profile.name,
             email: res.user_profile.email,
             icon: res.user_profile.icon,
+            userId: res.user_profile.user_id,
         },
     });
     // Step 2: Connect WS transport
@@ -173,16 +175,62 @@ async function sendRelationBootstrap(gateway, uid) {
             unsub();
             const data = JSON.parse(frame.payload);
             if (data.friend_list) {
-                useEntityStore.getState().setFriends(data.friend_list.map((f) => ({ uid: f.uid, name: f.name, email: f.email, icon: f.icon })));
+                useEntityStore.getState().setFriends(data.friend_list
+                    .map((f) => {
+                    const friendUid = Number(f.uid ?? 0);
+                    if (friendUid <= 0)
+                        return null;
+                    const displayName = (f.nick || f.name || normalizePublicUserId(f.user_id) || "未知用户").trim();
+                    const item = {
+                        uid: friendUid,
+                        name: displayName,
+                        email: (f.email || f.user_id || "").trim(),
+                        icon: f.icon || "",
+                    };
+                    if (f.user_id)
+                        item.userId = f.user_id;
+                    if (f.nick)
+                        item.nick = f.nick;
+                    if (f.desc)
+                        item.desc = f.desc;
+                    if (f.back)
+                        item.back = f.back;
+                    if (Array.isArray(f.labels))
+                        item.labels = f.labels;
+                    return item;
+                })
+                    .filter((f) => f !== null));
             }
             if (data.apply_list) {
-                useEntityStore.getState().setApplyList(data.apply_list.map((a) => ({
-                    fromUid: a.from_uid,
-                    toUid: a.to_uid,
-                    applyMsg: a.apply_msg,
-                    status: "pending",
-                    applyTime: a.apply_time,
-                })));
+                useEntityStore.getState().setApplyList(data.apply_list
+                    .map((a) => {
+                    const fromUid = Number(a.from_uid ?? a.uid ?? 0);
+                    if (fromUid <= 0)
+                        return null;
+                    const entry = {
+                        fromUid,
+                        applyMsg: a.apply_msg || a.desc || "请求添加你为好友",
+                        status: a.status === 1 ? "accepted" : a.status === 2 ? "rejected" : "pending",
+                        applyTime: Number(a.apply_time ?? Date.now()),
+                    };
+                    const toUid = Number(a.to_uid ?? 0);
+                    if (toUid > 0)
+                        entry.toUid = toUid;
+                    if (a.name)
+                        entry.name = a.name;
+                    if (a.user_id)
+                        entry.userId = a.user_id;
+                    if (a.icon)
+                        entry.icon = a.icon;
+                    if (a.nick)
+                        entry.nick = a.nick;
+                    if (a.desc)
+                        entry.desc = a.desc;
+                    if (Array.isArray(a.labels))
+                        entry.labels = a.labels;
+                    return entry;
+                })
+                    .filter((a) => a !== null));
             }
             resolve();
         });

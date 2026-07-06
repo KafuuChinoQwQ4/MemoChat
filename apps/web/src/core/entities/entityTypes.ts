@@ -5,12 +5,17 @@ export interface Friend {
   name: string
   email: string
   icon: string
+  userId?: string
+  nick?: string
   desc?: string
+  labels?: string[]
+  back?: string
   applyStatus?: number
 }
 
 export interface Group {
   groupId: number
+  groupCode?: string
   name: string
   icon: string
   memberCount?: number
@@ -59,8 +64,14 @@ export interface RichMessage {
 
 export interface ApplyEntry {
   fromUid: number
-  toUid: number
+  toUid?: number
   applyMsg: string
   status: "pending" | "accepted" | "rejected"
   applyTime: number
+  name?: string
+  userId?: string
+  icon?: string
+  nick?: string
+  desc?: string
+  labels?: string[]
 }

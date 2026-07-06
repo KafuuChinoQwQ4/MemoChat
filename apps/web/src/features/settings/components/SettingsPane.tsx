@@ -3,6 +3,7 @@ import { useSettingsStore } from "@/features/settings/store/settingsStore"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { useSessionStore } from "@/core/session/sessionStore"
+import { displayNameWithoutInternalId, publicUserIdText } from "@/core/entities/displayIds"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 
 function SunIcon() {
@@ -80,6 +81,7 @@ export function SettingsPane() {
   const toggleTheme  = useSettingsStore((s) => s.toggleTheme)
   const setBlurEnabled = useSettingsStore((s) => s.setBlurEnabled)
   const profile      = useSessionStore((s) => s.profile)
+  const profileName = displayNameWithoutInternalId(profile?.name, profile?.userId, profile?.uid ?? 0, "—")
 
   return (
     <GlassSurface style={{ height: "100%", overflow: "auto", padding: "24px 28px" }}>
@@ -109,16 +111,16 @@ export function SettingsPane() {
             gap: 16,
             padding: "18px 20px",
           }}>
-            <Avatar src={profile?.icon} name={profile?.name} size={56} />
+            <Avatar src={profile?.icon} name={profileName} size={56} />
             <div>
               <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 2 }}>
-                {profile?.name ?? "—"}
+                {profileName}
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                 {profile?.email ?? "—"}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-disabled)", marginTop: 3 }}>
-                UID: {profile?.uid ?? "—"}
+                {publicUserIdText(profile?.userId)}
               </div>
             </div>
           </div>

@@ -2,10 +2,92 @@
 import type { HttpClient } from "@/core/network/http/HttpClient"
 import type { ChatTransport } from "@/core/network/transport/ChatTransport"
 import { ReqId } from "@/core/network/opcodes/reqIds"
+import { ENDPOINTS } from "@/core/config/endpoints"
 import { genClientMsgId } from "@/shared/lib/id"
+
+export type SmartFeatureType = "summary" | "suggest" | "translate"
+
+export interface SmartFeatureResponse {
+  code?: number
+  error?: number
+  message?: string
+  result?: string
+  content?: string
+}
 
 export function createChatApi(transport: ChatTransport, _http: HttpClient) {
   return {
+    /** Search a user by public user id, e.g. u123456789 */
+    searchUser(userId: string) {
+      transport.send(ReqId.ID_SEARCH_USER_REQ, JSON.stringify({
+        user_id: userId.trim(),
+      }))
+    },
+
+    /** Send a friend apply request */
+    sendAddFriendApply(fromUid: number, applyName: string, targetUid: number, remark = "", labels: string[] = []) {
+      const cleanName = applyName.trim() || "未知用户"
+      transport.send(ReqId.ID_ADD_FRIEND_REQ, JSON.stringify({
+        uid: fromUid,
+        applyname: cleanName,
+        bakname: remark.trim() || cleanName,
+        touid: targetUid,
+        labels: labels.map((item) => item.trim()).filter(Boolean),
+      }))
+    },
+
+    /** Approve an incoming friend apply */
+    approveFriendApply(fromUid: number, targetUid: number, remark = "", labels: string[] = []) {
+      transport.send(ReqId.ID_AUTH_FRIEND_REQ, JSON.stringify({
+        fromuid: fromUid,
+        touid: targetUid,
+        back: remark.trim(),
+        labels: labels.map((item) => item.trim()).filter(Boolean),
+      }))
+    },
+
+    /** Create a group using public user ids, matching the desktop client payload */
+    createGroup(fromUid: number, name: string, memberUserIds: string[], memberLimit = 200) {
+      transport.send(ReqId.ID_CREATE_GROUP_REQ, JSON.stringify({
+        fromuid: fromUid,
+        name: name.trim(),
+        member_limit: memberLimit,
+        member_user_ids: memberUserIds.map((item) => item.trim()).filter(Boolean),
+      }))
+    },
+
+    /** Fetch group list */
+    fetchGroupList(fromUid: number) {
+      transport.send(ReqId.ID_GET_GROUP_LIST_REQ, JSON.stringify({ fromuid: fromUid }))
+    },
+
+    /** Run desktop-equivalent smart chat features through the AI gateway */
+    async runSmartFeature(
+      uid: number,
+      featureType: SmartFeatureType,
+      content: string,
+      options: {
+        targetLang?: string
+        context?: Record<string, unknown>
+        modelType?: string
+        modelName?: string
+      } = {},
+    ): Promise<SmartFeatureResponse> {
+      const payload: Record<string, unknown> = {
+        uid,
+        feature_type: featureType,
+        content,
+        model_type: options.modelType ?? "",
+        model_name: options.modelName ?? "",
+        deployment_preference: "any",
+        context_json: JSON.stringify(options.context ?? {}),
+      }
+      if (featureType === "translate") {
+        payload["target_lang"] = options.targetLang?.trim() || "中文"
+      }
+      return _http.post<SmartFeatureResponse>(ENDPOINTS.aiSmart, payload)
+    },
+
     /** Send a private text message */
     sendPrivateMessage(fromUid: number, toUid: number, content: string): string {
       const clientMsgId = genClientMsgId()

@@ -1,12 +1,15 @@
 /** MomentsShellContent — moments feed */
 import { useState, type CSSProperties } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { ENDPOINTS } from "@/core/config/endpoints"
 import { useSessionStore } from "@/core/session/sessionStore"
+import { displayNameWithoutInternalId } from "@/core/entities/displayIds"
 import { resolveMediaUrl } from "@/shared/media/mediaUrl"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
+import { GlassButton } from "@/shared/ui/glass/GlassButton"
+import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 import { formatMessageTime } from "@/shared/lib/time"
@@ -69,6 +72,13 @@ interface MomentDto {
 interface FeedResponse {
   error: number
   moments?: MomentDto[]
+}
+
+interface PublishResponse {
+  error?: number
+  code?: number
+  message?: string
+  moment_id?: number
 }
 
 function normalizeMomentMediaType(type: string | undefined): MomentMediaType | null {
@@ -139,10 +149,12 @@ function mapMoment(item: MomentDto): MomentItem {
 
   const textContent = textParts.join("\n")
   const authorName =
-    item.user_nick?.trim() ||
-    item.user_name?.trim() ||
-    item.user_id?.trim() ||
-    `用户 ${item.uid}`
+    displayNameWithoutInternalId(
+      item.user_nick?.trim() || item.user_name?.trim(),
+      item.user_id,
+      item.uid,
+      "未知用户",
+    )
   const location = item.location?.trim() ?? ""
   return {
     id: String(item.moment_id),
@@ -428,7 +440,13 @@ function MomentDetailOverlay({ moment, onClose }: { moment: MomentItem; onClose:
 export function MomentsShellContent() {
   const uid = useSessionStore((s) => s.uid)
   const token = useSessionStore((s) => s.token)
+  const queryClient = useQueryClient()
   const [selectedMoment, setSelectedMoment] = useState<MomentItem | null>(null)
+  const [draftText, setDraftText] = useState("")
+  const [draftLocation, setDraftLocation] = useState("")
+  const [visibility, setVisibility] = useState(0)
+  const [publishing, setPublishing] = useState(false)
+  const [publishStatus, setPublishStatus] = useState("")
   const { data, isLoading, error } = useQuery({
     queryKey: ["moments", "feed", uid],
     enabled: uid !== null && token !== null,
@@ -444,6 +462,45 @@ export function MomentsShellContent() {
       return (response.moments ?? []).map(mapMoment)
     },
   })
+
+  async function publishMoment() {
+    const content = draftText.trim()
+    if (!content) {
+      setPublishStatus("先写一点内容再发布")
+      return
+    }
+    if (uid === null || token === null) {
+      setPublishStatus("登录状态无效，请重新登录")
+      return
+    }
+    setPublishing(true)
+    setPublishStatus("正在发布...")
+    try {
+      const response = await getGateway().http.post<PublishResponse>(ENDPOINTS.momentsPublish, {
+        uid,
+        login_ticket: token,
+        visibility,
+        location: draftLocation.trim(),
+        items: [{
+          media_type: "text",
+          content,
+        }],
+      })
+      const errorCode = response.error ?? response.code ?? 0
+      if (errorCode !== 0) {
+        setPublishStatus(`发布失败，错误码 ${errorCode}`)
+        return
+      }
+      setDraftText("")
+      setDraftLocation("")
+      setPublishStatus(response.moment_id ? `已发布动态 ${response.moment_id}` : "已发布")
+      await queryClient.invalidateQueries({ queryKey: ["moments", "feed", uid] })
+    } catch (err) {
+      setPublishStatus(err instanceof Error ? err.message : "发布失败")
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -474,6 +531,85 @@ export function MomentsShellContent() {
         <div style={{ marginBottom: 18, animation: "fade-up 200ms ease both" }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>朋友圈</h2>
         </div>
+
+        <GlassSurface
+          elevated
+          style={{
+            padding: 16,
+            marginBottom: 14,
+            borderRadius: 14,
+            animation: "fade-up 210ms ease both",
+          }}
+        >
+          <textarea
+            value={draftText}
+            onChange={(event) => setDraftText(event.target.value)}
+            placeholder="发布朋友圈..."
+            aria-label="朋友圈内容"
+            maxLength={4096}
+            style={{
+              width: "100%",
+              minHeight: 82,
+              resize: "vertical",
+              border: 0,
+              borderRadius: 12,
+              padding: "10px 12px",
+              background: "rgba(255,255,255,0.10)",
+              color: "var(--text-primary)",
+              font: "inherit",
+              fontSize: 14,
+              lineHeight: 1.6,
+              outline: "1px solid var(--divider)",
+              boxSizing: "border-box",
+            }}
+          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) 132px auto",
+              gap: 10,
+              alignItems: "center",
+              marginTop: 10,
+            }}
+          >
+            <GlassTextField
+              value={draftLocation}
+              onChange={(event) => setDraftLocation(event.target.value)}
+              placeholder="位置（可选）"
+              aria-label="朋友圈位置"
+            />
+            <select
+              value={visibility}
+              onChange={(event) => setVisibility(Number(event.target.value))}
+              aria-label="朋友圈可见范围"
+              style={{
+                height: 38,
+                borderRadius: 10,
+                border: "1px solid var(--divider)",
+                background: "rgba(255,255,255,0.12)",
+                color: "var(--text-primary)",
+                padding: "0 10px",
+                font: "inherit",
+              }}
+            >
+              <option value={0}>公开</option>
+              <option value={1}>好友可见</option>
+            </select>
+            <GlassButton
+              type="button"
+              variant="primary"
+              onClick={() => void publishMoment()}
+              disabled={publishing || !draftText.trim()}
+            >
+              {publishing ? "发布中" : "发布"}
+            </GlassButton>
+          </div>
+          {publishStatus ? (
+            <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-secondary)" }}>
+              {publishStatus}
+            </div>
+          ) : null}
+        </GlassSurface>
 
         {items.length === 0 ? (
           <GlassSurface

@@ -15,6 +15,7 @@ export interface UserProfile {
   name: string
   email: string
   icon: string
+  userId?: string
   desc?: string
 }
 

@@ -4,6 +4,7 @@ import { useSettingsStore } from "@/features/settings/store/settingsStore";
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface";
 import { GlassButton } from "@/shared/ui/glass/GlassButton";
 import { useSessionStore } from "@/core/session/sessionStore";
+import { displayNameWithoutInternalId, publicUserIdText } from "@/core/entities/displayIds";
 import { Avatar } from "@/shared/ui/primitives/Avatar";
 function SunIcon() {
     return (_jsxs("svg", { width: "15", height: "15", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, children: [_jsx("circle", { cx: "12", cy: "12", r: "3.2" }), _jsx("path", { d: "M12 4.8v1.6M12 17.6v1.6M6.9 6.9l1.1 1.1M16 16l1.1 1.1M4.8 12h1.6M17.6 12h1.6M6.9 17.1l1.1-1.1M16 8l1.1-1.1" })] }));
@@ -38,6 +39,7 @@ export function SettingsPane() {
     const toggleTheme = useSettingsStore((s) => s.toggleTheme);
     const setBlurEnabled = useSettingsStore((s) => s.setBlurEnabled);
     const profile = useSessionStore((s) => s.profile);
+    const profileName = displayNameWithoutInternalId(profile?.name, profile?.userId, profile?.uid ?? 0, "—");
     return (_jsxs(GlassSurface, { style: { height: "100%", overflow: "auto", padding: "24px 28px" }, children: [_jsx("h2", { style: {
                     fontSize: 20,
                     fontWeight: 700,
@@ -53,7 +55,7 @@ export function SettingsPane() {
                             alignItems: "center",
                             gap: 16,
                             padding: "18px 20px",
-                        }, children: [_jsx(Avatar, { src: profile?.icon, name: profile?.name, size: 56 }), _jsxs("div", { children: [_jsx("div", { style: { fontWeight: 600, fontSize: 16, marginBottom: 2 }, children: profile?.name ?? "—" }), _jsx("div", { style: { fontSize: 13, color: "var(--text-secondary)" }, children: profile?.email ?? "—" }), _jsxs("div", { style: { fontSize: 11, color: "var(--text-disabled)", marginTop: 3 }, children: ["UID: ", profile?.uid ?? "—"] })] })] }) }) }), _jsx(Section, { title: "\u5916\u89C2", children: _jsxs(GlassSurface, { elevated: true, style: {
+                        }, children: [_jsx(Avatar, { src: profile?.icon, name: profileName, size: 56 }), _jsxs("div", { children: [_jsx("div", { style: { fontWeight: 600, fontSize: 16, marginBottom: 2 }, children: profileName }), _jsx("div", { style: { fontSize: 13, color: "var(--text-secondary)" }, children: profile?.email ?? "—" }), _jsx("div", { style: { fontSize: 11, color: "var(--text-disabled)", marginTop: 3 }, children: publicUserIdText(profile?.userId) })] })] }) }) }), _jsx(Section, { title: "\u5916\u89C2", children: _jsxs(GlassSurface, { elevated: true, style: {
                         borderRadius: 14,
                         overflow: "hidden",
                         animation: "fade-up 220ms ease both",

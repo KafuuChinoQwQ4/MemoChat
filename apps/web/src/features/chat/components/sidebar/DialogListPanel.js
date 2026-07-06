@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 /** DialogListPanel — scrollable list of conversations */
 import { useMemo } from "react";
 import { useEntityStore } from "@/core/entities/entityStore";
+import { displayNameWithoutInternalId } from "@/core/entities/displayIds";
 import { useChatStore } from "@/features/chat/store/chatStore";
 import { Avatar } from "@/shared/ui/primitives/Avatar";
 import { Badge } from "@/shared/ui/primitives/Badge";
@@ -17,11 +18,13 @@ export function DialogListPanel() {
             return a.isPinned ? -1 : 1;
         return b.lastMsgTime - a.lastMsgTime;
     }), [dialogsMap]);
-    const { selectedPeerId, setSelectedConversation } = useChatStore();
+    const selectedPeerId = useChatStore((s) => s.selectedPeerId);
     return (_jsxs(GlassScrollArea, { style: { height: "100%", display: "flex", flexDirection: "column" }, children: [_jsx("div", { style: { padding: "12px 12px 8px", fontWeight: 600, fontSize: 15 }, children: "\u6D88\u606F" }), dialogs.map((d) => {
                 const isActive = d.peerId === selectedPeerId;
-                const title = d.title ?? d.peerId.toString();
-                return (_jsxs("button", { onClick: () => setSelectedConversation(d.peerId, d.isGroup), style: {
+                const title = d.isGroup
+                    ? displayNameWithoutInternalId(d.title, undefined, d.peerId, "群聊")
+                    : displayNameWithoutInternalId(d.title, undefined, d.peerId, "未知用户");
+                return (_jsxs("button", { onClick: () => useChatStore.getState().setSelectedConversation(d.peerId, d.isGroup), style: {
                         display: "flex",
                         alignItems: "center",
                         gap: 10,
