@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemoChat 数据库架构图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5e6a7c;
+      --line: #d8e0ec;
+      --pg: #366fa8;
+      --redis: #b33a3a;
+      --mongo: #2d7c50;
+      --minio: #9b4f1c;
+      --qdrant: #8a4cd1;
+      --neo4j: #237c8a;
+      --shadow: 0 14px 34px rgba(23, 32, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1280px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 28px 0 44px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-end;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 780px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .stamp {
+      min-width: 210px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .overview {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .data-map {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .store {
+      min-height: 146px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcff;
+      position: relative;
+    }
+
+    .store::before {
+      content: "";
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 0;
+      height: 4px;
+      border-radius: 0 0 4px 4px;
+      background: var(--line);
+    }
+
+    .store.pg { border-color: color-mix(in srgb, var(--pg), white 58%); }
+    .store.redis { border-color: color-mix(in srgb, var(--redis), white 58%); }
+    .store.mongo { border-color: color-mix(in srgb, var(--mongo), white 58%); }
+    .store.minio { border-color: color-mix(in srgb, var(--minio), white 58%); }
+    .store.qdrant { border-color: color-mix(in srgb, var(--qdrant), white 58%); }
+    .store.neo4j { border-color: color-mix(in srgb, var(--neo4j), white 58%); }
+
+    .store.pg::before { background: var(--pg); }
+    .store.redis::before { background: var(--redis); }
+    .store.mongo::before { background: var(--mongo); }
+    .store.minio::before { background: var(--minio); }
+    .store.qdrant::before { background: var(--qdrant); }
+    .store.neo4j::before { background: var(--neo4j); }
+
+    .store h2 {
+      margin: 8px 0 6px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .store p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .metric {
+      border: 1px solid #e1e7f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfcff;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.06);
+      overflow: hidden;
+    }
+
+    .card.full {
+      grid-column: 1 / -1;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcff;
+    }
+
+    .card-head h2 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .badge {
+      flex: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.pg { background: var(--pg); }
+    .badge.redis { background: var(--redis); }
+    .badge.mongo { background: var(--mongo); }
+    .badge.minio { background: var(--minio); }
+    .badge.qdrant { background: var(--qdrant); }
+    .badge.neo4j { background: var(--neo4j); }
+
+    .card-body {
+      padding: 16px 18px 18px;
+    }
+
+    .table-groups {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .group {
+      border: 1px solid #e1e7f0;
+      border-radius: 8px;
+      background: #fbfcff;
+      padding: 12px;
+    }
+
+    .group h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .items {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .items li {
+      padding: 8px 9px;
+      border: 1px solid #e5eaf2;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #364258;
+      font-size: 13px;
+    }
+
+    .items strong {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--ink);
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .items span {
+      color: var(--muted);
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 8px 12px;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .kv dt {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .kv dd {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      color: #29354a;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 1080px) {
+      .data-map {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .table-groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100% - 24px, 1280px);
+        padding-top: 18px;
+      }
+
+      header {
+        display: block;
+      }
+
+      .stamp {
+        margin-top: 12px;
+        text-align: left;
+      }
+
+      .data-map,
+      .metric-row,
+      .grid,
+      .table-groups {
+        grid-template-columns: 1fr;
+      }
+
+      .kv {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>MemoChat 数据库架构图</h1>
+        <p class="subtitle">按当前代码、迁移脚本和运行中的 Docker 数据库只读查询整理。这里列核心表、集合、key family、bucket 和图/向量结构，不展示具体用户数据或 token。</p>
+      </div>
+      <div class="stamp">Generated<br>2026-06-14</div>
+    </header>
+
+    <section class="overview">
+      <div class="data-map" aria-label="database overview">
+        <article class="store pg">
+          <h2>Postgres</h2>
+          <p>关系型主库：账号、好友、群组、消息索引、动态、AI 元数据、运维索引。</p>
+        </article>
+        <article class="store redis">
+          <h2>Redis</h2>
+          <p>短期状态：验证码、HTTP token、在线路由、通话状态、AI 语义缓存。</p>
+        </article>
+        <article class="store mongo">
+          <h2>MongoDB</h2>
+          <p>文档型消息和动态正文：私聊、群聊、动态内容。</p>
+        </article>
+        <article class="store minio">
+          <h2>MinIO</h2>
+          <p>对象存储：头像、文件、图片、视频、动态媒体。</p>
+        </article>
+        <article class="store qdrant">
+          <h2>Qdrant</h2>
+          <p>RAG 向量库：每个用户知识库一个 collection。</p>
+        </article>
+        <article class="store neo4j">
+          <h2>Neo4j</h2>
+          <p>AI 图记忆：用户、会话、轮次、主题关系。</p>
+        </article>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric"><strong>50</strong><span>Postgres 当前表总数，不含系统表</span></div>
+        <div class="metric"><strong>5</strong><span>Mongo 当前 collections，其中 3 个业务核心</span></div>
+        <div class="metric"><strong>104</strong><span>Qdrant 当前 collections，主要是用户 KB</span></div>
+        <div class="metric"><strong>4 / 4</strong><span>Neo4j labels / relationship types</span></div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <div class="card-head">
+          <h2>Postgres 核心表</h2>
+          <span class="badge pg">memo / public / memo_ops</span>
+        </div>
+        <div class="card-body">
+          <div class="table-groups">
+            <section class="group">
+              <h3>账号与关系</h3>
+              <ul class="items">
+                <li><strong><code>memo.user</code></strong><span>uid、email、user_id、name、nick、icon；email/user_id 唯一。</span></li>
+                <li><strong><code>memo.user_id</code></strong><span>用户 UID 分配辅助表。</span></li>
+                <li><strong><code>memo.friend</code></strong><span>self_id + friend_id 好友关系。</span></li>
+                <li><strong><code>memo.friend_apply</code></strong><span>from_uid、to_uid、status 好友申请。</span></li>
+                <li><strong><code>memo.friend_tag</code></strong><span>好友标签。</span></li>
+                <li><strong><code>memo.friend_apply_tag</code></strong><span>申请携带标签。</span></li>
+              </ul>
+            </section>
+
+            <section class="group">
+              <h3>群组与会话</h3>
+              <ul class="items">
+                <li><strong><code>memo.chat_group</code></strong><span>group_id、group_code、owner_uid、status。</span></li>
+                <li><strong><code>memo.chat_group_member</code></strong><span>group_id、uid、role、mute_until。</span></li>
+                <li><strong><code>memo.chat_group_apply</code></strong><span>入群申请、邀请、审核状态。</span></li>
+                <li><strong><code>memo.chat_group_admin_permission</code></strong><span>群管理员权限位。</span></li>
+                <li><strong><code>memo.chat_dialog</code></strong><span>会话列表、置顶、草稿、未读数。</span></li>
+                <li><strong><code>memo.chat_dialog_meta</code></strong><span>会话元数据和兼容投影。</span></li>
+              </ul>
+            </section>
+
+            <section class="group">
+              <h3>消息与已读</h3>
+              <ul class="items">
+                <li><strong><code>memo.chat_private_msg</code></strong><span>私聊消息索引：双方 uid、内容、编辑/撤回时间。</span></li>
+                <li><strong><code>memo.chat_group_msg</code></strong><span>群聊消息索引：group_id、group_seq、server_msg_id。</span></li>
+                <li><strong><code>memo.chat_group_msg_ext</code></strong><span>群消息文件扩展字段。</span></li>
+                <li><strong><code>memo.chat_private_read_state</code></strong><span>uid + peer_uid 私聊已读时间。</span></li>
+                <li><strong><code>memo.chat_group_read_state</code></strong><span>uid + group_id 群聊已读时间。</span></li>
+                <li><strong><code>memo.chat_event_outbox</code></strong><span>异步事件 outbox：topic、payload_json、retry 状态。</span></li>
+              </ul>
+            </section>
+
+            <section class="group">
+              <h3>媒体、通话、动态</h3>
+              <ul class="items">
+                <li><strong><code>memo.chat_media_asset</code></strong><span>media_key、owner_uid、storage_provider、storage_path。</span></li>
+                <li><strong><code>memo.chat_call_session</code></strong><span>call_id、room_name、caller/callee、state、时间线。</span></li>
+                <li><strong><code>memo.moments</code></strong><span>moment_id、uid、visibility、like_count、comment_count。</span></li>
+                <li><strong><code>memo.moments_like</code></strong><span>moment_id + uid 点赞。</span></li>
+                <li><strong><code>memo.moments_comment</code></strong><span>动态评论与回复。</span></li>
+                <li><strong><code>memo.moments_comment_like</code></strong><span>评论点赞。</span></li>
+              </ul>
+            </section>
+
+            <section class="group">
+              <h3>AI Orchestrator</h3>
+              <ul class="items">
+                <li><strong><code>public.ai_session</code></strong><span>AI 会话：session_id、uid、model。</span></li>
+                <li><strong><code>public.ai_message</code></strong><span>AI 消息：role、content、tokens、model_name。</span></li>
+                <li><strong><code>public.ai_knowledge_base</code></strong><span>KB 元数据：kb_id、uid、qdrant_collection。</span></li>
+                <li><strong><code>public.ai_episodic_memory</code></strong><span>情景记忆 summary、entities、importance。</span></li>
+                <li><strong><code>public.ai_semantic_memory</code></strong><span>用户偏好 preferences。</span></li>
+                <li><strong><code>public.ai_smart_log</code></strong><span>智能功能 token 统计日志。</span></li>
+                <li><strong><code>public.ai_agent_run_trace</code></strong><span>Agent run trace 主表。</span></li>
+                <li><strong><code>public.ai_agent_run_step</code></strong><span>Agent step 明细。</span></li>
+                <li><strong><code>public.ai_agent_feedback</code></strong><span>用户反馈。</span></li>
+                <li><strong><code>public.ai_game_room_state</code></strong><span>A2A game 房间状态。</span></li>
+                <li><strong><code>public.ai_game_template</code></strong><span>A2A game 模板。</span></li>
+              </ul>
+            </section>
+
+            <section class="group">
+              <h3>MemoOps / Bench</h3>
+              <ul class="items">
+                <li><strong><code>memo_ops.ops_service_snapshot</code></strong><span>服务状态快照。</span></li>
+                <li><strong><code>memo_ops.ops_service_metric_minute</code></strong><span>分钟级指标聚合。</span></li>
+                <li><strong><code>memo_ops.ops_log_event_index</code></strong><span>日志事件索引。</span></li>
+                <li><strong><code>memo_ops.ops_trace_index</code></strong><span>trace 聚合索引。</span></li>
+                <li><strong><code>memo_ops.ops_loadtest_run/case/error_bucket</code></strong><span>压测报告索引。</span></li>
+                <li><strong><code>memo_ops.ops_source / ops_ingest_cursor</code></strong><span>采集源和游标。</span></li>
+                <li><strong><code>memo_ops.ops_alert_rule / ops_platform_setting</code></strong><span>告警规则和平台设置。</span></li>
+                <li><strong><code>bench.isolated_kv / bench.resume_kv</code></strong><span>压测辅助 KV，不属于业务核心。</span></li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Redis key families</h2>
+          <span class="badge redis">db0</span>
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt><code>code_&lt;email&gt;</code></dt>
+            <dd>验证码。VarifyServer 写入，Gate/Auth 读取验证。</dd>
+            <dt><code>varify_rl_email:&lt;email&gt;</code></dt>
+            <dd>按邮箱限流计数，带过期时间。</dd>
+            <dt><code>varify_rl_ip:&lt;ip&gt;</code></dt>
+            <dd>按 IP 限流计数，带过期时间。</dd>
+            <dt><code>utoken_&lt;uid&gt;</code></dt>
+            <dd>HTTP token，业务 HTTP 接口校验。</dd>
+            <dt><code>ulogin_profile_&lt;email&gt;</code></dt>
+            <dd>登录 profile JSON 缓存。</dd>
+            <dt><code>ulogin_profile_uid_&lt;uid&gt;</code></dt>
+            <dd>uid 到登录邮箱/profile 缓存的反查 key。</dd>
+            <dt><code>ubaseinfo_&lt;uid&gt;</code></dt>
+            <dd>旧协议 Chat 登录读取的用户基础信息。</dd>
+            <dt><code>uip_&lt;uid&gt;</code></dt>
+            <dd>在线用户所在 ChatServer。</dd>
+            <dt><code>usession_&lt;uid&gt;</code></dt>
+            <dd>在线用户当前长连接 session id。</dd>
+            <dt><code>server_online_users_&lt;server&gt;</code></dt>
+            <dd>每个 ChatServer 的在线 uid 集合。</dd>
+            <dt><code>relation_bootstrap_&lt;uid&gt;</code></dt>
+            <dd>好友/申请列表 bootstrap 短 TTL 缓存。</dd>
+            <dt><code>call:session:&lt;call_id&gt;</code></dt>
+            <dd>通话会话状态。</dd>
+            <dt><code>call:user_active:&lt;uid&gt;</code></dt>
+            <dd>用户当前活跃通话。</dd>
+            <dt><code>call:ringing:&lt;uid&gt;</code></dt>
+            <dd>响铃状态。</dd>
+            <dt><code>memochat:ai:semantic_cache:item:&lt;uuid&gt;</code></dt>
+            <dd>AI 语义缓存 Hash，包含问题、答案、embedding、metadata。</dd>
+            <dt><code>memochat:ai:semantic_cache:exact:&lt;...&gt;</code></dt>
+            <dd>AI exact match 缓存。</dd>
+            <dt><code>memochat_ai_semantic_cache_v1</code></dt>
+            <dd>Redis Search/Query Engine 索引，HNSW + COSINE + 384 维默认配置。</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>MongoDB collections</h2>
+          <span class="badge mongo">memochat</span>
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt><code>private_messages</code></dt>
+            <dd>私聊消息文档；核心字段 `_id/msg_id`、`conv_key`、双方 uid、content、created_at、edited/deleted_at。</dd>
+            <dt><code>group_messages</code></dt>
+            <dd>群聊消息文档；核心字段 `_id/msg_id`、group_id、group_seq、server_msg_id、from_uid、mentions_json。</dd>
+            <dt><code>moments_content</code></dt>
+            <dd>动态正文和媒体条目；核心字段 moment_id、items、server_time。</dd>
+            <dt><code>isolated_bench</code></dt>
+            <dd>压测集合，不是业务核心。</dd>
+            <dt><code>resume_bench</code></dt>
+            <dd>压测集合，不是业务核心。</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>MinIO buckets</h2>
+          <span class="badge minio">S3 compatible</span>
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt><code>memochat-avatar</code></dt>
+            <dd>头像对象。</dd>
+            <dt><code>memochat-file</code></dt>
+            <dd>普通文件对象。</dd>
+            <dt><code>memochat-image</code></dt>
+            <dd>聊天图片对象。</dd>
+            <dt><code>memochat-video</code></dt>
+            <dd>视频和音频对象。</dd>
+            <dt><code>memochat-moments</code></dt>
+            <dd>动态图片/视频对象。</dd>
+            <dt><code>assets/&lt;date&gt;/&lt;media_key&gt;_&lt;name&gt;</code></dt>
+            <dd>S3MediaStorage 持久化的对象 key 形态；Postgres `chat_media_asset.storage_path` 保存 bucket/key。</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Qdrant collections</h2>
+          <span class="badge qdrant">RAG vector store</span>
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt><code>user_{uid}_{kb_id}</code></dt>
+            <dd>每个用户知识库一个 collection；当前只读查询到 104 个 collection。</dd>
+            <dt><code>vector</code></dt>
+            <dd>向量维度来自 embedder，默认配置 384；距离度量为 COSINE。</dd>
+            <dt><code>page_content</code></dt>
+            <dd>chunk 文本。</dd>
+            <dt><code>metadata</code></dt>
+            <dd>源文件、页码等扩展元数据。</dd>
+            <dt><code>kb_id / uid / chunk_index</code></dt>
+            <dd>知识库、用户和 chunk 序号。</dd>
+            <dt><code>source / file_type / page / total_chunks / content_length</code></dt>
+            <dd>检索、过滤和展示用 payload 字段。</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Neo4j graph</h2>
+          <span class="badge neo4j">AI graph memory</span>
+        </div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt><code>User</code></dt>
+            <dd>uid、updated_at；AI 图记忆的用户节点。</dd>
+            <dt><code>AgentSession</code></dt>
+            <dd>session_id、uid、updated_at。</dd>
+            <dt><code>AgentTurn</code></dt>
+            <dd>turn_id、uid、session_id、user_message、ai_message、created_at。</dd>
+            <dt><code>Topic</code></dt>
+            <dd>name、updated_at；从用户消息和 AI 回复中抽取。</dd>
+            <dt><code>User -[:HAS_AGENT_SESSION]-&gt; AgentSession</code></dt>
+            <dd>用户到 AI 会话。</dd>
+            <dt><code>AgentSession -[:HAS_TURN]-&gt; AgentTurn</code></dt>
+            <dd>会话到轮次。</dd>
+            <dt><code>User -[:INTERESTED_IN]-&gt; Topic</code></dt>
+            <dd>兴趣权重随交互累加。</dd>
+            <dt><code>AgentTurn -[:ABOUT]-&gt; Topic</code></dt>
+            <dd>轮次涉及的主题。</dd>
+          </dl>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

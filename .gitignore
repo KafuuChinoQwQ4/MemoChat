@@ -2,7 +2,8 @@ build-MemoChat*
 build-*
 /build/
 /开发文档/
-/docs/
+/docs/resume/
+/docs/superpowers/
 
 # ---- Local environment / credentials ----
 .ai/
