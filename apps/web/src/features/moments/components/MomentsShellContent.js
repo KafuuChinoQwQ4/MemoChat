@@ -1,13 +1,16 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /** MomentsShellContent — moments feed */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGateway } from "@/shared/gateway/ClientGateway";
 import { ENDPOINTS } from "@/core/config/endpoints";
 import { useSessionStore } from "@/core/session/sessionStore";
+import { displayNameWithoutInternalId } from "@/core/entities/displayIds";
 import { resolveMediaUrl } from "@/shared/media/mediaUrl";
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea";
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface";
+import { GlassButton } from "@/shared/ui/glass/GlassButton";
+import { GlassTextField } from "@/shared/ui/glass/GlassTextField";
 import { Avatar } from "@/shared/ui/primitives/Avatar";
 import { Spinner } from "@/shared/ui/primitives/Spinner";
 import { formatMessageTime } from "@/shared/lib/time";
@@ -75,10 +78,7 @@ function mapMoment(item) {
         }
     });
     const textContent = textParts.join("\n");
-    const authorName = item.user_nick?.trim() ||
-        item.user_name?.trim() ||
-        item.user_id?.trim() ||
-        `用户 ${item.uid}`;
+    const authorName = displayNameWithoutInternalId(item.user_nick?.trim() || item.user_name?.trim(), item.user_id, item.uid, "未知用户");
     const location = item.location?.trim() ?? "";
     return {
         id: String(item.moment_id),
@@ -232,7 +232,13 @@ function MomentDetailOverlay({ moment, onClose }) {
 export function MomentsShellContent() {
     const uid = useSessionStore((s) => s.uid);
     const token = useSessionStore((s) => s.token);
+    const queryClient = useQueryClient();
     const [selectedMoment, setSelectedMoment] = useState(null);
+    const [draftText, setDraftText] = useState("");
+    const [draftLocation, setDraftLocation] = useState("");
+    const [visibility, setVisibility] = useState(0);
+    const [publishing, setPublishing] = useState(false);
+    const [publishStatus, setPublishStatus] = useState("");
     const { data, isLoading, error } = useQuery({
         queryKey: ["moments", "feed", uid],
         enabled: uid !== null && token !== null,
@@ -250,6 +256,46 @@ export function MomentsShellContent() {
             return (response.moments ?? []).map(mapMoment);
         },
     });
+    async function publishMoment() {
+        const content = draftText.trim();
+        if (!content) {
+            setPublishStatus("先写一点内容再发布");
+            return;
+        }
+        if (uid === null || token === null) {
+            setPublishStatus("登录状态无效，请重新登录");
+            return;
+        }
+        setPublishing(true);
+        setPublishStatus("正在发布...");
+        try {
+            const response = await getGateway().http.post(ENDPOINTS.momentsPublish, {
+                uid,
+                login_ticket: token,
+                visibility,
+                location: draftLocation.trim(),
+                items: [{
+                        media_type: "text",
+                        content,
+                    }],
+            });
+            const errorCode = response.error ?? response.code ?? 0;
+            if (errorCode !== 0) {
+                setPublishStatus(`发布失败，错误码 ${errorCode}`);
+                return;
+            }
+            setDraftText("");
+            setDraftLocation("");
+            setPublishStatus(response.moment_id ? `已发布动态 ${response.moment_id}` : "已发布");
+            await queryClient.invalidateQueries({ queryKey: ["moments", "feed", uid] });
+        }
+        catch (err) {
+            setPublishStatus(err instanceof Error ? err.message : "发布失败");
+        }
+        finally {
+            setPublishing(false);
+        }
+    }
     if (isLoading) {
         return (_jsx("div", { style: { height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }, children: _jsx(Spinner, { size: 30 }) }));
     }
@@ -260,7 +306,40 @@ export function MomentsShellContent() {
             }, children: "\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u5237\u65B0\u91CD\u8BD5" }));
     }
     const items = data ?? [];
-    return (_jsxs(GlassScrollArea, { style: { height: "100%", width: "100%", padding: "18px 14px 22px" }, children: [_jsxs("div", { style: { maxWidth: 1360, margin: "0 auto", width: "100%" }, children: [_jsx("div", { style: { marginBottom: 18, animation: "fade-up 200ms ease both" }, children: _jsx("h2", { style: { fontSize: 18, fontWeight: 700 }, children: "\u670B\u53CB\u5708" }) }), items.length === 0 ? (_jsx(GlassSurface, { elevated: true, style: {
+    return (_jsxs(GlassScrollArea, { style: { height: "100%", width: "100%", padding: "18px 14px 22px" }, children: [_jsxs("div", { style: { maxWidth: 1360, margin: "0 auto", width: "100%" }, children: [_jsx("div", { style: { marginBottom: 18, animation: "fade-up 200ms ease both" }, children: _jsx("h2", { style: { fontSize: 18, fontWeight: 700 }, children: "\u670B\u53CB\u5708" }) }), _jsxs(GlassSurface, { elevated: true, style: {
+                            padding: 16,
+                            marginBottom: 14,
+                            borderRadius: 14,
+                            animation: "fade-up 210ms ease both",
+                        }, children: [_jsx("textarea", { value: draftText, onChange: (event) => setDraftText(event.target.value), placeholder: "\u53D1\u5E03\u670B\u53CB\u5708...", "aria-label": "\u670B\u53CB\u5708\u5185\u5BB9", maxLength: 4096, style: {
+                                    width: "100%",
+                                    minHeight: 82,
+                                    resize: "vertical",
+                                    border: 0,
+                                    borderRadius: 12,
+                                    padding: "10px 12px",
+                                    background: "rgba(255,255,255,0.10)",
+                                    color: "var(--text-primary)",
+                                    font: "inherit",
+                                    fontSize: 14,
+                                    lineHeight: 1.6,
+                                    outline: "1px solid var(--divider)",
+                                    boxSizing: "border-box",
+                                } }), _jsxs("div", { style: {
+                                    display: "grid",
+                                    gridTemplateColumns: "minmax(0, 1fr) 132px auto",
+                                    gap: 10,
+                                    alignItems: "center",
+                                    marginTop: 10,
+                                }, children: [_jsx(GlassTextField, { value: draftLocation, onChange: (event) => setDraftLocation(event.target.value), placeholder: "\u4F4D\u7F6E\uFF08\u53EF\u9009\uFF09", "aria-label": "\u670B\u53CB\u5708\u4F4D\u7F6E" }), _jsxs("select", { value: visibility, onChange: (event) => setVisibility(Number(event.target.value)), "aria-label": "\u670B\u53CB\u5708\u53EF\u89C1\u8303\u56F4", style: {
+                                            height: 38,
+                                            borderRadius: 10,
+                                            border: "1px solid var(--divider)",
+                                            background: "rgba(255,255,255,0.12)",
+                                            color: "var(--text-primary)",
+                                            padding: "0 10px",
+                                            font: "inherit",
+                                        }, children: [_jsx("option", { value: 0, children: "\u516C\u5F00" }), _jsx("option", { value: 1, children: "\u597D\u53CB\u53EF\u89C1" })] }), _jsx(GlassButton, { type: "button", variant: "primary", onClick: () => void publishMoment(), disabled: publishing || !draftText.trim(), children: publishing ? "发布中" : "发布" })] }), publishStatus ? (_jsx("div", { style: { marginTop: 8, fontSize: 12, color: "var(--text-secondary)" }, children: publishStatus })) : null] }), items.length === 0 ? (_jsx(GlassSurface, { elevated: true, style: {
                             minHeight: 240,
                             display: "grid",
                             placeItems: "center",

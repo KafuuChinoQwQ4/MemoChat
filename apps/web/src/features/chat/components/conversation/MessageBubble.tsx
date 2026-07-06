@@ -2,6 +2,7 @@
 import type { RichMessage } from "@/core/entities/entityTypes"
 import { useEntityStore } from "@/core/entities/entityStore"
 import { useSessionStore } from "@/core/session/sessionStore"
+import { displayNameWithoutInternalId } from "@/core/entities/displayIds"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 
 export interface MessageBubbleProps {
@@ -26,9 +27,10 @@ export function MessageBubble({ message, showAvatar = true, stacked = false }: M
   const isSelf = message.fromUid === myUid
   const isRevoked = message.isRevoked === true
   const friend = friendsMap.get(message.fromUid)
+  const senderPublicId = message.fromUserId || friend?.userId
   const senderName = isSelf
-    ? (profile?.name || "我")
-    : (message.senderName || friend?.name || String(message.fromUid))
+    ? displayNameWithoutInternalId(profile?.name, profile?.userId, myUid ?? 0, "我")
+    : displayNameWithoutInternalId(message.senderName || friend?.name, senderPublicId, message.fromUid, "未知用户")
   const senderIcon = isSelf
     ? (profile?.icon || "")
     : (message.senderIcon || friend?.icon || "")

@@ -32,6 +32,7 @@ describe("registerChatRoutes list bootstraps", () => {
         error: 0,
         group_list: [{
           groupid: 83,
+          group_code: "g123456789",
           name: "Runtime Smoke Full Chat",
           icon: "group.png",
           member_count: 2,
@@ -43,6 +44,7 @@ describe("registerChatRoutes list bootstraps", () => {
 
     expect(useEntityStore.getState().groups.get(83)).toMatchObject({
       groupId: 83,
+      groupCode: "g123456789",
       name: "Runtime Smoke Full Chat",
       icon: "group.png",
       memberCount: 2,

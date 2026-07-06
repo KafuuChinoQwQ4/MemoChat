@@ -18,6 +18,7 @@ export const ENDPOINTS = {
     momentsCommentLike: "/api/moments/comment/like",
     // AI / Agent
     aiChatStream: "/ai/chat/stream",
+    aiSmart: "/ai/smart",
     aiSessionCreate: "/ai/session/create",
     aiSessionList: "/ai/session/list",
     aiSessionDelete: "/ai/session/delete",

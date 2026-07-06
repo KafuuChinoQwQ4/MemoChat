@@ -1,6 +1,7 @@
 /** DialogListPanel — scrollable list of conversations */
 import { useMemo } from "react"
 import { useEntityStore } from "@/core/entities/entityStore"
+import { displayNameWithoutInternalId } from "@/core/entities/displayIds"
 import { useChatStore } from "@/features/chat/store/chatStore"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { Badge } from "@/shared/ui/primitives/Badge"
@@ -20,18 +21,20 @@ export function DialogListPanel() {
       }),
     [dialogsMap],
   )
-  const { selectedPeerId, setSelectedConversation } = useChatStore()
+  const selectedPeerId = useChatStore((s) => s.selectedPeerId)
 
   return (
     <GlassScrollArea style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "12px 12px 8px", fontWeight: 600, fontSize: 15 }}>消息</div>
       {dialogs.map((d) => {
         const isActive = d.peerId === selectedPeerId
-        const title = d.title ?? d.peerId.toString()
+        const title = d.isGroup
+          ? displayNameWithoutInternalId(d.title, undefined, d.peerId, "群聊")
+          : displayNameWithoutInternalId(d.title, undefined, d.peerId, "未知用户")
         return (
           <button
             key={d.dialogId ?? `${d.isGroup ? "g" : "u"}_${d.peerId}`}
-            onClick={() => setSelectedConversation(d.peerId, d.isGroup)}
+            onClick={() => useChatStore.getState().setSelectedConversation(d.peerId, d.isGroup)}
             style={{
               display: "flex",
               alignItems: "center",

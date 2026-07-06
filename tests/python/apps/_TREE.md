@@ -13,6 +13,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `test_web_feature_parity_contract.py` | 校验 Web 端好友申请、建群、朋友圈发布和聊天智能功能入口契约 |
 | `test_web_moments_masonry_contract.py` | 校验 Web 朋友圈瀑布流内容资源映射与预览截断契约 |
 | `test_web_security_contract.py` | 校验 Web 客户端 CSP 与 WebSocket TLS 降级防护契约 |
 
