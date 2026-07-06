@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -109,69 +111,201 @@ Rectangle {
                     }
                 }
 
-                // Feed list
-                ListView {
-                    id: feedView
+                // Feed masonry
+                Item {
+                    id: feedViewport
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    spacing: 12
                     clip: true
-                    cacheBuffer: 200
-                    interactive: contentHeight > height
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: GlassScrollBar { }
 
-                    model: root.momentsModel ? root.momentsModel : null
+                    Flickable {
+                        id: feedView
+                        anchors.fill: parent
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        contentWidth: width
+                        contentHeight: Math.max(height, masonryHeight)
+                        interactive: contentHeight > height
+                        ScrollBar.vertical: GlassScrollBar { }
 
-                    delegate: Loader {
-                        width: feedView.width
-                        height: item ? item.implicitHeight : 0
-                        asynchronous: true
-                        sourceComponent: Component {
-                            MomentsDelegate {
-                                width: feedView.width
-                                backdrop: root.backdrop
-                                controller: root.momentsController
-                                momentData: model
-                                listTextContent: model.textContent || ""
-                                canDelete: root.currentUserUid > 0
-                                           && model.uid === root.currentUserUid
-                                onLikeClicked: {
-                                    if (root.momentsController) {
-                                        root.momentsController.toggleLike(model.momentId)
+                        property int sidePadding: 18
+                        property int topPadding: 14
+                        property int columnGap: 16
+                        property int rowGap: 14
+                        property int bottomPadding: 24
+                        property real masonryHeight: height
+                        readonly property int columnCount: {
+                            const usableWidth = Math.max(0, width - sidePadding * 2)
+                            if (usableWidth >= 1080) return 3
+                            if (usableWidth >= 660) return 2
+                            return 1
+                        }
+                        readonly property real cardWidth: Math.max(
+                            260,
+                            Math.floor((width - sidePadding * 2 - columnGap * (columnCount - 1)) / columnCount))
+
+                        function relayoutMasonry() {
+                            const columns = Math.max(1, columnCount)
+                            const heights = []
+                            for (let c = 0; c < columns; ++c) {
+                                heights.push(topPadding)
+                            }
+
+                            for (let i = 0; i < masonryRepeater.count; ++i) {
+                                const card = masonryRepeater.itemAt(i)
+                                if (!card) continue
+
+                                let targetColumn = 0
+                                for (let c = 1; c < columns; ++c) {
+                                    if (heights[c] < heights[targetColumn]) {
+                                        targetColumn = c
                                     }
                                 }
-                                onCommentClicked: {
-                                    detailLoader.active = true
-                                    if (detailLoader.item) {
-                                        detailLoader.item.openMoment(model.momentId)
-                                    }
-                                }
-                                onAvatarClicked: function(uid, name, icon, userId) {
-                                    contactProfilePopup.openProfile(uid,
-                                                                    name || "用户",
-                                                                    icon || "qrc:/res/head_1.jpg",
-                                                                    userId || "")
-                                }
-                                onDeleteClicked: {
-                                    root.pendingDeleteMomentId = model.momentId
-                                    deleteConfirmDialog.open()
-                                }
+
+                                card.width = cardWidth
+                                card.x = sidePadding + targetColumn * (cardWidth + columnGap)
+                                card.y = heights[targetColumn]
+
+                                const measuredHeight = Math.max(card.height || 0, card.implicitHeight || 0)
+                                heights[targetColumn] += measuredHeight + rowGap
+                            }
+
+                            let maxHeight = 0
+                            for (let c = 0; c < columns; ++c) {
+                                maxHeight = Math.max(maxHeight, heights[c])
+                            }
+                            masonryHeight = Math.max(height, maxHeight > 0 ? maxHeight - rowGap + bottomPadding : height)
+                            maybeLoadMore()
+                        }
+
+                        function maybeLoadMore() {
+                            if (!root.momentsController || !root.momentsController.hasMore) return
+                            if (root.momentsController.loading) return
+                            if (contentY + height >= contentHeight - 96) {
+                                root.momentsController.loadMore()
                             }
                         }
-                    }
 
-                    // Pull-to-refresh / Load more
-                    onAtYEndChanged: {
-                        if (atYEnd && root.momentsController && root.momentsController.hasMore) {
-                            root.momentsController.loadMore()
+                        onWidthChanged: Qt.callLater(relayoutMasonry)
+                        onColumnCountChanged: Qt.callLater(relayoutMasonry)
+                        onCardWidthChanged: Qt.callLater(relayoutMasonry)
+                        onHeightChanged: Qt.callLater(relayoutMasonry)
+                        onContentYChanged: maybeLoadMore()
+                        onContentHeightChanged: maybeLoadMore()
+
+                        Item {
+                            id: masonryContent
+                            width: feedView.width
+                            height: feedView.masonryHeight
+
+                            Repeater {
+                                id: masonryRepeater
+                                model: root.momentsModel ? root.momentsModel : null
+
+                                onItemAdded: function(index, item) {
+                                    Qt.callLater(feedView.relayoutMasonry)
+                                }
+                                onItemRemoved: function(index, item) {
+                                    Qt.callLater(feedView.relayoutMasonry)
+                                }
+
+                                delegate: Loader {
+                                    id: cardLoader
+                                    width: feedView.cardWidth
+                                    height: item ? item.implicitHeight : 0
+                                    asynchronous: true
+
+                                    required property int index
+                                    required property var momentId
+                                    required property int uid
+                                    required property string userId
+                                    required property string userName
+                                    required property string userNick
+                                    required property string userIcon
+                                    required property int visibility
+                                    required property string location
+                                    required property var createdAt
+                                    required property int likeCount
+                                    required property int commentCount
+                                    required property bool hasLiked
+                                    required property var items
+                                    required property string textContent
+                                    required property var likes
+                                    required property var comments
+
+                                    property var momentModel: ({
+                                                                    "momentId": momentId,
+                                                                    "uid": uid,
+                                                                    "userId": userId,
+                                                                    "userName": userName,
+                                                                    "userNick": userNick,
+                                                                    "userIcon": userIcon,
+                                                                    "visibility": visibility,
+                                                                    "location": location,
+                                                                    "createdAt": createdAt,
+                                                                    "likeCount": likeCount,
+                                                                    "commentCount": commentCount,
+                                                                    "hasLiked": hasLiked,
+                                                                    "items": items || [],
+                                                                    "textContent": textContent || "",
+                                                                    "likes": likes || [],
+                                                                    "comments": comments || []
+                                                                })
+
+                                    sourceComponent: Component {
+                                        MomentsDelegate {
+                                            width: cardLoader.width
+                                            backdrop: root.backdrop
+                                            controller: root.momentsController
+                                            momentData: cardLoader.momentModel
+                                            listTextContent: cardLoader.momentModel.textContent || ""
+                                            canDelete: root.currentUserUid > 0
+                                                       && cardLoader.momentModel.uid === root.currentUserUid
+                                            onLikeClicked: {
+                                                if (root.momentsController) {
+                                                    root.momentsController.toggleLike(cardLoader.momentModel.momentId)
+                                                }
+                                            }
+                                            onCommentClicked: {
+                                                detailLoader.active = true
+                                                if (detailLoader.item) {
+                                                    detailLoader.item.openMoment(cardLoader.momentModel.momentId)
+                                                }
+                                            }
+                                            onAvatarClicked: function(uid, name, icon, userId) {
+                                                contactProfilePopup.openProfile(uid,
+                                                                                name || "用户",
+                                                                                icon || "qrc:/res/head_1.jpg",
+                                                                                userId || "")
+                                            }
+                                            onDeleteClicked: {
+                                                root.pendingDeleteMomentId = cardLoader.momentModel.momentId
+                                                deleteConfirmDialog.open()
+                                            }
+                                        }
+                                    }
+
+                                    onLoaded: Qt.callLater(feedView.relayoutMasonry)
+                                    onHeightChanged: Qt.callLater(feedView.relayoutMasonry)
+
+                                    Connections {
+                                        target: cardLoader.item
+                                        function onImplicitHeightChanged() {
+                                            Qt.callLater(feedView.relayoutMasonry)
+                                        }
+                                        function onHeightChanged() {
+                                            Qt.callLater(feedView.relayoutMasonry)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
                     // Empty state
                     Label {
                         anchors.centerIn: parent
-                        visible: feedView.count === 0 && !(root.momentsController && root.momentsController.loading)
+                        visible: masonryRepeater.count === 0 && !(root.momentsController && root.momentsController.loading)
                         text: root.selectedFriendUid > 0 ? "暂无该好友朋友圈" : "暂无朋友圈内容"
                         font.pixelSize: 14
                         color: "#999999"

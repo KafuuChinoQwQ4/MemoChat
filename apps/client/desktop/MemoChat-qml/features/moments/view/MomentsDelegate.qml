@@ -36,6 +36,14 @@ Rectangle {
     property bool hasMediaContent: containsMediaContent(items)
     property bool hasRenderableContent: textContent.length > 0 || hasMediaContent
     property bool canDelete: false
+    property int textPreviewMaximumLines: 7
+    property int textPreviewLongTextThreshold: 220
+    property real mediaPreviewMaximumHeight: 360
+    property real fullMediaContentHeight: mediaContentHeight(items)
+    property real previewMediaContentHeight: Math.min(fullMediaContentHeight, mediaPreviewMaximumHeight)
+    property bool mediaPreviewOverflow: fullMediaContentHeight > previewMediaContentHeight + 1
+    property bool textPreviewOverflow: textContent.length > textPreviewLongTextThreshold
+                                       || logicalLineCount(textContent) > textPreviewMaximumLines
 
     signal likeClicked()
     signal commentClicked()
@@ -84,6 +92,7 @@ Rectangle {
         }
 
         Label {
+            id: contentText
             Layout.fillWidth: true
             visible: root.textContent.length > 0
             text: root.textContent
@@ -91,15 +100,40 @@ Rectangle {
             color: "#1a1a1a"
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignLeft
+            maximumLineCount: root.textPreviewMaximumLines
+            elide: Text.ElideRight
+
+            MouseArea {
+                anchors.fill: parent
+                enabled: expandText.visible
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: root.commentClicked()
+            }
+        }
+
+        Label {
+            id: expandText
+            Layout.fillWidth: true
+            visible: contentText.visible && (root.textPreviewOverflow || contentText.truncated)
+            text: "查看全文"
+            font.pixelSize: 13
+            color: "#4b7fc7"
+            horizontalAlignment: Text.AlignLeft
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.commentClicked()
+            }
         }
 
         Item {
             id: mediaColumn
             Layout.fillWidth: true
-            Layout.preferredHeight: root.mediaContentHeight(root.items)
-            Layout.minimumHeight: root.mediaContentHeight(root.items)
+            Layout.preferredHeight: root.previewMediaContentHeight
+            Layout.minimumHeight: root.previewMediaContentHeight
             visible: root.hasMediaContent
-            implicitHeight: root.mediaContentHeight(root.items)
+            implicitHeight: root.previewMediaContentHeight
             clip: true
 
             Column {
@@ -206,6 +240,34 @@ Rectangle {
                     }
                 }
             }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Math.min(64, parent.height)
+                visible: root.mediaPreviewOverflow
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                    GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.78) }
+                    GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.96) }
+                }
+
+                Label {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 10
+                    text: "查看全部"
+                    font.pixelSize: 13
+                    color: "#4b7fc7"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.commentClicked()
+                }
+            }
         }
 
         MomentsActionBar {
@@ -244,6 +306,11 @@ Rectangle {
 
     function buildTextContent(items) {
         return MomentsRuntime.buildTextContent(items)
+    }
+
+    function logicalLineCount(text) {
+        if (!text || text.length === 0) return 0
+        return String(text).split(/\r\n|\r|\n/).length
     }
 
     function containsMediaContent(items) {

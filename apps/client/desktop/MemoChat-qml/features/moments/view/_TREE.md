@@ -15,7 +15,7 @@
 | `MomentsDetailHeader.qml` | 详情页头部 |
 | `MomentsDetailMediaGrid.qml` | 详情页媒体网格 |
 | `MomentsDetailPopup.qml` | 动态详情弹窗 |
-| `MomentsFeedPane.qml` | 朋友圈信息流主面板 |
+| `MomentsFeedPane.qml` | 朋友圈瀑布流信息流主面板 |
 | `MomentsFriendSidePane.qml` | 好友侧边面板 |
 | `MomentsHeader.qml` | 朋友圈头部栏 |
 | `MomentsImagePreviewPopup.qml` | 图片大图预览弹窗 |
