@@ -114,7 +114,7 @@ public:
     Q_INVOKABLE bool getMomentLiked(qint64 momentId) const;
     Q_INVOKABLE int getMomentLikeCount(qint64 momentId) const;
     Q_INVOKABLE bool hasMoment(qint64 momentId) const;
-    /// Full row for detail popup (includes items[]).
+    /// Full row for feed/detail views (includes items[] and textContent).
     Q_INVOKABLE QVariantMap snapshotMoment(qint64 momentId) const;
 
 signals:

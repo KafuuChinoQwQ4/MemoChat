@@ -55,6 +55,33 @@ class MomentsQmlPhysicalLayoutContractTests(unittest.TestCase):
     def test_moments_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/moments/resources/moments.qrc", read(SOURCES))
 
+    def test_feed_pane_uses_masonry_layout(self):
+        feed = read(FEATURE_VIEW / "MomentsFeedPane.qml")
+        feed_section = feed[feed.index("// Feed masonry") : feed.index("MomentsPublishPage")]
+
+        self.assertIn("Flickable {", feed_section)
+        self.assertIn("Repeater {", feed_section)
+        self.assertIn("function relayoutMasonry()", feed_section)
+        self.assertIn("readonly property int columnCount", feed_section)
+        self.assertIn("targetColumn", feed_section)
+        self.assertIn("heights[targetColumn] += measuredHeight + rowGap", feed_section)
+        self.assertIn("function maybeLoadMore()", feed_section)
+        self.assertNotIn("ListView {", feed_section)
+        self.assertNotIn("onAtYEndChanged", feed_section)
+
+    def test_feed_pane_passes_complete_moment_roles_to_masonry_cards(self):
+        feed = read(FEATURE_VIEW / "MomentsFeedPane.qml")
+        feed_section = feed[feed.index("// Feed masonry") : feed.index("MomentsPublishPage")]
+
+        self.assertIn("required property var momentId", feed_section)
+        self.assertIn("required property var items", feed_section)
+        self.assertIn("required property string textContent", feed_section)
+        self.assertIn('"items": items || []', feed_section)
+        self.assertIn('"textContent": textContent || ""', feed_section)
+        self.assertIn("momentData: cardLoader.momentModel", feed_section)
+        self.assertIn('listTextContent: cardLoader.momentModel.textContent || ""', feed_section)
+        self.assertNotIn("property var momentModel: model", feed_section)
+
     def test_feed_delegate_media_blocks_contribute_to_card_height(self):
         delegate = read(FEATURE_VIEW / "MomentsDelegate.qml")
         media_column_start = delegate.index("id: mediaColumn")
@@ -63,10 +90,16 @@ class MomentsQmlPhysicalLayoutContractTests(unittest.TestCase):
 
         self.assertIn("clip: true", delegate[delegate.index("id: root") : delegate.index("implicitHeight:")])
         self.assertIn("Math.max(contentLayout.implicitHeight, contentLayout.childrenRect.height) + 24", delegate)
-        self.assertIn("Layout.preferredHeight: root.mediaContentHeight(root.items)", media_column_block)
-        self.assertIn("Layout.minimumHeight: root.mediaContentHeight(root.items)", media_column_block)
+        self.assertIn("property real mediaPreviewMaximumHeight", delegate)
+        self.assertIn(
+            "property real previewMediaContentHeight: Math.min(fullMediaContentHeight, mediaPreviewMaximumHeight)",
+            delegate,
+        )
+        self.assertIn("property bool mediaPreviewOverflow", delegate)
+        self.assertIn("Layout.preferredHeight: root.previewMediaContentHeight", media_column_block)
+        self.assertIn("Layout.minimumHeight: root.previewMediaContentHeight", media_column_block)
         self.assertIn("visible: root.hasMediaContent", media_column_block)
-        self.assertIn("implicitHeight: root.mediaContentHeight(root.items)", media_column_block)
+        self.assertIn("implicitHeight: root.previewMediaContentHeight", media_column_block)
         self.assertNotIn("height: visible ? root.mediaContentHeight(root.items) : 0", media_column_block)
         self.assertIn("id: mediaStack", media_column_block)
         self.assertIn("width: mediaStack.width", media_column_block)
@@ -77,6 +110,32 @@ class MomentsQmlPhysicalLayoutContractTests(unittest.TestCase):
         self.assertNotIn("blockColumn.implicitHeight", media_column_block)
         self.assertIn("function mediaItemHeight(item)", delegate)
         self.assertIn("function mediaContentHeight(items)", delegate)
+        self.assertIn('text: "查看全部"', media_column_block)
+
+    def test_feed_delegate_caps_long_text_preview_behind_detail(self):
+        delegate = read(FEATURE_VIEW / "MomentsDelegate.qml")
+
+        self.assertIn("property int textPreviewMaximumLines", delegate)
+        self.assertIn("property bool textPreviewOverflow", delegate)
+        self.assertIn("maximumLineCount: root.textPreviewMaximumLines", delegate)
+        self.assertIn("elide: Text.ElideRight", delegate)
+        self.assertIn('text: "查看全文"', delegate)
+        self.assertIn("onClicked: root.commentClicked()", delegate)
+        self.assertIn("function logicalLineCount(text)", delegate)
+
+    def test_moments_model_get_exposes_complete_feed_row(self):
+        queries = read(CLIENT / "features/moments/model/MomentsModelQueries.cpp")
+        get_body = queries[
+            queries.index("QVariantMap MomentsModel::get") : queries.index("MomentEntry MomentsModel::getMoment")
+        ]
+        snapshot_body = queries[queries.index("QVariantMap MomentsModel::snapshotMoment") :]
+
+        self.assertIn('map["userId"] = item.userId;', get_body)
+        self.assertIn('map["items"] = data(modelIndex, ItemsRole);', get_body)
+        self.assertIn('map["textContent"] = data(modelIndex, TextContentRole);', get_body)
+        self.assertIn('map["likes"] = data(modelIndex, LikesRole);', get_body)
+        self.assertIn('map["comments"] = data(modelIndex, CommentsRole);', get_body)
+        self.assertIn("return get(index);", snapshot_body)
 
 
 if __name__ == "__main__":
