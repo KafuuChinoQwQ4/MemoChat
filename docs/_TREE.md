@@ -9,6 +9,7 @@
 | [`adr/`](adr/_TREE.md) | 长期架构决策记录 |
 | [`architecture/`](architecture/_TREE.md) | 项目模块地图与分层架构说明 |
 | [`contracts/`](contracts/_TREE.md) | 认证、聊天传输、媒体等跨模块契约 |
+| [`debug/`](debug/_TREE.md) | 运行时和链路排障案例 |
 | [`dev/`](dev/_TREE.md) | 开发环境、构建测试、运行时和约定 |
 | [`resume/`](resume/_TREE.md) | 简历相关资料（gitignore 忽略新增内容） |
 | [`superpowers/`](superpowers/_TREE.md) | superpowers 工作流的计划与规格文档（gitignore 忽略新增内容） |

@@ -33,7 +33,7 @@ constexpr unsigned DeleteFriendForwardCount()
 
 constexpr unsigned DialogForwardCount()
 {
-    return 3; // get dialog list + sync draft + pin dialog
+    return 2; // sync draft + pin dialog; dialog list is served by the query path
 }
 
 constexpr unsigned ForwardingSurfaceCount()

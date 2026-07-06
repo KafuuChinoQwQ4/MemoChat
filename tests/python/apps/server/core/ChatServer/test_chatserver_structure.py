@@ -2215,6 +2215,13 @@ class ChatServerStructureTests(unittest.TestCase):
         relation_session_adapter = (DOMAIN_RELATION_DIR / "ChatRelationSessionAdapter.cpp").read_text(encoding="utf-8")
         self.assertIn("BuildRelationCommandRequest(session, msg_id, msg_data)", relation_session_adapter)
         self.assertIn("SendRelationCommandResult", relation_session_adapter)
+        dialog_handler = extract_function(
+            relation_session_adapter,
+            "void ChatRelationSessionAdapter::HandleGetDialogList",
+        )
+        self.assertIn("SendDialogListQueryResult(session, *_relation_service, msg_data)", dialog_handler)
+        self.assertIn("BuildDialogListJson(uid, payload)", relation_session_adapter)
+        self.assertNotIn("GetDialogList(BuildRelationCommandRequest", dialog_handler)
         self.assertIn(
             "_relation_service->SearchUser(BuildRelationCommandRequest(session, msg_id, msg_data))",
             relation_session_adapter,
