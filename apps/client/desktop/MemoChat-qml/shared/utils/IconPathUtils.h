@@ -32,59 +32,29 @@ inline void setIconDownloadAuthContext(int uid, const QString& token)
 
 inline bool isMediaDownloadPath(const QString& path)
 {
-    // Must start with exactly "/media/download" followed by end-of-string or "?"
-    // (query string). Bare contains() would allow path traversal such as
-    // "/media/download/../../admin" to pass, which could direct authenticated
-    // requests to unintended server endpoints.
+    // Must start with "/media/download" followed by end-of-string, "?" (query),
+    // or "/" (sub-path / trailing slash).  Reject path traversal: any component
+    // containing ".." is refused so that "/media/download/../../admin" cannot
+    // direct authenticated requests to unintended server endpoints.
+    // Note: QUrl::path() never contains "?" — that branch is kept for callers
+    // that pass raw URL strings, but QUrl users are covered by the size check.
     const QString kBase = QStringLiteral("/media/download");
     if (!path.startsWith(kBase))
     {
         return false;
     }
-    return path.size() == kBase.size() || path.at(kBase.size()) == QLatin1Char('?');
-}
-
-inline QString stripMediaDownloadLegacyAuthQuery(QString icon)
-{
-    QUrl url(icon);
-    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
+    if (path.size() == kBase.size())
     {
-        return icon;
+        return true;
     }
-
-    const QString path = url.path();
-    if (!isMediaDownloadPath(path))
+    const QChar next = path.at(kBase.size());
+    if (next != QLatin1Char('?') && next != QLatin1Char('/'))
     {
-        return icon;
+        return false;
     }
-
-    QUrlQuery query(url);
-    query.removeAllQueryItems(QStringLiteral("uid"));
-    query.removeAllQueryItems(QStringLiteral("token"));
-    url.setQuery(query);
-    return url.toString();
-}
-
-inline QString resolveMediaDownloadForQml(QString icon, const QString& accessToken)
-{
-    const QString sanitized = stripMediaDownloadLegacyAuthQuery(icon);
-    const QString token = accessToken.trimmed();
-    if (token.isEmpty())
-    {
-        return sanitized;
-    }
-
-    QUrl url(sanitized);
-    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile() || !isMediaDownloadPath(url.path()))
-    {
-        return sanitized;
-    }
-    return memochat::media::resolveAuthenticatedMediaDownloadUrl(sanitized, token);
-}
-
-inline QString attachMediaDownloadAuth(QString icon)
-{
-    return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());
+    // Reject path-traversal sequences anywhere in the path.
+    const QString remainder = path.mid(kBase.size());
+    return !remainder.contains(QStringLiteral(".."));
 }
 
 inline bool isLocalMediaHost(const QString& host)
@@ -139,6 +109,63 @@ inline QString withGateMediaUrlPrefix(QString icon)
         baseUrl.chop(1);
     }
     return baseUrl + icon;
+}
+
+inline QString stripMediaDownloadLegacyAuthQuery(QString icon)
+{
+    QUrl url(icon);
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
+    {
+        return icon;
+    }
+
+    const QString path = url.path();
+    if (!isMediaDownloadPath(path))
+    {
+        return icon;
+    }
+
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("uid"));
+    query.removeAllQueryItems(QStringLiteral("token"));
+    url.setQuery(query);
+    return url.toString();
+}
+
+inline QString resolveMediaDownloadForQml(QString icon, const QString& accessToken)
+{
+    // For scheme-less (relative) media download URLs, expand to a full URL first
+    // so the Bearer-auth path below can process them.  stripMediaDownloadLegacyAuthQuery
+    // and the subsequent QUrl checks both bail out early on scheme-less input, which
+    // would silently drop authentication on relative-URL media attachments.
+    if (isGateRelativeMediaDownloadUrl(icon))
+    {
+        const QString full = withGateMediaUrlPrefix(icon);
+        if (full.isEmpty())
+        {
+            return icon; // prefix not yet configured; propagate placeholder upward
+        }
+        icon = full;
+    }
+
+    const QString sanitized = stripMediaDownloadLegacyAuthQuery(icon);
+    const QString token = accessToken.trimmed();
+    if (token.isEmpty())
+    {
+        return sanitized;
+    }
+
+    QUrl url(sanitized);
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile() || !isMediaDownloadPath(url.path()))
+    {
+        return sanitized;
+    }
+    return memochat::media::resolveAuthenticatedMediaDownloadUrl(sanitized, token);
+}
+
+inline QString attachMediaDownloadAuth(QString icon)
+{
+    return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());
 }
 
 inline QString normalizeRelativeMediaDownloadUrl(QString icon)

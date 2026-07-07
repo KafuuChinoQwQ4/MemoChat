@@ -19,6 +19,7 @@ void UserMgr::SetUserInfo(std::shared_ptr<UserInfo> user_info)
 
 void UserMgr::SetToken(QString token)
 {
+    QMutexLocker locker(&_token_mutex);
     _token = token;
 }
 
@@ -69,6 +70,7 @@ QString UserMgr::GetDesc()
 
 QString UserMgr::GetToken()
 {
+    QMutexLocker locker(&_token_mutex);
     return _token;
 }
 
@@ -104,7 +106,10 @@ void UserMgr::ResetSession()
     _friend_map.clear();
     _group_list.clear();
     _group_map.clear();
-    _token.clear();
+    {
+        QMutexLocker locker(&_token_mutex);
+        _token.clear();
+    }
     _chat_loaded = 0;
     _contact_loaded = 0;
     _group_loaded = 0;

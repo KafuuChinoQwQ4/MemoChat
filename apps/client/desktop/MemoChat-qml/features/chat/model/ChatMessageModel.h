@@ -123,7 +123,6 @@ private:
     int findInsertPosition(const MessageEntry& entry) const;
     std::vector<MessageEntry> _items;
     std::vector<MessageEntry> _itemsBuffer;
-    int _download_uid = 0;
     QString _download_token;
     QTimer _time_divider_refresh_timer;
 };

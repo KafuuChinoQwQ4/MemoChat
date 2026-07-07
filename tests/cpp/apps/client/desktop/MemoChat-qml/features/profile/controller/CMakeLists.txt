@@ -35,6 +35,7 @@ add_executable(profile_controller_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/usermgr.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/usermgr.h
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/UserMgrFriends.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
 )
 set_target_properties(profile_controller_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(profile_controller_gtest PROPERTIES

@@ -79,7 +79,7 @@ void R18Controller::search(const QString& keyword, int page)
         return;
     }
 
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = _current_source_id;
     payload[QStringLiteral("keyword")] = keyword;
     payload[QStringLiteral("page")] = normalizedPage;
@@ -102,7 +102,7 @@ void R18Controller::openComic(const QString& sourceId, const QString& comicId)
     }
     setCurrentFavorite(false);
 
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = _current_source_id;
     payload[QStringLiteral("comic_id")] = comicId;
     postJson(QStringLiteral("/api/r18/comic/detail"), payload, QStringLiteral("detail"));
@@ -112,7 +112,7 @@ void R18Controller::openChapter(const QString& sourceId, const QString& chapterI
 {
     _current_chapter_id = chapterId;
     setCurrentPageIndex(1);
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
     payload[QStringLiteral("chapter_id")] = chapterId;
     postJson(QStringLiteral("/api/r18/chapter/pages"), payload, QStringLiteral("pages"));
@@ -120,7 +120,7 @@ void R18Controller::openChapter(const QString& sourceId, const QString& chapterI
 
 void R18Controller::enableSource(const QString& sourceId, bool enabled)
 {
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = sourceId;
     postJson(enabled ? QStringLiteral("/api/r18/source/enable")
                      : QStringLiteral("/api/r18/source/disable"), payload, QStringLiteral("source_state"));
@@ -141,7 +141,7 @@ void R18Controller::deleteSource(const QString& sourceId)
         return;
     }
 
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = normalizedSourceId;
     setPendingDeleteSourceId(normalizedSourceId);
     setStatusText(QStringLiteral("正在删除漫画源: %1").arg(normalizedSourceId));
@@ -150,7 +150,7 @@ void R18Controller::deleteSource(const QString& sourceId)
 
 void R18Controller::toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited)
 {
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
     payload[QStringLiteral("comic_id")] = comicId.isEmpty()
             ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
@@ -164,7 +164,7 @@ void R18Controller::updateHistory(const QString& sourceId,
                                   int pageIndex)
 {
     setCurrentPageIndex(pageIndex < 1 ? 1 : pageIndex);
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
     payload[QStringLiteral("comic_id")] = comicId.isEmpty()
             ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;

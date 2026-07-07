@@ -140,7 +140,6 @@ private:
     void getJson(const QUrl& url, const QString& op);
     void applyAuthHeader(QNetworkRequest& request) const;
     void setOfficialSourceCatalogUrl(const QString& url);
-    QJsonObject authPayload() const;
     QJsonObject officialSourceManifest(const QVariantMap& item, const QUrl& scriptUrl) const;
     QJsonObject sourceUrlManifest(const QUrl& scriptUrl) const;
     QUrl resolveOfficialSourceUrl(const QVariantMap& item) const;

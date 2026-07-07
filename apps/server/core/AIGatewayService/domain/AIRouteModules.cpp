@@ -238,11 +238,45 @@ static std::string BuildPrefixProxyTarget(std::shared_ptr<HttpConnection> connec
     return orchestrator_prefix + target.substr(gate_prefix.size());
 }
 
+// Percent-decode a single ASCII percent-encoded byte sequence (lowercase output).
+static std::string PercentDecodeAsciiKey(std::string_view encoded)
+{
+    std::string result;
+    result.reserve(encoded.size());
+    for (size_t i = 0; i < encoded.size(); ++i)
+    {
+        if (encoded[i] == '%' && i + 2 < encoded.size())
+        {
+            auto hexDigit = [](char c) -> int
+            {
+                if (c >= '0' && c <= '9')
+                    return c - '0';
+                if (c >= 'a' && c <= 'f')
+                    return c - 'a' + 10;
+                if (c >= 'A' && c <= 'F')
+                    return c - 'A' + 10;
+                return -1;
+            };
+            const int hi = hexDigit(encoded[i + 1]);
+            const int lo = hexDigit(encoded[i + 2]);
+            if (hi >= 0 && lo >= 0)
+            {
+                result.push_back(static_cast<char>(hi * 16 + lo));
+                i += 2;
+                continue;
+            }
+        }
+        result.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(encoded[i]))));
+    }
+    return result;
+}
+
 static bool IsUidQueryItem(std::string_view item)
 {
     const size_t equal_pos = item.find('=');
-    const std::string_view key = item.substr(0, equal_pos == std::string_view::npos ? item.size() : equal_pos);
-    return key == "uid";
+    const std::string_view raw_key = item.substr(0, equal_pos == std::string_view::npos ? item.size() : equal_pos);
+    // Decode percent-encoding so that "%75id" or "%55id" cannot bypass the uid-stripping filter.
+    return PercentDecodeAsciiKey(raw_key) == "uid";
 }
 
 static std::string PrefixProxyTargetWithTrustedUid(std::string target, int32_t auth_uid)
@@ -283,13 +317,22 @@ static std::string PrefixProxyTargetWithTrustedUid(std::string target, int32_t a
 
 static std::string PrefixProxyBodyWithTrustedUid(std::string body, int32_t auth_uid)
 {
+    // Empty body: inject a minimal object so the orchestrator always receives the
+    // JWT-verified uid.  An absent body would silently forward without identity.
+    if (body.empty())
+    {
+        return "{\"uid\":" + std::to_string(auth_uid) + "}";
+    }
     json::JsonValue root;
-    if (!body.empty() && json::glaze_parse(root, body) && root.isObject())
+    if (json::glaze_parse(root, body) && root.isObject())
     {
         root["uid"] = auth_uid;
         return json::glaze_stringify(root);
     }
-    return body;
+    // Non-object JSON (e.g. array) — cannot inject uid without corrupting the
+    // schema.  Stamp it as a wrapper so the orchestrator can still identify the
+    // caller rather than forward the payload anonymously.
+    return "{\"uid\":" + std::to_string(auth_uid) + ",\"_payload\":" + body + "}";
 }
 
 static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection,

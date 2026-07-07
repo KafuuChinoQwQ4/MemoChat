@@ -37,7 +37,6 @@ void AgentController::loadSessions()
     QUrlQuery query;
     query.addQueryItem("model_type", _current_model_backend);
     query.addQueryItem("model_name", _current_model_name);
-    addAuthToQuery(query);
     url.setQuery(query);
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
@@ -55,7 +54,6 @@ void AgentController::createSession()
     QJsonObject payload;
     payload["model_type"] = _current_model_backend;
     payload["model_name"] = _current_model_name;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::CreateSession, QString(), uid);
@@ -89,7 +87,6 @@ void AgentController::deleteSession(const QString& sessionId)
     auto uid = _gateway->userMgr()->GetUid();
     QJsonObject payload;
     payload["session_id"] = sessionId;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::DeleteSession, QString(), uid);
@@ -117,7 +114,6 @@ void AgentController::renameSession(const QString& sessionId, const QString& tit
     QJsonObject payload;
     payload["session_id"] = trimmedSessionId;
     payload["title"] = trimmedTitle;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::RenameSession, QString(), uid);
@@ -134,7 +130,6 @@ void AgentController::loadHistory(const QString& sessionId)
     query.addQueryItem("session_id", sessionId);
     query.addQueryItem("limit", "50");
     query.addQueryItem("offset", "0");
-    addAuthToQuery(query);
     url.setQuery(query);
 
     ReqId reqId = nextAgentHttpRequestId();

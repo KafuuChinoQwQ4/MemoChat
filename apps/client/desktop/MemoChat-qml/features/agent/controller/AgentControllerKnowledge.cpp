@@ -106,7 +106,6 @@ void AgentController::uploadDocument(const QString& filePath)
     payload["file_name"] = fileName;
     payload["file_type"] = fileType;
     payload["content"] = QString::fromLatin1(fileData.toBase64());
-    addAuthToPayload(payload);
 
     emit kbUploadProgress(0);
     setKnowledgeBusy(true, QString("正在上传 %1...").arg(fileName));
@@ -148,7 +147,6 @@ void AgentController::searchKnowledgeBase(const QString& query)
     QJsonObject payload;
     payload["query"] = query;
     payload["top_k"] = 5;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeSearch, QString(), uid);
@@ -165,7 +163,6 @@ void AgentController::listKnowledgeBases()
     setKnowledgeBusy(true, "正在加载知识库...");
     QUrl url = agentApiUrl(QStringLiteral("/ai/kb/list"));
     QUrlQuery query;
-    addAuthToQuery(query);
     url.setQuery(query);
 
     ReqId reqId = nextAgentHttpRequestId();
@@ -184,7 +181,6 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
 
     QJsonObject payload;
     payload["kb_id"] = kbId;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::KnowledgeDelete, QString(), uid);

@@ -45,6 +45,7 @@ add_executable(group_controller_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelState.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/core/session/userdata.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
 )
 set_target_properties(group_controller_gtest PROPERTIES AUTOMOC ON)
 set_target_properties(group_controller_gtest PROPERTIES

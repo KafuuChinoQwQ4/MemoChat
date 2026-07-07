@@ -61,7 +61,6 @@ void AgentController::listAgentTasks()
     QUrl url = agentApiUrl(QStringLiteral("/ai/tasks"));
     QUrlQuery query;
     query.addQueryItem("limit", "50");
-    addAuthToQuery(query);
     url.setQuery(query);
 
     ReqId reqId = nextAgentHttpRequestId();
@@ -94,7 +93,6 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
         payload["skill_name"] = skillName;
     }
     payload["metadata"] = buildChatMetadata();
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskCreate, QString(), uid);
@@ -116,7 +114,6 @@ void AgentController::cancelAgentTask(const QString& taskId)
 
     QJsonObject payload;
     payload["task_id"] = trimmed;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskCancel, QString(), scopedUid());
@@ -138,7 +135,6 @@ void AgentController::resumeAgentTask(const QString& taskId)
 
     QJsonObject payload;
     payload["task_id"] = trimmed;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::TaskResume, QString(), scopedUid());

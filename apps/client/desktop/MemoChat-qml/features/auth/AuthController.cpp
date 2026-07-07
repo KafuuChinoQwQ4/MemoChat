@@ -90,22 +90,24 @@ void AuthController::sendLogin(const QString& email, const QString& password) co
     payload["email"] = email.trimmed();
     payload["passwd"] = password;
     payload["client_ver"] = QStringLiteral(MEMOCHAT_CLIENT_VERSION);
-    _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/user_login"),
-                                     payload,
-                                     ReqId::ID_LOGIN_USER,
-                                     Modules::LOGINMOD,
-                                     QStringLiteral("auth"));
+    // Use PostAnonymousHttpReq: credential-exchange endpoints must not receive
+    // a stale Bearer token from a previous session.
+    _gateway->httpMgr()->PostAnonymousHttpReq(QUrl(gate_url_prefix + "/user_login"),
+                                              payload,
+                                              ReqId::ID_LOGIN_USER,
+                                              Modules::LOGINMOD,
+                                              QStringLiteral("auth"));
 }
 
 void AuthController::sendVerifyCode(const QString& email, Modules module) const
 {
     QJsonObject payload;
     payload["email"] = email.trimmed();
-    _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
-                                     payload,
-                                     ReqId::ID_GET_VARIFY_CODE,
-                                     module,
-                                     QStringLiteral("auth"));
+    _gateway->httpMgr()->PostAnonymousHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
+                                              payload,
+                                              ReqId::ID_GET_VARIFY_CODE,
+                                              module,
+                                              QStringLiteral("auth"));
 }
 
 void AuthController::sendRegister(const QString& user,
@@ -124,11 +126,11 @@ void AuthController::sendRegister(const QString& user,
     payload["icon"] = ":/res/head_1.png";
     payload["nick"] = user.trimmed();
 
-    _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/user_register"),
-                                     payload,
-                                     ReqId::ID_REG_USER,
-                                     Modules::REGISTERMOD,
-                                     QStringLiteral("auth"));
+    _gateway->httpMgr()->PostAnonymousHttpReq(QUrl(gate_url_prefix + "/user_register"),
+                                              payload,
+                                              ReqId::ID_REG_USER,
+                                              Modules::REGISTERMOD,
+                                              QStringLiteral("auth"));
 }
 
 void AuthController::sendResetPassword(const QString& user,
@@ -142,9 +144,9 @@ void AuthController::sendResetPassword(const QString& user,
     payload["passwd"] = password;
     payload["varifycode"] = verifyCode.trimmed();
 
-    _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/reset_pwd"),
-                                     payload,
-                                     ReqId::ID_RESET_PWD,
-                                     Modules::RESETMOD,
-                                     QStringLiteral("auth"));
+    _gateway->httpMgr()->PostAnonymousHttpReq(QUrl(gate_url_prefix + "/reset_pwd"),
+                                              payload,
+                                              ReqId::ID_RESET_PWD,
+                                              Modules::RESETMOD,
+                                              QStringLiteral("auth"));
 }

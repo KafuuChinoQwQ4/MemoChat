@@ -74,11 +74,6 @@ void MomentsController::setAuthorFilterUid(int uid)
     }
 }
 
-QJsonObject MomentsController::buildAuthJson() const
-{
-    return {};
-}
-
 QString MomentsController::mediaUrlForKey(const QString& mediaKey) const
 {
     const QString trimmed = mediaKey.trimmed();

@@ -61,8 +61,6 @@ void AgentController::sendMessage(const QString& content)
     {
         payload["requested_tools"] = requestedTools;
     }
-    addAuthToPayload(payload);
-
     QString msgId = makeUuid();
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ChatMessage, msgId, uid);
@@ -88,7 +86,6 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
     context["dialog"] = dialogUid;
     context["max_messages"] = 100;
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Summary, QString(), uid);
@@ -111,7 +108,6 @@ void AgentController::suggestReply(const QString& dialogUid, const QString& chat
     context["dialog"] = dialogUid;
     context["format"] = "three_options";
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Suggest, QString(), uid);
@@ -141,7 +137,6 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
     QJsonObject context;
     context["source_lang"] = sourceLang.trimmed().isEmpty() ? QStringLiteral("自动检测") : sourceLang.trimmed();
     payload["context_json"] = QString::fromUtf8(QJsonDocument(context).toJson(QJsonDocument::Compact));
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::Translate, QString(), uid);

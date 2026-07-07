@@ -224,7 +224,7 @@ void ProfileController::sendSaveProfile(int uid,
         return;
     }
 
-    const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(uid, token, name, nick, desc, icon);
+    const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(name, nick, desc, icon);
 
     _gateway->httpMgr()->PostHttpReq(QUrl(gate_url_prefix + "/user_update_profile"),
                                      payload,

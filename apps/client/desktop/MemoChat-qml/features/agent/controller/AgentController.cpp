@@ -56,18 +56,6 @@ ReqId AgentController::nextAgentHttpRequestId()
     return static_cast<ReqId>(_next_agent_http_request_id++);
 }
 
-void AgentController::addAuthToPayload(QJsonObject& payload) const
-{
-    payload.remove(QStringLiteral("uid"));
-    payload.remove(QStringLiteral("token"));
-}
-
-void AgentController::addAuthToQuery(QUrlQuery& query) const
-{
-    query.removeAllQueryItems(QStringLiteral("uid"));
-    query.removeAllQueryItems(QStringLiteral("token"));
-}
-
 void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod)
 {
     Q_UNUSED(mod);

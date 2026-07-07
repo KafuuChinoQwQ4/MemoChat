@@ -136,43 +136,55 @@ void CallController::toggleCallCamera()
 
 void CallController::startCall(int uid, const QString& token, int peerUid, const QString& callType) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/start"),
-                        memochat::call_request_payload::buildStartCallPayload(uid, token, peerUid, callType),
+                        memochat::call_request_payload::buildStartCallPayload(peerUid, callType),
                         ReqId::ID_CALL_START);
 }
 
 void CallController::acceptCall(int uid, const QString& token, const QString& callId) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/accept"),
-                        memochat::call_request_payload::buildCallIdPayload(uid, token, callId),
+                        memochat::call_request_payload::buildCallIdPayload(callId),
                         ReqId::ID_CALL_ACCEPT);
 }
 
 void CallController::rejectCall(int uid, const QString& token, const QString& callId) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/reject"),
-                        memochat::call_request_payload::buildCallIdPayload(uid, token, callId),
+                        memochat::call_request_payload::buildCallIdPayload(callId),
                         ReqId::ID_CALL_REJECT);
 }
 
 void CallController::cancelCall(int uid, const QString& token, const QString& callId) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/cancel"),
-                        memochat::call_request_payload::buildCallIdPayload(uid, token, callId),
+                        memochat::call_request_payload::buildCallIdPayload(callId),
                         ReqId::ID_CALL_CANCEL);
 }
 
 void CallController::hangupCall(int uid, const QString& token, const QString& callId) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/hangup"),
-                        memochat::call_request_payload::buildCallIdPayload(uid, token, callId),
+                        memochat::call_request_payload::buildCallIdPayload(callId),
                         ReqId::ID_CALL_HANGUP);
 }
 
 void CallController::fetchToken(int uid, const QString& token, const QString& callId, const QString& role) const
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     post(QStringLiteral("/api/call/token"),
-                        memochat::call_request_payload::buildFetchTokenPayload(uid, token, callId, role),
+                        memochat::call_request_payload::buildFetchTokenPayload(callId, role),
                         ReqId::ID_CALL_GET_TOKEN);
 }
 

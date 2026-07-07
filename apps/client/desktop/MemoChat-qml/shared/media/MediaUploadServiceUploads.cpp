@@ -231,7 +231,8 @@ bool uploadChunkedFile(QFile& file,
         for (int attempt = 0; attempt < mediaCfg.chunkRetry; ++attempt)
         {
             QList<QPair<QByteArray, QByteArray>> headers;
-            headers.append({QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8()});
+            headers.append(
+                {QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.trimmed().toUtf8()});
             headers.append({QByteArrayLiteral("X-Upload-Id"), uploadId.toUtf8()});
             headers.append({QByteArrayLiteral("X-Chunk-Index"), QByteArray::number(index)});
 

@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Network)
 
 add_executable(moments_entry_parser_gtest
     MomentsEntryParserTest.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/moments/parsing/MomentsEntryParser.cpp
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
 )
 set_target_properties(moments_entry_parser_gtest PROPERTIES
     CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
@@ -16,6 +17,7 @@ set_target_properties(moments_entry_parser_gtest PROPERTIES
 target_link_libraries(moments_entry_parser_gtest PRIVATE
     GTest_TestLib
     Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
 )
 
 target_include_directories(moments_entry_parser_gtest PRIVATE

@@ -22,7 +22,7 @@ void MomentsController::loadFeedForAuthor(int authorUid)
     setErrorText(QString());
     setProgressText(QString());
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["last_moment_id"] = 0;
     payload["limit"] = kPageSize;
     if (_author_filter_uid > 0)
@@ -44,7 +44,7 @@ void MomentsController::loadMore()
     setLoading(true);
     setProgressText(QString());
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["last_moment_id"] = _last_moment_id;
     payload["limit"] = kPageSize;
     if (_author_filter_uid > 0)
@@ -61,7 +61,7 @@ void MomentsController::loadMore()
 
 void MomentsController::deleteMoment(qint64 momentId)
 {
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/api/moments/delete"),
@@ -73,7 +73,7 @@ void MomentsController::deleteMoment(qint64 momentId)
 
 void MomentsController::submitLikeRequest(qint64 momentId, bool liked)
 {
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
     payload["like"] = liked;
 
@@ -136,7 +136,7 @@ void MomentsController::addComment(qint64 momentId, const QString& content, int 
     if (momentId <= 0 || content.trimmed().isEmpty())
         return;
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
     payload["content"] = content.trimmed();
     payload["reply_uid"] = replyUid;
@@ -155,7 +155,7 @@ void MomentsController::deleteComment(qint64 momentId, qint64 commentId)
     if (momentId <= 0 || commentId <= 0)
         return;
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
     payload["comment_id"] = commentId;
     payload["delete"] = true;
@@ -171,7 +171,7 @@ void MomentsController::deleteComment(qint64 momentId, qint64 commentId)
 
 void MomentsController::refreshMoment(qint64 momentId)
 {
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/api/moments/detail"),
@@ -186,7 +186,7 @@ void MomentsController::toggleCommentLike(qint64 momentId, qint64 commentId, boo
     if (momentId <= 0 || commentId <= 0)
         return;
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["comment_id"] = commentId;
     payload["like"] = liked;
 
@@ -211,7 +211,7 @@ void MomentsController::refreshComments(qint64 momentId)
     }
     _pending_comment_moments[ReqId::ID_MOMENTS_COMMENT_LIST] = momentId;
 
-    QJsonObject payload = buildAuthJson();
+    QJsonObject payload;
     payload["moment_id"] = momentId;
     payload["last_comment_id"] = 0;
     payload["limit"] = 50;
