@@ -1,6 +1,6 @@
 # skills/ 目录树
 
-> 项目的 skill 知识库，每个 `.md` 是一类开发/运维工作流的指引（构建、调试、QML UI、RAG、发布、评审等）；另含两个外部 skill 快照子目录。
+> 项目的 skill 知识库，每个 `.md` 是一类开发/运维工作流的指引（构建、调试、QML UI、RAG、发布、评审等）；另含外部 skill 快照子目录。
 
 ## 子目录
 
@@ -8,6 +8,7 @@
 | --- | --- |
 | `superpowers/` | 外部 skill 快照（上游 vendored，不在本文档范围内，未文档化） |
 | `mattpocock/` | 外部 skill 快照（上游 vendored，不在本文档范围内，未文档化） |
+| `awesomedesign/` | DESIGN.md 设计语言样本外部快照（上游 vendored，不在本文档范围内，未文档化） |
 
 ## 文件
 

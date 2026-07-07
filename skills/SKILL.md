@@ -34,6 +34,7 @@ description: Use when a non-trivial MemoChat task needs project-specific skill r
 4. 外部快照只在需要时读取入口：
    - `skills/superpowers/SKILL.md`：通用流程，如 brainstorming、TDD、debugging、review、verification。
    - `skills/mattpocock/SKILL.md`：Superpowers 缺口，如架构防腐化、领域语言 grilling、zoom-out、prototype、PRD/issue 切片。
+   - `skills/awesomedesign/SKILL.md`：DESIGN.md 设计语言样本库，只在前端/网页视觉方向需要具体设计参考时读取。
 5. 只有构造委派式或基于产物的阶段提示词时，才读取 `skills/PROMPTS.md`。
 
 ## 常用外部触发捷径

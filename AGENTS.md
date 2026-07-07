@@ -24,6 +24,7 @@
    - `skills/release.md`：用于 Git commit、release note、tag 或发布验证；检查 staged 范围和提交格式。
    - `skills/superpowers/SKILL.md`：用于需要应用项目内 Superpowers 工作流快照时；先读该入口，再只读取相关的 `skills/superpowers/<name>/SKILL.md` 子 skill，不要全量加载目录。
    - `skills/mattpocock/SKILL.md`：用于需要应用项目内 Matt Pocock skills 快照时，尤其是 Superpowers 没覆盖的架构防腐化、领域语言 grilling、zoom-out 代码地图、原型、PRD/issue 切片或 handoff；先读该入口，再只读取相关子 skill。
+   - `skills/awesomedesign/SKILL.md`：用于前端/网页视觉方向需要参考 DESIGN.md 设计语言样本时；先读该入口，再只读取相关站点的 `DESIGN.md`。
    - `skills/reflect.md`：用于从用户纠正中学习。
    - `skills/skill-authoring.md`：用于创建、更新、裁剪或复审本项目 skills 和外部 skill 快照入口。
    - `skills/tree-doc.md`：用于新增、删除、移动、重命名文件或文件夹，或文件职责变化时，实时同步各文件夹根部的 `_TREE.md` 目录树文档。
