@@ -42,6 +42,7 @@
   50%      { opacity: 0; }
 }
 
+/* ── Default: dark theme background (matches dark.css) ──────── */
 html {
   font-family: var(--font-family-zh);
   font-size: 14px;
@@ -52,19 +53,27 @@ html {
   height: 100%;
   overflow: hidden;
 
-  /* Subtle animated gradient background — light mode */
-  background: linear-gradient(-45deg, #edf1f6, #f2eff7, #f6f0ec, #eef5f1);
-  background-size: 400% 400%;
-  animation: bg-drift 28s ease infinite;
-}
-
-/* Dark mode override */
-html:not([data-theme="light"]),
-html[data-theme="dark"] {
-  background: var(--surface-bg);
+  /* Default = dark, avoids white flash before ThemeProvider fires */
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.024) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(0deg,  rgba(255,255,255,0.018) 0 1px, transparent 1px 88px),
+    linear-gradient(118deg, transparent 0%,  rgba(64,156,132,0.20) 18%, transparent 46%),
+    linear-gradient(252deg, transparent 3%,  rgba(186,115,71,0.16) 24%, transparent 50%),
+    linear-gradient(180deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0) 32%),
+    linear-gradient(148deg, #03050a 0%, #071019 40%, #101419 73%, #17170f 100%);
   background-color: #03050a;
   background-attachment: fixed;
-  background-size: auto;
+}
+
+/* ── Light theme override ─────────────────────────────────────── */
+html[data-theme="light"] {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,179,237,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(154,118,232,0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 60% 40%, rgba(74,222,128,0.08) 0%, transparent 50%),
+    linear-gradient(160deg, #deeef9 0%, #eef0fa 40%, #f5eef8 70%, #eef5ef 100%);
+  background-color: #e8eff8;
+  background-attachment: fixed;
   animation: none;
 }
 

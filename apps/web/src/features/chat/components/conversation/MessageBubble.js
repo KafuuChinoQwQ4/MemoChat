@@ -47,29 +47,30 @@ export function MessageBubble({ message, showAvatar = true, stacked = false }) {
                     margin: "0 0 4px",
                     fontSize: 11,
                     lineHeight: 1.2,
-                    color: "rgba(67, 85, 108, 0.74)",
+                    color: "var(--text-secondary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
+                    paddingLeft: 2,
                 }, children: senderName })), _jsx("div", { style: {
                     maxWidth: "100%",
-                    minHeight: 30,
-                    padding: "5px 8px",
+                    minHeight: 32,
+                    padding: "7px 11px",
                     borderRadius: isSelf
-                        ? (stacked ? "8px 3px 8px 8px" : "8px 8px 3px 8px")
-                        : (stacked ? "3px 8px 8px 8px" : "8px 8px 8px 3px"),
-                    background: isSelf ? "rgba(177, 217, 255, 0.82)" : "rgba(255, 255, 255, 0.74)",
-                    border: isSelf ? "1px solid rgba(101, 165, 233, 0.82)" : "1px solid rgba(255, 255, 255, 0.76)",
-                    color: isSelf ? "rgba(24, 50, 76, 0.94)" : "rgba(24, 31, 42, 0.94)",
+                        ? (stacked ? "10px 4px 10px 10px" : "10px 10px 4px 10px")
+                        : (stacked ? "4px 10px 10px 10px" : "10px 10px 10px 4px"),
+                    background: isSelf ? "var(--bubble-self-bg)" : "var(--bubble-other-bg)",
+                    border: `1px solid ${isSelf ? "var(--bubble-self-border)" : "var(--bubble-other-border)"}`,
+                    color: isSelf ? "var(--bubble-self-color)" : "var(--bubble-other-color)",
                     fontSize: 14,
-                    lineHeight: 1.38,
+                    lineHeight: 1.5,
                     wordBreak: "break-word",
                     overflowWrap: "anywhere",
-                    boxShadow: isSelf
-                        ? "0 4px 10px rgba(64, 130, 205, 0.12)"
-                        : "0 5px 14px rgba(31, 45, 63, 0.07)",
+                    boxShadow: isSelf ? "var(--bubble-self-shadow)" : "var(--bubble-other-shadow)",
+                    backdropFilter: "blur(8px) saturate(1.2)",
+                    WebkitBackdropFilter: "blur(8px) saturate(1.2)",
                 }, children: isRevoked ? (_jsx("span", { style: { color: "var(--text-disabled)", fontStyle: "italic", fontSize: 13 }, children: "\u6D88\u606F\u5DF2\u64A4\u56DE" })) : (message.content) }), statusText ? (_jsx("div", { style: {
-                    marginTop: 4,
+                    marginTop: 3,
                     fontSize: 11,
                     lineHeight: 1.2,
                     color: message.state === "failed" ? "var(--color-badge)" : "var(--text-disabled)",
@@ -79,8 +80,8 @@ export function MessageBubble({ message, showAvatar = true, stacked = false }) {
             display: "flex",
             justifyContent: isSelf ? "flex-end" : "flex-start",
             alignItems: "flex-start",
-            gap: 7,
-            marginTop: stacked ? 3 : 8,
-            padding: "0 14px",
+            gap: 8,
+            marginTop: stacked ? 3 : 10,
+            padding: "0 16px",
         }, children: isSelf ? (_jsxs(_Fragment, { children: [bubble, avatarSlot] })) : (_jsxs(_Fragment, { children: [avatarSlot, bubble] })) }));
 }

@@ -23,23 +23,33 @@ export function ComposerBar({ onSend }) {
     return (_jsxs("div", { style: {
             display: "flex",
             gap: 8,
-            padding: "8px 12px",
-            borderTop: "1px solid var(--divider)",
-            background: "rgba(255,255,255,0.05)",
+            padding: "10px 14px",
+            borderTop: "1px solid var(--composer-border)",
+            background: "var(--composer-bg)",
+            backdropFilter: "blur(16px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(16px) saturate(1.4)",
             alignItems: "flex-end",
-        }, children: [_jsx("textarea", { ref: textareaRef, value: composerText, onChange: (e) => setComposerText(e.target.value), onKeyDown: handleKeyDown, placeholder: "\u8F93\u5165\u6D88\u606F\u2026 (Enter \u53D1\u9001\uFF0CShift+Enter \u6362\u884C)", rows: 1, style: {
+        }, children: [_jsx("textarea", { ref: textareaRef, value: composerText, onChange: (e) => setComposerText(e.target.value), onKeyDown: handleKeyDown, onFocus: (e) => {
+                    e.currentTarget.style.borderColor = "var(--composer-input-focus-border)";
+                    e.currentTarget.style.boxShadow = "var(--composer-input-focus-shadow)";
+                }, onBlur: (e) => {
+                    e.currentTarget.style.borderColor = "var(--composer-input-border)";
+                    e.currentTarget.style.boxShadow = "none";
+                }, placeholder: "\u8F93\u5165\u6D88\u606F\u2026 (Enter \u53D1\u9001\uFF0CShift+Enter \u6362\u884C)", rows: 1, style: {
                     flex: 1,
                     resize: "none",
-                    border: "1px solid rgba(0,0,0,0.1)",
-                    borderRadius: 8,
-                    padding: "8px 12px",
+                    border: "1px solid var(--composer-input-border)",
+                    borderRadius: 10,
+                    padding: "9px 13px",
                     fontSize: 14,
-                    background: "rgba(255,255,255,0.6)",
+                    background: "var(--composer-input-bg)",
+                    color: "var(--text-primary)",
                     outline: "none",
-                    minHeight: 36,
+                    minHeight: 38,
                     maxHeight: 120,
                     overflowY: "auto",
                     lineHeight: 1.5,
                     fontFamily: "var(--font-family-zh)",
-                } }), _jsx(GlassButton, { variant: "primary", onClick: submit, disabled: !composerText.trim(), style: { padding: "8px 18px", flexShrink: 0 }, children: "\u53D1\u9001" })] }));
+                    transition: "border-color 150ms ease, box-shadow 150ms ease",
+                } }), _jsx(GlassButton, { variant: "primary", onClick: submit, disabled: !composerText.trim(), style: { padding: "9px 20px", flexShrink: 0 }, children: "\u53D1\u9001" })] }));
 }

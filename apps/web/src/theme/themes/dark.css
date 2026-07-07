@@ -35,4 +35,39 @@
   /* List panel */
   --list-panel-bg: rgba(8, 12, 18, 0.34);
   --list-panel-border: rgba(255, 255, 255, 0.13);
+
+  /* Message bubbles — teal self, dark other */
+  --bubble-self-bg: rgba(32, 98, 80, 0.88);
+  --bubble-self-border: rgba(92, 190, 164, 0.42);
+  --bubble-self-color: rgba(210, 242, 232, 0.96);
+  --bubble-self-shadow: 0 2px 10px rgba(0, 140, 110, 0.22);
+  --bubble-other-bg: rgba(15, 22, 34, 0.82);
+  --bubble-other-border: rgba(255, 255, 255, 0.12);
+  --bubble-other-color: rgba(215, 226, 238, 0.94);
+  --bubble-other-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+
+  /* Conversation */
+  --conversation-bg: transparent;
+  --conversation-topbar-bg: rgba(8, 12, 20, 0.60);
+  --conversation-topbar-border: rgba(255, 255, 255, 0.09);
+  --conversation-topbar-color: var(--text-primary);
+
+  /* Time separator */
+  --time-sep-bg: rgba(255, 255, 255, 0.10);
+  --time-sep-color: rgba(180, 195, 210, 0.72);
+
+  /* Composer */
+  --composer-bg: rgba(6, 10, 16, 0.52);
+  --composer-border: rgba(255, 255, 255, 0.09);
+  --composer-input-bg: rgba(6, 10, 16, 0.56);
+  --composer-input-border: rgba(255, 255, 255, 0.14);
+  --composer-input-focus-border: rgba(92, 190, 164, 0.72);
+  --composer-input-focus-shadow: 0 0 0 3px rgba(92, 190, 164, 0.16);
+
+  /* Dialog list */
+  --dialog-item-hover: rgba(92, 190, 164, 0.08);
+
+  /* Avatar */
+  --avatar-ring: rgba(255, 255, 255, 0.18);
+  --avatar-bg: rgba(40, 70, 60, 0.40);
 }

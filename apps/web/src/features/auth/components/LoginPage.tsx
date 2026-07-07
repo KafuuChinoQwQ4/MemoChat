@@ -8,6 +8,30 @@ import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 
+/** MemoChat bubble-chat logo mark */
+function BrandMark() {
+  return (
+    <svg
+      width="48"
+      height="48"
+      viewBox="0 0 48 48"
+      fill="none"
+      aria-hidden
+      style={{ display: "block" }}
+    >
+      <rect width="48" height="48" rx="14" fill="var(--color-brand-green)" />
+      <path
+        d="M11 15.5C11 13.567 12.567 12 14.5 12H33.5C35.433 12 37 13.567 37 15.5V28.5C37 30.433 35.433 32 33.5 32H26L19 37V32H14.5C12.567 32 11 30.433 11 28.5V15.5Z"
+        fill="white"
+        fillOpacity="0.95"
+      />
+      <circle cx="18.5" cy="22" r="2" fill="var(--color-brand-green)" />
+      <circle cx="24" cy="22" r="2" fill="var(--color-brand-green)" />
+      <circle cx="29.5" cy="22" r="2" fill="var(--color-brand-green)" />
+    </svg>
+  )
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
   const { loading, error, setLoading, setError, reset } = useAuthStore()
@@ -34,14 +58,33 @@ export function LoginPage() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "var(--surface-bg)",
     }}>
-      <GlassSurface elevated style={{ width: 360, padding: 32, borderRadius: "var(--panel-radius)" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, textAlign: "center", color: "var(--text-primary)" }}>
-          登录 MemoChat
-        </h1>
+      <GlassSurface
+        elevated
+        className="enter-fade-up"
+        style={{ width: 360, padding: "36px 32px 28px", borderRadius: "var(--panel-radius)" }}
+      >
+        {/* Brand header */}
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 28,
+        }}>
+          <BrandMark />
+          <div style={{ textAlign: "center" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+              欢迎回来
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>
+              登录你的 MemoChat 账号
+            </p>
+          </div>
+        </div>
 
-        <form onSubmit={(e) => { void handleSubmit(e) }} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Form */}
+        <form onSubmit={(e) => { void handleSubmit(e) }} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <GlassTextField
             label="邮箱"
             type="email"
@@ -60,22 +103,65 @@ export function LoginPage() {
             required
           />
 
+          {/* Forgot password link — aligned right */}
+          <div style={{ textAlign: "right", marginTop: -6 }}>
+            <button
+              type="button"
+              onClick={() => navigate("/reset")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-secondary)",
+                cursor: "pointer",
+                fontSize: 12,
+                padding: 0,
+              }}
+            >
+              忘记密码？
+            </button>
+          </div>
+
           {error && (
-            <p style={{ color: "var(--color-badge)", fontSize: 13, margin: 0 }}>{error}</p>
+            <p style={{
+              color: "var(--color-badge)",
+              fontSize: 13,
+              margin: 0,
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: "rgba(232,65,65,0.07)",
+              border: "1px solid rgba(232,65,65,0.16)",
+            }}>
+              {error}
+            </p>
           )}
 
-          <GlassButton type="submit" variant="primary" disabled={loading} style={{ marginTop: 8 }}>
+          <GlassButton type="submit" variant="primary" disabled={loading} style={{ marginTop: 4 }}>
             {loading ? <Spinner size={18} color="#fff" /> : "登录"}
           </GlassButton>
         </form>
 
-        <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center", fontSize: 13 }}>
-          <button onClick={() => navigate("/register")} style={{ background: "none", border: "none", color: "var(--color-brand-green)", cursor: "pointer" }}>
-            注册账号
-          </button>
-          <span style={{ color: "var(--text-disabled)" }}>·</span>
-          <button onClick={() => navigate("/reset")} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}>
-            忘记密码
+        {/* Register link */}
+        <div style={{
+          marginTop: 20,
+          paddingTop: 16,
+          borderTop: "1px solid var(--divider)",
+          textAlign: "center",
+          fontSize: 13,
+          color: "var(--text-secondary)",
+        }}>
+          还没有账号？{" "}
+          <button
+            onClick={() => navigate("/register")}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--color-brand-green)",
+              cursor: "pointer",
+              fontWeight: 500,
+              padding: 0,
+            }}
+          >
+            立即注册
           </button>
         </div>
       </GlassSurface>

@@ -226,21 +226,25 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        background: "linear-gradient(180deg, rgba(246,250,255,0.78), rgba(231,241,252,0.84))",
+        background: "var(--conversation-bg)",
       }}
     >
+      {/* Topbar */}
       <div
         style={{
-          minHeight: 44,
+          minHeight: 48,
           padding: "0 14px",
           display: "flex",
           alignItems: "center",
           gap: 10,
-          borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
-          color: "rgba(15, 23, 42, 0.94)",
-          fontSize: 16,
-          fontWeight: 700,
-          background: "linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,255,255,0.28))",
+          borderBottom: "1px solid var(--conversation-topbar-border)",
+          color: "var(--conversation-topbar-color)",
+          fontSize: 15,
+          fontWeight: 600,
+          background: "var(--conversation-topbar-bg)",
+          backdropFilter: "blur(16px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(16px) saturate(1.4)",
+          flexShrink: 0,
         }}
       >
         <div style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -345,11 +349,12 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
                       minHeight: 20,
                       padding: "2px 10px",
                       borderRadius: 999,
-                      background: "rgba(158, 174, 193, 0.36)",
-                      color: "rgba(47, 65, 88, 0.72)",
+                      background: "var(--time-sep-bg)",
+                      color: "var(--time-sep-color)",
                       fontSize: 11,
                       lineHeight: "16px",
                       fontWeight: 500,
+                      letterSpacing: "0.01em",
                     }}
                   >
                     {timeLabel}
