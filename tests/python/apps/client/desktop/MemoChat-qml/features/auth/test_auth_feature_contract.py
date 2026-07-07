@@ -183,7 +183,9 @@ class AuthFeatureContractTests(unittest.TestCase):
 
         self.assertIn("QString RefreshToken;", global_header)
         self.assertIn("QString refreshToken;", pending_header)
+        self.assertIn('obj.value("access_token").toString()', login_response)
         self.assertIn('obj.value("refresh_token").toString()', login_response)
+        self.assertNotIn('obj.value("token").toString()', login_response)
         self.assertIn("server_info.RefreshToken.trimmed().isEmpty()", login_response)
         self.assertIn("_pending_login_state.refreshToken = serverInfo.RefreshToken;", connection_state)
         self.assertGreaterEqual(connection_state.count("_pending_login_state.refreshToken.clear();"), 2)

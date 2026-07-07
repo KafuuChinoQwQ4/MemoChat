@@ -26,10 +26,24 @@ void configureSslIfNeeded(QNetworkRequest* request, const QUrl& url)
     }
 }
 
-bool postJson(const QUrl& url, const QJsonObject& payload, QJsonObject* responseObj, QString* errorText)
+void setBearerAccessToken(QNetworkRequest& request, const QString& accessToken)
+{
+    const QString token = accessToken.trimmed();
+    if (!token.isEmpty())
+    {
+        request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8());
+    }
+}
+
+bool postJson(const QUrl& url,
+              const QJsonObject& payload,
+              const QString& accessToken,
+              QJsonObject* responseObj,
+              QString* errorText)
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    setBearerAccessToken(request, accessToken);
     configureSslIfNeeded(&request, url);
 
     QString traceId;
@@ -220,9 +234,10 @@ bool postBinary(const QUrl& url,
     return true;
 }
 
-bool getJson(const QUrl& url, QJsonObject* responseObj, QString* errorText)
+bool getJson(const QUrl& url, const QString& accessToken, QJsonObject* responseObj, QString* errorText)
 {
     QNetworkRequest request(url);
+    setBearerAccessToken(request, accessToken);
     configureSslIfNeeded(&request, url);
 
     QString traceId;

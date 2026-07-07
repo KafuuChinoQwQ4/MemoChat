@@ -43,8 +43,6 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "method: POST\n"
            "path: /upload_media_init\n"
            "request: MediaUploadInitRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - media_type\n"
            "  - file_name\n"
            "  - mime\n"
@@ -63,8 +61,6 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "method: POST\n"
            "path: /upload_media_chunk\n"
            "request: MediaUploadChunkJsonRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - upload_id\n"
            "  - index\n"
            "  - data_base64\n"
@@ -77,8 +73,6 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "method: POST\n"
            "path: /upload_media_complete\n"
            "request: MediaUploadCompleteRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - upload_id\n"
            "response: MediaUploadAssetResponseDto\n"
            "  - media_key\n"
@@ -92,8 +86,6 @@ const char* ExpectedMediaRouteSchemaSnapshot()
            "method: POST\n"
            "path: /upload_media\n"
            "request: MediaUploadSimpleRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - media_type\n"
            "  - file_name\n"
            "  - mime\n"
@@ -150,9 +142,7 @@ TEST(MediaRouteSchemaTest, BuildsFieldInventoriesFromMediaDtos)
     ASSERT_EQ(schemas.size(), 4U);
 
     ExpectFields(schemas[0].request,
-                 {"uid",
-                  "token",
-                  "media_type",
+                 {"media_type",
                   "file_name",
                   "mime",
                   "file_size",
@@ -162,16 +152,14 @@ TEST(MediaRouteSchemaTest, BuildsFieldInventoriesFromMediaDtos)
                   "grant_friends"});
     ExpectFields(schemas[0].response, {"upload_id", "chunk_size", "total_chunks", "uploaded_chunks"});
 
-    ExpectFields(schemas[1].request, {"uid", "token", "upload_id", "index", "data_base64"});
+    ExpectFields(schemas[1].request, {"upload_id", "index", "data_base64"});
     ExpectFields(schemas[1].response, {"upload_id", "index", "size"});
 
-    ExpectFields(schemas[2].request, {"uid", "token", "upload_id"});
+    ExpectFields(schemas[2].request, {"upload_id"});
     ExpectFields(schemas[2].response, {"media_key", "media_type", "file_name", "mime", "size", "url"});
 
     ExpectFields(schemas[3].request,
-                 {"uid",
-                  "token",
-                  "media_type",
+                 {"media_type",
                   "file_name",
                   "mime",
                   "data_base64",

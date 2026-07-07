@@ -70,14 +70,6 @@ namespace memochat::call
 CallAuthRequestDto CallAuthRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     CallAuthRequestDto request;
-    if (public_dto::modules::ShouldReadOptionalInt(root.isMember("uid")))
-    {
-        request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    }
-    if (public_dto::modules::ShouldReadOptionalText(root.isMember("token")))
-    {
-        request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    }
     if (public_dto::modules::ShouldReadOptionalText(root.isMember("call_id")))
     {
         request.call_id = memochat::json::glaze_safe_get<std::string>(root, "call_id", "");
@@ -88,14 +80,6 @@ CallAuthRequestDto CallAuthRequestFromJsonValue(const memochat::json::JsonValue&
 CallStartRequestDto CallStartRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     CallStartRequestDto request;
-    if (public_dto::modules::ShouldReadOptionalInt(root.isMember("uid")))
-    {
-        request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    }
-    if (public_dto::modules::ShouldReadOptionalText(root.isMember("token")))
-    {
-        request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    }
     if (public_dto::modules::ShouldReadOptionalInt(root.isMember("peer_uid")))
     {
         request.peer_uid = memochat::json::glaze_safe_get<int>(root, "peer_uid", 0);
@@ -110,14 +94,6 @@ CallStartRequestDto CallStartRequestFromJsonValue(const memochat::json::JsonValu
 CallTokenRequestDto CallTokenRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     CallTokenRequestDto request;
-    if (public_dto::modules::ShouldReadOptionalInt(root.isMember("uid")))
-    {
-        request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    }
-    if (public_dto::modules::ShouldReadOptionalText(root.isMember("token")))
-    {
-        request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    }
     if (public_dto::modules::ShouldReadOptionalText(root.isMember("call_id")))
     {
         request.call_id = memochat::json::glaze_safe_get<std::string>(root, "call_id", "");

@@ -1,10 +1,8 @@
 /**
  * mediaUrl — mirrors IconPathUtils.
- * Appends uid + auth token as query params for media downloads.
- * NOTE: token in query may be logged; future hardening = header/cookie auth.
+ * Normalizes media references without embedding credentials in URLs.
  */
 import { runtimeConfig } from "@/core/config/runtimeConfig";
-import { useSessionStore } from "@/core/session/sessionStore";
 export const DEFAULT_AVATAR_DATA_URL = `data:image/svg+xml,${encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
   <defs>
@@ -65,19 +63,13 @@ function serializeUrl(parsed, absolute) {
         return parsed.toString();
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
-function withAuth(url) {
-    const { uid, token } = useSessionStore.getState();
-    const absolute = shouldReturnAbsolute(url);
-    const parsed = new URL(url, urlParseBase());
-    if (uid === null || uid <= 0 || !token)
-        return serializeUrl(parsed, absolute);
-    parsed.searchParams.set("uid", String(uid));
-    parsed.searchParams.set("token", token);
-    return serializeUrl(parsed, absolute);
-}
 function isMediaDownloadUrl(ref) {
     const parsed = new URL(ref, urlParseBase());
     return parsed.pathname === "/media/download";
+}
+function isR18ImageUrl(ref) {
+    const parsed = new URL(ref, urlParseBase());
+    return parsed.pathname === "/api/r18/image";
 }
 function currentMediaDownloadUrl(ref) {
     const source = new URL(ref, urlParseBase());
@@ -86,12 +78,20 @@ function currentMediaDownloadUrl(ref) {
         if (key !== "uid" && key !== "token")
             target.searchParams.append(key, value);
     });
-    return withAuth(serializeUrl(target, Boolean(mediaBaseUrl())));
+    return serializeUrl(target, Boolean(mediaBaseUrl()));
 }
 function mediaDownloadUrl(mediaKey) {
     const parsed = new URL("/media/download", urlParseBase());
     parsed.searchParams.set("asset", mediaKey);
     return currentMediaDownloadUrl(serializeUrl(parsed, Boolean(mediaBaseUrl())));
+}
+export function isAuthorizedMediaUrl(ref) {
+    if (!ref || isPassthroughUrl(ref))
+        return false;
+    return isMediaDownloadUrl(ref) || isR18ImageUrl(ref);
+}
+export function absoluteMediaUrl(ref) {
+    return new URL(ref, urlParseBase()).toString();
 }
 export function resolveMediaUrl(ref) {
     const clean = trimRef(ref);
@@ -113,7 +113,7 @@ export function resolveMediaUrl(ref) {
     }
     const path = clean.startsWith("/") ? clean : `/media/${clean.replace(/^media\//, "")}`;
     const url = `${mediaBaseUrl()}${path}`;
-    return isMediaDownloadUrl(url) ? withAuth(url) : url;
+    return isMediaDownloadUrl(url) ? currentMediaDownloadUrl(url) : url;
 }
 export function avatarUrl(icon) {
     if (!icon)

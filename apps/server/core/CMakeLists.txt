@@ -353,6 +353,8 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
 endif()
 
 add_library(memochat_auth_security STATIC
+    common/auth/JwtAccessToken.cpp
+    common/auth/JwtAccessToken.hpp
     common/auth/PasswordHasher.cpp
     common/auth/PasswordHasher.hpp
     common/auth/RefreshToken.cpp
@@ -616,6 +618,7 @@ set(MEMOCHAT_SERVER_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 # Infra-tier include roots: the GateInfraCore persistence/cache/config/clients/
 # runtime layer that lives in GateShared/core plus shared common headers.
 set(MEMOCHAT_GATE_CORE_INCLUDE_DIRS
+    ${MEMOCHAT_SERVER_CORE_DIR}/GateShared
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/cache
     ${MEMOCHAT_SERVER_CORE_DIR}/GateShared/core/clients

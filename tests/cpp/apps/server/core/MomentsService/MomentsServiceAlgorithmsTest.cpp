@@ -12,9 +12,6 @@ bool ShouldRejectNonFriendsVisibility(int visibility);
 bool IsFriendsOnlyForeignMoment(int visibility, int viewer_uid, int author_uid);
 int SuccessHttpStatus();
 const char* JsonContentType();
-const char* UidField();
-const char* LoginTicketField();
-bool HasRequiredAuthFields(bool has_uid, bool has_login_ticket);
 bool HasValidUid(int uid);
 bool HasValidMomentId(long long moment_id);
 bool HasValidCommentId(long long comment_id);
@@ -53,11 +50,6 @@ TEST(MomentsServiceAlgorithmsTest, ExposesResponseAuthAndIdGuards)
 
     EXPECT_EQ(SuccessHttpStatus(), 200);
     EXPECT_STREQ(JsonContentType(), "application/json");
-    EXPECT_STREQ(UidField(), "uid");
-    EXPECT_STREQ(LoginTicketField(), "login_ticket");
-    EXPECT_TRUE(HasRequiredAuthFields(true, true));
-    EXPECT_FALSE(HasRequiredAuthFields(true, false));
-    EXPECT_FALSE(HasRequiredAuthFields(false, true));
     EXPECT_FALSE(HasValidUid(0));
     EXPECT_TRUE(HasValidUid(1));
     EXPECT_FALSE(HasValidMomentId(0));

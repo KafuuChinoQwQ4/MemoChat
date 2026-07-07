@@ -1,5 +1,7 @@
 #include "ProfileRequestPayloads.h"
 
+#include <QtGlobal>
+
 namespace memochat::profile_payload
 {
 bool validateProfile(const QString& nick, const QString& desc, QString* errorText)
@@ -39,9 +41,9 @@ QJsonObject buildSaveProfilePayload(int uid,
                                     const QString& desc,
                                     const QString& icon)
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     QJsonObject payload;
-    payload["uid"] = uid;
-    payload["token"] = token;
     payload["name"] = name;
     payload["nick"] = nick.trimmed();
     payload["desc"] = desc.trimmed();

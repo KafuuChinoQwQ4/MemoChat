@@ -22,11 +22,11 @@ static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginRe
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRefreshRequestDto>(
     std::array<std::string_view, 2>{"refresh_token", "client_ver"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLogoutRequestDto>(
-    std::array<std::string_view, 5>{"uid", "token", "refresh_token", "client_ver", "all_devices"}));
+    std::array<std::string_view, 3>{"refresh_token", "client_ver", "all_devices"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::ProfileUpdateRequestDto>(
-    std::array<std::string_view, 5>{"token", "name", "nick", "desc", "icon"}));
-static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::GetUserInfoRequestDto>(
-    std::array<std::string_view, 1>{"token"}));
+    std::array<std::string_view, 4>{"name", "nick", "desc", "icon"}));
+static_assert(
+    memochat::reflection::FieldNamesEqual<gateauthsupport::GetUserInfoRequestDto>(std::array<std::string_view, 0>{}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthResetPasswordResponseDto>(
     std::array<std::string_view, 4>{"error", "email", "user", "varifycode"}));
 static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthRegisterResponseDto>(
@@ -56,7 +56,7 @@ static_assert(memochat::reflection::FieldNamesEqual<gateauthsupport::AuthLoginRe
                                      "email",
                                      "uid",
                                      "user_id",
-                                     "token",
+                                     "access_token",
                                      "login_ticket",
                                      "ticket_expire_ms",
                                      "refresh_token",
@@ -165,60 +165,51 @@ TEST(AuthPublicDtosTest, DecodesRefreshRequestWithClientVersionDefault)
 
 TEST(AuthPublicDtosTest, DecodesLogoutRequestWithDefaults)
 {
-    const auto full = gateauthsupport::AuthLogoutRequestFromJsonValue(Parse(
-        R"({"uid":42,"token":"access","refresh_token":"selector.verifier","client_ver":"3.0.0","all_devices":true})"));
-    EXPECT_EQ(full.uid, 42);
-    EXPECT_EQ(full.token, "access");
+    const auto full = gateauthsupport::AuthLogoutRequestFromJsonValue(
+        Parse(R"({"refresh_token":"selector.verifier","client_ver":"3.0.0","all_devices":true})"));
     EXPECT_EQ(full.refresh_token, "selector.verifier");
     EXPECT_EQ(full.client_ver, "3.0.0");
     EXPECT_TRUE(full.all_devices);
 
-    const auto minimal = gateauthsupport::AuthLogoutRequestFromJsonValue(Parse(R"({"uid":42,"token":"access"})"));
-    EXPECT_EQ(minimal.uid, 42);
-    EXPECT_EQ(minimal.token, "access");
+    const auto minimal = gateauthsupport::AuthLogoutRequestFromJsonValue(Parse(R"({"all_devices":true})"));
     EXPECT_EQ(minimal.refresh_token, "");
     EXPECT_EQ(minimal.client_ver, "");
-    EXPECT_FALSE(minimal.all_devices);
+    EXPECT_TRUE(minimal.all_devices);
 }
 
 TEST(AuthPublicDtosTest, DecodesProfileUpdateAndRequiredKeys)
 {
     memochat::json::JsonValue parsed;
     gateauthsupport::ProfileUpdateRequestDto request;
-    ASSERT_TRUE(gateauthsupport::DecodeProfileUpdateRequest(
-        R"({"uid":42,"token":"access","name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})",
-        &request,
-        &parsed));
+    ASSERT_TRUE(
+        gateauthsupport::DecodeProfileUpdateRequest(R"({"name":"alice","nick":"Alice","desc":"hello","icon":"i.png"})",
+                                                    &request,
+                                                    &parsed));
 
-    EXPECT_EQ(request.token, "access");
     EXPECT_EQ(request.name, "alice");
     EXPECT_EQ(request.nick, "Alice");
     EXPECT_EQ(request.desc, "hello");
     EXPECT_EQ(request.icon, "i.png");
     EXPECT_TRUE(gateauthsupport::HasProfileUpdateRequiredFields(parsed));
 
-    const auto missing_name = gateauthsupport::ProfileUpdateRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"access","nick":"Alice","desc":"hello","icon":"i.png"})"));
+    const auto missing_name =
+        gateauthsupport::ProfileUpdateRequestFromJsonValue(Parse(R"({"nick":"Alice","desc":"hello","icon":"i.png"})"));
     EXPECT_EQ(missing_name.name, "");
-    EXPECT_TRUE(gateauthsupport::HasProfileUpdateRequiredFields(
-        Parse(R"({"token":"access","nick":"Alice","desc":"hello","icon":"i.png"})")));
-    EXPECT_FALSE(gateauthsupport::HasProfileUpdateRequiredFields(
-        Parse(R"({"uid":42,"nick":"Alice","desc":"hello","icon":"i.png"})")));
-    EXPECT_FALSE(gateauthsupport::HasProfileUpdateRequiredFields(Parse(R"({"uid":42,"nick":"Alice","icon":"i.png"})")));
+    EXPECT_TRUE(
+        gateauthsupport::HasProfileUpdateRequiredFields(Parse(R"({"nick":"Alice","desc":"hello","icon":"i.png"})")));
+    EXPECT_FALSE(gateauthsupport::HasProfileUpdateRequiredFields(Parse(R"({"nick":"Alice","icon":"i.png"})")));
 }
 
 TEST(AuthPublicDtosTest, DecodesGetUserInfoRequest)
 {
     gateauthsupport::GetUserInfoRequestDto request;
-    ASSERT_TRUE(gateauthsupport::DecodeGetUserInfoRequest(R"({"uid":42,"token":"access"})", &request));
-    EXPECT_EQ(request.token, "access");
+    ASSERT_TRUE(gateauthsupport::DecodeGetUserInfoRequest(R"({})", &request));
 }
 
 TEST(AuthPublicDtosTest, PreservesRepresentativeWrongTypeDefaults)
 {
-    const auto profile = gateauthsupport::ProfileUpdateRequestFromJsonValue(
-        Parse(R"({"uid":"bad","name":false,"nick":7,"desc":{},"icon":[]})"));
-    EXPECT_EQ(profile.token, "");
+    const auto profile =
+        gateauthsupport::ProfileUpdateRequestFromJsonValue(Parse(R"({"name":false,"nick":7,"desc":{},"icon":[]})"));
     EXPECT_EQ(profile.name, "");
     EXPECT_EQ(profile.nick, "");
     EXPECT_EQ(profile.desc, "");
@@ -325,9 +316,7 @@ TEST(AuthPublicDtosTest, ValidatesRefreshTokenShapeAndRateLimitSubject)
 
 TEST(AuthPublicDtosTest, ValidatesLogoutTokensBeforeRedis)
 {
-    gateauthsupport::AuthLogoutRequestDto logout_request{.uid = 42,
-                                                         .token = "access-token",
-                                                         .refresh_token = ValidRefreshToken(),
+    gateauthsupport::AuthLogoutRequestDto logout_request{.refresh_token = ValidRefreshToken(),
                                                          .client_ver = "3.0.0",
                                                          .all_devices = false};
     EXPECT_TRUE(gateauthsupport::ValidateAuthLogoutRequest(logout_request).ok());
@@ -340,30 +329,20 @@ TEST(AuthPublicDtosTest, ValidatesLogoutTokensBeforeRedis)
     logout_request.all_devices = true;
     EXPECT_TRUE(gateauthsupport::ValidateAuthLogoutRequest(logout_request).ok());
 
-    logout_request.token =
-        std::string(gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::Token) + 1, 't');
+    logout_request.refresh_token =
+        std::string(gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::RefreshToken) + 1, 't');
     result = gateauthsupport::ValidateAuthLogoutRequest(logout_request);
     EXPECT_EQ(result.code, gateauthsupport::AuthInputValidationCode::TooLong);
-    EXPECT_EQ(result.field, gateauthsupport::AuthInputField::Token);
+    EXPECT_EQ(result.field, gateauthsupport::AuthInputField::RefreshToken);
 }
 
 TEST(AuthPublicDtosTest, ValidatesProfileUpdateFieldsBeforeTokenLookupOrDb)
 {
-    gateauthsupport::ProfileUpdateRequestDto request{.token = "access-token",
-                                                     .name = "alice",
-                                                     .nick = "Alice",
-                                                     .desc = "",
-                                                     .icon = ""};
+    gateauthsupport::ProfileUpdateRequestDto request{.name = "alice", .nick = "Alice", .desc = "", .icon = ""};
     EXPECT_TRUE(gateauthsupport::ValidateProfileUpdateRequest(request).ok());
 
-    request.token = std::string(gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::Token) + 1, 't');
-    auto result = gateauthsupport::ValidateProfileUpdateRequest(request);
-    EXPECT_EQ(result.code, gateauthsupport::AuthInputValidationCode::TooLong);
-    EXPECT_EQ(result.field, gateauthsupport::AuthInputField::Token);
-
-    request.token = "access-token";
     request.name = std::string(gateauthsupport::AuthInputMaxLength(gateauthsupport::AuthInputField::User) + 1, 'n');
-    result = gateauthsupport::ValidateProfileUpdateRequest(request);
+    auto result = gateauthsupport::ValidateProfileUpdateRequest(request);
     EXPECT_EQ(result.field, gateauthsupport::AuthInputField::User);
 
     request.name = "alice";
@@ -458,6 +437,7 @@ TEST(AuthPublicDtosTest, WritesLogoutResponseWithoutSecrets)
     EXPECT_EQ(memochat::json::glaze_safe_get<int>(root, "uid", 0), 42);
     EXPECT_TRUE(memochat::json::glaze_safe_get<bool>(root, "all_devices", false));
     EXPECT_FALSE(memochat::json::glaze_has_key(root, "token"));
+    EXPECT_FALSE(memochat::json::glaze_has_key(root, "access_token"));
     EXPECT_FALSE(memochat::json::glaze_has_key(root, "refresh_token"));
     EXPECT_FALSE(memochat::json::glaze_has_key(root, "login_ticket"));
 }

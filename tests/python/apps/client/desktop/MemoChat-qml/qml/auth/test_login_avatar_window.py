@@ -49,8 +49,14 @@ class LoginAvatarWindowTests(unittest.TestCase):
         self.assertIn("isGateRelativeMediaDownloadUrl", source)
         self.assertIn("withGateMediaUrlPrefix", source)
         # normalizeRelativeMediaDownloadUrl now checks prefix is non-empty before
-        # passing to attachMediaDownloadAuth (avatar-bug fix: return {} when unset).
+        # using the Bearer-auth media cache bridge (avatar-bug fix: return {} when unset).
         self.assertIn("return attachMediaDownloadAuth(full);", source)
+        self.assertIn("return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());", source)
+        self.assertIn("inline QString stripMediaDownloadLegacyAuthQuery", source)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("uid"));', source)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("token"));', source)
+        self.assertNotIn('query.addQueryItem("uid"', source)
+        self.assertNotIn('query.addQueryItem("token"', source)
         self.assertLess(
             source.index("isGateRelativeMediaDownloadUrl(icon)"),
             source.index("if (QDir::isAbsolutePath(icon))"),

@@ -44,7 +44,6 @@ void AgentController::sendStreamMessage(const QString& content)
     emit streamingChanged();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["session_id"] = sessionId;
     payload["content"] = content;
     payload["model_type"] = _current_model_backend;

@@ -41,11 +41,6 @@ int NormalizeTokenTtlSec(int value)
     return value < 300 ? 300 : value;
 }
 
-bool HasValidAuthRequest(int uid, bool token_empty)
-{
-    return uid > 0 && !token_empty;
-}
-
 bool HasValidStartPeer(int uid, int peer_uid)
 {
     return peer_uid > 0 && uid != peer_uid;

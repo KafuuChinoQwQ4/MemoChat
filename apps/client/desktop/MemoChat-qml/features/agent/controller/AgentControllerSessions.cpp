@@ -35,7 +35,6 @@ void AgentController::loadSessions()
     _pending_requests.track(reqId, AgentRequestKind::ListSessions, QString(), uid);
     QUrl url = agentApiUrl(QStringLiteral("/ai/session/list"));
     QUrlQuery query;
-    query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("model_type", _current_model_backend);
     query.addQueryItem("model_name", _current_model_name);
     addAuthToQuery(query);
@@ -54,7 +53,6 @@ void AgentController::createSession()
         emit gameStateChanged();
     }
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["model_type"] = _current_model_backend;
     payload["model_name"] = _current_model_name;
     addAuthToPayload(payload);
@@ -90,7 +88,6 @@ void AgentController::deleteSession(const QString& sessionId)
     }
     auto uid = _gateway->userMgr()->GetUid();
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["session_id"] = sessionId;
     addAuthToPayload(payload);
 
@@ -118,7 +115,6 @@ void AgentController::renameSession(const QString& sessionId, const QString& tit
 
     auto uid = _gateway->userMgr()->GetUid();
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["session_id"] = trimmedSessionId;
     payload["title"] = trimmedTitle;
     addAuthToPayload(payload);
@@ -135,7 +131,6 @@ void AgentController::loadHistory(const QString& sessionId)
     auto uid = _gateway->userMgr()->GetUid();
     QUrl url = agentApiUrl(QStringLiteral("/ai/history"));
     QUrlQuery query;
-    query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("session_id", sessionId);
     query.addQueryItem("limit", "50");
     query.addQueryItem("offset", "0");

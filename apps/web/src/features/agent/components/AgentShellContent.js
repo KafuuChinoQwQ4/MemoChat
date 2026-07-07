@@ -169,10 +169,6 @@ export function AgentShellContent() {
         setModelsLoading(true);
         getGateway().http.get(ENDPOINTS.aiModelList, {
             signal: controller.signal,
-            headers: {
-                "X-User-Id": String(uid),
-                "X-User-Token": token,
-            },
         }).then((response) => {
             if (cancelled)
                 return;
@@ -279,7 +275,6 @@ export function AgentShellContent() {
         try {
             const sse = getGateway().sse;
             await sse.start(ENDPOINTS.aiChatStream, {
-                uid,
                 content: userMsg.content,
                 stream: true,
                 model_type: modelSnapshot.modelType,
@@ -288,7 +283,6 @@ export function AgentShellContent() {
                     messages: requestMessages.map((m) => ({ role: m.role, content: m.content })),
                 },
             }, {
-                uid,
                 token: token ?? undefined,
                 onChunk: (chunk) => {
                     if (chunk.chunk) {

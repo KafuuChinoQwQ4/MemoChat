@@ -1,7 +1,10 @@
 #include "support/UserTokenValidator.hpp"
 
 #include "RedisMgr.hpp"
+#include "ConfigMgr.hpp"
 #include "const.hpp"
+#include "auth/AuthSecret.hpp"
+#include "auth/JwtAccessToken.hpp"
 
 #include <array>
 #include <charconv>
@@ -72,11 +75,44 @@ bool ParsePositiveInt(std::string_view value, int& parsed)
     parsed = out;
     return true;
 }
+
+std::string JwtAccessSecret()
+{
+    auto secret = ConfigMgr::Inst().GetValue("AuthToken", "JwtSecret");
+    return secret.empty() ? std::string(memochat::auth::kWellKnownDevJwtAccessSecret) : secret;
+}
+
+std::string JwtAccessIssuer()
+{
+    auto issuer = ConfigMgr::Inst().GetValue("AuthToken", "JwtIssuer");
+    return issuer.empty() ? "memochat" : issuer;
+}
+
+std::string JwtAccessAudience()
+{
+    auto audience = ConfigMgr::Inst().GetValue("AuthToken", "JwtAudience");
+    return audience.empty() ? "memochat-http" : audience;
+}
+
+bool DecodeCurrentAccessToken(const std::string& token, JwtAccessTokenClaims& claims)
+{
+    JwtAccessTokenValidationOptions options;
+    options.issuer = JwtAccessIssuer();
+    options.audience = JwtAccessAudience();
+    options.allowed_clock_skew_sec = 30;
+    return DecodeAndVerifyAccessToken(token, JwtAccessSecret(), options, claims, nullptr);
+}
 } // namespace
 
 bool ValidateUserToken(int uid, const std::string& token)
 {
     if (!memochat::gate::auth::modules::ShouldValidateUserToken(uid, token.empty()))
+    {
+        return false;
+    }
+    JwtAccessTokenClaims claims;
+    const bool jwt_valid = DecodeCurrentAccessToken(token, claims);
+    if (!memochat::gate::auth::modules::ShouldAcceptJwtAccessClaims(jwt_valid, uid, claims.uid))
     {
         return false;
     }
@@ -91,6 +127,11 @@ bool ValidateUserToken(int uid, const std::string& token)
 bool ResolveUserIdFromToken(const std::string& token, int& uid)
 {
     uid = 0;
+    JwtAccessTokenClaims claims;
+    if (!DecodeCurrentAccessToken(token, claims))
+    {
+        return false;
+    }
     const auto lookup_key = UserTokenLookupKey(token);
     if (lookup_key.empty())
     {
@@ -102,7 +143,8 @@ bool ResolveUserIdFromToken(const std::string& token, int& uid)
         return false;
     }
     int resolved_uid = 0;
-    if (!ParsePositiveInt(raw_uid, resolved_uid) || !ValidateUserToken(resolved_uid, token))
+    if (!ParsePositiveInt(raw_uid, resolved_uid) || resolved_uid != claims.uid ||
+        !ValidateUserToken(resolved_uid, token))
     {
         return false;
     }
@@ -113,6 +155,12 @@ bool ResolveUserIdFromToken(const std::string& token, int& uid)
 bool StoreUserToken(int uid, const std::string& token, int ttl_seconds)
 {
     if (!memochat::gate::auth::modules::ShouldValidateUserToken(uid, token.empty()) || ttl_seconds <= 0)
+    {
+        return false;
+    }
+    JwtAccessTokenClaims claims;
+    const bool jwt_valid = DecodeCurrentAccessToken(token, claims);
+    if (!memochat::gate::auth::modules::ShouldAcceptJwtAccessClaims(jwt_valid, uid, claims.uid))
     {
         return false;
     }

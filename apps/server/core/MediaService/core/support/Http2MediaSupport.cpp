@@ -261,9 +261,10 @@ std::filesystem::path ChunkDirForLocal(const std::string& upload_id)
     return ChunkRootLocal() / upload_id;
 }
 
-bool ValidateUserTokenLocal(int uid, const std::string& token)
+bool ResolveAccessTokenUidLocal(const std::string& access_token, int& uid)
 {
-    return memochat::auth::ValidateUserToken(uid, token);
+    uid = 0;
+    return memochat::auth::ResolveUserIdFromToken(access_token, uid);
 }
 
 std::set<int> ListUploadedChunkIndexesLocal(const std::filesystem::path& chunk_dir)
@@ -452,13 +453,7 @@ std::string DecodeBase64(const std::string& input)
     return DecodeBase64Local(input);
 }
 
-bool ValidateUserToken(int uid, const std::string& token)
-{
-    return ValidateUserTokenLocal(uid, token);
-}
-
-MediaResult HandleUploadMediaInit(int uid,
-                                  const std::string& token,
+MediaResult HandleUploadMediaInit(const std::string& access_token,
                                   const std::string& media_type,
                                   const std::string& file_name,
                                   const std::string& mime,
@@ -469,7 +464,8 @@ MediaResult HandleUploadMediaInit(int uid,
                                   bool grant_friends)
 {
     MediaResult result;
-    if (uid <= 0 || file_name.empty() || file_size <= 0 || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (file_name.empty() || file_size <= 0 || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -540,8 +536,7 @@ MediaResult HandleUploadMediaInit(int uid,
     return result;
 }
 
-MediaResult HandleUploadMediaChunk(int uid,
-                                   const std::string& token,
+MediaResult HandleUploadMediaChunk(const std::string& access_token,
                                    const std::string& upload_id,
                                    int index,
                                    const std::string& chunk_data_base64)
@@ -574,17 +569,17 @@ MediaResult HandleUploadMediaChunk(int uid,
         return result;
     }
 
-    return HandleUploadMediaChunkBytes(uid, token, upload_id, index, binary);
+    return HandleUploadMediaChunkBytes(access_token, upload_id, index, binary);
 }
 
-MediaResult HandleUploadMediaChunkBytes(int uid,
-                                        const std::string& token,
+MediaResult HandleUploadMediaChunkBytes(const std::string& access_token,
                                         const std::string& upload_id,
                                         int index,
                                         std::string_view chunk_data)
 {
     MediaResult result;
-    if (uid <= 0 || upload_id.empty() || index < 0 || chunk_data.empty() || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (upload_id.empty() || index < 0 || chunk_data.empty() || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -660,10 +655,11 @@ MediaResult HandleUploadMediaChunkBytes(int uid,
     return result;
 }
 
-MediaResult HandleUploadMediaStatus(int uid, const std::string& token, const std::string& upload_id)
+MediaResult HandleUploadMediaStatus(const std::string& access_token, const std::string& upload_id)
 {
     MediaResult result;
-    if (uid <= 0 || upload_id.empty() || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (upload_id.empty() || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -699,10 +695,11 @@ MediaResult HandleUploadMediaStatus(int uid, const std::string& token, const std
     return result;
 }
 
-MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const std::string& upload_id)
+MediaResult HandleUploadMediaComplete(const std::string& access_token, const std::string& upload_id)
 {
     MediaResult result;
-    if (uid <= 0 || upload_id.empty() || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (upload_id.empty() || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -844,8 +841,7 @@ MediaResult HandleUploadMediaComplete(int uid, const std::string& token, const s
     return result;
 }
 
-MediaResult HandleUploadMediaSimple(int uid,
-                                    const std::string& token,
+MediaResult HandleUploadMediaSimple(const std::string& access_token,
                                     const std::string& media_type,
                                     const std::string& file_name,
                                     const std::string& mime,
@@ -856,7 +852,8 @@ MediaResult HandleUploadMediaSimple(int uid,
                                     bool grant_friends)
 {
     MediaResult result;
-    if (uid <= 0 || file_name.empty() || data_base64.empty() || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (file_name.empty() || data_base64.empty() || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";
@@ -970,10 +967,11 @@ MediaResult HandleUploadMediaSimple(int uid,
     return result;
 }
 
-MediaResult HandleMediaDownloadInfo(int uid, const std::string& token, const std::string& media_key)
+MediaResult HandleMediaDownloadInfo(const std::string& access_token, const std::string& media_key)
 {
     MediaResult result;
-    if (uid <= 0 || media_key.empty() || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (media_key.empty() || !ResolveAccessTokenUidLocal(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid or params invalid";

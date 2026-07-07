@@ -74,7 +74,7 @@ export async function postLoginBootstrap(creds) {
     }
     session.setLogin({
         uid: res.uid,
-        token: res.token,
+        token: res.access_token,
         loginTicket: res.login_ticket,
         ticketExpireMs: res.ticket_expire_ms,
         refreshToken: res.refresh_token,
@@ -135,7 +135,7 @@ async function connectAndChatLogin(gateway, res) {
         const serverInfo = {
             transport,
             loginTicket: res.login_ticket,
-            token: res.token,
+            token: res.access_token,
             uid: res.uid,
             protocolVersion: res.protocol_version,
         };

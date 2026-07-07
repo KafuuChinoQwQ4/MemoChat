@@ -1,7 +1,7 @@
 /**
  * sessionStore — Zustand store for authentication + connection state.
  * Mirrors ShellViewModel session fields + AppChatRecoveryState machine.
- * Memory-only for token/loginTicket; refreshToken via tokenStorage.
+ * Memory-only for access token/loginTicket; refreshToken via tokenStorage.
  */
 import { create } from "zustand";
 import { tokenStorage } from "./tokenStorage";

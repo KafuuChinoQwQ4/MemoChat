@@ -15,15 +15,15 @@ describe("media URL resolution", () => {
             profile: { uid: 42, name: "tester", email: "t@example.test", icon: "" },
         });
     });
-    it("keeps media download paths on /media/download and appends uid plus token", () => {
-        expect(resolveMediaUrl("media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key&uid=42&token=tok+value");
-        expect(resolveMediaUrl("/media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key&uid=42&token=tok+value");
+    it("keeps media download paths on /media/download without embedding credentials", () => {
+        expect(resolveMediaUrl("media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key");
+        expect(resolveMediaUrl("/media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key");
     });
     it("normalizes legacy localhost media download URLs to the current gateway path", () => {
-        expect(resolveMediaUrl("http://127.0.0.1:8080/media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key&uid=42&token=tok+value");
+        expect(resolveMediaUrl("http://127.0.0.1:8080/media/download?asset=avatar-key")).toBe("/media/download?asset=avatar-key");
     });
-    it("turns bare media keys into authenticated download URLs", () => {
-        expect(resolveMediaUrl("abc-def_1234567890")).toBe("/media/download?asset=abc-def_1234567890&uid=42&token=tok+value");
+    it("turns bare media keys into canonical download URLs", () => {
+        expect(resolveMediaUrl("abc-def_1234567890")).toBe("/media/download?asset=abc-def_1234567890");
     });
     it("keeps non-download media paths same-origin when no media base URL is configured", () => {
         expect(resolveMediaUrl("avatars/a.png")).toBe("/media/avatars/a.png");

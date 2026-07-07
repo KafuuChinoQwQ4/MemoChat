@@ -9,31 +9,27 @@
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadInitRequestDto>(
-    std::array<std::string_view, 10>{"uid",
-                                     "token",
-                                     "media_type",
-                                     "file_name",
-                                     "mime",
-                                     "file_size",
-                                     "grant_uids",
-                                     "grant_group_id",
-                                     "grant_public",
-                                     "grant_friends"}));
+    std::array<std::string_view, 8>{"media_type",
+                                    "file_name",
+                                    "mime",
+                                    "file_size",
+                                    "grant_uids",
+                                    "grant_group_id",
+                                    "grant_public",
+                                    "grant_friends"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadChunkJsonRequestDto>(
-    std::array<std::string_view, 5>{"uid", "token", "upload_id", "index", "data_base64"}));
+    std::array<std::string_view, 3>{"upload_id", "index", "data_base64"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadCompleteRequestDto>(
-    std::array<std::string_view, 3>{"uid", "token", "upload_id"}));
+    std::array<std::string_view, 1>{"upload_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadSimpleRequestDto>(
-    std::array<std::string_view, 10>{"uid",
-                                     "token",
-                                     "media_type",
-                                     "file_name",
-                                     "mime",
-                                     "data_base64",
-                                     "grant_uids",
-                                     "grant_group_id",
-                                     "grant_public",
-                                     "grant_friends"}));
+    std::array<std::string_view, 8>{"media_type",
+                                    "file_name",
+                                    "mime",
+                                    "data_base64",
+                                    "grant_uids",
+                                    "grant_group_id",
+                                    "grant_public",
+                                    "grant_friends"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadInitResponseDto>(
     std::array<std::string_view, 4>{"upload_id", "chunk_size", "total_chunks", "uploaded_chunks"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUploadChunkResponseDto>(
@@ -44,15 +40,13 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::media::MediaUpload
     std::array<std::string_view, 6>{"media_key", "media_type", "file_name", "mime", "size", "url"}));
 #endif
 
-TEST(MediaPublicDtosTest, DecodesUploadInitRequestWithExistingWireFieldNames)
+TEST(MediaPublicDtosTest, DecodesUploadInitRequestBusinessFieldsOnly)
 {
     memochat::media::MediaUploadInitRequestDto request;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":42,"token":"token-1","media_type":"image","file_name":"photo.png","mime":"image/png","file_size":4096})",
+        R"({"media_type":"image","file_name":"photo.png","mime":"image/png","file_size":4096})",
         &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.media_type, "image");
     EXPECT_EQ(request.file_name, "photo.png");
     EXPECT_EQ(request.mime, "image/png");
@@ -67,7 +61,7 @@ TEST(MediaPublicDtosTest, DecodesUploadInitGrantAudience)
 {
     memochat::media::MediaUploadInitRequestDto request;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":42,"token":"token-1","file_name":"photo.png","file_size":4096,"grant_uids":[7,7,0,-1,8],"grant_group_id":99,"grant_public":true,"grant_friends":true})",
+        R"({"file_name":"photo.png","file_size":4096,"grant_uids":[7,7,0,-1,8],"grant_group_id":99,"grant_public":true,"grant_friends":true})",
         &request));
 
     ASSERT_EQ(request.grant_uids.size(), 2U);
@@ -81,27 +75,23 @@ TEST(MediaPublicDtosTest, DecodesUploadInitGrantAudience)
 TEST(MediaPublicDtosTest, DefaultsUploadInitMediaTypeToFile)
 {
     memochat::media::MediaUploadInitRequestDto request;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":42,"token":"token-1","file_name":"doc.bin","file_size":1})",
-        &request));
+    ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(R"({"file_name":"doc.bin","file_size":1})", &request));
     EXPECT_EQ(request.media_type, "file");
     EXPECT_TRUE(request.mime.empty());
 
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":42,"token":"token-1","media_type":"","file_name":"doc.bin","file_size":1})",
-        &request));
+    ASSERT_TRUE(
+        memochat::media::DecodeMediaUploadInitRequest(R"({"media_type":"","file_name":"doc.bin","file_size":1})",
+                                                      &request));
     EXPECT_EQ(request.media_type, "file");
 }
 
-TEST(MediaPublicDtosTest, DecodesChunkJsonRequestWithExistingWireFieldNames)
+TEST(MediaPublicDtosTest, DecodesChunkJsonRequestBusinessFieldsOnly)
 {
     memochat::media::MediaUploadChunkJsonRequestDto request;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadChunkJsonRequest(
-        R"({"uid":42,"token":"token-1","upload_id":"upload-1","index":3,"data_base64":"YWJj"})",
-        &request));
+    ASSERT_TRUE(
+        memochat::media::DecodeMediaUploadChunkJsonRequest(R"({"upload_id":"upload-1","index":3,"data_base64":"YWJj"})",
+                                                           &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.upload_id, "upload-1");
     EXPECT_EQ(request.index, 3);
     EXPECT_EQ(request.data_base64, "YWJj");
@@ -110,21 +100,18 @@ TEST(MediaPublicDtosTest, DecodesChunkJsonRequestWithExistingWireFieldNames)
 TEST(MediaPublicDtosTest, DefaultsChunkJsonIndexToMinusOne)
 {
     memochat::media::MediaUploadChunkJsonRequestDto request;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadChunkJsonRequest(
-        R"({"uid":42,"token":"token-1","upload_id":"upload-1","data_base64":"YWJj"})",
-        &request));
+    ASSERT_TRUE(memochat::media::DecodeMediaUploadChunkJsonRequest(R"({"upload_id":"upload-1","data_base64":"YWJj"})",
+                                                                   &request));
 
     EXPECT_EQ(request.index, -1);
 }
 
-TEST(MediaPublicDtosTest, KeepsLegacySafeGetDefaultsForWrongTypes)
+TEST(MediaPublicDtosTest, KeepsSafeGetDefaultsForWrongTypes)
 {
     memochat::media::MediaUploadInitRequestDto init;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":"bad","token":7,"media_type":12,"file_name":false,"mime":{},"file_size":"bad"})",
+        R"({"media_type":12,"file_name":false,"mime":{},"file_size":"bad"})",
         &init));
-    EXPECT_EQ(init.uid, 0);
-    EXPECT_TRUE(init.token.empty());
     EXPECT_EQ(init.media_type, "file");
     EXPECT_TRUE(init.file_name.empty());
     EXPECT_TRUE(init.mime.empty());
@@ -135,37 +122,29 @@ TEST(MediaPublicDtosTest, KeepsLegacySafeGetDefaultsForWrongTypes)
     EXPECT_FALSE(init.grant_friends);
 
     memochat::media::MediaUploadChunkJsonRequestDto chunk;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadChunkJsonRequest(
-        R"({"uid":"bad","token":7,"upload_id":false,"index":"bad","data_base64":{}})",
-        &chunk));
-    EXPECT_EQ(chunk.uid, 0);
-    EXPECT_TRUE(chunk.token.empty());
+    ASSERT_TRUE(
+        memochat::media::DecodeMediaUploadChunkJsonRequest(R"({"upload_id":false,"index":"bad","data_base64":{}})",
+                                                           &chunk));
     EXPECT_TRUE(chunk.upload_id.empty());
     EXPECT_EQ(chunk.index, -1);
     EXPECT_TRUE(chunk.data_base64.empty());
 }
 
-TEST(MediaPublicDtosTest, DecodesCompleteRequestWithExistingWireFieldNames)
+TEST(MediaPublicDtosTest, DecodesCompleteRequestBusinessFieldsOnly)
 {
     memochat::media::MediaUploadCompleteRequestDto request;
-    ASSERT_TRUE(
-        memochat::media::DecodeMediaUploadCompleteRequest(R"({"uid":42,"token":"token-1","upload_id":"upload-1"})",
-                                                          &request));
+    ASSERT_TRUE(memochat::media::DecodeMediaUploadCompleteRequest(R"({"upload_id":"upload-1"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.upload_id, "upload-1");
 }
 
-TEST(MediaPublicDtosTest, DecodesSimpleRequestWithExistingWireFieldNames)
+TEST(MediaPublicDtosTest, DecodesSimpleRequestBusinessFieldsOnly)
 {
     memochat::media::MediaUploadSimpleRequestDto request;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadSimpleRequest(
-        R"({"uid":42,"token":"token-1","media_type":"image","file_name":"photo.png","mime":"image/png","data_base64":"YWJj"})",
+        R"({"media_type":"image","file_name":"photo.png","mime":"image/png","data_base64":"YWJj"})",
         &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.media_type, "image");
     EXPECT_EQ(request.file_name, "photo.png");
     EXPECT_EQ(request.mime, "image/png");
@@ -180,7 +159,7 @@ TEST(MediaPublicDtosTest, DecodesSimpleRequestGrantAudience)
 {
     memochat::media::MediaUploadSimpleRequestDto request;
     ASSERT_TRUE(memochat::media::DecodeMediaUploadSimpleRequest(
-        R"({"uid":42,"token":"token-1","file_name":"photo.png","data_base64":"YWJj","grant_uids":[99,12,12],"grant_group_id":123,"grant_public":false,"grant_friends":true})",
+        R"({"file_name":"photo.png","data_base64":"YWJj","grant_uids":[99,12,12],"grant_group_id":123,"grant_public":false,"grant_friends":true})",
         &request));
 
     ASSERT_EQ(request.grant_uids.size(), 2U);
@@ -194,14 +173,13 @@ TEST(MediaPublicDtosTest, DecodesSimpleRequestGrantAudience)
 TEST(MediaPublicDtosTest, DefaultsSimpleMediaTypeToFile)
 {
     memochat::media::MediaUploadSimpleRequestDto request;
-    ASSERT_TRUE(memochat::media::DecodeMediaUploadSimpleRequest(
-        R"({"uid":42,"token":"token-1","file_name":"doc.bin","data_base64":"YWJj"})",
-        &request));
+    ASSERT_TRUE(
+        memochat::media::DecodeMediaUploadSimpleRequest(R"({"file_name":"doc.bin","data_base64":"YWJj"})", &request));
     EXPECT_EQ(request.media_type, "file");
     EXPECT_TRUE(request.mime.empty());
 
     ASSERT_TRUE(memochat::media::DecodeMediaUploadSimpleRequest(
-        R"({"uid":42,"token":"token-1","media_type":"","file_name":"doc.bin","data_base64":"YWJj"})",
+        R"({"media_type":"","file_name":"doc.bin","data_base64":"YWJj"})",
         &request));
     EXPECT_EQ(request.media_type, "file");
 }
@@ -211,25 +189,25 @@ TEST(MediaPublicDtosTest, RejectsMalformedJsonAndNullOutputs)
     memochat::media::MediaUploadInitRequestDto init;
     EXPECT_FALSE(memochat::media::DecodeMediaUploadInitRequest("not-json", &init));
     EXPECT_FALSE(memochat::media::DecodeMediaUploadInitRequest(
-        R"({"uid":42})",
+        R"({})",
         static_cast<memochat::media::MediaUploadInitRequestDto*>(nullptr)));
 
     memochat::media::MediaUploadChunkJsonRequestDto chunk;
     EXPECT_FALSE(memochat::media::DecodeMediaUploadChunkJsonRequest("not-json", &chunk));
     EXPECT_FALSE(memochat::media::DecodeMediaUploadChunkJsonRequest(
-        R"({"uid":42})",
+        R"({})",
         static_cast<memochat::media::MediaUploadChunkJsonRequestDto*>(nullptr)));
 
     memochat::media::MediaUploadCompleteRequestDto complete;
     EXPECT_FALSE(memochat::media::DecodeMediaUploadCompleteRequest("not-json", &complete));
     EXPECT_FALSE(memochat::media::DecodeMediaUploadCompleteRequest(
-        R"({"uid":42})",
+        R"({})",
         static_cast<memochat::media::MediaUploadCompleteRequestDto*>(nullptr)));
 
     memochat::media::MediaUploadSimpleRequestDto simple;
     EXPECT_FALSE(memochat::media::DecodeMediaUploadSimpleRequest("not-json", &simple));
     EXPECT_FALSE(memochat::media::DecodeMediaUploadSimpleRequest(
-        R"({"uid":42})",
+        R"({})",
         static_cast<memochat::media::MediaUploadSimpleRequestDto*>(nullptr)));
 }
 

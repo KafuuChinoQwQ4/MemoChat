@@ -3,8 +3,6 @@
 #include "IconPathUtils.h"
 #include "MessageContentCodec.h"
 
-#include <QUrlQuery>
-
 void ChatMessageModel::setDownloadAuthContext(int uid, const QString& token)
 {
     if (_download_uid == uid && _download_token == token)
@@ -31,27 +29,17 @@ void ChatMessageModel::setDownloadAuthContext(int uid, const QString& token)
 }
 QString ChatMessageModel::withDownloadAuth(const QString& urlText) const
 {
-    if (_download_uid <= 0 || _download_token.trimmed().isEmpty())
-    {
-        return urlText;
-    }
     QUrl url(urlText);
     if (!url.isValid())
     {
         return urlText;
     }
     const QString path = url.path();
-    if (!path.endsWith("/media/download") && !path.contains("/media/download"))
+    if (!isMediaDownloadPath(path))
     {
         return urlText;
     }
-    QUrlQuery query(url);
-    query.removeQueryItem("uid");
-    query.removeQueryItem("token");
-    query.addQueryItem("uid", QString::number(_download_uid));
-    query.addQueryItem("token", _download_token);
-    url.setQuery(query);
-    return url.toString();
+    return resolveMediaDownloadForQml(urlText, _download_token);
 }
 
 QString ChatMessageModel::normalizeSenderIcon(const QString& icon) const

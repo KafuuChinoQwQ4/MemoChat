@@ -6,6 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `BearerAccessAuthAlgorithmsConsumer.cpp` | 在测试目标中直接 import Bearer access token 解析算法 module，暴露 header 匹配和 token 定位给 GTest。 |
+| `BearerAccessAuthAlgorithmsTest.cpp` | 验证 Authorization Bearer 头解析算法的大小写匹配、空白处理和旧 scheme 拒绝。 |
 | `CMakeLists.txt` | 注册 GateShared 测试目标的 CMake 配置。 |
 | `ChatGrpcClientAlgorithmsConsumer.cpp` | 在测试目标中直接 import Gate Chat gRPC 客户端算法 module，暴露连接池、span 和 RPC guard 给 GTest。 |
 | `ChatGrpcClientAlgorithmsTest.cpp` | 验证 Gate Chat gRPC 客户端算法 module 的连接池默认值、span 元数据和 RPC 失败 guard。 |
@@ -38,8 +40,8 @@
 | `RouteRegistryTest.cpp` | 验证 GateRuntimeCore 内 RouteRegistry 的 exact/prefix 分发行为，覆盖导入模块后的真实路由算法路径。 |
 | `RouteSchemaCatalogTest.cpp` | 验证路由 schema 目录聚合：模块/路由顺序、文本与 JSON 渲染（含转义）及跨模块重复路由检测。 |
 | `RouteSchemaTest.cpp` | 验证路由 DTO schema helper 的反射字段清单、无 body 路由与 snapshot 输出。 |
-| `UserTokenValidatorAlgorithmsConsumer.cpp` | 在测试目标中直接 import 用户 token 校验算法 module，暴露前置 guard 和 Redis value 接受判断给 GTest。 |
-| `UserTokenValidatorAlgorithmsTest.cpp` | 验证用户 token 校验算法 module 的 uid/token guard 与 Redis 命中判断。 |
+| `UserTokenValidatorAlgorithmsConsumer.cpp` | 在测试目标中直接 import 用户 access token 校验算法 module，暴露前置 guard 和 Redis value 接受判断给 GTest。 |
+| `UserTokenValidatorAlgorithmsTest.cpp` | 验证用户 access token 校验算法 module 的 JWT/current-token guard 与 Redis 命中判断。 |
 | `main.cpp` | GTest 测试入口。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

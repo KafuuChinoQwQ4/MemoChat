@@ -22,10 +22,6 @@ export class SseStreamClient {
             };
             if (opts.token) {
                 headers["Authorization"] = `Bearer ${opts.token}`;
-                headers["X-User-Token"] = opts.token;
-            }
-            if (opts.uid !== null && opts.uid !== undefined && opts.uid > 0) {
-                headers["X-User-Id"] = String(opts.uid);
             }
             const res = await fetch(`${runtimeConfig.aiBaseUrl}${path}`, {
                 method: "POST",

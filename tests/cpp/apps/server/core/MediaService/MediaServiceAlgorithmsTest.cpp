@@ -42,7 +42,6 @@ bool HasValidSimpleUploadRequest(int uid, bool file_name_empty, bool encoded_emp
 bool ShouldRejectEmptyBinary(bool binary_empty);
 bool HasDownloadLocator(bool media_key_empty, bool legacy_file_empty);
 bool ShouldRejectLegacyFileDownload(bool legacy_file_empty);
-bool HasRequiredDownloadAuth(bool uid_raw_empty, bool token_empty);
 bool HasValidDownloadAuth(int uid, bool token_valid);
 bool IsReadableAsset(bool asset_loaded, int status, long long deleted_at_ms);
 bool ShouldAuditCrossOwner(int owner_uid, int uid);
@@ -149,8 +148,6 @@ TEST(MediaServiceAlgorithmsTest, ExposesSessionSimpleUploadAndDownloadGuards)
     EXPECT_FALSE(HasDownloadLocator(true, true));
     EXPECT_TRUE(ShouldRejectLegacyFileDownload(false));
     EXPECT_FALSE(ShouldRejectLegacyFileDownload(true));
-    EXPECT_TRUE(HasRequiredDownloadAuth(false, false));
-    EXPECT_FALSE(HasRequiredDownloadAuth(true, false));
     EXPECT_TRUE(HasValidDownloadAuth(1, true));
     EXPECT_FALSE(HasValidDownloadAuth(0, true));
     EXPECT_FALSE(HasValidDownloadAuth(1, false));

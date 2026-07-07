@@ -56,45 +56,16 @@ ReqId AgentController::nextAgentHttpRequestId()
     return static_cast<ReqId>(_next_agent_http_request_id++);
 }
 
-QString AgentController::currentAuthToken() const
-{
-    return _gateway && _gateway->userMgr() ? _gateway->userMgr()->GetToken() : QString();
-}
-
 void AgentController::addAuthToPayload(QJsonObject& payload) const
 {
-    if (!payload.contains(QStringLiteral("uid")))
-    {
-        const int uid = currentUid();
-        if (uid > 0)
-        {
-            payload[QStringLiteral("uid")] = uid;
-        }
-    }
-
-    const QString token = currentAuthToken().trimmed();
-    if (!token.isEmpty())
-    {
-        payload[QStringLiteral("token")] = token;
-    }
+    payload.remove(QStringLiteral("uid"));
+    payload.remove(QStringLiteral("token"));
 }
 
 void AgentController::addAuthToQuery(QUrlQuery& query) const
 {
-    if (!query.hasQueryItem(QStringLiteral("uid")))
-    {
-        const int uid = currentUid();
-        if (uid > 0)
-        {
-            query.addQueryItem(QStringLiteral("uid"), QString::number(uid));
-        }
-    }
-
-    const QString token = currentAuthToken().trimmed();
-    if (!token.isEmpty() && !query.hasQueryItem(QStringLiteral("token")))
-    {
-        query.addQueryItem(QStringLiteral("token"), token);
-    }
+    query.removeAllQueryItems(QStringLiteral("uid"));
+    query.removeAllQueryItems(QStringLiteral("token"));
 }
 
 void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err, Modules mod)

@@ -1,12 +1,14 @@
 #include "CallRequestPayloads.h"
 
+#include <QtGlobal>
+
 namespace memochat::call_request_payload
 {
 QJsonObject buildStartCallPayload(int uid, const QString& token, int peerUid, const QString& callType)
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     QJsonObject payload;
-    payload["uid"] = uid;
-    payload["token"] = token;
     payload["peer_uid"] = peerUid;
     payload["call_type"] = callType;
     return payload;
@@ -14,9 +16,9 @@ QJsonObject buildStartCallPayload(int uid, const QString& token, int peerUid, co
 
 QJsonObject buildCallIdPayload(int uid, const QString& token, const QString& callId)
 {
+    Q_UNUSED(uid);
+    Q_UNUSED(token);
     QJsonObject payload;
-    payload["uid"] = uid;
-    payload["token"] = token;
     payload["call_id"] = callId;
     return payload;
 }

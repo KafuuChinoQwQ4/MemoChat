@@ -6,6 +6,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `AuthenticatedMediaCache.cpp` | 带 Bearer 头下载受保护媒体并缓存为本地文件 URL 的实现 |
+| `AuthenticatedMediaCache.h` | 受保护媒体下载缓存桥的接口定义 |
 | `LocalFilePickerService.cpp` | 本地文件选择服务的实现 |
 | `LocalFilePickerService.h` | 本地文件选择服务的接口定义 |
 | `LocalFilePickerServiceAttachments.cpp` | 附件文件选择逻辑实现 |

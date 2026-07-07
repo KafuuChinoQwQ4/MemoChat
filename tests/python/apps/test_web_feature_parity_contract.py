@@ -2,7 +2,6 @@ import unittest
 
 from tests.python.support.paths import repo_root
 
-
 REPO_ROOT = repo_root()
 WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
 

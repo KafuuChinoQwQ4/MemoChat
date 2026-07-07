@@ -36,8 +36,6 @@ const char* ExpectedProfileRouteSchemaSnapshot()
            "method: POST\n"
            "path: /user_update_profile\n"
            "request: ProfileUpdateRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - name\n"
            "  - nick\n"
            "  - desc\n"
@@ -54,7 +52,6 @@ const char* ExpectedProfileRouteSchemaSnapshot()
            "method: POST\n"
            "path: /get_user_info\n"
            "request: GetUserInfoRequestDto\n"
-           "  - uid\n"
            "response: UserInfoResponseDto\n"
            "  - error\n"
            "  - uid\n"
@@ -97,10 +94,10 @@ TEST(ProfileRouteSchemaTest, BuildsFieldInventoriesFromProfileDtos)
     const auto schemas = memochat::gate::modules::profile::ProfileRouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 2U);
 
-    ExpectFields(schemas[0].request, {"uid", "token", "name", "nick", "desc", "icon"});
+    ExpectFields(schemas[0].request, {"name", "nick", "desc", "icon"});
     ExpectFields(schemas[0].response, {"error", "uid", "name", "nick", "desc", "icon"});
 
-    ExpectFields(schemas[1].request, {"uid"});
+    ExpectFields(schemas[1].request, {});
     ExpectFields(schemas[1].response, {"error", "uid", "user_id", "name", "email", "nick", "icon", "desc", "sex"});
 }
 

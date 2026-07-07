@@ -86,7 +86,7 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("HandleUploadMediaChunkBytes", header)
         self.assertIn("std::string_view chunk_data", header)
         self.assertRegex(source, r"HandleUploadMediaChunkBytes\s*\([^)]*std::string_view chunk_data")
-        self.assertIn("return HandleUploadMediaChunkBytes(uid, token, upload_id, index, binary);", source)
+        self.assertIn("return HandleUploadMediaChunkBytes(access_token, upload_id, index, binary);", source)
         bytes_body = re.search(
             r"MediaResult HandleUploadMediaChunkBytes\s*\([^)]*std::string_view chunk_data\)(?P<body>.*?)"
             r"\nMediaResult HandleUploadMediaStatus",
@@ -96,6 +96,8 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIsNotNone(bytes_body)
         self.assertIn("ofs.write(chunk_data.data()", bytes_body.group("body"))
         self.assertNotIn("DecodeBase64Local", bytes_body.group("body"))
+        self.assertIn("ResolveAccessTokenUidLocal(access_token, uid)", bytes_body.group("body"))
+        self.assertNotIn("ValidateUserTokenLocal(uid, token)", source)
 
     def test_shared_media_support_persists_upload_session_as_object(self):
         source = read_text(SERVER_CORE / "MediaService" / "core" / "support" / "Http2MediaSupport.cpp")
@@ -254,7 +256,7 @@ class MediaUploadContractTest(unittest.TestCase):
         compact = normalize_space(block)
 
         self.assertIn("WriteJson(response, root)", block)
-        self.assertIn('root["message"] = "missing media key or auth params"', block)
+        self.assertIn('root["message"] = "missing media key"', block)
         self.assertIn('root["message"] = "token invalid"', block)
         self.assertIn('root["message"] = "asset not found"', block)
         self.assertIn("LegacyFileDownloadDisabledMessage()", block)
@@ -296,7 +298,12 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("request.headers", header_helper)
         self.assertIn("LowercaseAscii(key) == LowercaseAscii(name)", normalize_space(header_helper))
         self.assertRegex(source, r"\b(ToLower|EqualsIgnoreCase|HeaderValue|FindHeaderCaseInsensitive)\b")
-        for header in ("Content-Type", "X-Uid", "X-Token", "X-Upload-Id", "X-Chunk-Index"):
+        self.assertLess(
+            chunk_block.index("ResolveBearerUidLocal(request, root, uid)"),
+            chunk_block.index('HeaderValue(request, "Content-Type")'),
+        )
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, uid)", source)
+        for header in ("Content-Type", "X-Upload-Id", "X-Chunk-Index"):
             with self.subTest(header=header):
                 self.assertIn(f'"{header}"', chunk_block)
         self.assertNotRegex(
@@ -533,7 +540,7 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("request.grantUids.append(queueSnapshot.chatUid)", runner_source)
         self.assertIn("request.grantPublic = visibility == 0", moments_source)
         self.assertIn("request.grantFriends = visibility == 1", moments_source)
-        self.assertIn("uid, token, visibility", controller_source)
+        self.assertIn("visibility, attachments", controller_source)
 
 
 if __name__ == "__main__":

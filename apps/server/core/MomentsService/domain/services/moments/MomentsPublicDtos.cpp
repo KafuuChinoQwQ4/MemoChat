@@ -131,20 +131,9 @@ void NormalizeMomentPublicItem(MomentItemInfo& item)
     }
 }
 
-MomentsAuthFieldsDto MomentsAuthFieldsFromJsonValue(const memochat::json::JsonValue& root)
-{
-    MomentsAuthFieldsDto request;
-    request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    request.login_ticket = memochat::json::glaze_safe_get<std::string>(root, "login_ticket", "");
-    return request;
-}
-
 MomentPublishRequestDto MomentPublishRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentPublishRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.visibility = MomentsReadInt(root, "visibility", 0);
     request.location = MomentsReadString(root, "location");
 
@@ -181,9 +170,6 @@ MomentPublishRequestDto MomentPublishRequestFromJsonValue(const memochat::json::
 MomentListRequestDto MomentListRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentListRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.last_moment_id = MomentsReadInt64(root, "last_moment_id", 0);
     request.limit = MomentsReadInt(root, "limit", 20);
     request.author_uid = MomentsReadInt(root, "author_uid", 0);
@@ -194,9 +180,6 @@ MomentListRequestDto MomentListRequestFromJsonValue(const memochat::json::JsonVa
 MomentIdRequestDto MomentIdRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentIdRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.moment_id = MomentsReadInt64(root, "moment_id", 0);
     return request;
 }
@@ -204,9 +187,6 @@ MomentIdRequestDto MomentIdRequestFromJsonValue(const memochat::json::JsonValue&
 MomentLikeRequestDto MomentLikeRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentLikeRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.moment_id = MomentsReadInt64(root, "moment_id", 0);
     request.like = MomentsReadBool(root, "like", true);
     return request;
@@ -215,9 +195,6 @@ MomentLikeRequestDto MomentLikeRequestFromJsonValue(const memochat::json::JsonVa
 MomentCommentRequestDto MomentCommentRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentCommentRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.moment_id = MomentsReadInt64(root, "moment_id", 0);
     request.content = MomentsReadString(root, "content");
     request.reply_uid = MomentsReadInt(root, "reply_uid", 0);
@@ -230,9 +207,6 @@ MomentCommentRequestDto MomentCommentRequestFromJsonValue(const memochat::json::
 MomentCommentListRequestDto MomentCommentListRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentCommentListRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.moment_id = MomentsReadInt64(root, "moment_id", 0);
     request.last_comment_id = MomentsReadInt64(root, "last_comment_id", 0);
     request.limit = MomentsReadInt(root, "limit", 20);
@@ -243,9 +217,6 @@ MomentCommentListRequestDto MomentCommentListRequestFromJsonValue(const memochat
 MomentCommentLikeRequestDto MomentCommentLikeRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     MomentCommentLikeRequestDto request;
-    const MomentsAuthFieldsDto auth = MomentsAuthFieldsFromJsonValue(root);
-    request.uid = auth.uid;
-    request.login_ticket = auth.login_ticket;
     request.comment_id = MomentsReadInt64(root, "comment_id", 0);
     request.like = MomentsReadBool(root, "like", true);
     return request;

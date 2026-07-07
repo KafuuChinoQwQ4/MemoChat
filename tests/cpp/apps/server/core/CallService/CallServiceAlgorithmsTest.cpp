@@ -7,7 +7,6 @@ bool IsEnabledText(const char* value);
 int NormalizeRingTimeoutSec(int value);
 int NormalizeBusyKeyTtlSec(int value);
 int NormalizeTokenTtlSec(int value);
-bool HasValidAuthRequest(int uid, bool token_empty);
 bool HasValidStartPeer(int uid, int peer_uid);
 bool IsSupportedCallType(const char* call_type);
 const char* RingingState();
@@ -63,9 +62,6 @@ TEST(CallServiceAlgorithmsTest, ExposesConfigNormalizationAndRequestGuards)
     EXPECT_EQ(NormalizeTokenTtlSec(0), 300);
     EXPECT_EQ(NormalizeTokenTtlSec(301), 301);
 
-    EXPECT_TRUE(HasValidAuthRequest(1, false));
-    EXPECT_FALSE(HasValidAuthRequest(0, false));
-    EXPECT_FALSE(HasValidAuthRequest(1, true));
     EXPECT_TRUE(HasValidStartPeer(1, 2));
     EXPECT_FALSE(HasValidStartPeer(1, 1));
     EXPECT_FALSE(HasValidStartPeer(1, 0));

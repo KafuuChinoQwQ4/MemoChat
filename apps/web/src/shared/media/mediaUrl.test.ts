@@ -17,24 +17,24 @@ describe("media URL resolution", () => {
     })
   })
 
-  it("keeps media download paths on /media/download and appends uid plus token", () => {
+  it("keeps media download paths on /media/download without embedding credentials", () => {
     expect(resolveMediaUrl("media/download?asset=avatar-key")).toBe(
-      "/media/download?asset=avatar-key&uid=42&token=tok+value",
+      "/media/download?asset=avatar-key",
     )
     expect(resolveMediaUrl("/media/download?asset=avatar-key")).toBe(
-      "/media/download?asset=avatar-key&uid=42&token=tok+value",
+      "/media/download?asset=avatar-key",
     )
   })
 
   it("normalizes legacy localhost media download URLs to the current gateway path", () => {
     expect(resolveMediaUrl("http://127.0.0.1:8080/media/download?asset=avatar-key")).toBe(
-      "/media/download?asset=avatar-key&uid=42&token=tok+value",
+      "/media/download?asset=avatar-key",
     )
   })
 
-  it("turns bare media keys into authenticated download URLs", () => {
+  it("turns bare media keys into canonical download URLs", () => {
     expect(resolveMediaUrl("abc-def_1234567890")).toBe(
-      "/media/download?asset=abc-def_1234567890&uid=42&token=tok+value",
+      "/media/download?asset=abc-def_1234567890",
     )
   })
 

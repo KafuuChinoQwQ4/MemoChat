@@ -18,12 +18,10 @@ describe("Avatar", () => {
     })
   })
 
-  it("keeps media avatar downloads same-origin in local proxy mode", () => {
+  it("does not expose media avatar credentials in the image URL", () => {
     render(<Avatar src="media/download?asset=avatar-key" name="Alice" />)
 
-    expect(screen.getByRole("img").getAttribute("src")).toBe(
-      "/media/download?asset=avatar-key&uid=42&token=tok+value",
-    )
+    expect(screen.getByRole("img").getAttribute("src")).toMatch(/^data:image\/svg\+xml,/)
   })
 
   it("maps built-in head avatar refs to the local fallback image", () => {

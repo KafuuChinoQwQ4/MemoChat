@@ -45,12 +45,9 @@ public:
                               const std::string& binary,
                               std::string* error);
 
-    memochat::json::JsonValue
-    Search(const std::string& source_id, const std::string& keyword, int page, int uid, const std::string& token);
-    memochat::json::JsonValue
-    Detail(const std::string& source_id, const std::string& comic_id, int uid, const std::string& token);
-    memochat::json::JsonValue
-    Pages(const std::string& source_id, const std::string& chapter_id, int uid, const std::string& token);
+    memochat::json::JsonValue Search(const std::string& source_id, const std::string& keyword, int page);
+    memochat::json::JsonValue Detail(const std::string& source_id, const std::string& comic_id);
+    memochat::json::JsonValue Pages(const std::string& source_id, const std::string& chapter_id);
     R18ImagePayload FetchImage(const std::string& source_id, const std::string& image_url);
 
 private:

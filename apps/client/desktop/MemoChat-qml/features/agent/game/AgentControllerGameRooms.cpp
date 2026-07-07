@@ -44,9 +44,6 @@ void AgentController::loadGameRoom(const QString& roomId)
         return;
     }
     QUrl url(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId);
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
-    url.setQuery(query);
     if (_current_game_room_id != trimmedRoomId)
     {
         _current_game_room_id = trimmedRoomId;
@@ -65,9 +62,6 @@ void AgentController::deleteGameRoom(const QString& roomId)
         return;
     }
     QUrl url(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId);
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
-    url.setQuery(query);
     _pendingDeleteGameRoomId = trimmedRoomId;
     sendGameDelete(url, QStringLiteral("delete_room"), QStringLiteral("正在清除游戏房间..."));
 }
@@ -83,7 +77,6 @@ void AgentController::createGameRoom(const QString& title,
         rulesetId.trimmed().isEmpty() ? QStringLiteral("werewolf.basic") : rulesetId.trimmed();
     const QString trimmedDisplayName = displayName.trimmed();
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     if (!trimmedDisplayName.isEmpty())
     {
         payload[QStringLiteral("display_name")] = trimmedDisplayName;
@@ -142,7 +135,6 @@ void AgentController::createGameRoomFromTemplate(const QString& templateId,
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     const QString trimmedDisplayName = displayName.trimmed();
     if (!trimmedDisplayName.isEmpty())
     {
@@ -163,7 +155,6 @@ void AgentController::startGameRoom(const QString& roomId)
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId + QStringLiteral("/start")), payload,
                       QStringLiteral("start_room"), QStringLiteral("正在开始游戏..."));
 }
@@ -177,7 +168,6 @@ void AgentController::restartGameRoom(const QString& roomId)
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId + QStringLiteral("/restart")), payload,
                       QStringLiteral("restart_room"), QStringLiteral("正在重新开始游戏..."));
 }
@@ -191,7 +181,6 @@ void AgentController::tickGameRoom(const QString& roomId)
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId + QStringLiteral("/tick")), payload,
                       QStringLiteral("tick_room"), QStringLiteral("正在推进 Agent 回合..."));
 }
@@ -205,7 +194,6 @@ void AgentController::autoTickGameRoom(const QString& roomId, int maxSteps)
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("max_steps")] = qBound(1, maxSteps, 32);
     sendGamePost(QUrl(gameBaseUrl() + QStringLiteral("/rooms/") + trimmedRoomId + QStringLiteral("/auto-tick")),
                       payload, QStringLiteral("auto_tick_room"), QStringLiteral("正在自动推进 Agent 回合..."));
@@ -224,7 +212,6 @@ void AgentController::submitGameAction(const QString& roomId,
         return;
     }
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("participant_id")] = actorId.trimmed();
     payload[QStringLiteral("action_type")] = actionType.trimmed().isEmpty() ? QStringLiteral("say")
                                                                             : actionType.trimmed();
@@ -251,7 +238,6 @@ void AgentController::updateGameParticipant(const QString& roomId,
     }
 
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("display_name")] = displayName.trimmed();
     payload[QStringLiteral("persona")] = persona;
     payload[QStringLiteral("strategy")] = strategy.trimmed();

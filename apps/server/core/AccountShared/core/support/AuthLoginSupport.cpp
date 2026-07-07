@@ -105,15 +105,15 @@ int GetRefreshTokenTtlSec()
     return std::clamp(std::atoi(ttl.c_str()), 3600, 180 * 24 * 60 * 60);
 }
 
-int GetHttpTokenTtlSec()
+int GetAccessTokenTtlSec()
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto ttl = cfg.GetValue("AuthToken", "HttpTokenTtlSec");
+    const auto ttl = cfg.GetValue("AuthToken", "AccessTokenTtlSec");
     if (ttl.empty())
     {
-        return 24 * 60 * 60;
+        return 15 * 60;
     }
-    return std::clamp(std::atoi(ttl.c_str()), 60, 30 * 24 * 60 * 60);
+    return std::clamp(std::atoi(ttl.c_str()), 60, 60 * 60);
 }
 
 } // namespace gateauthsupport
@@ -208,6 +208,42 @@ std::string GetChatAuthSecret()
                        });
     }
     return secret;
+}
+
+std::string GetJwtAccessSecret()
+{
+    auto& cfg = ConfigMgr::Inst();
+    auto secret = cfg.GetValue("AuthToken", "JwtSecret");
+    if (secret.empty())
+    {
+        secret = std::string(memochat::auth::kWellKnownDevJwtAccessSecret);
+    }
+    if (memochat::auth::IsWellKnownDevJwtAccessSecret(secret))
+    {
+        static std::once_flag dev_secret_warned;
+        std::call_once(dev_secret_warned,
+                       []()
+                       {
+                           memolog::LogWarn("auth.jwt_secret.dev_default",
+                                            "AuthToken JwtSecret is the well-known dev default; set env "
+                                            "MEMOCHAT_AUTHTOKEN_JWTSECRET in production");
+                       });
+    }
+    return secret;
+}
+
+std::string GetJwtAccessIssuer()
+{
+    auto& cfg = ConfigMgr::Inst();
+    auto issuer = cfg.GetValue("AuthToken", "JwtIssuer");
+    return issuer.empty() ? "memochat" : issuer;
+}
+
+std::string GetJwtAccessAudience()
+{
+    auto& cfg = ConfigMgr::Inst();
+    auto audience = cfg.GetValue("AuthToken", "JwtAudience");
+    return audience.empty() ? "memochat-http" : audience;
 }
 
 int GetChatTicketTtlSec()
@@ -443,8 +479,8 @@ std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,
     // the per-login target decision stays here because chat sessions are stateful
     // (the signed ticket binds a uid to a specific target_server).
     //
-    // The HTTP token is left empty so the caller rotates it via AuthCache on the
-    // shared `utoken_<uid>` key (the same key focused services validate against).
+    // The access token is left empty so the caller signs the JWT and rotates the
+    // current-token binding via AuthCache on the shared `utoken_<uid>` key.
     if (http_token)
     {
         http_token->clear();

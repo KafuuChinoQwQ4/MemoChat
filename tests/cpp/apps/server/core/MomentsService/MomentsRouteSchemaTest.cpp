@@ -58,8 +58,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/publish\n"
            "request: MomentPublishRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - visibility\n"
            "  - location\n"
            "  - items\n"
@@ -71,8 +69,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/list\n"
            "request: MomentListRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - last_moment_id\n"
            "  - limit\n"
            "  - author_uid\n"
@@ -85,8 +81,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/detail\n"
            "request: MomentIdRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - moment_id\n"
            "response: MomentDetailResponseDto\n"
            "  - error\n"
@@ -96,8 +90,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/delete\n"
            "request: MomentIdRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - moment_id\n"
            "response: MomentIdResponseDto\n"
            "  - error\n"
@@ -107,8 +99,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/like\n"
            "request: MomentLikeRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - moment_id\n"
            "  - like\n"
            "response: MomentLikeResponseDto\n"
@@ -121,8 +111,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/comment\n"
            "request: MomentCommentRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - moment_id\n"
            "  - content\n"
            "  - reply_uid\n"
@@ -139,8 +127,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/comment/list\n"
            "request: MomentCommentListRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - moment_id\n"
            "  - last_comment_id\n"
            "  - limit\n"
@@ -155,8 +141,6 @@ const char* ExpectedMomentsRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/moments/comment/like\n"
            "request: MomentCommentLikeRequestDto\n"
-           "  - uid\n"
-           "  - login_ticket\n"
            "  - comment_id\n"
            "  - like\n"
            "response: MomentCommentLikeResponseDto\n"
@@ -230,29 +214,28 @@ TEST(MomentsRouteSchemaTest, BuildsFieldInventoriesFromMomentsDtos)
     const auto schemas = memochat::gate::modules::moments::MomentsRouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 8U);
 
-    ExpectFields(schemas[0].request, {"uid", "login_ticket", "visibility", "location", "items"});
+    ExpectFields(schemas[0].request, {"visibility", "location", "items"});
     ExpectFields(schemas[0].response, {"error", "moment_id"});
 
-    ExpectFields(schemas[1].request, {"uid", "login_ticket", "last_moment_id", "limit", "author_uid"});
+    ExpectFields(schemas[1].request, {"last_moment_id", "limit", "author_uid"});
     ExpectFields(schemas[1].response, {"error", "has_more", "moments"});
 
-    ExpectFields(schemas[2].request, {"uid", "login_ticket", "moment_id"});
+    ExpectFields(schemas[2].request, {"moment_id"});
     ExpectFields(schemas[2].response, {"error", "moment"});
 
-    ExpectFields(schemas[3].request, {"uid", "login_ticket", "moment_id"});
+    ExpectFields(schemas[3].request, {"moment_id"});
     ExpectFields(schemas[3].response, {"error", "moment_id"});
 
-    ExpectFields(schemas[4].request, {"uid", "login_ticket", "moment_id", "like"});
+    ExpectFields(schemas[4].request, {"moment_id", "like"});
     ExpectFields(schemas[4].response, {"error", "moment_id", "has_liked", "like_count"});
 
-    ExpectFields(schemas[5].request,
-                 {"uid", "login_ticket", "moment_id", "content", "reply_uid", "comment_id", "delete", "delete_mode"});
+    ExpectFields(schemas[5].request, {"moment_id", "content", "reply_uid", "comment_id", "delete", "delete_mode"});
     ExpectFields(schemas[5].response, {"error", "moment_id", "delete", "comment_count"});
 
-    ExpectFields(schemas[6].request, {"uid", "login_ticket", "moment_id", "last_comment_id", "limit"});
+    ExpectFields(schemas[6].request, {"moment_id", "last_comment_id", "limit"});
     ExpectFields(schemas[6].response, {"error", "moment_id", "has_more", "comment_count", "comments"});
 
-    ExpectFields(schemas[7].request, {"uid", "login_ticket", "comment_id", "like"});
+    ExpectFields(schemas[7].request, {"comment_id", "like"});
     ExpectFields(schemas[7].response, {"error", "comment_id", "has_liked", "like_count", "like_names", "likes"});
 }
 

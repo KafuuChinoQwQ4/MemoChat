@@ -6,13 +6,12 @@
 #include "json/GlazeCompat.hpp"
 #include "logging/Logger.hpp"
 #include "logging/Telemetry.hpp"
-#include "support/UserTokenValidator.hpp"
+#include "support/BearerAccessAuth.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -92,23 +91,6 @@ std::string LowerAsciiCopy(std::string value)
     return value;
 }
 
-bool StartsWithCaseInsensitive(std::string_view value, std::string_view prefix)
-{
-    if (value.size() < prefix.size())
-    {
-        return false;
-    }
-    for (std::size_t index = 0; index < prefix.size(); ++index)
-    {
-        if (std::tolower(static_cast<unsigned char>(value[index])) !=
-            std::tolower(static_cast<unsigned char>(prefix[index])))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 std::string HeaderValue(const memochat::gate::routing::GateRequest& request, std::string_view name)
 {
     const std::string needle = LowerAsciiCopy(std::string(name));
@@ -184,152 +166,19 @@ std::string QueryValue(const memochat::gate::routing::GateRequest& request, std:
     return iter->second;
 }
 
-bool TryParseInt32(std::string value, int32_t& out)
-{
-    value = TrimCopy(std::move(value));
-    if (value.empty())
-    {
-        return false;
-    }
-    try
-    {
-        std::size_t parsed = 0;
-        const long long raw = std::stoll(value, &parsed, 10);
-        if (parsed != value.size() || raw < std::numeric_limits<int32_t>::min() ||
-            raw > std::numeric_limits<int32_t>::max())
-        {
-            return false;
-        }
-        out = static_cast<int32_t>(raw);
-        return true;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
-std::string AuthorizationToken(const std::string& authorization)
-{
-    std::string value = TrimCopy(authorization);
-    if (value.empty())
-    {
-        return "";
-    }
-    if (StartsWithCaseInsensitive(value, "bearer "))
-    {
-        return TrimCopy(value.substr(7));
-    }
-    if (StartsWithCaseInsensitive(value, "token "))
-    {
-        return TrimCopy(value.substr(6));
-    }
-    return value;
-}
-
-std::string ExtractUserToken(const memochat::gate::routing::GateRequest& request, const json::JsonValue* body_root)
-{
-    for (std::string_view header_name : {"x-user-token", "x-auth-token"})
-    {
-        const std::string header_token = TrimCopy(HeaderValue(request, header_name));
-        if (!header_token.empty())
-        {
-            return header_token;
-        }
-    }
-
-    const std::string auth_token = AuthorizationToken(HeaderValue(request, "authorization"));
-    if (!auth_token.empty())
-    {
-        return auth_token;
-    }
-
-    const std::string query_token = TrimCopy(QueryValue(request, "token"));
-    if (!query_token.empty())
-    {
-        return query_token;
-    }
-
-    if (body_root != nullptr)
-    {
-        return TrimCopy(json::glaze_safe_get<std::string>(*body_root, "token", ""));
-    }
-    return "";
-}
-
-bool UseAuthUidCandidate(int32_t candidate_uid, int32_t& auth_uid)
-{
-    if (candidate_uid <= 0)
-    {
-        return false;
-    }
-    if (auth_uid <= 0)
-    {
-        auth_uid = candidate_uid;
-        return true;
-    }
-    return auth_uid == candidate_uid;
-}
-
-bool UseAuthUidText(std::string value, int32_t& auth_uid)
-{
-    value = TrimCopy(std::move(value));
-    if (value.empty())
-    {
-        return true;
-    }
-    int32_t uid = 0;
-    return TryParseInt32(value, uid) && UseAuthUidCandidate(uid, auth_uid);
-}
-
-bool ResolveAuthenticatedUid(const memochat::gate::routing::GateRequest& request,
-                             const json::JsonValue* body_root,
-                             int32_t fallback_uid,
-                             int32_t& auth_uid)
-{
-    auth_uid = 0;
-    if (fallback_uid > 0 && !UseAuthUidCandidate(fallback_uid, auth_uid))
-    {
-        return false;
-    }
-    for (std::string_view header_name : {"x-user-id", "x-uid"})
-    {
-        if (!UseAuthUidText(HeaderValue(request, header_name), auth_uid))
-        {
-            return false;
-        }
-    }
-    if (!UseAuthUidText(QueryValue(request, "uid"), auth_uid))
-    {
-        return false;
-    }
-    if (body_root != nullptr && json::glaze_has_key(*body_root, "uid"))
-    {
-        if (!UseAuthUidCandidate(json::glaze_safe_get<int>(*body_root, "uid", 0), auth_uid))
-        {
-            return false;
-        }
-    }
-    return auth_uid > 0;
-}
-
 bool RequireUserAuth(const memochat::gate::routing::GateRequest& request,
                      memochat::gate::routing::GateResponse& response,
-                     int32_t fallback_uid,
-                     const json::JsonValue* body_root = nullptr,
                      int32_t* authenticated_uid = nullptr)
 {
-    int32_t uid = 0;
-    const std::string token = ExtractUserToken(request, body_root);
-    if (!ResolveAuthenticatedUid(request, body_root, fallback_uid, uid) ||
-        service_modules::ShouldRejectUserAuth(uid, token.empty()) || !memochat::auth::ValidateUserToken(uid, token))
+    int uid = 0;
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
     {
         WriteAuthFailure(response);
         return false;
     }
     if (authenticated_uid != nullptr)
     {
-        *authenticated_uid = uid;
+        *authenticated_uid = static_cast<int32_t>(uid);
     }
     return true;
 }
@@ -421,7 +270,7 @@ bool AIService::HandleChat(const memochat::gate::routing::GateRequest& request,
 
     const AIChatRequestDto chat_request = AIChatRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, chat_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -468,7 +317,7 @@ bool AIService::HandleSmart(const memochat::gate::routing::GateRequest& request,
 
     const AISmartRequestDto smart_request = AISmartRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, smart_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -502,16 +351,14 @@ bool AIService::HandleHistory(const memochat::gate::routing::GateRequest& reques
                               memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.history", "http");
-    int32_t uid = 0;
     std::string session_id;
     int limit = service_modules::DefaultHistoryLimit();
     int offset = service_modules::DefaultHistoryOffset();
-    AssignQueryInt32(request, "uid", uid);
     AssignQueryString(request, "session_id", session_id);
     AssignQueryInt(request, "limit", limit);
     AssignQueryInt(request, "offset", offset);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, uid, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -533,7 +380,7 @@ bool AIService::HandleCreateSession(const memochat::gate::routing::GateRequest& 
 
     const AISessionCreateRequestDto session_request = AISessionCreateRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, session_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -553,14 +400,12 @@ bool AIService::HandleListSessions(const memochat::gate::routing::GateRequest& r
                                    memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.session.list", "http");
-    int32_t uid = 0;
     std::string model_type = service_modules::DefaultModelType();
     std::string model_name;
-    AssignQueryInt32(request, "uid", uid);
     AssignQueryString(request, "model_type", model_type);
     AssignQueryString(request, "model_name", model_name);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, uid, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -582,7 +427,7 @@ bool AIService::HandleDeleteSession(const memochat::gate::routing::GateRequest& 
 
     const AISessionDeleteRequestDto session_request = AISessionDeleteRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, session_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -604,7 +449,7 @@ bool AIService::HandleUpdateSession(const memochat::gate::routing::GateRequest& 
 
     const AISessionUpdateRequestDto session_request = AISessionUpdateRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, session_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -617,7 +462,7 @@ bool AIService::HandleListModels(const memochat::gate::routing::GateRequest& req
                                  memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.model.list", "http");
-    if (!RequireUserAuth(request, response, 0))
+    if (!RequireUserAuth(request, response))
     {
         return true;
     }
@@ -638,7 +483,7 @@ bool AIService::HandleRegisterApiProvider(const memochat::gate::routing::GateReq
     }
 
     const AIRegisterApiProviderRequestDto provider_request = AIRegisterApiProviderRequestFromJsonValue(src_root);
-    if (!RequireUserAuth(request, response, 0, &src_root))
+    if (!RequireUserAuth(request, response))
     {
         return true;
     }
@@ -666,7 +511,7 @@ bool AIService::HandleDeleteApiProvider(const memochat::gate::routing::GateReque
     }
 
     const AIDeleteApiProviderRequestDto provider_request = AIDeleteApiProviderRequestFromJsonValue(src_root);
-    if (!RequireUserAuth(request, response, 0, &src_root))
+    if (!RequireUserAuth(request, response))
     {
         return true;
     }
@@ -692,7 +537,7 @@ bool AIService::HandleKbUpload(const memochat::gate::routing::GateRequest& reque
 
     const AIKbUploadRequestDto kb_request = AIKbUploadRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, kb_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -714,7 +559,7 @@ bool AIService::HandleKbSearch(const memochat::gate::routing::GateRequest& reque
 
     const AIKbSearchRequestDto kb_request = AIKbSearchRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, kb_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -727,10 +572,8 @@ bool AIService::HandleListKb(const memochat::gate::routing::GateRequest& request
                              memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.kb.list", "http");
-    int32_t uid = 0;
-    AssignQueryInt32(request, "uid", uid);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, uid, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -752,7 +595,7 @@ bool AIService::HandleDeleteKb(const memochat::gate::routing::GateRequest& reque
 
     const AIKbDeleteRequestDto kb_request = AIKbDeleteRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, kb_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -765,10 +608,8 @@ bool AIService::HandleMemoryList(const memochat::gate::routing::GateRequest& req
                                  memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.memory.list", "http");
-    int32_t uid = 0;
-    AssignQueryInt32(request, "uid", uid);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, uid, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -790,7 +631,7 @@ bool AIService::HandleMemoryCreate(const memochat::gate::routing::GateRequest& r
 
     const AIMemoryCreateRequestDto memory_request = AIMemoryCreateRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, memory_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -812,7 +653,7 @@ bool AIService::HandleMemoryDelete(const memochat::gate::routing::GateRequest& r
 
     const AIMemoryDeleteRequestDto memory_request = AIMemoryDeleteRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, memory_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -834,7 +675,7 @@ bool AIService::HandleTaskCreate(const memochat::gate::routing::GateRequest& req
 
     const AITaskCreateRequestDto task_request = AITaskCreateRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, task_request.uid, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -854,12 +695,10 @@ bool AIService::HandleTaskList(const memochat::gate::routing::GateRequest& reque
                                memochat::gate::routing::GateResponse& response)
 {
     memolog::SpanScope span("gate.ai.tasks.list", "http");
-    int32_t uid = 0;
     int limit = service_modules::DefaultTaskListLimit();
-    AssignQueryInt32(request, "uid", uid);
     AssignQueryInt(request, "limit", limit);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, uid, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -875,7 +714,7 @@ bool AIService::HandleTaskDetail(const memochat::gate::routing::GateRequest& req
     std::string task_id;
     AssignQueryString(request, "task_id", task_id);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, 0, nullptr, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -897,7 +736,7 @@ bool AIService::HandleTaskCancel(const memochat::gate::routing::GateRequest& req
 
     const AITaskIdRequestDto task_request = AITaskIdRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, 0, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }
@@ -919,7 +758,7 @@ bool AIService::HandleTaskResume(const memochat::gate::routing::GateRequest& req
 
     const AITaskIdRequestDto task_request = AITaskIdRequestFromJsonValue(src_root);
     int32_t auth_uid = 0;
-    if (!RequireUserAuth(request, response, 0, &src_root, &auth_uid))
+    if (!RequireUserAuth(request, response, &auth_uid))
     {
         return true;
     }

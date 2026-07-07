@@ -93,7 +93,7 @@ const char* ExpectedAuthRouteSchemaSnapshot()
            "  - email\n"
            "  - uid\n"
            "  - user_id\n"
-           "  - token\n"
+           "  - access_token\n"
            "  - login_ticket\n"
            "  - ticket_expire_ms\n"
            "  - refresh_token\n"
@@ -116,7 +116,7 @@ const char* ExpectedAuthRouteSchemaSnapshot()
            "  - email\n"
            "  - uid\n"
            "  - user_id\n"
-           "  - token\n"
+           "  - access_token\n"
            "  - login_ticket\n"
            "  - ticket_expire_ms\n"
            "  - refresh_token\n"
@@ -129,8 +129,6 @@ const char* ExpectedAuthRouteSchemaSnapshot()
            "method: POST\n"
            "path: /auth/logout\n"
            "request: AuthLogoutRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - refresh_token\n"
            "  - client_ver\n"
            "  - all_devices\n"
@@ -199,7 +197,7 @@ TEST(AuthRouteSchemaTest, BuildsFieldInventoriesFromAuthDtos)
                                                             "email",
                                                             "uid",
                                                             "user_id",
-                                                            "token",
+                                                            "access_token",
                                                             "login_ticket",
                                                             "ticket_expire_ms",
                                                             "refresh_token",
@@ -213,7 +211,7 @@ TEST(AuthRouteSchemaTest, BuildsFieldInventoriesFromAuthDtos)
     ExpectFields(schemas[3].request, {"refresh_token", "client_ver"});
     ExpectFields(schemas[3].response, login_response_fields);
 
-    ExpectFields(schemas[4].request, {"uid", "token", "refresh_token", "client_ver", "all_devices"});
+    ExpectFields(schemas[4].request, {"refresh_token", "client_ver", "all_devices"});
     ExpectFields(schemas[4].response, {"error", "uid", "all_devices"});
 }
 

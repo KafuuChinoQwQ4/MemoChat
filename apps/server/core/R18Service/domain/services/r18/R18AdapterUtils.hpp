@@ -40,8 +40,7 @@ std::string StringValue(const json::JsonValue& value);
 std::string FieldString(const json::JsonValue& object, const std::string& key, const std::string& fallback = "");
 int64_t FieldInt(const json::JsonValue& object, const std::string& key, int64_t fallback = 0);
 json::JsonValue MakeTags(const std::vector<std::string>& tags);
-std::string
-ImageProxyUrl(int uid, const std::string& token, const std::string& source_id, const std::string& image_url);
+std::string ImageProxyUrl(const std::string& source_id, const std::string& image_url);
 
 R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& line2 = "");
 bool ReadCachedImage(const std::filesystem::path& cache_root, const std::string& cache_key, R18ImagePayload* payload);

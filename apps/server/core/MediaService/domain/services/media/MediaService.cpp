@@ -9,7 +9,7 @@
 #include "const.hpp"
 #include "json/GlazeCompat.hpp"
 #include "logging/Logger.hpp"
-#include "support/UserTokenValidator.hpp"
+#include "support/BearerAccessAuth.hpp"
 
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -290,11 +290,6 @@ bool LoadJsonFileLocal(const std::filesystem::path& path, memochat::json::JsonVa
     return true;
 }
 
-bool ValidateUserTokenLocal(int uid, const std::string& token)
-{
-    return memochat::auth::ValidateUserToken(uid, token);
-}
-
 std::set<int> ListUploadedChunkIndexesLocal(const std::filesystem::path& chunk_dir)
 {
     std::set<int> indexes;
@@ -364,6 +359,20 @@ void WriteJson(memochat::gate::routing::GateResponse& response, const memochat::
     response.content_type = service_modules::JsonContentType();
     response.body_kind = memochat::gate::routing::GateResponseBodyKind::Inline;
     response.body = root.toStyledString();
+}
+
+bool ResolveBearerUidLocal(const memochat::gate::routing::GateRequest& request,
+                           memochat::json::JsonValue& root,
+                           int& uid,
+                           const std::string& message = "token invalid or params invalid")
+{
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+        root["message"] = message;
+        return false;
+    }
+    return true;
 }
 
 std::string LowercaseAscii(std::string value)
@@ -581,14 +590,17 @@ bool MediaService::HandleUploadMediaInit(const memochat::gate::routing::GateRequ
         return true;
     }
 
-    const int uid = upload_request.uid;
-    const std::string token = upload_request.token;
+    int uid = 0;
+    if (!ResolveBearerUidLocal(request, root, uid))
+    {
+        WriteJson(response, root);
+        return true;
+    }
     std::string media_type = upload_request.media_type;
     const std::string file_name = SanitizeFileNameLocal(upload_request.file_name);
     std::string mime = upload_request.mime;
     const int64_t file_size = upload_request.file_size;
-    if (!service_modules::HasValidUploadInitRequest(uid, file_name.empty(), file_size, true) ||
-        !ValidateUserTokenLocal(uid, token))
+    if (!service_modules::HasValidUploadInitRequest(uid, file_name.empty(), file_size, true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid or params invalid";
@@ -665,11 +677,16 @@ bool MediaService::HandleUploadMediaChunk(const memochat::gate::routing::GateReq
     memochat::json::JsonValue root;
     int uid = 0;
     int index = -1;
-    std::string token;
     std::string upload_id;
     std::string binary;
     std::string encoded;
     bool json_payload = false;
+
+    if (!ResolveBearerUidLocal(request, root, uid))
+    {
+        WriteJson(response, root);
+        return true;
+    }
 
     std::string content_type = HeaderValue(request, "Content-Type");
     if (memochat::media::IsJsonContentType(content_type))
@@ -695,24 +712,19 @@ bool MediaService::HandleUploadMediaChunk(const memochat::gate::routing::GateReq
             return true;
         }
 
-        uid = chunk_request.uid;
-        token = chunk_request.token;
         upload_id = chunk_request.upload_id;
         index = chunk_request.index;
         encoded = chunk_request.data_base64;
     }
     else
     {
-        uid = std::atoi(HeaderValue(request, "X-Uid").c_str());
-        token = HeaderValue(request, "X-Token");
         upload_id = HeaderValue(request, "X-Upload-Id");
         index = std::atoi(HeaderValue(request, "X-Chunk-Index").c_str());
         binary = request.body;
     }
 
     const bool payload_empty = json_payload ? encoded.empty() : binary.empty();
-    if (!service_modules::HasValidChunkUploadRequest(uid, upload_id.empty(), index, payload_empty, true) ||
-        !ValidateUserTokenLocal(uid, token))
+    if (!service_modules::HasValidChunkUploadRequest(uid, upload_id.empty(), index, payload_empty, true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid or params invalid";
@@ -823,11 +835,14 @@ bool MediaService::HandleUploadMediaStatus(const memochat::gate::routing::GateRe
                                            memochat::gate::routing::GateResponse& response)
 {
     memochat::json::JsonValue root;
-    const int uid = std::atoi(QueryValue(request, "uid").c_str());
-    const std::string token = QueryValue(request, "token");
+    int uid = 0;
+    if (!ResolveBearerUidLocal(request, root, uid))
+    {
+        WriteJson(response, root);
+        return true;
+    }
     const std::string upload_id = QueryValue(request, "upload_id");
-    if (!service_modules::HasValidStatusAuth(uid, token.empty(), upload_id.empty(), true) ||
-        !ValidateUserTokenLocal(uid, token))
+    if (!service_modules::HasValidStatusAuth(uid, false, upload_id.empty(), true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid or params invalid";
@@ -880,11 +895,14 @@ bool MediaService::HandleUploadMediaComplete(const memochat::gate::routing::Gate
         return true;
     }
 
-    const int uid = upload_request.uid;
-    const std::string token = upload_request.token;
+    int uid = 0;
+    if (!ResolveBearerUidLocal(request, root, uid))
+    {
+        WriteJson(response, root);
+        return true;
+    }
     const std::string upload_id = upload_request.upload_id;
-    if (!service_modules::HasValidCompleteAuth(uid, token.empty(), upload_id.empty(), true) ||
-        !ValidateUserTokenLocal(uid, token))
+    if (!service_modules::HasValidCompleteAuth(uid, false, upload_id.empty(), true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid or params invalid";
@@ -1067,14 +1085,17 @@ bool MediaService::HandleUploadMediaSimple(const memochat::gate::routing::GateRe
         return true;
     }
 
-    const int uid = upload_request.uid;
-    const std::string token = upload_request.token;
+    int uid = 0;
+    if (!ResolveBearerUidLocal(request, root, uid))
+    {
+        WriteJson(response, root);
+        return true;
+    }
     std::string media_type = upload_request.media_type;
     const std::string file_name = SanitizeFileNameLocal(upload_request.file_name);
     std::string mime = upload_request.mime;
     const std::string encoded = upload_request.data_base64;
-    if (!service_modules::HasValidSimpleUploadRequest(uid, file_name.empty(), encoded.empty(), true) ||
-        !ValidateUserTokenLocal(uid, token))
+    if (!service_modules::HasValidSimpleUploadRequest(uid, file_name.empty(), encoded.empty(), true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid or params invalid";
@@ -1209,8 +1230,6 @@ bool MediaService::HandleMediaDownload(const memochat::gate::routing::GateReques
     memochat::json::JsonValue root;
     const std::string media_key = QueryValue(request, "asset");
     const std::string legacy_file = QueryValue(request, "file");
-    const std::string uid_raw = QueryValue(request, "uid");
-    const std::string token = QueryValue(request, "token");
     if (service_modules::ShouldRejectLegacyFileDownload(legacy_file.empty()))
     {
         root["error"] = ErrorCodes::Error_Json;
@@ -1219,17 +1238,17 @@ bool MediaService::HandleMediaDownload(const memochat::gate::routing::GateReques
         return true;
     }
 
-    if (!service_modules::HasDownloadLocator(media_key.empty(), legacy_file.empty()) ||
-        !service_modules::HasRequiredDownloadAuth(uid_raw.empty(), token.empty()))
+    if (!service_modules::HasDownloadLocator(media_key.empty(), legacy_file.empty()))
     {
         root["error"] = ErrorCodes::Error_Json;
-        root["message"] = "missing media key or auth params";
+        root["message"] = "missing media key";
         WriteJson(response, root);
         return true;
     }
 
-    const int uid = std::atoi(uid_raw.c_str());
-    if (!service_modules::HasValidDownloadAuth(uid, true) || !ValidateUserTokenLocal(uid, token))
+    int uid = 0;
+    if (!ResolveBearerUidLocal(request, root, uid, "token invalid") ||
+        !service_modules::HasValidDownloadAuth(uid, true))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         root["message"] = "token invalid";

@@ -68,6 +68,8 @@ add_library(GateInfraCore STATIC
     runtime/GateGlobals.cpp
     runtime/GateGlobals.hpp
     runtime/Singleton.hpp
+    support/BearerAccessAuth.cpp       # Strict Authorization: Bearer access-token resolver
+    support/BearerAccessAuth.hpp
     support/GateRouteModules.hpp           # Shared route registration interface (H1+H3 handlers)
     support/UserTokenValidator.cpp        # Shared utoken_<uid> Redis token validator (finding ④)
     support/UserTokenValidator.hpp
@@ -84,6 +86,7 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             memochat.gate.postgres_mgr_algorithms=persistence/cxx_modules/PostgresMgr.cppm
             memochat.gate.redis_mgr_algorithms=cache/cxx_modules/RedisMgr.cppm
             memochat.gate.redis_pipeline_algorithms=cache/cxx_modules/RedisPipeline.cppm
+            memochat.gate.bearer_access_auth_algorithms=support/cxx_modules/BearerAccessAuth.cppm
             memochat.gate.user_token_validator_algorithms=support/cxx_modules/UserTokenValidator.cppm
         CONSUMER_SOURCES
             clients/ChatGrpcClient.cpp
@@ -94,6 +97,7 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             persistence/PostgresMgr.cpp
             cache/RedisMgr.cpp
             cache/RedisPipelines.cpp
+            support/BearerAccessAuth.cpp
             support/UserTokenValidator.cpp
     )
 endif()

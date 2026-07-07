@@ -21,7 +21,6 @@ constexpr std::size_t kMaxDescLength = 255;
 constexpr std::size_t kMaxVerifyCodeLength = 16;
 constexpr std::size_t kMaxRefreshTokenLength = 128;
 constexpr std::size_t kMaxClientVersionLength = 32;
-constexpr std::size_t kMaxAccessTokenLength = 128;
 constexpr std::size_t kRefreshTokenSelectorLength = 36;
 constexpr std::size_t kRefreshTokenVerifierLength = 64;
 
@@ -209,8 +208,6 @@ const char* AuthInputFieldName(AuthInputField field)
             return "refresh_token";
         case AuthInputField::ClientVer:
             return "client_ver";
-        case AuthInputField::Token:
-            return "token";
     }
     return "unknown";
 }
@@ -256,8 +253,6 @@ std::size_t AuthInputMaxLength(AuthInputField field)
             return kMaxRefreshTokenLength;
         case AuthInputField::ClientVer:
             return kMaxClientVersionLength;
-        case AuthInputField::Token:
-            return kMaxAccessTokenLength;
     }
     return 0;
 }
@@ -457,10 +452,6 @@ AuthInputValidationResult ValidateAuthRefreshRequest(const AuthRefreshRequestDto
 
 AuthInputValidationResult ValidateAuthLogoutRequest(const AuthLogoutRequestDto& request)
 {
-    if (const auto result = ValidateStringField(request.token, AuthInputField::Token, true); !result.ok())
-    {
-        return result;
-    }
     if (!request.refresh_token.empty())
     {
         if (const auto result = ValidateStringField(request.refresh_token, AuthInputField::RefreshToken, false);
@@ -486,10 +477,6 @@ AuthInputValidationResult ValidateAuthLogoutRequest(const AuthLogoutRequestDto& 
 
 AuthInputValidationResult ValidateProfileUpdateRequest(const ProfileUpdateRequestDto& request)
 {
-    if (const auto result = ValidateStringField(request.token, AuthInputField::Token, true); !result.ok())
-    {
-        return result;
-    }
     if (const auto result = ValidateStringField(request.name, AuthInputField::User, false); !result.ok())
     {
         return result;
@@ -559,8 +546,6 @@ AuthRefreshRequestDto AuthRefreshRequestFromJsonValue(const memochat::json::Json
 AuthLogoutRequestDto AuthLogoutRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     AuthLogoutRequestDto request;
-    request.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     request.refresh_token = memochat::json::glaze_safe_get<std::string>(root, "refresh_token", "");
     request.client_ver = memochat::json::glaze_safe_get<std::string>(root, "client_ver", "");
     request.all_devices = memochat::json::glaze_safe_get<bool>(root, "all_devices", false);
@@ -570,7 +555,6 @@ AuthLogoutRequestDto AuthLogoutRequestFromJsonValue(const memochat::json::JsonVa
 ProfileUpdateRequestDto ProfileUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     ProfileUpdateRequestDto request;
-    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     request.name = memochat::json::glaze_safe_get<std::string>(root, "name", "");
     request.nick = memochat::json::glaze_safe_get<std::string>(root, "nick", "");
     request.desc = memochat::json::glaze_safe_get<std::string>(root, "desc", "");
@@ -580,8 +564,8 @@ ProfileUpdateRequestDto ProfileUpdateRequestFromJsonValue(const memochat::json::
 
 GetUserInfoRequestDto GetUserInfoRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
+    (void) root;
     GetUserInfoRequestDto request;
-    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     return request;
 }
 
@@ -594,7 +578,6 @@ bool HasAuthEmailRequiredFields(const memochat::json::JsonValue& root)
 bool HasProfileUpdateRequiredFields(const memochat::json::JsonValue& root)
 {
     return memochat::account::auth_public::modules::HasProfileUpdateRequiredShape(
-        memochat::json::glaze_has_key(root, "token"),
         memochat::json::glaze_has_key(root, "nick"),
         memochat::json::glaze_has_key(root, "desc"),
         memochat::json::glaze_has_key(root, "icon"));

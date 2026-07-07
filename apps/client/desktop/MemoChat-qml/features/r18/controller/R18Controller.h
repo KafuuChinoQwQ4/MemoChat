@@ -9,6 +9,7 @@
 #include <QVariantMap>
 
 class ClientGateway;
+class QNetworkRequest;
 
 class R18Controller : public QObject
 {
@@ -137,6 +138,7 @@ signals:
 private:
     void postJson(const QString& path, const QJsonObject& payload, const QString& op);
     void getJson(const QUrl& url, const QString& op);
+    void applyAuthHeader(QNetworkRequest& request) const;
     void setOfficialSourceCatalogUrl(const QString& url);
     QJsonObject authPayload() const;
     QJsonObject officialSourceManifest(const QVariantMap& item, const QUrl& scriptUrl) const;

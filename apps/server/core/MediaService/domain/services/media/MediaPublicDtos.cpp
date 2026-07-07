@@ -145,8 +145,6 @@ bool DecodeMediaUploadInitRequest(std::string_view body, MediaUploadInitRequestD
         return false;
     }
     MediaUploadInitRequestDto parsed;
-    parsed.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    parsed.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     parsed.media_type = memochat::json::glaze_safe_get<std::string>(root, "media_type", "file");
     parsed.file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
     parsed.mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");
@@ -176,8 +174,6 @@ bool DecodeMediaUploadChunkJsonRequest(std::string_view body,
     {
         return false;
     }
-    out->uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    out->token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     out->upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
     out->index = memochat::json::glaze_safe_get<int>(root, "index", -1);
     out->data_base64 = memochat::json::glaze_safe_get<std::string>(root, "data_base64", "");
@@ -199,8 +195,6 @@ bool DecodeMediaUploadCompleteRequest(std::string_view body, MediaUploadComplete
     {
         return false;
     }
-    out->uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    out->token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     out->upload_id = memochat::json::glaze_safe_get<std::string>(root, "upload_id", "");
     return true;
 }
@@ -221,8 +215,6 @@ bool DecodeMediaUploadSimpleRequest(std::string_view body, MediaUploadSimpleRequ
         return false;
     }
     MediaUploadSimpleRequestDto parsed;
-    parsed.uid = memochat::json::glaze_safe_get<int>(root, "uid", 0);
-    parsed.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
     parsed.media_type = memochat::json::glaze_safe_get<std::string>(root, "media_type", "file");
     parsed.file_name = memochat::json::glaze_safe_get<std::string>(root, "file_name", "");
     parsed.mime = memochat::json::glaze_safe_get<std::string>(root, "mime", "");

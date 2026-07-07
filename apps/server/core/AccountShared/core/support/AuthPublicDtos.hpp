@@ -49,8 +49,6 @@ struct AuthRefreshRequestDto
 
 struct AuthLogoutRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string refresh_token;
     std::string client_ver;
     bool all_devices = false;
@@ -58,7 +56,6 @@ struct AuthLogoutRequestDto
 
 struct ProfileUpdateRequestDto
 {
-    std::string token;
     std::string name;
     std::string nick;
     std::string desc;
@@ -67,7 +64,6 @@ struct ProfileUpdateRequestDto
 
 struct GetUserInfoRequestDto
 {
-    std::string token; ///< Session token — must match the authenticated caller's token.
 };
 
 struct AuthResetPasswordResponseDto
@@ -164,7 +160,7 @@ struct AuthLoginResponseDto
     std::string email;
     int uid = 0;
     std::string user_id;
-    std::string token;
+    std::string access_token;
     std::string login_ticket;
     int64_t ticket_expire_ms = 0;
     std::string refresh_token;
@@ -186,7 +182,6 @@ enum class AuthInputField
     VarifyCode,
     RefreshToken,
     ClientVer,
-    Token,
 };
 
 enum class AuthInputValidationCode

@@ -118,8 +118,14 @@ class UserAvatarProfileContractTests(unittest.TestCase):
         # media-key branch now guards against empty prefix before returning URL
         self.assertIn("mediaKeyDownloadUrl(icon)", icon_utils)
         self.assertIn("kDefaultIcon : keyUrl", icon_utils)
-        # normalizeRelativeMediaDownloadUrl now checks for empty prefix before auth-appending
-        self.assertIn("return attachMediaDownloadAuth(full);", icon_utils)
+        # Protected media is fetched through a Bearer-auth cache bridge, not query auth.
+        self.assertIn("inline QString stripMediaDownloadLegacyAuthQuery", icon_utils)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("uid"));', icon_utils)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("token"));', icon_utils)
+        self.assertIn("return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());", icon_utils)
+        self.assertIn("memochat::media::resolveAuthenticatedMediaDownloadUrl(sanitized, token)", icon_utils)
+        self.assertNotIn('query.addQueryItem("uid"', icon_utils)
+        self.assertNotIn('query.addQueryItem("token"', icon_utils)
         self.assertIn("inline QString normalizeLocalMediaDownloadUrl", icon_utils)
         self.assertIn("normalized.setPort(parsedBase.port(-1));", icon_utils)
         self.assertNotIn("parsed.setPort(8080)", icon_utils)

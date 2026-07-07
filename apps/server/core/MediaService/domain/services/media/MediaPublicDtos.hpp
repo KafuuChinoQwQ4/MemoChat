@@ -12,8 +12,6 @@ namespace memochat::media
 
 struct MediaUploadInitRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string media_type;
     std::string file_name;
     std::string mime;
@@ -26,8 +24,6 @@ struct MediaUploadInitRequestDto
 
 struct MediaUploadChunkJsonRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string upload_id;
     int index = -1;
     std::string data_base64;
@@ -35,15 +31,11 @@ struct MediaUploadChunkJsonRequestDto
 
 struct MediaUploadCompleteRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string upload_id;
 };
 
 struct MediaUploadSimpleRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string media_type;
     std::string file_name;
     std::string mime;

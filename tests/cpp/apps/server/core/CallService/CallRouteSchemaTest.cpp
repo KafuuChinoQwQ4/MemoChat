@@ -33,7 +33,7 @@ namespace
 
 const std::vector<std::string>& AuthRequestFields()
 {
-    static const std::vector<std::string> fields = {"uid", "token", "call_id"};
+    static const std::vector<std::string> fields = {"call_id"};
     return fields;
 }
 
@@ -76,8 +76,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/start\n"
            "request: CallStartRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - peer_uid\n"
            "  - call_type\n"
            "response: CallStartResponseDto\n"
@@ -108,8 +106,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/accept\n"
            "request: CallAuthRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - call_id\n"
            "response: CallEventResponseDto\n"
            "  - error\n"
@@ -136,8 +132,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/reject\n"
            "request: CallAuthRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - call_id\n"
            "response: CallEventResponseDto\n"
            "  - error\n"
@@ -164,8 +158,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/cancel\n"
            "request: CallAuthRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - call_id\n"
            "response: CallEventResponseDto\n"
            "  - error\n"
@@ -192,8 +184,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/hangup\n"
            "request: CallAuthRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - call_id\n"
            "response: CallEventResponseDto\n"
            "  - error\n"
@@ -220,8 +210,6 @@ const char* ExpectedCallRouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/call/token\n"
            "request: CallTokenRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - call_id\n"
            "  - role\n"
            "response: CallTokenResponseDto\n"
@@ -278,7 +266,7 @@ TEST(CallRouteSchemaTest, BuildsFieldInventoriesFromCallDtos)
     const auto schemas = memochat::gate::modules::call::CallRouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 6U);
 
-    ExpectFields(schemas[0].request, {"uid", "token", "peer_uid", "call_type"});
+    ExpectFields(schemas[0].request, {"peer_uid", "call_type"});
     ExpectFields(schemas[0].response,
                  {"error",       "event_type",  "call_id",     "room_name",   "call_type",   "caller_uid",
                   "callee_uid",  "caller_name", "callee_name", "caller_icon", "callee_icon", "started_at",
@@ -291,7 +279,7 @@ TEST(CallRouteSchemaTest, BuildsFieldInventoriesFromCallDtos)
         ExpectFields(schemas[i].response, EventResponseFields());
     }
 
-    ExpectFields(schemas[5].request, {"uid", "token", "call_id", "role"});
+    ExpectFields(schemas[5].request, {"call_id", "role"});
     ExpectFields(schemas[5].response, {"error", "call_id", "room_name", "role", "livekit_url", "token", "trace_id"});
 }
 

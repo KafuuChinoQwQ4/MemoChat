@@ -42,8 +42,6 @@ const char* ExpectedR18RouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/r18/source/enable\n"
            "request: R18SourceToggleRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - source_id\n"
            "response: R18SourceToggleResponseDto\n"
            "  - source_id\n"
@@ -53,8 +51,6 @@ const char* ExpectedR18RouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/r18/source/disable\n"
            "request: R18SourceToggleRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - source_id\n"
            "response: R18SourceToggleResponseDto\n"
            "  - source_id\n"
@@ -64,8 +60,6 @@ const char* ExpectedR18RouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/r18/favorite/toggle\n"
            "request: R18FavoriteToggleRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - source_id\n"
            "  - comic_id\n"
            "  - favorited\n"
@@ -78,8 +72,6 @@ const char* ExpectedR18RouteSchemaSnapshot()
            "method: POST\n"
            "path: /api/r18/history/update\n"
            "request: R18HistoryUpdateRequestDto\n"
-           "  - uid\n"
-           "  - token\n"
            "  - source_id\n"
            "  - comic_id\n"
            "  - chapter_id\n"
@@ -129,16 +121,16 @@ TEST(R18RouteSchemaTest, BuildsFieldInventoriesFromR18Dtos)
     const auto schemas = memochat::gate::modules::r18::R18RouteModule::RouteSchemas();
     ASSERT_EQ(schemas.size(), 4U);
 
-    ExpectFields(schemas[0].request, {"uid", "token", "source_id"});
+    ExpectFields(schemas[0].request, {"source_id"});
     ExpectFields(schemas[0].response, {"source_id", "enabled"});
 
-    ExpectFields(schemas[1].request, {"uid", "token", "source_id"});
+    ExpectFields(schemas[1].request, {"source_id"});
     ExpectFields(schemas[1].response, {"source_id", "enabled"});
 
-    ExpectFields(schemas[2].request, {"uid", "token", "source_id", "comic_id", "favorited"});
+    ExpectFields(schemas[2].request, {"source_id", "comic_id", "favorited"});
     ExpectFields(schemas[2].response, {"source_id", "comic_id", "favorited"});
 
-    ExpectFields(schemas[3].request, {"uid", "token", "source_id", "comic_id", "chapter_id", "page_index"});
+    ExpectFields(schemas[3].request, {"source_id", "comic_id", "chapter_id", "page_index"});
     ExpectFields(schemas[3].response, {"source_id", "comic_id", "chapter_id", "page_index"});
 }
 

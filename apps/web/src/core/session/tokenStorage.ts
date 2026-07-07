@@ -2,7 +2,7 @@
  * tokenStorage — security-conscious token persistence.
  *
  * Strategy (per architecture plan):
- * - token + loginTicket: memory-only (anti-XSS)
+ * - access token + loginTicket: memory-only (anti-XSS)
  * - refreshToken: sessionStorage only (no localStorage)
  * - loginTicket: never persisted (one-time use)
  */

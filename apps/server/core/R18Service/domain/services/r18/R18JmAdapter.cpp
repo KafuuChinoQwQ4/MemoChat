@@ -79,7 +79,7 @@ std::string JmImageUrl(const std::string& id, const std::string& image_name)
     return std::string(jm_adapter::modules::ImageBaseUrl()) + "/media/photos/" + id + "/" + image_name;
 }
 
-JsonValue JmComicToJson(const JsonValue& comic, int uid, const std::string& token)
+JsonValue JmComicToJson(const JsonValue& comic)
 {
     const std::string id = FieldString(comic, "id");
     const JsonValue category = json::glaze_get(comic, "category");
@@ -91,7 +91,7 @@ JsonValue JmComicToJson(const JsonValue& comic, int uid, const std::string& toke
     item["title"] = FieldString(comic, "name", id);
     item["subtitle"] = FieldString(comic, "author");
     item["description"] = FieldString(comic, "description");
-    item["cover"] = ImageProxyUrl(uid, token, jm_adapter::modules::SourceId(), JmCoverUrl(id));
+    item["cover"] = ImageProxyUrl(jm_adapter::modules::SourceId(), JmCoverUrl(id));
     item["author"] = FieldString(comic, "author");
     item["tags"] = MakeTags({FieldString(category, "title"), FieldString(category_sub, "title")});
     return item;
@@ -213,7 +213,7 @@ bool IsAllowedJmImageUrl(const std::string& image_url)
     }
 }
 
-json::JsonValue JmSearch(const std::string& keyword, int page, int uid, const std::string& token)
+json::JsonValue JmSearch(const std::string& keyword, int page)
 {
     const int normalized_page = jm_adapter::modules::NormalizeSearchPage(page);
     const std::string normalized_keyword = keyword.empty() ? "" : detail::UrlEncode(keyword);
@@ -236,7 +236,7 @@ json::JsonValue JmSearch(const std::string& keyword, int page, int uid, const st
         {
             if (returned_count >= jm_adapter::modules::SearchPageSize())
                 break;
-            json::glaze_append(data["items"], JmComicToJson(json::JsonValue(entry), uid, token));
+            json::glaze_append(data["items"], JmComicToJson(json::JsonValue(entry)));
             ++returned_count;
         }
     }
@@ -251,7 +251,7 @@ json::JsonValue JmSearch(const std::string& keyword, int page, int uid, const st
     return data;
 }
 
-json::JsonValue JmDetail(const std::string& comic_id, int uid, const std::string& token)
+json::JsonValue JmDetail(const std::string& comic_id)
 {
     std::string id = comic_id;
     if (jm_adapter::modules::ShouldStripJmPrefix(id.rfind("jm", 0) == 0))
@@ -263,7 +263,7 @@ json::JsonValue JmDetail(const std::string& comic_id, int uid, const std::string
     data["comic_id"] = id;
     data["title"] = detail::FieldString(result, "name", id);
     data["description"] = detail::FieldString(result, "description");
-    data["cover"] = detail::ImageProxyUrl(uid, token, jm_adapter::modules::SourceId(), JmCoverUrl(id));
+    data["cover"] = detail::ImageProxyUrl(jm_adapter::modules::SourceId(), JmCoverUrl(id));
     data["likes"] = detail::FieldInt(result, "likes", 0);
     data["views"] = detail::FieldString(result, "total_views");
     data["favorite"] = json::glaze_safe_get<bool>(result, "is_favorite", false);
@@ -313,7 +313,7 @@ json::JsonValue JmDetail(const std::string& comic_id, int uid, const std::string
     return data;
 }
 
-json::JsonValue JmPages(const std::string& chapter_id, int uid, const std::string& token)
+json::JsonValue JmPages(const std::string& chapter_id)
 {
     const json::JsonValue result = JmApiGet("/chapter?id=" + detail::UrlEncode(chapter_id));
     json::JsonValue data;
@@ -331,8 +331,7 @@ json::JsonValue JmPages(const std::string& chapter_id, int uid, const std::strin
             json::JsonValue page;
             page["index"] = index;
             page["image_id"] = chapter_id + "-p" + std::to_string(index);
-            page["url"] =
-                detail::ImageProxyUrl(uid, token, jm_adapter::modules::SourceId(), JmImageUrl(chapter_id, image_name));
+            page["url"] = detail::ImageProxyUrl(jm_adapter::modules::SourceId(), JmImageUrl(chapter_id, image_name));
             json::glaze_append(data["pages"], page);
             ++index;
         }

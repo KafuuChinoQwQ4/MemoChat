@@ -262,12 +262,11 @@ json::JsonValue MakeTags(const std::vector<std::string>& tags)
     return arr;
 }
 
-std::string ImageProxyUrl(int uid, const std::string& token, const std::string& source_id, const std::string& image_url)
+std::string ImageProxyUrl(const std::string& source_id, const std::string& image_url)
 {
     if (image_url.empty())
         return "";
-    return "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + UrlEncode(token) +
-           "&source_id=" + UrlEncode(source_id) + "&image_url=" + UrlEncode(image_url);
+    return "/api/r18/image?source_id=" + UrlEncode(source_id) + "&image_url=" + UrlEncode(image_url);
 }
 
 R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& line2)

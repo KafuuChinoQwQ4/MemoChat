@@ -24,6 +24,7 @@ void R18Controller::postJson(const QString& path, const QJsonObject& payload, co
     }
     QNetworkRequest request(QUrl(gate_url_prefix + path));
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    applyAuthHeader(request);
     applyRequestOptions(request);
     auto* reply = _network.post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     armTimeout(reply);
@@ -98,6 +99,7 @@ void R18Controller::getJson(const QUrl& url, const QString& op)
     setLoading(true);
     setError({});
     QNetworkRequest request(url);
+    applyAuthHeader(request);
     applyRequestOptions(request);
     auto* reply = _network.get(request);
     armTimeout(reply);
@@ -157,11 +159,17 @@ void R18Controller::getJson(const QUrl& url, const QString& op)
 
 QJsonObject R18Controller::authPayload() const
 {
-    QJsonObject payload;
+    return {};
+}
+
+void R18Controller::applyAuthHeader(QNetworkRequest& request) const
+{
     if (_gateway && _gateway->userMgr())
     {
-        payload[QStringLiteral("uid")] = _gateway->userMgr()->GetUid();
-        payload[QStringLiteral("token")] = _gateway->userMgr()->GetToken();
+        const QString token = _gateway->userMgr()->GetToken().trimmed();
+        if (!token.isEmpty())
+        {
+            request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8());
+        }
     }
-    return payload;
 }

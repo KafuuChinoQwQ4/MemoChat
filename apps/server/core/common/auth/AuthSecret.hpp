@@ -11,9 +11,15 @@
 namespace memochat::auth
 {
 inline constexpr std::string_view kWellKnownDevHmacSecret = "memochat-dev-chat-secret";
+inline constexpr std::string_view kWellKnownDevJwtAccessSecret = "memochat-dev-access-token-secret";
 inline bool IsWellKnownDevHmacSecret(std::string_view secret)
 {
     return secret == kWellKnownDevHmacSecret;
+}
+
+inline bool IsWellKnownDevJwtAccessSecret(std::string_view secret)
+{
+    return secret == kWellKnownDevJwtAccessSecret;
 }
 
 inline std::string LowerAscii(std::string value)
@@ -64,6 +70,25 @@ inline void RequireNonDefaultChatAuthSecretInProduction(std::string_view service
     {
         throw std::runtime_error(std::string(service_name) +
                                  " refuses to start: ChatAuth.HmacSecret must be at least 32 bytes");
+    }
+}
+
+inline void RequireNonDefaultJwtAccessSecretInProduction(std::string_view service_name, std::string_view secret)
+{
+    if (!IsProductionSecretEnforcementEnabled())
+    {
+        return;
+    }
+    if (secret.empty() || IsWellKnownDevJwtAccessSecret(secret))
+    {
+        throw std::runtime_error(std::string(service_name) +
+                                 " refuses to start: AuthToken.JwtSecret must be non-default; set "
+                                 "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development");
+    }
+    if (secret.size() < 32)
+    {
+        throw std::runtime_error(std::string(service_name) +
+                                 " refuses to start: AuthToken.JwtSecret must be at least 32 bytes");
     }
 }
 } // namespace memochat::auth

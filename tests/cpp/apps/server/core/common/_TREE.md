@@ -1,11 +1,12 @@
 # common/ 目录树
 
-> 测试服务端公共库 common/，覆盖 JSON、日志、proto 与 C++26 标准反射基础设施。
+> 测试服务端公共库 common/，覆盖认证、JSON、日志、proto 与 C++26 标准反射基础设施。
 
 ## 子目录
 
 | 子目录 | 作用概括 |
 | --- | --- |
+| [`auth/`](auth/_TREE.md) | 公共认证算法测试 |
 | [`json/`](json/_TREE.md) | Glaze JSON 兼容性测试 |
 | [`logging/`](logging/_TREE.md) | 结构化 JSON 日志测试 |
 | [`proto/`](proto/_TREE.md) | Protobuf 消息序列化测试 |

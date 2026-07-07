@@ -103,7 +103,6 @@ void AgentController::uploadDocument(const QString& filePath)
     }
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["file_name"] = fileName;
     payload["file_type"] = fileType;
     payload["content"] = QString::fromLatin1(fileData.toBase64());
@@ -147,7 +146,6 @@ void AgentController::searchKnowledgeBase(const QString& query)
     emit knowledgeSearchResultChanged();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["query"] = query;
     payload["top_k"] = 5;
     addAuthToPayload(payload);
@@ -167,7 +165,6 @@ void AgentController::listKnowledgeBases()
     setKnowledgeBusy(true, "正在加载知识库...");
     QUrl url = agentApiUrl(QStringLiteral("/ai/kb/list"));
     QUrlQuery query;
-    query.addQueryItem("uid", QString::number(uid));
     addAuthToQuery(query);
     url.setQuery(query);
 
@@ -186,7 +183,6 @@ void AgentController::deleteKnowledgeBase(const QString& kbId)
     setKnowledgeBusy(true, "正在删除知识库...");
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["kb_id"] = kbId;
     addAuthToPayload(payload);
 

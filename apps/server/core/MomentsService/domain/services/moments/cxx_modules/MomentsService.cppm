@@ -52,21 +52,6 @@ const char* JsonContentType()
     return "application/json";
 }
 
-const char* UidField()
-{
-    return "uid";
-}
-
-const char* LoginTicketField()
-{
-    return "login_ticket";
-}
-
-bool HasRequiredAuthFields(bool has_uid, bool has_login_ticket)
-{
-    return has_uid && has_login_ticket;
-}
-
 bool HasValidUid(int uid)
 {
     return uid > 0;

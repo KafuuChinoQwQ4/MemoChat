@@ -11,4 +11,9 @@ bool ShouldAcceptStoredUserToken(bool redis_hit, bool stored_token_empty, bool t
 {
     return redis_hit && !stored_token_empty && token_matches;
 }
+
+bool ShouldAcceptJwtAccessClaims(bool jwt_valid, int expected_uid, int claims_uid)
+{
+    return jwt_valid && expected_uid > 0 && claims_uid == expected_uid;
+}
 } // namespace memochat::gate::auth::modules

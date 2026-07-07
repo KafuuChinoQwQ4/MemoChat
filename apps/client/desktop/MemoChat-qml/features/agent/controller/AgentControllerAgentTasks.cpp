@@ -60,7 +60,6 @@ void AgentController::listAgentTasks()
     setAgentTaskBusy(true, "正在加载后台任务...");
     QUrl url = agentApiUrl(QStringLiteral("/ai/tasks"));
     QUrlQuery query;
-    query.addQueryItem("uid", QString::number(uid));
     query.addQueryItem("limit", "50");
     addAuthToQuery(query);
     url.setQuery(query);
@@ -84,7 +83,6 @@ void AgentController::createAgentTask(const QString& content, const QString& tit
     setAgentTaskBusy(true, "正在创建后台任务...");
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["title"] = title.trimmed().isEmpty() ? trimmed.left(32) : title.trimmed();
     payload["content"] = trimmed;
     payload["session_id"] = _current_session_id;

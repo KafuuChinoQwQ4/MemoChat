@@ -6,6 +6,7 @@
 #include "json/GlazeCompat.hpp"
 #include "logging/Logger.hpp"
 #include "routing/RouteRegistry.hpp"
+#include "support/BearerAccessAuth.hpp"
 
 #include <string>
 
@@ -18,7 +19,7 @@ namespace
 {
 namespace response_modules = memochat::call::route_response::modules;
 
-using JsonPostHandler = bool (*)(const memochat::json::JsonValue&, memochat::json::JsonValue&, const std::string&);
+using JsonPostHandler = bool (*)(int, const memochat::json::JsonValue&, memochat::json::JsonValue&, const std::string&);
 
 void WriteJson(memochat::gate::routing::GateResponse& response,
                const std::string& content_type,
@@ -33,6 +34,16 @@ bool HandleJsonPost(const memochat::gate::routing::GateRequest& request,
                     memochat::gate::routing::GateResponse& response,
                     JsonPostHandler handler)
 {
+    int uid = 0;
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
+    {
+        memochat::json::JsonValue root;
+        root["error"] = ErrorCodes::TokenInvalid;
+        root["trace_id"] = request.trace_id;
+        WriteJson(response, response_modules::JsonContentType(), root);
+        return true;
+    }
+
     memochat::json::JsonValue root;
     memochat::json::JsonValue src_root;
     memochat::json::JsonReader reader;
@@ -43,7 +54,7 @@ bool HandleJsonPost(const memochat::gate::routing::GateRequest& request,
         return true;
     }
 
-    handler(src_root, root, request.trace_id);
+    handler(uid, src_root, root, request.trace_id);
     root["trace_id"] = request.trace_id;
     WriteJson(response, response_modules::JsonContentType(), root);
     return true;
@@ -59,55 +70,72 @@ std::string QueryValue(const memochat::gate::routing::GateRequest& request, cons
     return iter->second;
 }
 
-int QueryUid(const memochat::gate::routing::GateRequest& request)
-{
-    const auto uid = QueryValue(request, "uid");
-    return memochat::call::route_modules::ParseUnsignedDecimalOrZero(uid.data(), uid.size());
-}
-
-bool StartCall(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool StartCall(int uid,
+               const memochat::json::JsonValue& src_root,
+               memochat::json::JsonValue& root,
+               const std::string& trace_id)
 {
     memolog::LogInfo("call.start.requested", "call start requested", {{"trace_id", trace_id}, {"module", "call"}});
-    return CallService::GetInstance()->StartCall(src_root, root, trace_id);
+    return CallService::GetInstance()->StartCall(uid, src_root, root, trace_id);
 }
 
-bool AcceptCall(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool AcceptCall(int uid,
+                const memochat::json::JsonValue& src_root,
+                memochat::json::JsonValue& root,
+                const std::string& trace_id)
 {
-    return CallService::GetInstance()->AcceptCall(src_root, root, trace_id);
+    return CallService::GetInstance()->AcceptCall(uid, src_root, root, trace_id);
 }
 
-bool RejectCall(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool RejectCall(int uid,
+                const memochat::json::JsonValue& src_root,
+                memochat::json::JsonValue& root,
+                const std::string& trace_id)
 {
-    return CallService::GetInstance()->RejectCall(src_root, root, trace_id);
+    return CallService::GetInstance()->RejectCall(uid, src_root, root, trace_id);
 }
 
-bool CancelCall(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool CancelCall(int uid,
+                const memochat::json::JsonValue& src_root,
+                memochat::json::JsonValue& root,
+                const std::string& trace_id)
 {
-    return CallService::GetInstance()->CancelCall(src_root, root, trace_id);
+    return CallService::GetInstance()->CancelCall(uid, src_root, root, trace_id);
 }
 
-bool HangupCall(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool HangupCall(int uid,
+                const memochat::json::JsonValue& src_root,
+                memochat::json::JsonValue& root,
+                const std::string& trace_id)
 {
-    return CallService::GetInstance()->HangupCall(src_root, root, trace_id);
+    return CallService::GetInstance()->HangupCall(uid, src_root, root, trace_id);
 }
 
-bool PostToken(const memochat::json::JsonValue& src_root, memochat::json::JsonValue& root, const std::string& trace_id)
+bool PostToken(int uid,
+               const memochat::json::JsonValue& src_root,
+               memochat::json::JsonValue& root,
+               const std::string& trace_id)
 {
     const memochat::call::CallTokenRequestDto token_request = memochat::call::CallTokenRequestFromJsonValue(src_root);
-    return CallService::GetInstance()
-        ->GetToken(token_request.uid, token_request.token, token_request.call_id, token_request.role, root, trace_id);
+    return CallService::GetInstance()->GetToken(uid, token_request.call_id, token_request.role, root, trace_id);
 }
 
 bool HandleGetToken(const memochat::gate::routing::GateRequest& request,
                     memochat::gate::routing::GateResponse& response)
 {
-    const int uid = QueryUid(request);
-    const std::string token = QueryValue(request, "token");
+    int uid = 0;
     const std::string call_id = QueryValue(request, "call_id");
     const std::string role = QueryValue(request, "role");
 
     memochat::json::JsonValue root;
-    CallService::GetInstance()->GetToken(uid, token, call_id, role, root, request.trace_id);
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+    }
+    else
+    {
+        CallService::GetInstance()->GetToken(uid, call_id, role, root, request.trace_id);
+    }
 
     response.status = response_modules::OkStatus();
     response.content_type = response_modules::TokenJsonContentType();
