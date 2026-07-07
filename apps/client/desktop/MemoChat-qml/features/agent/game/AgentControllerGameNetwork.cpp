@@ -49,7 +49,6 @@ void AgentController::sendGameGet(const QUrl& url, const QString& op, const QStr
     const int uid = scopedUid();
     QUrl authedUrl = url;
     QUrlQuery query(authedUrl);
-    addAuthToQuery(query);
     authedUrl.setQuery(query);
     clearGameError();
     setGameBusy(true, statusText);
@@ -63,7 +62,6 @@ void AgentController::sendGamePost(const QUrl& url,
 {
     const int uid = scopedUid();
     QJsonObject authedPayload = payload;
-    addAuthToPayload(authedPayload);
     clearGameError();
     setGameBusy(true, statusText);
     _gameClient->post(url, authedPayload, op, statusText, uid);
@@ -74,7 +72,6 @@ void AgentController::sendGameDelete(const QUrl& url, const QString& op, const Q
     const int uid = scopedUid();
     QUrl authedUrl = url;
     QUrlQuery query(authedUrl);
-    addAuthToQuery(query);
     authedUrl.setQuery(query);
     clearGameError();
     setGameBusy(true, statusText);

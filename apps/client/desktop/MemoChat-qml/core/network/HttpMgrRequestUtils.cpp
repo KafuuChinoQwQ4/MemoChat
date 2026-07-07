@@ -230,6 +230,16 @@ void prepareJsonRequest(QNetworkRequest& request, const QByteArray& data)
     prepareRequestTransport(request);
 }
 
+void prepareUnauthenticatedJsonRequest(QNetworkRequest& request, const QByteArray& data)
+{
+    // No Authorization header — use for credential-exchange endpoints such as
+    // /user_login, /user_register, and /get_varifycode where a stale Bearer
+    // token must not be sent.
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
+    prepareRequestTransport(request);
+}
+
 void prepareGetRequest(QNetworkRequest& request)
 {
     applyBearerAccessTokenHeader(request);

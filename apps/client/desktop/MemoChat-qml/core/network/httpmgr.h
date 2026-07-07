@@ -20,6 +20,13 @@ public:
     ~HttpMgr();
     void
     PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString& module = QStringLiteral("http"));
+    /** Like PostHttpReq but does NOT add an Authorization header — use for
+     *  credential-exchange routes (login, register, verify-code). */
+    void PostAnonymousHttpReq(QUrl url,
+                              QJsonObject json,
+                              ReqId req_id,
+                              Modules mod,
+                              const QString& module = QStringLiteral("http"));
     void GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString& module = QStringLiteral("http"));
     /** Drop pooled idle sockets (e.g. after logout) so the next login does not reuse a dead connection. */
     void clearConnectionCache();
@@ -32,7 +39,8 @@ private:
                              ReqId req_id,
                              Modules mod,
                              const QString& module,
-                             QVector<QUrl> fallbackUrls);
+                             QVector<QUrl> fallbackUrls,
+                             bool withAuth = true);
     void
     getHttpReqInternal(const QUrl& url, ReqId req_id, Modules mod, const QString& module, QVector<QUrl> fallbackUrls);
     QNetworkAccessManager _manager;

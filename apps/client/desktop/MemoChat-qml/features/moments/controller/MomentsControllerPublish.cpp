@@ -193,7 +193,7 @@ void MomentsController::submitPublishRequest(const QString& location,
         setProgressText(QStringLiteral("正在发布朋友圈..."));
     }
 
-    const QJsonObject payload = memochat::moments::buildPublishPayload(buildAuthJson(), location, visibility, items);
+    const QJsonObject payload = memochat::moments::buildPublishPayload(QJsonObject{}, location, visibility, items);
 
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/api/moments/publish"),
                                         payload,

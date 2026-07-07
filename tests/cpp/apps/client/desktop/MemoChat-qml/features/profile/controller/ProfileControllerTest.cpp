@@ -79,16 +79,13 @@ TEST(ProfileControllerTest, ValidateProfileRejectsInvalidVisibleInputs)
     EXPECT_TRUE(errorText.isEmpty());
 }
 
-TEST(ProfileControllerTest, SavePayloadTrimsEditableFieldsAndPreservesIdentityFields)
+TEST(ProfileControllerTest, SavePayloadTrimsEditableFieldsAndOmitsClientIdentityFields)
 {
     const QJsonObject payload = memochat::profile_payload::buildSaveProfilePayload(
-        42,
-        QStringLiteral("access"),
-                       QStringLiteral("memo_user"),
-                                      QStringLiteral(" Nick "), QStringLiteral(" Desc "), QStringLiteral("avatar.png"));
+        QStringLiteral("memo_user"), QStringLiteral(" Nick "), QStringLiteral(" Desc "), QStringLiteral("avatar.png"));
 
-    EXPECT_EQ(payload.value(QStringLiteral("uid")).toInt(), 42);
-    EXPECT_EQ(payload.value(QStringLiteral("token")).toString(), QStringLiteral("access"));
+    EXPECT_FALSE(payload.contains(QStringLiteral("uid")));
+    EXPECT_FALSE(payload.contains(QStringLiteral("token")));
     EXPECT_EQ(payload.value(QStringLiteral("name")).toString(), QStringLiteral("memo_user"));
     EXPECT_EQ(payload.value(QStringLiteral("nick")).toString(), QStringLiteral("Nick"));
     EXPECT_EQ(payload.value(QStringLiteral("desc")).toString(), QStringLiteral("Desc"));

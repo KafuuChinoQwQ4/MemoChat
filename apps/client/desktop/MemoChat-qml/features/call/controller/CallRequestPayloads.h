@@ -6,9 +6,9 @@
 
 namespace memochat::call_request_payload
 {
-QJsonObject buildStartCallPayload(int uid, const QString& token, int peerUid, const QString& callType);
-QJsonObject buildCallIdPayload(int uid, const QString& token, const QString& callId);
-QJsonObject buildFetchTokenPayload(int uid, const QString& token, const QString& callId, const QString& role);
+QJsonObject buildStartCallPayload(int peerUid, const QString& callType);
+QJsonObject buildCallIdPayload(const QString& callId);
+QJsonObject buildFetchTokenPayload(const QString& callId, const QString& role);
 } // namespace memochat::call_request_payload
 
 #endif // CALLREQUESTPAYLOADS_H

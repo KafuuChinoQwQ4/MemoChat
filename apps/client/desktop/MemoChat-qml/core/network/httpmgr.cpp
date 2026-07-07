@@ -21,7 +21,14 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
 {
     QVector<QUrl> urls = gateProtocolFallbackUrls(url);
     const QUrl first = urls.takeFirst();
-    postHttpReqInternal(first, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, urls);
+    postHttpReqInternal(first, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, urls, true);
+}
+
+void HttpMgr::PostAnonymousHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString& module)
+{
+    QVector<QUrl> urls = gateProtocolFallbackUrls(url);
+    const QUrl first = urls.takeFirst();
+    postHttpReqInternal(first, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, urls, false);
 }
 
 void HttpMgr::GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString& module)
@@ -36,10 +43,18 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
                                   ReqId req_id,
                                   Modules mod,
                                   const QString& module,
-                                  QVector<QUrl> fallbackUrls)
+                                  QVector<QUrl> fallbackUrls,
+                                  bool withAuth)
 {
     QNetworkRequest request(url);
-    prepareJsonRequest(request, data);
+    if (withAuth)
+    {
+        prepareJsonRequest(request, data);
+    }
+    else
+    {
+        prepareUnauthenticatedJsonRequest(request, data);
+    }
 
     QString traceId;
     QString requestId;

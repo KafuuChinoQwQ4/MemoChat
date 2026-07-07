@@ -60,7 +60,6 @@ void AgentController::listMemories()
     setMemoryBusy(true, "正在加载记忆...");
     QUrl url = agentApiUrl(QStringLiteral("/ai/memory/list"));
     QUrlQuery query;
-    addAuthToQuery(query);
     url.setQuery(query);
 
     ReqId reqId = nextAgentHttpRequestId();
@@ -83,7 +82,6 @@ void AgentController::createMemory(const QString& content)
 
     QJsonObject payload;
     payload["content"] = trimmed;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::MemoryCreate, QString(), uid);
@@ -106,7 +104,6 @@ void AgentController::deleteMemory(const QString& memoryId)
 
     QJsonObject payload;
     payload["memory_id"] = trimmed;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::MemoryDelete, QString(), uid);

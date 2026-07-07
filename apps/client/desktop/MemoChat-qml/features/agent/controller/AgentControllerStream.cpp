@@ -59,8 +59,6 @@ void AgentController::sendStreamMessage(const QString& content)
     {
         payload["requested_tools"] = requestedTools;
     }
-    addAuthToPayload(payload);
-
     _streamClient->start(agentApiUrl(QStringLiteral("/ai/chat/stream")), payload);
 }
 

@@ -36,12 +36,19 @@ add_executable(dialog_list_service_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelState.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelQueries.cpp
+    ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
 )
 set_target_properties(dialog_list_service_gtest PROPERTIES AUTOMOC ON)
+set_target_properties(dialog_list_service_gtest PROPERTIES
+    CXX_STANDARD ${MEMOCHAT_QT_CXX_STANDARD}
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
 
 target_link_libraries(dialog_list_service_gtest PRIVATE
     GTest_TestLib
     Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
 )
 
 target_include_directories(dialog_list_service_gtest PRIVATE

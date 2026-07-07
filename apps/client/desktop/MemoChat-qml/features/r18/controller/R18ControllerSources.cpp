@@ -122,7 +122,7 @@ void R18Controller::importSourcePackage(const QString& filePath, const QString& 
         return;
     }
 
-    auto payload = authPayload();
+    QJsonObject payload;
     payload[QStringLiteral("file_name")] = QFileInfo(localPath).fileName();
     payload[QStringLiteral("data_base64")] = QString::fromLatin1(file.readAll().toBase64());
     payload[QStringLiteral("manifest_json")] = manifestJson;
@@ -229,7 +229,7 @@ void R18Controller::downloadAndImportSource(const QUrl& scriptUrl, const QVarian
 
             const QJsonObject manifest =
                 item.isEmpty() ? sourceUrlManifest(scriptUrl) : officialSourceManifest(item, scriptUrl);
-            auto payload = authPayload();
+            QJsonObject payload;
             QString fileName = item.value(
                 QStringLiteral("fileName"),
                                item.value(QStringLiteral("filename"), item.value(QStringLiteral("key")))).toString();

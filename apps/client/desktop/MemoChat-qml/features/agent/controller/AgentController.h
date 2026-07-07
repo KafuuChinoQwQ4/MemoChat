@@ -266,8 +266,6 @@ private:
     void handleGameNetworkError(const QString& op, const QString& errorText, int uid);
     void handleGameFormatError(const QString& op, int uid);
     int currentUid() const;
-    void addAuthToPayload(QJsonObject& payload) const;
-    void addAuthToQuery(QUrlQuery& query) const;
     int scopedUid();
     ReqId nextAgentHttpRequestId();
     void ensureUserScope();

@@ -5,11 +5,11 @@
 
 void ChatMessageModel::setDownloadAuthContext(int uid, const QString& token)
 {
-    if (_download_uid == uid && _download_token == token)
+    Q_UNUSED(uid); // uid is no longer used; auth is token-only via Bearer header
+    if (_download_token == token)
     {
         return;
     }
-    _download_uid = uid;
     _download_token = token;
     if (_items.empty())
     {

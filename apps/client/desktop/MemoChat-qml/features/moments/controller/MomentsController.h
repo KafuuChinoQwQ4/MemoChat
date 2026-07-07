@@ -104,7 +104,6 @@ private:
     void setProgressText(const QString& text);
     void setAuthorFilterUid(int uid);
     void submitPublishRequest(const QString& location, int visibility, const QVariantList& items, bool manageLoading);
-    QJsonObject buildAuthJson() const;
     MomentEntry parseMomentEntry(const QJsonObject& obj) const;
     void applyAuthoritativeState(MomentEntry& entry) const;
     void submitLikeRequest(qint64 momentId, bool liked);

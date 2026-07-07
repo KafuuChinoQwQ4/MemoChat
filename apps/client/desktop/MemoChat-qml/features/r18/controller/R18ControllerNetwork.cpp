@@ -1,6 +1,7 @@
 #include "R18Controller.h"
 
 #include "ClientGateway.h"
+#include "HttpMgrRequestUtils.h"
 #include "R18ControllerPrivate.h"
 #include "global.h"
 #include "usermgr.h"
@@ -157,19 +158,9 @@ void R18Controller::getJson(const QUrl& url, const QString& op)
             });
 }
 
-QJsonObject R18Controller::authPayload() const
-{
-    return {};
-}
-
 void R18Controller::applyAuthHeader(QNetworkRequest& request) const
 {
-    if (_gateway && _gateway->userMgr())
-    {
-        const QString token = _gateway->userMgr()->GetToken().trimmed();
-        if (!token.isEmpty())
-        {
-            request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8());
-        }
-    }
+    // Delegate to the shared helper so auth token is always read from the same
+    // global UserMgr source as every other controller in the application.
+    applyBearerAccessTokenHeader(request);
 }

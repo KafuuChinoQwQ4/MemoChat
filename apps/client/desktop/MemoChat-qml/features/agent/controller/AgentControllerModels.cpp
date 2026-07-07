@@ -76,7 +76,6 @@ void AgentController::refreshModelList()
 
     QUrl url = agentApiUrl(QStringLiteral("/ai/model/list"));
     QUrlQuery query;
-    addAuthToQuery(query);
     url.setQuery(query);
 
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
@@ -101,7 +100,6 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     payload["base_url"] = trimmedUrl;
     payload["api_key"] = trimmedKey;
     payload["adapter"] = QStringLiteral("openai_compatible");
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister, QString(), scopedUid());
@@ -123,7 +121,6 @@ void AgentController::deleteApiProvider(const QString& providerId)
     setApiProviderBusy(true, "正在删除 API 模型...");
     QJsonObject payload;
     payload["provider_id"] = trimmedProviderId;
-    addAuthToPayload(payload);
 
     ReqId reqId = nextAgentHttpRequestId();
     _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete, QString(), scopedUid());

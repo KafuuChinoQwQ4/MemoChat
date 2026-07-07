@@ -122,8 +122,9 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
             server_info.Endpoints.push_back(endpoint);
         }
     }
-    if (server_info.Uid <= 0 || server_info.Token.trimmed().isEmpty() || server_info.LoginTicket.trimmed().isEmpty() ||
-        server_info.RefreshToken.trimmed().isEmpty() || server_info.Endpoints.isEmpty())
+    // login_ticket and refresh_token are legacy fields that may be absent on
+    // Bearer-only server responses; only require the access token and endpoints.
+    if (server_info.Uid <= 0 || server_info.Token.trimmed().isEmpty() || server_info.Endpoints.isEmpty())
     {
         _port.setIgnoreNextLoginDisconnect(false);
         _port.setBusy(false);

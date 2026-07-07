@@ -1,6 +1,7 @@
 #ifndef USERMGR_H
 #define USERMGR_H
 #include <QObject>
+#include <QMutex>
 #include <memory>
 #include <singleton.h>
 #include "userdata.h"
@@ -83,6 +84,7 @@ private:
     std::vector<std::shared_ptr<GroupInfoData>> _group_list;
     QMap<qint64, std::shared_ptr<GroupInfoData>> _group_map;
     QString _token;
+    mutable QMutex _token_mutex; // guards _token against main-thread writes vs worker-thread reads
     int _chat_loaded;
     int _contact_loaded;
     int _group_loaded;
