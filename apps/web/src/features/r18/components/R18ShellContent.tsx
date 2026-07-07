@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ENDPOINTS } from "@/core/config/endpoints"
-import { runtimeConfig } from "@/core/config/runtimeConfig"
 import { useSessionStore } from "@/core/session/sessionStore"
 import { getGateway } from "@/shared/gateway/ClientGateway"
+import { useMediaUrl } from "@/shared/hooks/useMediaUrl"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
@@ -56,12 +56,22 @@ function sourceTitle(source: R18Source): string {
   return source.title?.trim() || source.name?.trim() || source.id
 }
 
-function resolveR18Url(ref: string | undefined): string {
-  if (!ref) return ""
-  if (ref.startsWith("data:") || ref.startsWith("blob:") || ref.startsWith("http://") || ref.startsWith("https://")) {
-    return ref
+function R18Cover({ cover, title }: { cover?: string; title?: string }) {
+  const coverUrl = useMediaUrl(cover)
+  if (!coverUrl) {
+    return (
+      <div style={{ aspectRatio: "3 / 4", display: "grid", placeItems: "center", color: "var(--text-disabled)", background: "var(--tint-hover)" }}>
+        无封面
+      </div>
+    )
   }
-  return `${runtimeConfig.gateBaseUrl}${ref.startsWith("/") ? ref : `/${ref}`}`
+  return (
+    <img
+      src={coverUrl}
+      alt={title ?? "cover"}
+      style={{ width: "100%", aspectRatio: "3 / 4", objectFit: "cover", background: "var(--tint-hover)" }}
+    />
+  )
 }
 
 export function R18ShellContent() {
@@ -80,8 +90,7 @@ export function R18ShellContent() {
     enabled: authReady,
     queryFn: async () => {
       if (uid === null || token === null) throw new Error("Missing R18 auth")
-      const query = new URLSearchParams({ uid: String(uid), token }).toString()
-      const response = await getGateway().http.get<R18SourcesResponse>(`${ENDPOINTS.r18Sources}?${query}`)
+      const response = await getGateway().http.get<R18SourcesResponse>(ENDPOINTS.r18Sources)
       if (response.error !== 0) throw new Error(response.message || `R18 sources failed: ${response.error}`)
       return response.data?.sources ?? []
     },
@@ -105,8 +114,6 @@ export function R18ShellContent() {
     queryFn: async () => {
       if (uid === null || token === null || !selectedSource?.id) throw new Error("Missing R18 search input")
       const response = await getGateway().http.post<R18SearchResponse>(ENDPOINTS.r18Search, {
-        uid,
-        token,
         source_id: selectedSource.id,
         keyword: submittedKeyword,
         page,
@@ -123,7 +130,7 @@ export function R18ShellContent() {
     try {
       const response = await getGateway().http.post<{ error: number; message?: string }>(
         enable ? ENDPOINTS.r18SourceEnable : ENDPOINTS.r18SourceDisable,
-        { uid, token, source_id: source.id },
+        { source_id: source.id },
       )
       if (response.error !== 0) throw new Error(response.message || "源切换失败")
       await sourcesQuery.refetch()
@@ -238,20 +245,12 @@ export function R18ShellContent() {
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 }}>
               {(searchQuery.data?.items ?? []).map((item) => {
-                const cover = resolveR18Url(item.cover)
                 return (
                   <GlassSurface key={`${item.source_id}-${item.comic_id}`} elevated style={{ overflow: "hidden" }}>
-                    {cover ? (
-                      <img
-                        src={cover}
-                        alt={item.title ?? "cover"}
-                        style={{ width: "100%", aspectRatio: "3 / 4", objectFit: "cover", background: "var(--tint-hover)" }}
-                      />
-                    ) : (
-                      <div style={{ aspectRatio: "3 / 4", display: "grid", placeItems: "center", color: "var(--text-disabled)", background: "var(--tint-hover)" }}>
-                        无封面
-                      </div>
-                    )}
+                    <R18Cover
+                      {...(item.cover === undefined ? {} : { cover: item.cover })}
+                      {...(item.title === undefined ? {} : { title: item.title })}
+                    />
                     <div style={{ padding: 12 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                         {item.title || item.comic_id || "未命名"}

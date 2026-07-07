@@ -9,7 +9,7 @@ export const handlers = [
             name: "TestUser",
             email: "test@example.com",
             icon: "",
-            token: "mock-token",
+            access_token: "mock-access-token",
             login_ticket: "mock-ticket",
             ticket_expire_ms: Date.now() + 7 * 86400 * 1000,
             refresh_token: "mock-refresh",

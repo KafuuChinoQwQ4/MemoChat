@@ -65,23 +65,20 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::mo
     std::array<std::string_view, 5>{"error", "moment_id", "has_more", "comment_count", "comments"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentLikeResponseDto>(
     std::array<std::string_view, 6>{"error", "comment_id", "has_liked", "like_count", "like_names", "likes"}));
-static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentsAuthFieldsDto>(
-    std::array<std::string_view, 2>{"uid", "login_ticket"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentPublishRequestDto>(
-    std::array<std::string_view, 5>{"uid", "login_ticket", "visibility", "location", "items"}));
+    std::array<std::string_view, 3>{"visibility", "location", "items"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentListRequestDto>(
-    std::array<std::string_view, 5>{"uid", "login_ticket", "last_moment_id", "limit", "author_uid"}));
+    std::array<std::string_view, 3>{"last_moment_id", "limit", "author_uid"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentIdRequestDto>(
-    std::array<std::string_view, 3>{"uid", "login_ticket", "moment_id"}));
+    std::array<std::string_view, 1>{"moment_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentLikeRequestDto>(
-    std::array<std::string_view, 4>{"uid", "login_ticket", "moment_id", "like"}));
+    std::array<std::string_view, 2>{"moment_id", "like"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentRequestDto>(
-    std::array<std::string_view,
-               8>{"uid", "login_ticket", "moment_id", "content", "reply_uid", "comment_id", "delete_", "delete_mode"}));
+    std::array<std::string_view, 6>{"moment_id", "content", "reply_uid", "comment_id", "delete_", "delete_mode"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentListRequestDto>(
-    std::array<std::string_view, 5>{"uid", "login_ticket", "moment_id", "last_comment_id", "limit"}));
+    std::array<std::string_view, 3>{"moment_id", "last_comment_id", "limit"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::moments::MomentCommentLikeRequestDto>(
-    std::array<std::string_view, 4>{"uid", "login_ticket", "comment_id", "like"}));
+    std::array<std::string_view, 2>{"comment_id", "like"}));
 #endif
 
 namespace
@@ -455,16 +452,12 @@ TEST(MomentsOutputDtosTest, WritesCommentListAndCommentLikeResponses)
 TEST(MomentsOutputDtosTest, ParsesMomentRequestNumericStringAndBoolCoercions)
 {
     const memochat::json::JsonValue root = Parse(
-        R"({"uid":42,"login_ticket":"ticket","moment_id":"100","comment_id":"900","last_moment_id":"88","last_comment_id":"77","reply_uid":"55","author_uid":"66","limit":"60","like":"0","delete":"true","content":""})");
+        R"({"moment_id":"100","comment_id":"900","last_moment_id":"88","last_comment_id":"77","reply_uid":"55","author_uid":"66","limit":"60","like":"0","delete":"true","content":""})");
 
     EXPECT_EQ(memochat::gate::services::moments::MomentsReadInt64(root, "moment_id", 0), 100);
     EXPECT_EQ(memochat::gate::services::moments::MomentsReadInt(root, "reply_uid", 0), 55);
     EXPECT_FALSE(memochat::gate::services::moments::MomentsReadBool(root, "like", true));
     EXPECT_TRUE(memochat::gate::services::moments::MomentsReadBool(root, "delete", false));
-
-    const auto auth = memochat::gate::services::moments::MomentsAuthFieldsFromJsonValue(root);
-    EXPECT_EQ(auth.uid, 42);
-    EXPECT_EQ(auth.login_ticket, "ticket");
 
     const auto list = memochat::gate::services::moments::MomentListRequestFromJsonValue(root);
     EXPECT_EQ(list.last_moment_id, 88);
@@ -491,11 +484,7 @@ TEST(MomentsOutputDtosTest, ParsesMomentRequestNumericStringAndBoolCoercions)
 TEST(MomentsOutputDtosTest, PreservesMomentRequestDefaultsAndWrongTypeFallbacks)
 {
     const memochat::json::JsonValue root =
-        Parse(R"({"uid":"bad","login_ticket":7,"moment_id":"bad","limit":0,"like":"bad","delete":{},"content":123})");
-
-    const auto auth = memochat::gate::services::moments::MomentsAuthFieldsFromJsonValue(root);
-    EXPECT_EQ(auth.uid, 0);
-    EXPECT_EQ(auth.login_ticket, "");
+        Parse(R"({"moment_id":"bad","limit":0,"like":"bad","delete":{},"content":123})");
 
     const auto id = memochat::gate::services::moments::MomentIdRequestFromJsonValue(root);
     EXPECT_EQ(id.moment_id, 0);
@@ -513,14 +502,12 @@ TEST(MomentsOutputDtosTest, PreservesMomentRequestDefaultsAndWrongTypeFallbacks)
     EXPECT_FALSE(comment.delete_mode);
 }
 
-TEST(MomentsOutputDtosTest, ParsesPublishItemsAndLegacyContentFallback)
+TEST(MomentsOutputDtosTest, ParsesPublishItemsAndTextContentFallback)
 {
     const memochat::json::JsonValue with_items = Parse(
-        R"({"uid":42,"login_ticket":"ticket","visibility":"1","location":"Shanghai","items":[{"media_type":"image","media_key":"","thumb_key":"thumb","content":"caption","width":640,"height":480,"duration_ms":123},{"media_type":"video","media_key":"video-key","thumb_key":"thumb2","content":"clip","width":1280,"height":720,"duration_ms":9000},{"media_type":"unknown","media_key":"ignored","thumb_key":"ignored","content":"text","width":10,"height":20,"duration_ms":30}]})");
+        R"({"visibility":"1","location":"Shanghai","items":[{"media_type":"image","media_key":"","thumb_key":"thumb","content":"caption","width":640,"height":480,"duration_ms":123},{"media_type":"video","media_key":"video-key","thumb_key":"thumb2","content":"clip","width":1280,"height":720,"duration_ms":9000},{"media_type":"unknown","media_key":"ignored","thumb_key":"ignored","content":"text","width":10,"height":20,"duration_ms":30}]})");
 
     const auto request = memochat::gate::services::moments::MomentPublishRequestFromJsonValue(with_items);
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.login_ticket, "ticket");
     EXPECT_EQ(request.visibility, 1);
     EXPECT_EQ(request.location, "Shanghai");
     ASSERT_EQ(request.items.size(), 3);
@@ -543,9 +530,9 @@ TEST(MomentsOutputDtosTest, ParsesPublishItemsAndLegacyContentFallback)
     EXPECT_EQ(request.items[2].thumb_key, "");
     EXPECT_EQ(request.items[2].width, 0);
 
-    const memochat::json::JsonValue legacy = Parse(R"({"uid":42,"login_ticket":"ticket","content":"legacy text"})");
-    const auto legacy_request = memochat::gate::services::moments::MomentPublishRequestFromJsonValue(legacy);
-    ASSERT_EQ(legacy_request.items.size(), 1);
-    EXPECT_EQ(legacy_request.items[0].media_type, "text");
-    EXPECT_EQ(legacy_request.items[0].content, "legacy text");
+    const memochat::json::JsonValue text_only = Parse(R"({"content":"plain text"})");
+    const auto text_only_request = memochat::gate::services::moments::MomentPublishRequestFromJsonValue(text_only);
+    ASSERT_EQ(text_only_request.items.size(), 1);
+    EXPECT_EQ(text_only_request.items[0].media_type, "text");
+    EXPECT_EQ(text_only_request.items[0].content, "plain text");
 }

@@ -37,13 +37,17 @@ bool populateUploadedMediaInfo(const QJsonObject& responseObj,
 ClientMediaConfig loadMediaConfig();
 bool isApiSuccess(const QJsonObject& obj, QString* errorText);
 
-bool postJson(const QUrl& url, const QJsonObject& payload, QJsonObject* responseObj, QString* errorText);
+bool postJson(const QUrl& url,
+              const QJsonObject& payload,
+              const QString& accessToken,
+              QJsonObject* responseObj,
+              QString* errorText);
 bool postBinary(const QUrl& url,
                 const QByteArray& payload,
                 const QList<QPair<QByteArray, QByteArray>>& headers,
                 QJsonObject* responseObj,
                 QString* errorText);
-bool getJson(const QUrl& url, QJsonObject* responseObj, QString* errorText);
+bool getJson(const QUrl& url, const QString& accessToken, QJsonObject* responseObj, QString* errorText);
 
 bool uploadAvatarFile(QFile& file,
                       const QFileInfo& fileInfo,

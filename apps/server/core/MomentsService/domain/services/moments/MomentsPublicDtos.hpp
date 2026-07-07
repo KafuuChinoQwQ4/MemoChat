@@ -10,16 +10,8 @@
 namespace memochat::gate::services::moments
 {
 
-struct MomentsAuthFieldsDto
-{
-    int uid = 0;
-    std::string login_ticket;
-};
-
 struct MomentPublishRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int visibility = 0;
     std::string location;
     std::vector<MomentItemInfo> items;
@@ -27,8 +19,6 @@ struct MomentPublishRequestDto
 
 struct MomentListRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t last_moment_id = 0;
     int limit = 20;
     int author_uid = 0;
@@ -36,23 +26,17 @@ struct MomentListRequestDto
 
 struct MomentIdRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t moment_id = 0;
 };
 
 struct MomentLikeRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t moment_id = 0;
     bool like = true;
 };
 
 struct MomentCommentRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t moment_id = 0;
     std::string content;
     int reply_uid = 0;
@@ -63,8 +47,6 @@ struct MomentCommentRequestDto
 
 struct MomentCommentListRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t moment_id = 0;
     int64_t last_comment_id = 0;
     int limit = 20;
@@ -72,8 +54,6 @@ struct MomentCommentListRequestDto
 
 struct MomentCommentLikeRequestDto
 {
-    int uid = 0;
-    std::string login_ticket;
     int64_t comment_id = 0;
     bool like = true;
 };
@@ -85,7 +65,6 @@ std::string MomentsReadString(const memochat::json::JsonValue& obj, const char* 
 
 void NormalizeMomentPublicItem(MomentItemInfo& item);
 
-MomentsAuthFieldsDto MomentsAuthFieldsFromJsonValue(const memochat::json::JsonValue& root);
 MomentPublishRequestDto MomentPublishRequestFromJsonValue(const memochat::json::JsonValue& root);
 MomentListRequestDto MomentListRequestFromJsonValue(const memochat::json::JsonValue& root);
 MomentIdRequestDto MomentIdRequestFromJsonValue(const memochat::json::JsonValue& root);

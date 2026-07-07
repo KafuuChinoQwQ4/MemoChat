@@ -127,7 +127,7 @@ JsonValue PicacgApiGet(const std::string& path, const std::string& token = "")
     return json::glaze_get(root, "data");
 }
 
-JsonValue PicacgComicToJson(const JsonValue& c, int uid, const std::string& token)
+JsonValue PicacgComicToJson(const JsonValue& c)
 {
     const std::string id = FieldString(c, "_id");
     const std::string file_server = FieldString(json::glaze_get(c, "thumb"), "fileServer");
@@ -139,7 +139,7 @@ JsonValue PicacgComicToJson(const JsonValue& c, int uid, const std::string& toke
     item["comic_id"] = id;
     item["title"] = FieldString(c, "title", id);
     item["subtitle"] = FieldString(c, "author");
-    item["cover"] = ImageProxyUrl(uid, token, picacg_adapter::modules::SourceId(), cover_url);
+    item["cover"] = ImageProxyUrl(picacg_adapter::modules::SourceId(), cover_url);
     item["author"] = FieldString(c, "author");
     JsonValue tags{json::array_t{}};
     const JsonValue cats = json::glaze_get(c, "categories");
@@ -152,13 +152,13 @@ JsonValue PicacgComicToJson(const JsonValue& c, int uid, const std::string& toke
 
 } // namespace
 
-json::JsonValue PicacgSearch(const std::string& keyword, int page, int uid, const std::string& token)
+json::JsonValue PicacgSearch(const std::string& keyword, int page)
 {
     const int p = picacg_adapter::modules::NormalizeSearchPage(page);
     const std::string path = "/comics/advanced-search?page=" + std::to_string(p);
     const std::string body_str = R"({"keyword":")" + keyword + R"(","sort":"dd"})";
     const std::string path_no_slash = "comics/advanced-search?page=" + std::to_string(p);
-    const auto headers = PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, token);
+    const auto headers = PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash);
     const std::string url = std::string("https://") + picacg_adapter::modules::ApiHost() + path;
 
     const detail::ParsedUrl parsed = detail::ParseUrl(url);
@@ -206,13 +206,13 @@ json::JsonValue PicacgSearch(const std::string& keyword, int page, int uid, cons
     out["items"] = json::JsonValue{json::array_t{}};
     if (const auto* arr = json::glaze_get_array(comics))
         for (const auto& c : *arr)
-            json::glaze_append(out["items"], PicacgComicToJson(json::JsonValue(c), uid, token));
+            json::glaze_append(out["items"], PicacgComicToJson(json::JsonValue(c)));
     return out;
 }
 
-json::JsonValue PicacgDetail(const std::string& comic_id, int uid, const std::string& token)
+json::JsonValue PicacgDetail(const std::string& comic_id)
 {
-    const json::JsonValue data = PicacgApiGet("/comics/" + comic_id, token);
+    const json::JsonValue data = PicacgApiGet("/comics/" + comic_id);
     const json::JsonValue info = json::glaze_get(data, "comic");
 
     const std::string file_server = detail::FieldString(json::glaze_get(info, "thumb"), "fileServer");
@@ -224,10 +224,10 @@ json::JsonValue PicacgDetail(const std::string& comic_id, int uid, const std::st
     out["comic_id"] = comic_id;
     out["title"] = detail::FieldString(info, "title", comic_id);
     out["description"] = detail::FieldString(info, "description");
-    out["cover"] = detail::ImageProxyUrl(uid, token, picacg_adapter::modules::SourceId(), cover_url);
+    out["cover"] = detail::ImageProxyUrl(picacg_adapter::modules::SourceId(), cover_url);
     out["chapters"] = json::JsonValue{json::array_t{}};
 
-    const json::JsonValue eps_data = PicacgApiGet("/comics/" + comic_id + "/eps?page=1", token);
+    const json::JsonValue eps_data = PicacgApiGet("/comics/" + comic_id + "/eps?page=1");
     const json::JsonValue eps_docs = json::glaze_get(json::glaze_get(eps_data, "eps"), "docs");
     int order = 1;
     if (const auto* arr = json::glaze_get_array(eps_docs))
@@ -256,11 +256,10 @@ json::JsonValue PicacgDetail(const std::string& comic_id, int uid, const std::st
     return out;
 }
 
-json::JsonValue
-PicacgPages(const std::string& comic_id, const std::string& chapter_id, int uid, const std::string& token)
+json::JsonValue PicacgPages(const std::string& comic_id, const std::string& chapter_id)
 {
     const std::string path = "/comics/" + comic_id + "/order/1/pages?page=1";
-    const json::JsonValue data = PicacgApiGet(path, token);
+    const json::JsonValue data = PicacgApiGet(path);
     const json::JsonValue pages = json::glaze_get(json::glaze_get(data, "pages"), "docs");
 
     json::JsonValue out;
@@ -280,7 +279,7 @@ PicacgPages(const std::string& comic_id, const std::string& chapter_id, int uid,
             json::JsonValue page;
             page["index"] = index;
             page["image_id"] = chapter_id + "-p" + std::to_string(index);
-            page["url"] = detail::ImageProxyUrl(uid, token, picacg_adapter::modules::SourceId(), img);
+            page["url"] = detail::ImageProxyUrl(picacg_adapter::modules::SourceId(), img);
             json::glaze_append(out["pages"], page);
             ++index;
         }

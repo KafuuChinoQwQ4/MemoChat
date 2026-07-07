@@ -1,6 +1,6 @@
 # auth/ 目录树
 
-> 跨服务共享的认证基础定义：服务端密钥、密码哈希与 ChatServer 本地校验的 HMAC 登录票据（D-TOKEN 契约）。
+> 跨服务共享的认证基础定义：服务端密钥、JWT access token、密码哈希与 ChatServer 本地校验的 HMAC 登录票据（D-TOKEN 契约）。
 
 ## 文件
 
@@ -8,6 +8,8 @@
 | --- | --- |
 | `AuthSecret.hpp` | 认证用共享密钥定义、开发默认识别与生产启动硬失败检查 |
 | `ChatLoginTicket.hpp` | HMAC 登录票据结构，供 ChatServer 本地校验 |
+| `JwtAccessToken.cpp` | JWT access token 的 HS256 签发、验签与 claim 校验实现 |
+| `JwtAccessToken.hpp` | JWT access token claim 结构与签发/验签接口 |
 | `PasswordHasher.cpp` | libsodium 密码哈希、验证与 rehash 判定实现 |
 | `PasswordHasher.hpp` | 密码哈希深模块接口 |
 | `RefreshToken.cpp` | refresh token 生成、拆分、哈希与常量时间验证实现 |

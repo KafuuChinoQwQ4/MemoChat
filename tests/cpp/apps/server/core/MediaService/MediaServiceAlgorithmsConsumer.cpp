@@ -212,11 +212,6 @@ bool ShouldRejectLegacyFileDownload(bool legacy_file_empty)
     return memochat::media::service::modules::ShouldRejectLegacyFileDownload(legacy_file_empty);
 }
 
-bool HasRequiredDownloadAuth(bool uid_raw_empty, bool token_empty)
-{
-    return memochat::media::service::modules::HasRequiredDownloadAuth(uid_raw_empty, token_empty);
-}
-
 bool HasValidDownloadAuth(int uid, bool token_valid)
 {
     return memochat::media::service::modules::HasValidDownloadAuth(uid, token_valid);

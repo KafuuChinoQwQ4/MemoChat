@@ -207,11 +207,6 @@ bool ShouldRejectLegacyFileDownload(bool legacy_file_empty)
     return !legacy_file_empty;
 }
 
-bool HasRequiredDownloadAuth(bool uid_raw_empty, bool token_empty)
-{
-    return !uid_raw_empty && !token_empty;
-}
-
 bool HasValidDownloadAuth(int uid, bool token_valid)
 {
     return uid > 0 && token_valid;

@@ -33,6 +33,8 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_CHATAUTH_HMACSECRET
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: chat-auth-secret } }
+            - name: MEMOCHAT_AUTHTOKEN_JWTSECRET
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: jwt-access-secret } }
             - name: MEMOCHAT_AUTH_REFRESH_PEPPER
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: auth-refresh-pepper } }
             - name: MEMOCHAT_CALL_APIKEY

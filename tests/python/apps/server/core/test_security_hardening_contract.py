@@ -128,40 +128,36 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("request.session_uid = session->userId();", group)
         self.assertNotRegex(group, r"const\s+int\s+(?:uid|from_uid|owner_uid|reviewer_uid)\s*=\s*command\.")
 
-    def test_profile_and_moments_routes_validate_redis_tokens_before_mutation(self):
+    def test_profile_and_moments_routes_resolve_bearer_uid_before_mutation(self):
         profile = read(PROFILE_ROUTE_MODULE)
         http2_profile = read(HTTP2_PROFILE_SUPPORT)
         moments = read(MOMENTS_SERVICE)
-        dtos = read(AUTH_PUBLIC_DTOS)
-        dto_header = read(AUTH_PUBLIC_DTOS_HEADER)
 
-        self.assertIn('#include "support/UserTokenValidator.hpp"', profile)
+        self.assertIn('#include "support/BearerAccessAuth.hpp"', profile)
         self.assertIn("gateauthsupport::ValidateProfileUpdateRequest(profile_request)", profile)
         self.assertLess(
             profile.index("ValidateProfileUpdateRequest(profile_request)"),
-            profile.index("ResolveUserIdFromToken(token, uid)"),
+            profile.index("ResolveBearerAccessUserId(request, uid)"),
         )
-        self.assertIn("memochat::auth::ResolveUserIdFromToken(token, uid)", profile)
-        self.assertLess(profile.index("ResolveUserIdFromToken(token, uid)"), profile.index("UpdateUserProfile"))
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, uid)", profile)
+        self.assertLess(profile.index("ResolveBearerAccessUserId(request, uid)"), profile.index("UpdateUserProfile"))
 
         self.assertIn('#include "support/UserTokenValidator.hpp"', http2_profile)
         self.assertIn("gateauthsupport::ValidateProfileUpdateRequest(profile_request)", http2_profile)
         self.assertLess(
             http2_profile.index("ValidateProfileUpdateRequest(profile_request)"),
-            http2_profile.index("ResolveUserIdFromToken(token, uid)"),
+            http2_profile.index("ResolveUserIdFromToken(access_token, uid)"),
         )
-        self.assertIn("memochat::auth::ResolveUserIdFromToken(token, uid)", http2_profile)
+        self.assertIn("memochat::auth::ResolveUserIdFromToken(access_token, uid)", http2_profile)
         self.assertLess(
-            http2_profile.index("ResolveUserIdFromToken(token, uid)"), http2_profile.index("UpdateUserProfile")
+            http2_profile.index("ResolveUserIdFromToken(access_token, uid)"),
+            http2_profile.index("UpdateUserProfile"),
         )
 
-        self.assertIn('#include "support/UserTokenValidator.hpp"', moments)
-        self.assertIn("memochat::auth::ValidateUserToken(uid, token)", moments)
-        self.assertIn("LoginTicketField()", moments)
-
-        self.assertIn("std::string token;", dto_header)
-        self.assertIn('glaze_safe_get<std::string>(root, "token"', dtos)
-        self.assertIn('glaze_has_key(root, "token")', dtos)
+        self.assertIn('#include "support/BearerAccessAuth.hpp"', moments)
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, uid)", moments)
+        self.assertNotIn("ValidateUserToken(uid, token)", moments)
+        self.assertNotIn("LoginTicketField()", moments)
 
     def test_moments_interactions_enforce_visibility_before_read_or_mutation(self):
         moments = read(MOMENTS_SERVICE)
@@ -334,13 +330,12 @@ class SecurityHardeningContractTests(unittest.TestCase):
         gateway_service = read(AIGATEWAY_AI_SERVICE)
         route_module = read(AIGATEWAY_ROUTE_MODULE)
 
-        for source in (gateway_service, route_module):
-            with self.subTest(source_hash=hash(source)):
-                self.assertIn("ResolveAuthenticatedUid", source)
-                self.assertIn("UseAuthUidCandidate", source)
-                self.assertIn('json::glaze_has_key(*body_root, "uid")', source)
-                self.assertIn("!ResolveAuthenticatedUid", source)
-                self.assertIn("*authenticated_uid = uid", source)
+        self.assertIn("RequireUserAuth", gateway_service)
+        self.assertIn("ResolveBearerAccessUserId(request, uid)", gateway_service)
+        self.assertIn("RequireConnectionUserAuth", route_module)
+        self.assertIn('ExtractBearerAccessToken(HeaderValue(connection, "authorization"))', route_module)
+        self.assertIn("PrefixProxyBodyWithTrustedUid(IncomingBodyString(connection), auth_uid)", route_module)
+        self.assertIn("PrefixProxyTargetWithTrustedUid(std::move(target), auth_uid)", route_module)
 
         user_scoped_calls = (
             ("bool AIService::HandleChat", "Client().Chat(auth_uid"),
@@ -368,8 +363,7 @@ class SecurityHardeningContractTests(unittest.TestCase):
                 self.assertIn(call, body)
 
         stream_block = route_module[route_module.index('"/ai/chat/stream"') :]
-        self.assertIn('const int32_t request_uid = json::glaze_safe_get<int>(src_root, "uid", 0)', stream_block)
-        self.assertIn("RequireConnectionUserAuth(connection, &src_root, request_uid, &auth_uid)", stream_block)
+        self.assertIn("RequireConnectionUserAuth(connection, &auth_uid)", stream_block)
         self.assertRegex(stream_block, r"g_ai_stream_client->ChatStream\(\s*auth_uid")
         self.assertNotRegex(stream_block, r"g_ai_stream_client->ChatStream\(\s*request_uid")
 
@@ -497,10 +491,15 @@ class SecurityHardeningContractTests(unittest.TestCase):
         proxy_body = function_body(route_module, "static void ProxyAiOrchestratorPrefix")
         self.assertLess(proxy_body.index("RequireConnectionUserAuth"), proxy_body.index("BuildPrefixProxyTarget"))
         self.assertIn('ProxyAiOrchestratorPrefix(connection, verb, "/ai/pet", "/pet"', route_module)
-        self.assertIn("RequireConnectionUserAuth(connection, nullptr)", route_module)
+        self.assertIn("RequireConnectionUserAuth(connection, &auth_uid)", route_module)
+        self.assertIn("ProxyAiOrchestratorPetStream(connection, auth_uid)", route_module)
+        self.assertIn(
+            'PrefixProxyTargetWithTrustedUid(BuildPrefixProxyTarget(connection, "/ai/pet", "/pet"), auth_uid)',
+            route_module,
+        )
         self.assertLess(
-            route_module.index("RequireConnectionUserAuth(connection, nullptr)"),
-            route_module.index("ProxyAiOrchestratorPetStream(connection)"),
+            route_module.index("RequireConnectionUserAuth(connection, &auth_uid)"),
+            route_module.index("ProxyAiOrchestratorPetStream(connection, auth_uid)"),
         )
 
         sse_body = function_body(aiserver_client, "grpc::Status PostJsonSSE")
@@ -540,27 +539,41 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("self._runtime_provider_api_key(runtime_cfg)", service)
         self.assertNotIn('"api_key": api_key', service)
 
-    def test_http_tokens_rotate_with_ttl_and_reset_consumes_verification_code(self):
+    def test_jwt_access_tokens_rotate_with_ttl_and_reset_consumes_verification_code(self):
         auth_service = read(AUTH_SERVICE)
         auth_cache = read(AUTH_CACHE)
         auth_cache_header = read(AUTH_CACHE_HEADER)
         auth_login_support = read(AUTH_LOGIN_SUPPORT)
         user_token_validator = read(USER_TOKEN_VALIDATOR)
+        http2_media = read(SERVER_CORE / "MediaService/core/support/Http2MediaSupport.cpp")
         issue_body = function_body(auth_service, "bool IssueLoginSessionForUser")
         reset_body = function_body(auth_service, "bool AuthService::HandleResetPwd")
 
-        self.assertIn("int GetHttpTokenTtlSec()", auth_login_support)
-        self.assertIn('GetValue("AuthToken", "HttpTokenTtlSec")', auth_login_support)
+        self.assertIn("int GetAccessTokenTtlSec()", auth_login_support)
+        self.assertIn('GetValue("AuthToken", "AccessTokenTtlSec")', auth_login_support)
+        self.assertIn("std::string GetJwtAccessSecret()", auth_login_support)
+        self.assertIn("std::string GetJwtAccessIssuer()", auth_login_support)
+        self.assertIn("std::string GetJwtAccessAudience()", auth_login_support)
         self.assertIn("bool SetHttpToken", auth_cache_header)
         self.assertIn("memochat::auth::StoreUserToken(uid, token, ttl_seconds)", auth_cache)
         self.assertIn('constexpr std::string_view kUserTokenLookupPrefix = "utoken_lookup_";', user_token_validator)
+        self.assertIn("DecodeAndVerifyAccessToken(token, JwtAccessSecret(), options, claims", user_token_validator)
+        self.assertIn("ShouldAcceptJwtAccessClaims(jwt_valid, uid, claims.uid)", user_token_validator)
         self.assertIn("RedisMgr::GetInstance()->SetEx(token_key, token, ttl_seconds)", user_token_validator)
         self.assertIn(
             "RedisMgr::GetInstance()->SetEx(lookup_key, std::to_string(uid), ttl_seconds)", user_token_validator
         )
         self.assertIn("boost::uuids::random_generator()()", issue_body)
-        self.assertIn("SetHttpToken(userInfo.uid, http_token, gateauthsupport::GetHttpTokenTtlSec())", issue_body)
-        self.assertNotIn("GetHttpToken(userInfo.uid, http_token)", issue_body)
+        self.assertIn("JwtAccessTokenClaims access_claims", issue_body)
+        self.assertIn("access_claims.uid = userInfo.uid", issue_body)
+        self.assertIn("access_claims.sub = std::to_string(userInfo.uid)", issue_body)
+        self.assertIn("EncodeAccessToken(access_claims, gateauthsupport::GetJwtAccessSecret())", issue_body)
+        self.assertIn("SetHttpToken(userInfo.uid, access_token, access_token_ttl_sec)", issue_body)
+        self.assertIn('root["access_token"] = access_token', issue_body)
+        self.assertNotIn("GetHttpToken(userInfo.uid, access_token)", issue_body)
+        self.assertIn("ResolveAccessTokenUidLocal(const std::string& access_token, int& uid)", http2_media)
+        self.assertIn("memochat::auth::ResolveUserIdFromToken(access_token, uid)", http2_media)
+        self.assertNotIn("ValidateUserTokenLocal(uid, token)", http2_media)
 
         self.assertIn("void DeleteVerificationCode", auth_cache_header)
         self.assertIn("RedisMgr::GetInstance()->Del(BuildVerificationCodeKey(email));", auth_cache)
@@ -726,7 +739,7 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("AuthRefreshTokenRateLimitSubject(refresh_request.refresh_token)", refresh)
 
         logout = function_body(source, "bool AuthService::HandleAuthLogout")
-        self.assertLess(logout.index("ValidateAuthLogoutRequest"), logout.index("GetHttpToken"))
+        self.assertLess(logout.index("ValidateAuthLogoutRequest"), logout.index("ResolveBearerAccessUserId"))
         self.assertLess(logout.index("ValidateAuthLogoutRequest"), logout.index("RevokeRefreshToken"))
 
     def test_auth_request_rate_limiter_adds_missing_endpoint_buckets_and_safe_failure_mode(self):
@@ -1020,8 +1033,6 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("DecodeAuthLogoutRequest", dto_header)
         self.assertIn("AuthLogoutRequestFromJsonValue", dtos)
         for token in (
-            'glaze_safe_get<int>(root, "uid"',
-            'glaze_safe_get<std::string>(root, "token"',
             'glaze_safe_get<std::string>(root, "refresh_token"',
             'glaze_safe_get<bool>(root, "all_devices"',
         ):
@@ -1030,8 +1041,12 @@ class SecurityHardeningContractTests(unittest.TestCase):
 
         self.assertIn("bool HandleAuthLogout", auth_service_header)
         logout_body = function_body(auth_service, "bool AuthService::HandleAuthLogout")
-        self.assertIn("AuthCache::Instance().GetHttpToken", logout_body)
-        self.assertIn("provided_token != logout_request.token", logout_body)
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, authenticated_uid)", logout_body)
+        self.assertIn("refresh_uid == authenticated_uid", logout_body)
+        self.assertNotIn("logout_request.uid", logout_body)
+        self.assertNotIn("logout_request.access_token", logout_body)
+        self.assertNotIn("AuthCache::Instance().GetHttpToken", logout_body)
+        self.assertNotIn("provided_token != logout_request.token", logout_body)
         self.assertIn("RevokeAllRefreshTokensForUid", logout_body)
         self.assertIn("RevokeRefreshToken", logout_body)
         self.assertIn("AuthCache::Instance().DeleteHttpToken", logout_body)

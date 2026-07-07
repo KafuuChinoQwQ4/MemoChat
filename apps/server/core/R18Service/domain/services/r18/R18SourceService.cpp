@@ -361,17 +361,13 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     return rec;
 }
 
-json::JsonValue R18SourceService::Search(const std::string& source_id,
-                                         const std::string& keyword,
-                                         int page,
-                                         int uid,
-                                         const std::string& token)
+json::JsonValue R18SourceService::Search(const std::string& source_id, const std::string& keyword, int page)
 {
     if (source_id == kJmSourceId)
     {
         try
         {
-            return JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), uid, token);
+            return JmSearch(keyword, source_service::modules::NormalizeSearchPage(page));
         }
         catch (const std::exception& exc)
         {
@@ -382,7 +378,7 @@ json::JsonValue R18SourceService::Search(const std::string& source_id,
     {
         try
         {
-            return PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page), uid, token);
+            return PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page));
         }
         catch (const std::exception& exc)
         {
@@ -402,22 +398,20 @@ json::JsonValue R18SourceService::Search(const std::string& source_id,
     first["comic_id"] = "mock-" + std::to_string(page) + "-1";
     first["title"] = keyword.empty() ? "R18 Preview Comic" : ("R18 Preview: " + keyword);
     first["subtitle"] = SourceSnapshot(source_id).value_or(R18SourceRecord{}).message;
-    first["cover"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + detail::UrlEncode(token) +
-                     "&source_id=" + detail::UrlEncode(source_id) + "&image_id=cover";
+    first["cover"] = "/api/r18/image?source_id=" + detail::UrlEncode(source_id) + "&image_id=cover";
     first["author"] = source_id;
     first["tags"] = detail::MakeTags({"sample"});
     json::glaze_append(data["items"], first);
     return data;
 }
 
-json::JsonValue
-R18SourceService::Detail(const std::string& source_id, const std::string& comic_id, int uid, const std::string& token)
+json::JsonValue R18SourceService::Detail(const std::string& source_id, const std::string& comic_id)
 {
     if (source_id == kJmSourceId)
     {
         try
         {
-            return JmDetail(comic_id, uid, token);
+            return JmDetail(comic_id);
         }
         catch (const std::exception& exc)
         {
@@ -435,7 +429,7 @@ R18SourceService::Detail(const std::string& source_id, const std::string& comic_
     {
         try
         {
-            return PicacgDetail(comic_id, uid, token);
+            return PicacgDetail(comic_id);
         }
         catch (const std::exception& exc)
         {
@@ -456,8 +450,7 @@ R18SourceService::Detail(const std::string& source_id, const std::string& comic_
     data["comic_id"] = comic_id;
     data["title"] = (source && !source->name.empty() ? source->name : "Unknown Source") + " Preview Comic";
     data["description"] = source ? source->message : "The selected source was not found.";
-    data["cover"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + detail::UrlEncode(token) +
-                    "&source_id=" + detail::UrlEncode(source_id) + "&image_id=cover";
+    data["cover"] = "/api/r18/image?source_id=" + detail::UrlEncode(source_id) + "&image_id=cover";
     data["chapters"] = json::JsonValue{json::array_t{}};
     for (int i = 1; i <= source_service::modules::PreviewChapterCount(); ++i)
     {
@@ -472,14 +465,13 @@ R18SourceService::Detail(const std::string& source_id, const std::string& comic_
     return data;
 }
 
-json::JsonValue
-R18SourceService::Pages(const std::string& source_id, const std::string& chapter_id, int uid, const std::string& token)
+json::JsonValue R18SourceService::Pages(const std::string& source_id, const std::string& chapter_id)
 {
     if (source_id == kJmSourceId)
     {
         try
         {
-            return JmPages(chapter_id, uid, token);
+            return JmPages(chapter_id);
         }
         catch (const std::exception& exc)
         {
@@ -497,7 +489,7 @@ R18SourceService::Pages(const std::string& source_id, const std::string& chapter
         const std::string comic_id = sep != std::string::npos ? chapter_id.substr(0, sep) : chapter_id;
         try
         {
-            return PicacgPages(comic_id, chapter_id, uid, token);
+            return PicacgPages(comic_id, chapter_id);
         }
         catch (const std::exception& exc)
         {
@@ -519,8 +511,7 @@ R18SourceService::Pages(const std::string& source_id, const std::string& chapter
         json::JsonValue page;
         page["index"] = i;
         page["image_id"] = chapter_id + "-p" + std::to_string(i);
-        page["url"] = "/api/r18/image?uid=" + std::to_string(uid) + "&token=" + detail::UrlEncode(token) +
-                      "&source_id=" + detail::UrlEncode(source_id) +
+        page["url"] = "/api/r18/image?source_id=" + detail::UrlEncode(source_id) +
                       "&image_id=" + detail::UrlEncode(chapter_id + "-p" + std::to_string(i));
         json::glaze_append(data["pages"], page);
     }

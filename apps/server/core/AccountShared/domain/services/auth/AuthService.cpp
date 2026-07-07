@@ -8,10 +8,13 @@
 #include "GateAsyncSideEffects.hpp"
 #include "GateWorkerPool.hpp"
 #include "auth/ChatLoginTicket.hpp"
+#include "auth/JwtAccessToken.hpp"
 #include "auth/RefreshToken.hpp"
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
 #include "services/account/AccountPersistence.hpp"
+#include "support/BearerAccessAuth.hpp"
+#include "support/UserTokenValidator.hpp"
 
 #include <algorithm>
 #include <boost/uuid/random_generator.hpp>
@@ -206,14 +209,14 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     std::vector<std::string> least_loaded_servers;
     std::string route_source;
     std::string status_route_detail;
-    std::string http_token;
+    std::string access_token;
     const auto route_start_ms = gateauthsupport::NowMs();
     const auto route_nodes = gateauthsupport::SelectChatRouteForLogin(userInfo.uid,
                                                                       &server_load_snapshot,
                                                                       &least_loaded_servers,
                                                                       &route_source,
                                                                       &status_route_detail,
-                                                                      &http_token);
+                                                                      &access_token);
     const auto route_select_ms = gateauthsupport::NowMs() - route_start_ms;
     if (route_nodes.empty())
     {
@@ -226,8 +229,21 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     }
 
     const auto ticket_start_ms = gateauthsupport::NowMs();
-    http_token = boost::uuids::to_string(boost::uuids::random_generator()());
-    if (!AuthCache::Instance().SetHttpToken(userInfo.uid, http_token, gateauthsupport::GetHttpTokenTtlSec()))
+    const int access_token_ttl_sec = gateauthsupport::GetAccessTokenTtlSec();
+    const int64_t access_token_now_sec = gateauthsupport::NowMs() / 1000;
+    memochat::auth::JwtAccessTokenClaims access_claims;
+    access_claims.typ = "access";
+    access_claims.iss = gateauthsupport::GetJwtAccessIssuer();
+    access_claims.aud = gateauthsupport::GetJwtAccessAudience();
+    access_claims.sub = std::to_string(userInfo.uid);
+    access_claims.uid = userInfo.uid;
+    access_claims.iat = access_token_now_sec;
+    access_claims.nbf = access_token_now_sec;
+    access_claims.exp = access_token_now_sec + access_token_ttl_sec;
+    access_claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());
+    access_claims.token_version = 0;
+    access_token = memochat::auth::EncodeAccessToken(access_claims, gateauthsupport::GetJwtAccessSecret());
+    if (access_token.empty() || !AuthCache::Instance().SetHttpToken(userInfo.uid, access_token, access_token_ttl_sec))
     {
         root["error"] = ErrorCodes::RPCFailed;
         return false;
@@ -263,7 +279,7 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     root["email"] = userInfo.email;
     root["uid"] = userInfo.uid;
     root["user_id"] = userInfo.user_id;
-    root["token"] = http_token;
+    root["access_token"] = access_token;
     root["login_ticket"] = login_ticket;
     root["ticket_expire_ms"] = static_cast<int64_t>(claims.expire_at_ms);
     gateauthsupport::AuthLoginUserProfileDto user_profile_dto;
@@ -881,16 +897,13 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         return true;
     }
 
-    std::string provided_token;
-    if (logout_request.uid <= 0 || logout_request.token.empty() ||
-        !AuthCache::Instance().GetHttpToken(logout_request.uid, provided_token) ||
-        provided_token != logout_request.token)
+    int authenticated_uid = 0;
+    if (!memochat::auth::ResolveBearerAccessUserId(request, authenticated_uid))
     {
         root["error"] = ErrorCodes::TokenInvalid;
-        memolog::LogWarn(
-            "gate.auth_logout.failed",
-            "http token rejected",
-            {{"uid", std::to_string(logout_request.uid)}, {"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
+        memolog::LogWarn("gate.auth_logout.failed",
+                         "bearer access token rejected",
+                         {{"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
         WriteJson(response, root);
         return true;
     }
@@ -898,7 +911,7 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
     bool revoked = false;
     if (logout_request.all_devices)
     {
-        revoked = account::AccountPersistence::Instance().RevokeAllRefreshTokensForUid(logout_request.uid);
+        revoked = account::AccountPersistence::Instance().RevokeAllRefreshTokensForUid(authenticated_uid);
     }
     else
     {
@@ -906,7 +919,7 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         revoked =
             !logout_request.refresh_token.empty() &&
             account::AccountPersistence::Instance().RevokeRefreshToken(logout_request.refresh_token, refresh_uid) &&
-            refresh_uid == logout_request.uid;
+            refresh_uid == authenticated_uid;
     }
 
     if (!revoked)
@@ -914,25 +927,25 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         root["error"] = ErrorCodes::TokenInvalid;
         memolog::LogWarn("gate.auth_logout.failed",
                          "refresh token revoke failed",
-                         {{"uid", std::to_string(logout_request.uid)},
+                         {{"uid", std::to_string(authenticated_uid)},
                           {"all_devices", logout_request.all_devices ? "true" : "false"},
                           {"error_code", std::to_string(ErrorCodes::TokenInvalid)}});
         WriteJson(response, root);
         return true;
     }
 
-    AuthCache::Instance().DeleteHttpToken(logout_request.uid);
-    gateauthsupport::InvalidateLoginCacheByUid(logout_request.uid);
+    AuthCache::Instance().DeleteHttpToken(authenticated_uid);
+    gateauthsupport::InvalidateLoginCacheByUid(authenticated_uid);
 
     gateauthsupport::AuthLogoutResponseDto logout_response;
     logout_response.error = ErrorCodes::Success;
-    logout_response.uid = logout_request.uid;
+    logout_response.uid = authenticated_uid;
     logout_response.all_devices = logout_request.all_devices;
     root = gateauthsupport::AuthLogoutResponseToJsonValue(logout_response);
     memolog::LogInfo(
         "gate.auth_logout",
         "auth credentials revoked",
-        {{"uid", std::to_string(logout_request.uid)}, {"all_devices", logout_request.all_devices ? "true" : "false"}});
+        {{"uid", std::to_string(authenticated_uid)}, {"all_devices", logout_request.all_devices ? "true" : "false"}});
     WriteJson(response, root);
     return true;
 }

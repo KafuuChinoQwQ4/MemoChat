@@ -23,6 +23,10 @@ if(NOT TARGET gtest_tests)
     add_custom_target(gtest_tests)
 endif()
 
+set(AUTHENTICATED_MEDIA_CACHE_SOURCE
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
+)
+
 add_executable(dialog_list_service_gtest
     DialogListServiceTest.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/DialogListEntryBuilder.cpp
@@ -71,6 +75,7 @@ add_executable(chat_dialog_list_response_service_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+    ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelOrdering.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModelMutations.cpp
@@ -87,6 +92,7 @@ set_target_properties(chat_dialog_list_response_service_gtest PROPERTIES
 target_link_libraries(chat_dialog_list_response_service_gtest PRIVATE
     GTest_TestLib
     Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
 )
 
 target_include_directories(chat_dialog_list_response_service_gtest PRIVATE
@@ -270,6 +276,7 @@ if(EXISTS "${PRIVATE_CHAT_SEND_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_SEND_
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+        ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
@@ -297,6 +304,7 @@ if(EXISTS "${PRIVATE_CHAT_SEND_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_SEND_
     target_link_libraries(private_chat_send_service_gtest PRIVATE
         GTest_TestLib
         Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Network
         Qt${QT_VERSION_MAJOR}::Sql
     )
 
@@ -339,6 +347,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_HI
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+        ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/MessagePayloadService.cpp
@@ -361,6 +370,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_HI
     target_link_libraries(private_chat_history_service_gtest PRIVATE
         GTest_TestLib
         Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Network
         Qt${QT_VERSION_MAJOR}::Sql
     )
 
@@ -401,6 +411,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_REQUEST_SERVICE_SOURCE}" AND EXISTS "${PRIVATE
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+        ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
@@ -420,6 +431,7 @@ if(EXISTS "${PRIVATE_CHAT_HISTORY_REQUEST_SERVICE_SOURCE}" AND EXISTS "${PRIVATE
     target_link_libraries(private_chat_history_request_service_gtest PRIVATE
         GTest_TestLib
         Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Network
     )
 
     target_include_directories(private_chat_history_request_service_gtest PRIVATE
@@ -463,6 +475,7 @@ if(EXISTS "${PRIVATE_CHAT_EVENT_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_EVEN
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+        ${AUTHENTICATED_MEDIA_CACHE_SOURCE}
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
         ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/MessagePayloadService.cpp
@@ -487,6 +500,7 @@ if(EXISTS "${PRIVATE_CHAT_EVENT_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_EVEN
         GTest::gmock
         GTest::gtest
         Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Network
         Qt${QT_VERSION_MAJOR}::Sql
     )
 

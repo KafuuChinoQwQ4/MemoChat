@@ -14,12 +14,11 @@ describe("SseStreamClient", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
     });
-    it("sends user auth headers and serializes the AI stream body", async () => {
+    it("sends bearer auth and serializes the AI stream body", async () => {
         const fetchMock = vi.fn().mockResolvedValue(sseResponse('{"chunk":"ok","is_final":true}'));
         vi.stubGlobal("fetch", fetchMock);
         const chunks = [];
-        await new SseStreamClient().start("/ai/chat/stream", { uid: 42, content: "hello", stream: true }, {
-            uid: 42,
+        await new SseStreamClient().start("/ai/chat/stream", { content: "hello", stream: true }, {
             token: "tok",
             onChunk: (chunk) => chunks.push(chunk.chunk),
         });
@@ -29,11 +28,9 @@ describe("SseStreamClient", () => {
         expect(init.headers).toMatchObject({
             "Content-Type": "application/json",
             Authorization: "Bearer tok",
-            "X-User-Id": "42",
-            "X-User-Token": "tok",
         });
         expect(typeof init.body).toBe("string");
-        expect(JSON.parse(init.body)).toEqual({ uid: 42, content: "hello", stream: true });
+        expect(JSON.parse(init.body)).toEqual({ content: "hello", stream: true });
         expect(chunks).toEqual(["ok"]);
     });
 });

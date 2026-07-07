@@ -151,10 +151,11 @@ class SharedUserTokenValidatorTest(unittest.TestCase):
     def test_services_delegate_to_shared_validator(self):
         for path in self.DELEGATORS:
             src = read(path)
-            self.assertIn(
-                "memochat::auth::ValidateUserToken",
-                src,
-                f"{path.name} must delegate to the shared validator, not re-implement it.",
+            self.assertTrue(
+                "memochat::auth::ValidateUserToken" in src
+                or "memochat::auth::ResolveUserIdFromToken" in src
+                or "memochat::auth::ResolveBearerAccessUserId" in src,
+                f"{path.name} must delegate to shared token validation, not re-implement it.",
             )
 
 

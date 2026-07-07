@@ -466,16 +466,20 @@ class AgentControllerBoundaryTests(unittest.TestCase):
             read(AGENT_CONTROLLER_DIR / "AgentControllerStream.cpp"),
         )
 
-    def test_ai_gateway_requests_attach_current_user_token(self):
+    def test_ai_gateway_requests_use_bearer_header_and_strip_legacy_auth_fields(self):
         header = read(AGENT_CONTROLLER_DIR / "AgentController.h")
         controller = read(AGENT_CONTROLLER_DIR / "AgentController.cpp")
+        request_utils = read(REPO_ROOT / "apps/client/desktop/MemoChat-qml/core/network/HttpMgrRequestUtils.cpp")
+        direct_agent_request_utils = read(AGENT_TRANSPORT_DIR / "AgentNetworkRequestUtils.h")
 
-        self.assertIn("QString currentAuthToken() const;", header)
         self.assertIn("void addAuthToPayload(QJsonObject& payload) const;", header)
         self.assertIn("void addAuthToQuery(QUrlQuery& query) const;", header)
-        self.assertIn("GetToken()", controller)
-        self.assertIn('payload[QStringLiteral("token")] = token;', controller)
-        self.assertIn('query.addQueryItem(QStringLiteral("token"), token);', controller)
+        self.assertIn('payload.remove(QStringLiteral("uid"));', controller)
+        self.assertIn('payload.remove(QStringLiteral("token"));', controller)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("uid"));', controller)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("token"));', controller)
+        self.assertIn('request.setRawHeader(QByteArrayLiteral("Authorization")', request_utils)
+        self.assertIn("applyBearerAccessTokenHeader(request);", direct_agent_request_utils)
 
         expected_payload_calls = {
             "AgentControllerChat.cpp": 4,
@@ -504,6 +508,18 @@ class AgentControllerBoundaryTests(unittest.TestCase):
         game_network = read(AGENT_GAME_DIR / "AgentControllerGameNetwork.cpp")
         self.assertEqual(game_network.count("addAuthToQuery(query);"), 2)
         self.assertEqual(game_network.count("addAuthToPayload(authedPayload);"), 1)
+
+        bearer_only_sources = {
+            **{file_name: read(AGENT_CONTROLLER_DIR / file_name) for file_name in expected_payload_calls},
+            "AgentControllerGameRooms.cpp": read(AGENT_GAME_DIR / "AgentControllerGameRooms.cpp"),
+            "AgentControllerGameTemplates.cpp": read(AGENT_GAME_DIR / "AgentControllerGameTemplates.cpp"),
+        }
+        for file_name, source in bearer_only_sources.items():
+            with self.subTest(file=file_name, helper="no_http_uid_auth"):
+                self.assertNotIn('query.addQueryItem("uid"', source)
+                self.assertNotIn('query.addQueryItem(QStringLiteral("uid")', source)
+                self.assertNotIn('payload["uid"]', source)
+                self.assertNotIn('payload[QStringLiteral("uid")]', source)
 
     def test_ai_tab_entry_stays_lightweight_and_non_stacking(self):
         client = REPO_ROOT / "apps/client/desktop/MemoChat-qml"

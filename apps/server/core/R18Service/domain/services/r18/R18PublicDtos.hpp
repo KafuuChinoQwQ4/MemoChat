@@ -9,23 +9,13 @@
 namespace memochat::r18
 {
 
-struct R18AuthRequestDto
-{
-    int uid = 0;
-    std::string token;
-};
-
 struct R18SourceToggleRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
 };
 
 struct R18SearchRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
     std::string keyword;
     int page = 1;
@@ -33,24 +23,18 @@ struct R18SearchRequestDto
 
 struct R18ComicDetailRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
     std::string comic_id;
 };
 
 struct R18ChapterPagesRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
     std::string chapter_id;
 };
 
 struct R18FavoriteToggleRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
     std::string comic_id;
     bool favorited = true;
@@ -58,8 +42,6 @@ struct R18FavoriteToggleRequestDto
 
 struct R18HistoryUpdateRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string source_id;
     std::string comic_id;
     std::string chapter_id;
@@ -87,7 +69,6 @@ struct R18HistoryUpdateResponseDto
     int64_t page_index = 0;
 };
 
-R18AuthRequestDto R18AuthRequestFromJsonValue(const memochat::json::JsonValue& root);
 R18SourceToggleRequestDto R18SourceToggleRequestFromJsonValue(const memochat::json::JsonValue& root);
 R18SearchRequestDto R18SearchRequestFromJsonValue(const memochat::json::JsonValue& root);
 R18ComicDetailRequestDto R18ComicDetailRequestFromJsonValue(const memochat::json::JsonValue& root);

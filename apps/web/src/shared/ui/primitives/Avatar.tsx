@@ -1,7 +1,7 @@
 /** Avatar — displays user avatar with a default image fallback */
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
-import { useSessionStore } from "@/core/session/sessionStore"
-import { avatarUrl, DEFAULT_AVATAR_DATA_URL } from "@/shared/media/mediaUrl"
+import { useEffect, useState, type CSSProperties } from "react"
+import { DEFAULT_AVATAR_DATA_URL } from "@/shared/media/mediaUrl"
+import { useMediaUrl } from "@/shared/hooks/useMediaUrl"
 
 export interface AvatarProps {
   /** Pass null or undefined to show initials fallback */
@@ -14,9 +14,7 @@ export interface AvatarProps {
 }
 
 export function Avatar({ src, name, size = 40, className, style, onClick }: AvatarProps) {
-  const uid = useSessionStore((s) => s.uid)
-  const token = useSessionStore((s) => s.token)
-  const url = useMemo(() => avatarUrl(src), [src, token, uid])
+  const url = useMediaUrl(src)
   const [failedUrls, setFailedUrls] = useState<Set<string>>(() => new Set())
   const initials = name ? name.slice(0, 2).toUpperCase() : "?"
   const displayUrl = url && !failedUrls.has(url) ? url : DEFAULT_AVATAR_DATA_URL

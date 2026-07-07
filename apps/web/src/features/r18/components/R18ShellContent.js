@@ -3,9 +3,9 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ENDPOINTS } from "@/core/config/endpoints";
-import { runtimeConfig } from "@/core/config/runtimeConfig";
 import { useSessionStore } from "@/core/session/sessionStore";
 import { getGateway } from "@/shared/gateway/ClientGateway";
+import { useMediaUrl } from "@/shared/hooks/useMediaUrl";
 import { GlassButton } from "@/shared/ui/glass/GlassButton";
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea";
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface";
@@ -14,13 +14,12 @@ import { Spinner } from "@/shared/ui/primitives/Spinner";
 function sourceTitle(source) {
     return source.title?.trim() || source.name?.trim() || source.id;
 }
-function resolveR18Url(ref) {
-    if (!ref)
-        return "";
-    if (ref.startsWith("data:") || ref.startsWith("blob:") || ref.startsWith("http://") || ref.startsWith("https://")) {
-        return ref;
+function R18Cover({ cover, title }) {
+    const coverUrl = useMediaUrl(cover);
+    if (!coverUrl) {
+        return (_jsx("div", { style: { aspectRatio: "3 / 4", display: "grid", placeItems: "center", color: "var(--text-disabled)", background: "var(--tint-hover)" }, children: "\u65E0\u5C01\u9762" }));
     }
-    return `${runtimeConfig.gateBaseUrl}${ref.startsWith("/") ? ref : `/${ref}`}`;
+    return (_jsx("img", { src: coverUrl, alt: title ?? "cover", style: { width: "100%", aspectRatio: "3 / 4", objectFit: "cover", background: "var(--tint-hover)" } }));
 }
 export function R18ShellContent() {
     const uid = useSessionStore((s) => s.uid);
@@ -37,8 +36,7 @@ export function R18ShellContent() {
         queryFn: async () => {
             if (uid === null || token === null)
                 throw new Error("Missing R18 auth");
-            const query = new URLSearchParams({ uid: String(uid), token }).toString();
-            const response = await getGateway().http.get(`${ENDPOINTS.r18Sources}?${query}`);
+            const response = await getGateway().http.get(ENDPOINTS.r18Sources);
             if (response.error !== 0)
                 throw new Error(response.message || `R18 sources failed: ${response.error}`);
             return response.data?.sources ?? [];
@@ -58,8 +56,6 @@ export function R18ShellContent() {
             if (uid === null || token === null || !selectedSource?.id)
                 throw new Error("Missing R18 search input");
             const response = await getGateway().http.post(ENDPOINTS.r18Search, {
-                uid,
-                token,
                 source_id: selectedSource.id,
                 keyword: submittedKeyword,
                 page,
@@ -75,7 +71,7 @@ export function R18ShellContent() {
         const enable = !source.enabled;
         setActionError(null);
         try {
-            const response = await getGateway().http.post(enable ? ENDPOINTS.r18SourceEnable : ENDPOINTS.r18SourceDisable, { uid, token, source_id: source.id });
+            const response = await getGateway().http.post(enable ? ENDPOINTS.r18SourceEnable : ENDPOINTS.r18SourceDisable, { source_id: source.id });
             if (response.error !== 0)
                 throw new Error(response.message || "源切换失败");
             await sourcesQuery.refetch();
@@ -121,7 +117,6 @@ export function R18ShellContent() {
                                     } }) }), _jsx(GlassButton, { onClick: submitSearch, variant: "primary", children: "\u641C\u7D22" }), selectedSource && (_jsx(GlassButton, { onClick: () => { void toggleSource(selectedSource); }, children: selectedSource.enabled ? "停用源" : "启用源" }))] }), (sourcesQuery.error || searchQuery.error || actionError) && (_jsx("div", { style: { margin: "12px 18px 0", color: "var(--color-badge)", fontSize: 13 }, children: actionError ||
                             (sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
                             (searchQuery.error instanceof Error ? searchQuery.error.message : "加载失败") })), _jsx(GlassScrollArea, { style: { flex: 1, minHeight: 0, padding: 18 }, children: searchQuery.isLoading ? (_jsx("div", { style: { display: "grid", placeItems: "center", height: "100%" }, children: _jsx(Spinner, { size: 28 }) })) : (_jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 }, children: [(searchQuery.data?.items ?? []).map((item) => {
-                                    const cover = resolveR18Url(item.cover);
-                                    return (_jsxs(GlassSurface, { elevated: true, style: { overflow: "hidden" }, children: [cover ? (_jsx("img", { src: cover, alt: item.title ?? "cover", style: { width: "100%", aspectRatio: "3 / 4", objectFit: "cover", background: "var(--tint-hover)" } })) : (_jsx("div", { style: { aspectRatio: "3 / 4", display: "grid", placeItems: "center", color: "var(--text-disabled)", background: "var(--tint-hover)" }, children: "\u65E0\u5C01\u9762" })), _jsxs("div", { style: { padding: 12 }, children: [_jsx("div", { style: { fontWeight: 700, fontSize: 14, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }, children: item.title || item.comic_id || "未命名" }), (item.subtitle || item.author) && (_jsx("div", { style: { marginTop: 6, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: item.subtitle || item.author }))] })] }, `${item.source_id}-${item.comic_id}`));
+                                    return (_jsxs(GlassSurface, { elevated: true, style: { overflow: "hidden" }, children: [_jsx(R18Cover, { ...(item.cover === undefined ? {} : { cover: item.cover }), ...(item.title === undefined ? {} : { title: item.title }) }), _jsxs("div", { style: { padding: 12 }, children: [_jsx("div", { style: { fontWeight: 700, fontSize: 14, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }, children: item.title || item.comic_id || "未命名" }), (item.subtitle || item.author) && (_jsx("div", { style: { marginTop: 6, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: item.subtitle || item.author }))] })] }, `${item.source_id}-${item.comic_id}`));
                                 }), (searchQuery.data?.items ?? []).length === 0 && !searchQuery.isLoading && (_jsx(GlassSurface, { style: { minHeight: 220, display: "grid", placeItems: "center", color: "var(--text-disabled)", gridColumn: "1 / -1" }, children: "\u6682\u65E0\u7ED3\u679C" }))] })) })] })] }));
 }

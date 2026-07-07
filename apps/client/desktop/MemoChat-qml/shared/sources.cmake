@@ -2,6 +2,7 @@ set(MEMOCHAT_QML_SHARED_SOURCES
     shared/gateway/ClientGateway.cpp
     shared/gateway/TransportEndpointPolicy.cpp
     shared/gateway/TransportSelector.cpp
+    shared/media/AuthenticatedMediaCache.cpp
     shared/media/LocalFilePickerService.cpp
     shared/media/LocalFilePickerServiceAttachments.cpp
     shared/media/LocalFilePickerServiceAvatar.cpp
@@ -17,6 +18,7 @@ set(MEMOCHAT_QML_SHARED_HEADERS
     shared/gateway/ClientGateway.h
     shared/gateway/TransportEndpointPolicy.h
     shared/gateway/TransportSelector.h
+    shared/media/AuthenticatedMediaCache.h
     shared/media/LocalFilePickerService.h
     shared/media/LocalFilePickerServicePrivate.h
     shared/media/MediaUploadRequest.h

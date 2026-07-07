@@ -93,7 +93,7 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
 
     ServerInfo server_info;
     server_info.Uid = obj.value("uid").toInt();
-    server_info.Token = obj.value("token").toString();
+    server_info.Token = obj.value("access_token").toString();
     server_info.LoginTicket = obj.value("login_ticket").toString();
     server_info.RefreshToken = obj.value("refresh_token").toString();
     server_info.ProtocolVersion = obj.value("protocol_version").toInt(3);

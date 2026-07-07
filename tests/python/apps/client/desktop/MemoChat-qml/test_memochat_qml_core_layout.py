@@ -427,6 +427,8 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
             "features/profile/controller/ProfileRequestPayloads.h",
             "shared/gateway/ClientGateway.cpp",
             "shared/gateway/TransportEndpointPolicy.cpp",
+            "shared/media/AuthenticatedMediaCache.cpp",
+            "shared/media/AuthenticatedMediaCache.h",
             "shared/media/LocalFilePickerService.cpp",
             "shared/media/LocalFilePickerServicePrivate.h",
             "shared/media/LocalFilePickerServiceAttachments.cpp",
@@ -658,6 +660,8 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("shared/gateway/ClientGateway.cpp", qml_cmake)
         self.assertIn("shared/gateway/TransportEndpointPolicy.cpp", qml_cmake)
         self.assertIn("shared/gateway/TransportEndpointPolicy.h", qml_cmake)
+        self.assertIn("shared/media/AuthenticatedMediaCache.cpp", qml_cmake)
+        self.assertIn("shared/media/AuthenticatedMediaCache.h", qml_cmake)
         self.assertIn("shared/media/LocalFilePickerServiceAttachments.cpp", qml_cmake)
         self.assertIn("shared/media/LocalFilePickerServiceAvatar.cpp", qml_cmake)
         self.assertIn("shared/media/MediaUploadServiceHelpers.cpp", qml_cmake)
@@ -710,6 +714,8 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("features/pet/controller/PetController.cpp", pet)
         self.assertIn("set(MEMOCHAT_QML_SHARED_SOURCES", shared)
         self.assertIn("set(MEMOCHAT_QML_SHARED_HEADERS", shared)
+        self.assertIn("shared/media/AuthenticatedMediaCache.cpp", shared)
+        self.assertIn("shared/media/AuthenticatedMediaCache.h", shared)
         self.assertIn("shared/media/MediaUploadService.cpp", shared)
         self.assertIn("set(MEMOCHAT_QML_LIVE2D_SOURCES", live2d)
         self.assertIn("set(MEMOCHAT_QML_LIVE2D_HEADERS", live2d)
@@ -771,9 +777,9 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("function isGridAtBottom", r18_runtime)
         self.assertIn('import "../runtime/AgentPaneRuntime.js" as AgentPaneRuntime', agent_pane)
         self.assertIn("AgentPaneRuntime.currentSessionTitle", agent_pane)
-        self.assertIn("function currentSessionTitle", agent_runtime)
-        self.assertIn("function sessionSummary", agent_runtime)
-        self.assertIn("function skillModeHint", agent_runtime)
+        self.assertIn("const currentSessionTitle =", agent_runtime)
+        self.assertIn("const sessionSummary =", agent_runtime)
+        self.assertIn("const skillModeHint =", agent_runtime)
 
     def test_heavy_moments_controller_concerns_are_split(self):
         controller = (QML_DIR / "features/moments/controller/MomentsController.cpp").read_text(encoding="utf-8")

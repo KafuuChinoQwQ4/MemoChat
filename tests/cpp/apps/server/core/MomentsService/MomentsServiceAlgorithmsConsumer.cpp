@@ -52,21 +52,6 @@ const char* JsonContentType()
     return memochat::moments::service::modules::JsonContentType();
 }
 
-const char* UidField()
-{
-    return memochat::moments::service::modules::UidField();
-}
-
-const char* LoginTicketField()
-{
-    return memochat::moments::service::modules::LoginTicketField();
-}
-
-bool HasRequiredAuthFields(bool has_uid, bool has_login_ticket)
-{
-    return memochat::moments::service::modules::HasRequiredAuthFields(has_uid, has_login_ticket);
-}
-
 bool HasValidUid(int uid)
 {
     return memochat::moments::service::modules::HasValidUid(uid);

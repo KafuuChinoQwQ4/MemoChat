@@ -1,6 +1,7 @@
 #ifndef AGENTNETWORKREQUESTUTILS_H
 #define AGENTNETWORKREQUESTUTILS_H
 
+#include "HttpMgrRequestUtils.h"
 #include "global.h"
 
 #include <QCoreApplication>
@@ -44,6 +45,7 @@ inline void configureAgentLocalGateRequest(QNetworkRequest& request)
 {
     const QUrl url = request.url();
     const QString scheme = url.scheme().toLower();
+    applyBearerAccessTokenHeader(request);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     request.setTransferTimeout(10000);
 #endif

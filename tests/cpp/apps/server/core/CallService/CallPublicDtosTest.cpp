@@ -8,12 +8,12 @@
 #include <string_view>
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
-static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallAuthRequestDto>(
-    std::array<std::string_view, 3>{"uid", "token", "call_id"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallAuthRequestDto>(std::array<std::string_view, 1>{
+    "call_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallStartRequestDto>(
-    std::array<std::string_view, 4>{"uid", "token", "peer_uid", "call_type"}));
+    std::array<std::string_view, 2>{"peer_uid", "call_type"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallTokenRequestDto>(
-    std::array<std::string_view, 4>{"uid", "token", "call_id", "role"}));
+    std::array<std::string_view, 2>{"call_id", "role"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallEventResponseDto>(
     std::array<std::string_view, 19>{"error",
                                      "event_type",
@@ -44,38 +44,29 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::call::CallTokenRes
     std::array<std::string_view, 7>{"error", "call_id", "room_name", "role", "livekit_url", "token", "trace_id"}));
 #endif
 
-TEST(CallPublicDtosTest, DecodesStartRequestWithExistingWireFieldNames)
+TEST(CallPublicDtosTest, DecodesStartRequestBusinessFieldsOnly)
 {
     memochat::call::CallStartRequestDto request;
-    ASSERT_TRUE(
-        memochat::call::DecodeCallStartRequest(R"({"uid":42,"token":"token-1","peer_uid":77,"call_type":"video"})",
-                                               &request));
+    ASSERT_TRUE(memochat::call::DecodeCallStartRequest(R"({"peer_uid":77,"call_type":"video"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.peer_uid, 77);
     EXPECT_EQ(request.call_type, "video");
 }
 
-TEST(CallPublicDtosTest, KeepsLegacyStartDefaultsForWrongTypes)
+TEST(CallPublicDtosTest, DefaultsStartBusinessFieldsForWrongTypes)
 {
     memochat::call::CallStartRequestDto request;
-    ASSERT_TRUE(memochat::call::DecodeCallStartRequest(R"({"uid":"bad","token":7,"peer_uid":"bad","call_type":false})",
-                                                       &request));
+    ASSERT_TRUE(memochat::call::DecodeCallStartRequest(R"({"peer_uid":"bad","call_type":false})", &request));
 
-    EXPECT_EQ(request.uid, 0);
-    EXPECT_TRUE(request.token.empty());
     EXPECT_EQ(request.peer_uid, 0);
     EXPECT_TRUE(request.call_type.empty());
 }
 
-TEST(CallPublicDtosTest, DecodesAuthRequestWithExistingWireFieldNames)
+TEST(CallPublicDtosTest, DecodesAuthRequestBusinessFieldsOnly)
 {
     memochat::call::CallAuthRequestDto request;
-    ASSERT_TRUE(memochat::call::DecodeCallAuthRequest(R"({"uid":42,"token":"token-1","call_id":"call-1"})", &request));
+    ASSERT_TRUE(memochat::call::DecodeCallAuthRequest(R"({"call_id":"call-1"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.call_id, "call-1");
 }
 
@@ -84,20 +75,14 @@ TEST(CallPublicDtosTest, DefaultsAuthRequestMissingFields)
     memochat::call::CallAuthRequestDto request;
     ASSERT_TRUE(memochat::call::DecodeCallAuthRequest(R"({})", &request));
 
-    EXPECT_EQ(request.uid, 0);
-    EXPECT_TRUE(request.token.empty());
     EXPECT_TRUE(request.call_id.empty());
 }
 
-TEST(CallPublicDtosTest, DecodesTokenRequestWithExistingWireFieldNames)
+TEST(CallPublicDtosTest, DecodesTokenRequestBusinessFieldsOnly)
 {
     memochat::call::CallTokenRequestDto request;
-    ASSERT_TRUE(
-        memochat::call::DecodeCallTokenRequest(R"({"uid":42,"token":"token-1","call_id":"call-1","role":"caller"})",
-                                               &request));
+    ASSERT_TRUE(memochat::call::DecodeCallTokenRequest(R"({"call_id":"call-1","role":"caller"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.call_id, "call-1");
     EXPECT_EQ(request.role, "caller");
 }
@@ -105,10 +90,8 @@ TEST(CallPublicDtosTest, DecodesTokenRequestWithExistingWireFieldNames)
 TEST(CallPublicDtosTest, DefaultsTokenRoleToEmptyString)
 {
     memochat::call::CallTokenRequestDto request;
-    ASSERT_TRUE(memochat::call::DecodeCallTokenRequest(R"({"uid":42,"token":"token-1","call_id":"call-1"})", &request));
+    ASSERT_TRUE(memochat::call::DecodeCallTokenRequest(R"({"call_id":"call-1"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "token-1");
     EXPECT_EQ(request.call_id, "call-1");
     EXPECT_TRUE(request.role.empty());
 }

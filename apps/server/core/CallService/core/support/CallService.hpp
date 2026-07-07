@@ -13,23 +13,27 @@ class CallService : public Singleton<CallService>
     friend class Singleton<CallService>;
 
 public:
-    bool StartCall(const memochat::json::JsonValue& request,
+    bool StartCall(int uid,
+                   const memochat::json::JsonValue& request,
                    memochat::json::JsonValue& response,
                    const std::string& trace_id);
-    bool AcceptCall(const memochat::json::JsonValue& request,
+    bool AcceptCall(int uid,
+                    const memochat::json::JsonValue& request,
                     memochat::json::JsonValue& response,
                     const std::string& trace_id);
-    bool RejectCall(const memochat::json::JsonValue& request,
+    bool RejectCall(int uid,
+                    const memochat::json::JsonValue& request,
                     memochat::json::JsonValue& response,
                     const std::string& trace_id);
-    bool CancelCall(const memochat::json::JsonValue& request,
+    bool CancelCall(int uid,
+                    const memochat::json::JsonValue& request,
                     memochat::json::JsonValue& response,
                     const std::string& trace_id);
-    bool HangupCall(const memochat::json::JsonValue& request,
+    bool HangupCall(int uid,
+                    const memochat::json::JsonValue& request,
                     memochat::json::JsonValue& response,
                     const std::string& trace_id);
     bool GetToken(int uid,
-                  const std::string& token,
                   const std::string& call_id,
                   const std::string& role,
                   memochat::json::JsonValue& response,
@@ -51,10 +55,6 @@ private:
 
     CallService();
     CallConfig LoadConfig() const;
-    bool ParseAuthRequest(const memochat::json::JsonValue& request,
-                          int& uid,
-                          std::string& token,
-                          std::string& call_id) const;
     bool LoadSession(const std::string& call_id, CallSessionInfo& session) const;
     bool SaveSession(const CallSessionInfo& session, int ttl_seconds) const;
     void ClearBusyState(const CallSessionInfo& session) const;

@@ -34,23 +34,13 @@ R18Controller::R18Controller(ClientGateway* gateway, QObject* parent)
 
 void R18Controller::refreshSources()
 {
-    auto payload = authPayload();
     QUrl url(gate_url_prefix + QStringLiteral("/api/r18/sources"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(payload.value(QStringLiteral("uid")).toInt()));
-    query.addQueryItem(QStringLiteral("token"), payload.value(QStringLiteral("token")).toString());
-    url.setQuery(query);
     getJson(url, QStringLiteral("sources"));
 }
 
 void R18Controller::refreshHistory()
 {
-    auto payload = authPayload();
     QUrl url(gate_url_prefix + QStringLiteral("/api/r18/history"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(payload.value(QStringLiteral("uid")).toInt()));
-    query.addQueryItem(QStringLiteral("token"), payload.value(QStringLiteral("token")).toString());
-    url.setQuery(query);
     getJson(url, QStringLiteral("history"));
 }
 

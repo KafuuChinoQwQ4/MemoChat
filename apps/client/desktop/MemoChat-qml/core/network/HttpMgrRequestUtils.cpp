@@ -1,6 +1,7 @@
 #include "HttpMgrRequestUtils.h"
 
 #include "global.h"
+#include "usermgr.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -211,15 +212,27 @@ QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
     return urls;
 }
 
+void applyBearerAccessTokenHeader(QNetworkRequest& request)
+{
+    const auto userMgr = UserMgr::GetInstance();
+    const QString accessToken = userMgr ? userMgr->GetToken().trimmed() : QString();
+    if (!accessToken.isEmpty())
+    {
+        request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + accessToken.toUtf8());
+    }
+}
+
 void prepareJsonRequest(QNetworkRequest& request, const QByteArray& data)
 {
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
+    applyBearerAccessTokenHeader(request);
     prepareRequestTransport(request);
 }
 
 void prepareGetRequest(QNetworkRequest& request)
 {
+    applyBearerAccessTokenHeader(request);
     prepareRequestTransport(request);
 }
 

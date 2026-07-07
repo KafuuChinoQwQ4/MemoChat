@@ -5,6 +5,7 @@
 #include <QJsonValue>
 #include <QSet>
 #include <QUrlQuery>
+#include <QtGlobal>
 
 namespace MediaUploadServicePrivate
 {
@@ -87,8 +88,7 @@ bool uploadAvatarFile(QFile& file,
     }
 
     QJsonObject uploadPayload;
-    uploadPayload["uid"] = uid;
-    uploadPayload["token"] = token;
+    Q_UNUSED(uid);
     uploadPayload["media_type"] = mediaType;
     uploadPayload["file_name"] = fileInfo.fileName();
     uploadPayload["mime"] = mimeType;
@@ -96,7 +96,7 @@ bool uploadAvatarFile(QFile& file,
     appendGrantFields(uploadPayload, grantUids, grantGroupId, grantPublic, grantFriends);
 
     QJsonObject uploadRsp;
-    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media")), uploadPayload, &uploadRsp, errorText))
+    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media")), uploadPayload, token, &uploadRsp, errorText))
     {
         return false;
     }
@@ -138,8 +138,7 @@ bool uploadChunkedFile(QFile& file,
     }
 
     QJsonObject initPayload;
-    initPayload["uid"] = uid;
-    initPayload["token"] = token;
+    Q_UNUSED(uid);
     initPayload["media_type"] = mediaType;
     initPayload["file_name"] = fileInfo.fileName();
     initPayload["mime"] = mimeType;
@@ -148,7 +147,7 @@ bool uploadChunkedFile(QFile& file,
     appendGrantFields(initPayload, grantUids, grantGroupId, grantPublic, grantFriends);
 
     QJsonObject initRsp;
-    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_init")), initPayload, &initRsp, errorText))
+    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_init")), initPayload, token, &initRsp, errorText))
     {
         return false;
     }
@@ -173,12 +172,10 @@ bool uploadChunkedFile(QFile& file,
     QSet<int> uploadedChunks;
     QUrl statusUrl(mediaUploadUrl(QStringLiteral("/upload_media_status")));
     QUrlQuery statusQuery;
-    statusQuery.addQueryItem("uid", QString::number(uid));
-    statusQuery.addQueryItem("token", token);
     statusQuery.addQueryItem("upload_id", uploadId);
     statusUrl.setQuery(statusQuery);
     QJsonObject statusRsp;
-    if (getJson(statusUrl, &statusRsp, nullptr) && isApiSuccess(statusRsp, nullptr))
+    if (getJson(statusUrl, token, &statusRsp, nullptr) && isApiSuccess(statusRsp, nullptr))
     {
         const QJsonArray uploaded = statusRsp.value("uploaded_chunks").toArray();
         for (const QJsonValue& v : uploaded)
@@ -234,8 +231,7 @@ bool uploadChunkedFile(QFile& file,
         for (int attempt = 0; attempt < mediaCfg.chunkRetry; ++attempt)
         {
             QList<QPair<QByteArray, QByteArray>> headers;
-            headers.append({QByteArrayLiteral("X-Uid"), QByteArray::number(uid)});
-            headers.append({QByteArrayLiteral("X-Token"), token.toUtf8()});
+            headers.append({QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8()});
             headers.append({QByteArrayLiteral("X-Upload-Id"), uploadId.toUtf8()});
             headers.append({QByteArrayLiteral("X-Chunk-Index"), QByteArray::number(index)});
 
@@ -272,11 +268,10 @@ bool uploadChunkedFile(QFile& file,
     }
 
     QJsonObject completePayload;
-    completePayload["uid"] = uid;
-    completePayload["token"] = token;
     completePayload["upload_id"] = uploadId;
     QJsonObject completeRsp;
-    if (!postJson(mediaUploadUrl(QStringLiteral("/upload_media_complete")), completePayload, &completeRsp, errorText))
+    if (!postJson(
+            mediaUploadUrl(QStringLiteral("/upload_media_complete")), completePayload, token, &completeRsp, errorText))
     {
         return false;
     }

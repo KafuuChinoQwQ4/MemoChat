@@ -96,20 +96,9 @@ template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& va
 namespace memochat::r18
 {
 
-R18AuthRequestDto R18AuthRequestFromJsonValue(const memochat::json::JsonValue& root)
-{
-    R18AuthRequestDto request;
-    request.uid = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(root, "uid", 0LL));
-    request.token = memochat::json::glaze_safe_get<std::string>(root, "token", "");
-    return request;
-}
-
 R18SourceToggleRequestDto R18SourceToggleRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18SourceToggleRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
     return request;
 }
@@ -117,9 +106,6 @@ R18SourceToggleRequestDto R18SourceToggleRequestFromJsonValue(const memochat::js
 R18SearchRequestDto R18SearchRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18SearchRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
     if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
@@ -136,9 +122,6 @@ R18SearchRequestDto R18SearchRequestFromJsonValue(const memochat::json::JsonValu
 R18ComicDetailRequestDto R18ComicDetailRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18ComicDetailRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
     if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
@@ -152,9 +135,6 @@ R18ComicDetailRequestDto R18ComicDetailRequestFromJsonValue(const memochat::json
 R18ChapterPagesRequestDto R18ChapterPagesRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18ChapterPagesRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     const bool has_source_id = root.isMember("source_id");
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", kDefaultR18SourceId);
     if (public_dto::modules::ShouldUseDefaultSourceId(has_source_id))
@@ -168,9 +148,6 @@ R18ChapterPagesRequestDto R18ChapterPagesRequestFromJsonValue(const memochat::js
 R18FavoriteToggleRequestDto R18FavoriteToggleRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18FavoriteToggleRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
     request.comic_id = memochat::json::glaze_safe_get<std::string>(root, "comic_id", "");
     const bool has_favorited = root.isMember("favorited");
@@ -183,9 +160,6 @@ R18FavoriteToggleRequestDto R18FavoriteToggleRequestFromJsonValue(const memochat
 R18HistoryUpdateRequestDto R18HistoryUpdateRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18HistoryUpdateRequestDto request;
-    const R18AuthRequestDto auth = R18AuthRequestFromJsonValue(root);
-    request.uid = auth.uid;
-    request.token = auth.token;
     request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
     request.comic_id = memochat::json::glaze_safe_get<std::string>(root, "comic_id", "");
     request.chapter_id = memochat::json::glaze_safe_get<std::string>(root, "chapter_id", "");

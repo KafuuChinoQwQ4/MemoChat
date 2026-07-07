@@ -76,14 +76,7 @@ void MomentsController::setAuthorFilterUid(int uid)
 
 QJsonObject MomentsController::buildAuthJson() const
 {
-    auto um = UserMgr::GetInstance();
-    QJsonObject obj;
-    if (um)
-    {
-        obj["uid"] = um->GetUid();
-        obj["login_ticket"] = um->GetToken();
-    }
-    return obj;
+    return {};
 }
 
 QString MomentsController::mediaUrlForKey(const QString& mediaKey) const

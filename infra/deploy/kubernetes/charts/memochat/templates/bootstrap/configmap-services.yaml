@@ -35,6 +35,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [LoginCache]
     TtlSec=3600
     [Media]
@@ -101,6 +106,11 @@ data:
     Host={{ .Values.aiOrchestrator.serviceName }}
     Port={{ .Values.aiOrchestrator.service.port }}
     TimeoutSec=300
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [Log]
     Level=info
     Dir=/var/log/memochat/aigateway
@@ -380,6 +390,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [Log]
     Level=info
     Dir=/var/log/memochat/mediagateway
@@ -423,6 +438,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [Mongo]
     Enabled=true
     Uri={{ .Values.externalServices.mongodb.uri }}
@@ -471,6 +491,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [Cluster]
     DiscoveryMode=k8s-statefulset
     ServiceName={{ .Values.chat.serviceName }}
@@ -532,6 +557,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [Log]
     Level=info
     Dir=/var/log/memochat/r18gateway
@@ -578,6 +608,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [LoginCache]
     TtlSec=3600
     [Kafka]
@@ -644,6 +679,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [LoginCache]
     TtlSec=3600
     [Kafka]
@@ -702,6 +742,11 @@ data:
     [ChatAuth]
     HmacSecret=
     TicketTtlSec=20
+    [AuthToken]
+    JwtSecret=
+    JwtIssuer=memochat
+    JwtAudience=memochat-http
+    AccessTokenTtlSec=900
     [LoginCache]
     TtlSec=3600
     [Kafka]

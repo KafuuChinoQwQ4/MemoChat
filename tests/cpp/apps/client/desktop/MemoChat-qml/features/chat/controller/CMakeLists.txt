@@ -51,6 +51,7 @@ add_executable(chat_feature_controller_gtest
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+    ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ChatDialogListResponseService.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ChatDialogSelectionService.cpp
     ${MEMOCHAT_REPO_ROOT}/apps/client/desktop/MemoChat-qml/features/chat/services/ConversationSyncService.cpp

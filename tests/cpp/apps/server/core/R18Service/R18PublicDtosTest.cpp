@@ -9,20 +9,18 @@
 #include <string_view>
 
 #if MEMOCHAT_ENABLE_CPP26_REFLECTION
-static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18AuthRequestDto>(
-    std::array<std::string_view, 2>{"uid", "token"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceToggleRequestDto>(
-    std::array<std::string_view, 3>{"uid", "token", "source_id"}));
+    std::array<std::string_view, 1>{"source_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SearchRequestDto>(
-    std::array<std::string_view, 5>{"uid", "token", "source_id", "keyword", "page"}));
+    std::array<std::string_view, 3>{"source_id", "keyword", "page"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ComicDetailRequestDto>(
-    std::array<std::string_view, 4>{"uid", "token", "source_id", "comic_id"}));
+    std::array<std::string_view, 2>{"source_id", "comic_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ChapterPagesRequestDto>(
-    std::array<std::string_view, 4>{"uid", "token", "source_id", "chapter_id"}));
+    std::array<std::string_view, 2>{"source_id", "chapter_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18FavoriteToggleRequestDto>(
-    std::array<std::string_view, 5>{"uid", "token", "source_id", "comic_id", "favorited"}));
+    std::array<std::string_view, 3>{"source_id", "comic_id", "favorited"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18HistoryUpdateRequestDto>(
-    std::array<std::string_view, 6>{"uid", "token", "source_id", "comic_id", "chapter_id", "page_index"}));
+    std::array<std::string_view, 4>{"source_id", "comic_id", "chapter_id", "page_index"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceToggleResponseDto>(
     std::array<std::string_view, 2>{"source_id", "enabled"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18FavoriteToggleResponseDto>(
@@ -46,25 +44,20 @@ memochat::json::JsonValue Parse(std::string_view body)
 TEST(R18PublicDtosTest, DecodesSourceToggleRequest)
 {
     memochat::r18::R18SourceToggleRequestDto request;
-    ASSERT_TRUE(
-        memochat::r18::DecodeR18SourceToggleRequest(R"({"uid":42,"token":"tok","source_id":"builtin"})", &request));
+    ASSERT_TRUE(memochat::r18::DecodeR18SourceToggleRequest(R"({"source_id":"builtin"})", &request));
 
-    EXPECT_EQ(request.uid, 42);
-    EXPECT_EQ(request.token, "tok");
     EXPECT_EQ(request.source_id, "builtin");
 }
 
 TEST(R18PublicDtosTest, DecodesSearchRequestAndDefaults)
 {
-    const auto full = memochat::r18::R18SearchRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"tok","source_id":"builtin","keyword":"abc","page":3})"));
-    EXPECT_EQ(full.uid, 42);
-    EXPECT_EQ(full.token, "tok");
+    const auto full =
+        memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({"source_id":"builtin","keyword":"abc","page":3})"));
     EXPECT_EQ(full.source_id, "builtin");
     EXPECT_EQ(full.keyword, "abc");
     EXPECT_EQ(full.page, 3);
 
-    const auto defaults = memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({"uid":42,"token":"tok"})"));
+    const auto defaults = memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({})"));
     EXPECT_EQ(defaults.source_id, "");
     EXPECT_EQ(defaults.keyword, "");
     EXPECT_EQ(defaults.page, 1);
@@ -72,17 +65,12 @@ TEST(R18PublicDtosTest, DecodesSearchRequestAndDefaults)
 
 TEST(R18PublicDtosTest, DecodesDetailAndPagesRequests)
 {
-    const auto detail = memochat::r18::R18ComicDetailRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"tok","source_id":"s","comic_id":"c"})"));
-    EXPECT_EQ(detail.uid, 42);
-    EXPECT_EQ(detail.token, "tok");
+    const auto detail = memochat::r18::R18ComicDetailRequestFromJsonValue(Parse(R"({"source_id":"s","comic_id":"c"})"));
     EXPECT_EQ(detail.source_id, "s");
     EXPECT_EQ(detail.comic_id, "c");
 
-    const auto pages = memochat::r18::R18ChapterPagesRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"tok","source_id":"s","chapter_id":"ch"})"));
-    EXPECT_EQ(pages.uid, 42);
-    EXPECT_EQ(pages.token, "tok");
+    const auto pages =
+        memochat::r18::R18ChapterPagesRequestFromJsonValue(Parse(R"({"source_id":"s","chapter_id":"ch"})"));
     EXPECT_EQ(pages.source_id, "s");
     EXPECT_EQ(pages.chapter_id, "ch");
 }
@@ -90,45 +78,36 @@ TEST(R18PublicDtosTest, DecodesDetailAndPagesRequests)
 TEST(R18PublicDtosTest, DecodesFavoriteAndHistoryRequestsWithDefaults)
 {
     const auto favorite = memochat::r18::R18FavoriteToggleRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"tok","source_id":"s","comic_id":"c","favorited":false})"));
-    EXPECT_EQ(favorite.uid, 42);
-    EXPECT_EQ(favorite.token, "tok");
+        Parse(R"({"source_id":"s","comic_id":"c","favorited":false})"));
     EXPECT_EQ(favorite.source_id, "s");
     EXPECT_EQ(favorite.comic_id, "c");
     EXPECT_FALSE(favorite.favorited);
 
-    const auto favorite_defaults =
-        memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(R"({"uid":42,"token":"tok"})"));
+    const auto favorite_defaults = memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(R"({})"));
     EXPECT_EQ(favorite_defaults.source_id, "");
     EXPECT_EQ(favorite_defaults.comic_id, "");
     EXPECT_TRUE(favorite_defaults.favorited);
 
     const auto history = memochat::r18::R18HistoryUpdateRequestFromJsonValue(
-        Parse(R"({"uid":42,"token":"tok","source_id":"s","comic_id":"c","chapter_id":"ch","page_index":9})"));
-    EXPECT_EQ(history.uid, 42);
-    EXPECT_EQ(history.token, "tok");
+        Parse(R"({"source_id":"s","comic_id":"c","chapter_id":"ch","page_index":9})"));
     EXPECT_EQ(history.source_id, "s");
     EXPECT_EQ(history.comic_id, "c");
     EXPECT_EQ(history.chapter_id, "ch");
     EXPECT_EQ(history.page_index, 9);
 
-    const auto history_defaults =
-        memochat::r18::R18HistoryUpdateRequestFromJsonValue(Parse(R"({"uid":42,"token":"tok"})"));
+    const auto history_defaults = memochat::r18::R18HistoryUpdateRequestFromJsonValue(Parse(R"({})"));
     EXPECT_EQ(history_defaults.page_index, 0);
 }
 
 TEST(R18PublicDtosTest, PreservesRepresentativeWrongTypeDefaults)
 {
-    const auto search = memochat::r18::R18SearchRequestFromJsonValue(
-        Parse(R"({"uid":"bad","token":7,"source_id":false,"keyword":{},"page":"bad"})"));
-    EXPECT_EQ(search.uid, 0);
-    EXPECT_EQ(search.token, "");
+    const auto search =
+        memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({"source_id":false,"keyword":{},"page":"bad"})"));
     EXPECT_EQ(search.source_id, "");
     EXPECT_EQ(search.keyword, "");
     EXPECT_EQ(search.page, 1);
 
-    const auto favorite =
-        memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(R"({"uid":42,"token":"tok","favorited":"bad"})"));
+    const auto favorite = memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(R"({"favorited":"bad"})"));
     EXPECT_TRUE(favorite.favorited);
 }
 
@@ -141,7 +120,7 @@ TEST(R18PublicDtosTest, RejectsMalformedJsonAndNullOutputs)
     EXPECT_EQ(error, "invalid json");
 
     error.clear();
-    EXPECT_FALSE(memochat::r18::DecodeR18SearchRequest(R"({"uid":42})",
+    EXPECT_FALSE(memochat::r18::DecodeR18SearchRequest(R"({})",
                                                        static_cast<memochat::r18::R18SearchRequestDto*>(nullptr),
                                                        &error));
     EXPECT_EQ(error, "output pointer is null");

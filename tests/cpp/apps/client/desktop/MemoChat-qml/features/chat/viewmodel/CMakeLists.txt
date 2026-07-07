@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Network)
 
 add_executable(chat_view_model_gtest
     ChatViewModelTest.cpp
@@ -11,6 +11,7 @@ add_executable(chat_view_model_gtest
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelMutations.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelPresentation.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/model/ChatMessageModelQueries.cpp
+    ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/shared/media/AuthenticatedMediaCache.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/services/MessageContentCodec.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/chat/viewmodel/ChatViewModel.cpp
     ${CMAKE_SOURCE_DIR}/apps/client/desktop/MemoChat-qml/features/contact/model/FriendListModel.cpp
@@ -31,6 +32,7 @@ set_target_properties(chat_view_model_gtest PROPERTIES
 target_link_libraries(chat_view_model_gtest PRIVATE
     GTest_TestLib
     Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
 )
 
 target_include_directories(chat_view_model_gtest PRIVATE

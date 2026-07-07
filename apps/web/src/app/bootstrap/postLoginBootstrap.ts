@@ -29,7 +29,7 @@ export interface LoginResponse {
   error: number
   uid: number
   user_id: string
-  token: string
+  access_token: string
   login_ticket: string
   ticket_expire_ms: number
   refresh_token: string
@@ -132,7 +132,7 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
 
   session.setLogin({
     uid: res.uid,
-    token: res.token,
+    token: res.access_token,
     loginTicket: res.login_ticket,
     ticketExpireMs: res.ticket_expire_ms,
     refreshToken: res.refresh_token,
@@ -202,7 +202,7 @@ async function connectAndChatLogin(
     const serverInfo: ServerInfo = {
       transport,
       loginTicket: res.login_ticket,
-      token: res.token,
+      token: res.access_token,
       uid: res.uid,
       protocolVersion: res.protocol_version,
     }

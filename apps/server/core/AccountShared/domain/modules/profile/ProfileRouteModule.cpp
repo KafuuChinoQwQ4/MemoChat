@@ -7,7 +7,7 @@
 #include "const.hpp"
 #include "json/GlazeCompat.hpp"
 #include "routing/RouteRegistry.hpp"
-#include "support/UserTokenValidator.hpp"
+#include "support/BearerAccessAuth.hpp"
 
 #include <string>
 
@@ -45,7 +45,6 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
         return true;
     }
 
-    const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
@@ -56,11 +55,9 @@ bool HandleUserUpdateProfile(const memochat::gate::routing::GateRequest& request
         WriteJson(response, root);
         return true;
     }
-    // H-8 verified: uid is derived exclusively from the validated HTTP token via
-    // ResolveUserIdFromToken; any uid field in the request DTO is never used to
-    // drive database operations, so no IDOR vulnerability exists here.
+    // H-8 verified: uid is derived exclusively from Authorization: Bearer.
     int uid = 0;
-    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         WriteJson(response, root);
@@ -105,20 +102,9 @@ bool HandleGetUserInfo(const memochat::gate::routing::GateRequest& request,
         return true;
     }
 
-    const auto token = user_info_request.token;
-
-    if (token.empty())
-    {
-        root["error"] = ErrorCodes::Error_Json;
-        WriteJson(response, root);
-        return true;
-    }
-
-    // H-8 verified: uid is derived exclusively from the validated HTTP token via
-    // ResolveUserIdFromToken; the request DTO carries no uid field that could be
-    // substituted, so no IDOR vulnerability exists here.
+    // H-8 verified: uid is derived exclusively from Authorization: Bearer.
     int uid = 0;
-    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
     {
         root["error"] = ErrorCodes::TokenInvalid;
         WriteJson(response, root);

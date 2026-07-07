@@ -46,7 +46,6 @@ void AgentController::sendMessage(const QString& content)
     emit loadingChanged();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["session_id"] = sessionId;
     payload["content"] = content;
     payload["model_type"] = _current_model_backend;
@@ -81,7 +80,6 @@ void AgentController::summarizeChat(const QString& dialogUid, const QString& cha
     clearErrorState();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["feature_type"] = "summary";
     payload["content"] = chatHistoryJson;
     payload["model_type"] = _current_model_backend;
@@ -105,7 +103,6 @@ void AgentController::suggestReply(const QString& dialogUid, const QString& chat
     clearErrorState();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["feature_type"] = "suggest";
     payload["content"] = chatHistoryJson;
     payload["model_type"] = _current_model_backend;
@@ -136,7 +133,6 @@ void AgentController::translateMessageWithSource(const QString& msgContent,
     clearErrorState();
 
     QJsonObject payload;
-    payload["uid"] = uid;
     payload["feature_type"] = "translate";
     payload["content"] = msgContent;
     payload["target_lang"] = targetLang.trimmed().isEmpty() ? QStringLiteral("中文") : targetLang.trimmed();

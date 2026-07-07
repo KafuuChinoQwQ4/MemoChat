@@ -66,6 +66,12 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
         chat_auth_secret = std::string(memochat::auth::kWellKnownDevHmacSecret);
     }
     memochat::auth::RequireNonDefaultChatAuthSecretInProduction(service_name, chat_auth_secret);
+    auto jwt_access_secret = cfgMgr.GetValue("AuthToken", "JwtSecret");
+    if (jwt_access_secret.empty())
+    {
+        jwt_access_secret = std::string(memochat::auth::kWellKnownDevJwtAccessSecret);
+    }
+    memochat::auth::RequireNonDefaultJwtAccessSecretInProduction(service_name, jwt_access_secret);
 
     // Register the domain route profile BEFORE the first LogicSystem::Instance().
     LogicSystem::ClearRouteProfileRegistrars();

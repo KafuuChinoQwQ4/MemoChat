@@ -134,6 +134,26 @@ target_include_directories(gateshared_route_registry_gtest PRIVATE
 add_dependencies(gtest_tests gateshared_route_registry_gtest)
 
 if(MEMOCHAT_ENABLE_GNU_MODULES)
+    add_executable(gateshared_bearer_access_auth_algorithms_gtest
+        main.cpp
+        BearerAccessAuthAlgorithmsConsumer.cpp
+        BearerAccessAuthAlgorithmsTest.cpp
+    )
+
+    target_link_libraries(gateshared_bearer_access_auth_algorithms_gtest PRIVATE
+        GTest_TestLib
+        memochat_server_deps
+    )
+
+    memochat_enable_gnu_modules(gateshared_bearer_access_auth_algorithms_gtest
+        MODULES
+            memochat.gate.bearer_access_auth_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/GateShared/core/support/cxx_modules/BearerAccessAuth.cppm
+        CONSUMER_SOURCES
+            BearerAccessAuthAlgorithmsConsumer.cpp
+    )
+
+    add_dependencies(gtest_tests gateshared_bearer_access_auth_algorithms_gtest)
+
     add_executable(gateshared_http_json_support_algorithms_gtest
         main.cpp
         GateHttpJsonSupportAlgorithmsConsumer.cpp
@@ -496,6 +516,7 @@ gtest_discover_tests(gateshared_cross_module_route_schema_catalog_gtest TEST_DIS
 gtest_discover_tests(gateshared_cserver_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
 gtest_discover_tests(gateshared_route_registry_gtest TEST_DISCOVERY_MODE POST_BUILD)
 if(MEMOCHAT_ENABLE_GNU_MODULES)
+    gtest_discover_tests(gateshared_bearer_access_auth_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
     gtest_discover_tests(gateshared_http_json_support_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
     gtest_discover_tests(gateshared_h1_route_adapter_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
     gtest_discover_tests(gateshared_worker_pool_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)

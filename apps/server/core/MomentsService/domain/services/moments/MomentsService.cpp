@@ -9,7 +9,7 @@
 #include "services/moments/MomentsOutputDtos.hpp"
 #include "services/moments/MomentsPersistence.hpp"
 #include "services/moments/MomentsPublicDtos.hpp"
-#include "support/UserTokenValidator.hpp"
+#include "support/BearerAccessAuth.hpp"
 
 #include <chrono>
 #include <functional>
@@ -85,7 +85,7 @@ void WriteJson(memochat::gate::routing::GateResponse& response, const json::Json
 
 bool HandleJsonRequest(const memochat::gate::routing::GateRequest& request,
                        memochat::gate::routing::GateResponse& response,
-                       const std::function<bool(const json::JsonValue&, json::JsonValue&, const std::string&)>& fn)
+                       const std::function<bool(const json::JsonValue&, json::JsonValue&, const std::string&, int)>& fn)
 {
     json::JsonValue root = json::JsonValue{};
     json::JsonValue src_root = json::JsonValue{};
@@ -97,34 +97,17 @@ bool HandleJsonRequest(const memochat::gate::routing::GateRequest& request,
         return true;
     }
 
-    fn(src_root, root, request.trace_id);
-    root["trace_id"] = request.trace_id;
-    WriteJson(response, root);
-    return true;
-}
-
-bool ValidateAuth(const json::JsonValue& src_root, json::JsonValue& root, int& uid)
-{
-    if (!memochat::moments::service::modules::HasRequiredAuthFields(
-            json::isMember(src_root, memochat::moments::service::modules::UidField()),
-            json::isMember(src_root, memochat::moments::service::modules::LoginTicketField())))
-    {
-        root["error"] = ErrorCodes::Error_Json;
-        return false;
-    }
-    uid = json::glaze_safe_get<int>(src_root, memochat::moments::service::modules::UidField(), 0);
-    if (!memochat::moments::service::modules::HasValidUid(uid))
-    {
-        root["error"] = ErrorCodes::UidInvalid;
-        return false;
-    }
-    const std::string token =
-        json::glaze_safe_get<std::string>(src_root, memochat::moments::service::modules::LoginTicketField(), "");
-    if (!memochat::auth::ValidateUserToken(uid, token))
+    int uid = 0;
+    if (!memochat::auth::ResolveBearerAccessUserId(request, uid))
     {
         root["error"] = ErrorCodes::TokenInvalid;
-        return false;
+        WriteJson(response, root);
+        return true;
     }
+
+    fn(src_root, root, request.trace_id, uid);
+    root["trace_id"] = request.trace_id;
+    WriteJson(response, root);
     return true;
 }
 
@@ -209,14 +192,8 @@ bool MomentsService::HandlePublish(const memochat::gate::routing::GateRequest& r
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                return true;
-            }
-
             const MomentPublishRequestDto request_dto = MomentPublishRequestFromJsonValue(src_root);
             const auto now_ms = NowMs();
 
@@ -266,14 +243,8 @@ bool MomentsService::HandleList(const memochat::gate::routing::GateRequest& requ
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                return true;
-            }
-
             const MomentListRequestDto request_dto = MomentListRequestFromJsonValue(src_root);
 
             std::vector<MomentInfo> moments;
@@ -339,15 +310,8 @@ bool MomentsService::HandleDetail(const memochat::gate::routing::GateRequest& re
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                memolog::LogWarn("gate.moments.detail", "auth failed");
-                return true;
-            }
-
             const MomentIdRequestDto request_dto = MomentIdRequestFromJsonValue(src_root);
             const int64_t moment_id = request_dto.moment_id;
             memolog::LogInfo("gate.moments.detail", "moment_id=" + std::to_string(moment_id));
@@ -405,14 +369,8 @@ bool MomentsService::HandleDelete(const memochat::gate::routing::GateRequest& re
 {
     return HandleJsonRequest(request,
                              response,
-                             [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+                             [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
                              {
-                                 int uid = 0;
-                                 if (!ValidateAuth(src_root, root, uid))
-                                 {
-                                     return true;
-                                 }
-
                                  const MomentIdRequestDto request_dto = MomentIdRequestFromJsonValue(src_root);
                                  const int64_t moment_id = request_dto.moment_id;
                                  if (!memochat::moments::service::modules::HasValidMomentId(moment_id))
@@ -438,14 +396,8 @@ bool MomentsService::HandleLike(const memochat::gate::routing::GateRequest& requ
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                return true;
-            }
-
             const MomentLikeRequestDto request_dto = MomentLikeRequestFromJsonValue(src_root);
             if (!memochat::moments::service::modules::HasValidMomentId(request_dto.moment_id))
             {
@@ -482,14 +434,8 @@ bool MomentsService::HandleComment(const memochat::gate::routing::GateRequest& r
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                return true;
-            }
-
             const MomentCommentRequestDto request_dto = MomentCommentRequestFromJsonValue(src_root);
 
             if (request_dto.delete_mode)
@@ -574,14 +520,8 @@ bool MomentsService::HandleCommentList(const memochat::gate::routing::GateReques
 {
     return HandleJsonRequest(request,
                              response,
-                             [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+                             [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
                              {
-                                 int uid = 0;
-                                 if (!ValidateAuth(src_root, root, uid))
-                                 {
-                                     return true;
-                                 }
-
                                  const MomentCommentListRequestDto request_dto =
                                      MomentCommentListRequestFromJsonValue(src_root);
 
@@ -631,14 +571,8 @@ bool MomentsService::HandleCommentLike(const memochat::gate::routing::GateReques
     return HandleJsonRequest(
         request,
         response,
-        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&)
+        [](const json::JsonValue& src_root, json::JsonValue& root, const std::string&, int uid)
         {
-            int uid = 0;
-            if (!ValidateAuth(src_root, root, uid))
-            {
-                return true;
-            }
-
             const MomentCommentLikeRequestDto request_dto = MomentCommentLikeRequestFromJsonValue(src_root);
             if (!memochat::moments::service::modules::HasValidCommentId(request_dto.comment_id))
             {

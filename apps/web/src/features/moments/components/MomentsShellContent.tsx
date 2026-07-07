@@ -5,7 +5,7 @@ import { getGateway } from "@/shared/gateway/ClientGateway"
 import { ENDPOINTS } from "@/core/config/endpoints"
 import { useSessionStore } from "@/core/session/sessionStore"
 import { displayNameWithoutInternalId } from "@/core/entities/displayIds"
-import { resolveMediaUrl } from "@/shared/media/mediaUrl"
+import { useMediaUrl } from "@/shared/hooks/useMediaUrl"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
@@ -227,7 +227,8 @@ function MomentMediaTile({
   onOpen?: () => void
 }) {
   const height = mediaDisplayHeight(media, full)
-  const source = resolveMediaUrl(full ? media.mediaKey : media.previewKey)
+  const source = useMediaUrl(full ? media.mediaKey : media.previewKey)
+  const previewSource = useMediaUrl(media.type === "video" ? media.previewKey : null)
   const interactive = Boolean(onOpen)
   const sharedStyle: CSSProperties = {
     width: "100%",
@@ -272,8 +273,8 @@ function MomentMediaTile({
         display: "grid",
         placeItems: "center",
         color: "#eaf2ff",
-        background: media.previewKey
-          ? `linear-gradient(rgba(18,25,34,0.42), rgba(18,25,34,0.72)), url("${resolveMediaUrl(media.previewKey)}") center/cover`
+        background: previewSource
+          ? `linear-gradient(rgba(18,25,34,0.42), rgba(18,25,34,0.72)), url("${previewSource}") center/cover`
           : "linear-gradient(135deg, #263447, #111821)",
       }}
     >
@@ -293,7 +294,7 @@ function MomentMediaTile({
   }
 
   return (
-    <a href={resolveMediaUrl(media.mediaKey)} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+    <a href={source || undefined} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
       {tile}
     </a>
   )
@@ -453,8 +454,6 @@ export function MomentsShellContent() {
     queryFn: async () => {
       if (uid === null || token === null) throw new Error("Missing moments auth")
       const response = await getGateway().http.post<FeedResponse>(ENDPOINTS.momentsList, {
-        uid,
-        login_ticket: token,
         last_moment_id: 0,
         limit: 20,
       })
@@ -477,8 +476,6 @@ export function MomentsShellContent() {
     setPublishStatus("正在发布...")
     try {
       const response = await getGateway().http.post<PublishResponse>(ENDPOINTS.momentsPublish, {
-        uid,
-        login_ticket: token,
         visibility,
         location: draftLocation.trim(),
         items: [{

@@ -17,7 +17,7 @@ struct ProfileResult
 bool ParseJsonBody(std::string_view body_sv, memochat::json::JsonValue& root);
 memochat::json::JsonValue MakeError(int error_code, const std::string& message);
 
-ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req);
+ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req, const std::string& access_token);
 ProfileResult HandleGetUserInfo(const std::string& token);
 
 } // namespace Http2ProfileSupport

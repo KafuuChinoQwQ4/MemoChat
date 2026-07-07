@@ -112,21 +112,15 @@ void AgentController::loadGameRolePresets(const QString& rulesetId)
 void AgentController::listGameRooms()
 {
     ensureUserScope();
-    QUrl url(gameBaseUrl() + QStringLiteral("/rooms"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
-    url.setQuery(query);
-    sendGameGet(url, QStringLiteral("rooms"), QStringLiteral("正在加载游戏房间..."));
+    sendGameGet(QUrl(gameBaseUrl() + QStringLiteral("/rooms")),
+                     QStringLiteral("rooms"), QStringLiteral("正在加载游戏房间..."));
 }
 
 void AgentController::listGameTemplates()
 {
     ensureUserScope();
-    QUrl url(gameBaseUrl() + QStringLiteral("/templates"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
-    url.setQuery(query);
-    sendGameGet(url, QStringLiteral("templates"), QStringLiteral("正在加载游戏模板..."));
+    sendGameGet(QUrl(gameBaseUrl() + QStringLiteral("/templates")),
+                     QStringLiteral("templates"), QStringLiteral("正在加载游戏模板..."));
 }
 
 void AgentController::listGameTemplatePresets(const QString& rulesetId)
@@ -156,7 +150,6 @@ void AgentController::saveGameTemplate(const QString& title,
 
     QJsonObject payload;
     payload[QStringLiteral("template_id")] = QString();
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("title")] = trimmedTitle;
     payload[QStringLiteral("description")] = description.trimmed();
     payload[QStringLiteral("ruleset_id")] = trimmedRuleset;
@@ -211,9 +204,6 @@ void AgentController::deleteGameTemplate(const QString& templateId)
         return;
     }
     QUrl url(gameBaseUrl() + QStringLiteral("/templates/") + trimmedTemplateId);
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("uid"), QString::number(currentUid()));
-    url.setQuery(query);
     sendGameDelete(url, QStringLiteral("delete_template"), QStringLiteral("正在删除游戏模板..."));
 }
 
@@ -227,7 +217,6 @@ void AgentController::cloneGameTemplatePreset(const QString& presetId, const QSt
     }
 
     QJsonObject payload;
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("title")] = title.trimmed();
 
     sendGamePost(QUrl(gameBaseUrl() +
@@ -273,7 +262,6 @@ QString AgentController::exportGameTemplate(const QString& templateId)
     }
 
     QJsonObject exported = sanitizedGameTemplateValue(templ).toObject();
-    exported[QStringLiteral("uid")] = currentUid();
     const QJsonDocument doc(exported);
     setGameBusy(false, QStringLiteral("模板 JSON 已导出。"));
     return QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
@@ -303,7 +291,6 @@ bool AgentController::importGameTemplate(const QString& templateJson)
         setGameError(QStringLiteral("模板 JSON 缺少 agents 数组。"));
         return false;
     }
-    payload[QStringLiteral("uid")] = currentUid();
     payload[QStringLiteral("template_id")] = payload.value(QStringLiteral("template_id")).toString();
     if (payload.value(QStringLiteral("title")).toString().trimmed().isEmpty())
     {

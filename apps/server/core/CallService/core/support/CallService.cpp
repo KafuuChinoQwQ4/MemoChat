@@ -108,20 +108,6 @@ MakeCallStartResponseDto(const memochat::call::CallEventResponseDto& event, int 
     return response;
 }
 
-bool ValidateGateUserToken(int uid, const std::string& token)
-{
-    if (!service_modules::HasValidAuthRequest(uid, token.empty()))
-    {
-        return false;
-    }
-    std::string token_value;
-    if (!RedisMgr::GetInstance()->Get(std::string(USERTOKENPREFIX) + std::to_string(uid), token_value))
-    {
-        return false;
-    }
-    return !token_value.empty() && token_value == token;
-}
-
 std::string Base64UrlEncode(const std::string& input)
 {
     std::string out(memochat::call::modules::Base64UrlEncodedSize(input.size()), '\0');
@@ -236,18 +222,6 @@ CallService::CallConfig CallService::LoadConfig() const
     if (!token_ttl.empty())
         cfg.token_ttl_sec = service_modules::NormalizeTokenTtlSec(std::atoi(token_ttl.c_str()));
     return cfg;
-}
-
-bool CallService::ParseAuthRequest(const memochat::json::JsonValue& request,
-                                   int& uid,
-                                   std::string& token,
-                                   std::string& call_id) const
-{
-    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
-    uid = auth_request.uid;
-    token = auth_request.token;
-    call_id = auth_request.call_id;
-    return service_modules::HasValidAuthRequest(uid, token.empty());
 }
 
 bool CallService::LoadSession(const std::string& call_id, CallSessionInfo& session) const
@@ -378,7 +352,8 @@ std::string CallService::CreateToken(const CallSessionInfo& session, int uid, co
     return signing_input + "." + signature;
 }
 
-bool CallService::StartCall(const memochat::json::JsonValue& request,
+bool CallService::StartCall(int uid,
+                            const memochat::json::JsonValue& request,
                             memochat::json::JsonValue& response,
                             const std::string& trace_id)
 {
@@ -388,13 +363,9 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
         response["error"] = ErrorCodes::Error_Json;
         return true;
     }
-    int uid = 0;
     const memochat::call::CallStartRequestDto start_request = memochat::call::CallStartRequestFromJsonValue(request);
     int peer_uid = start_request.peer_uid;
-    std::string token;
-    std::string unused_call_id;
-    if (!ParseAuthRequest(request, uid, token, unused_call_id) || !ValidateGateUserToken(uid, token) ||
-        !service_modules::HasValidStartPeer(uid, peer_uid))
+    if (!service_modules::HasValidStartPeer(uid, peer_uid))
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
@@ -461,14 +432,14 @@ bool CallService::StartCall(const memochat::json::JsonValue& request,
     return true;
 }
 
-bool CallService::AcceptCall(const memochat::json::JsonValue& request,
+bool CallService::AcceptCall(int uid,
+                             const memochat::json::JsonValue& request,
                              memochat::json::JsonValue& response,
                              const std::string& trace_id)
 {
-    int uid = 0;
-    std::string token;
-    std::string call_id;
-    if (!ParseAuthRequest(request, uid, token, call_id) || !ValidateGateUserToken(uid, token))
+    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
+    const std::string& call_id = auth_request.call_id;
+    if (call_id.empty())
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
@@ -504,14 +475,14 @@ bool CallService::AcceptCall(const memochat::json::JsonValue& request,
     return true;
 }
 
-bool CallService::RejectCall(const memochat::json::JsonValue& request,
+bool CallService::RejectCall(int uid,
+                             const memochat::json::JsonValue& request,
                              memochat::json::JsonValue& response,
                              const std::string& trace_id)
 {
-    int uid = 0;
-    std::string token;
-    std::string call_id;
-    if (!ParseAuthRequest(request, uid, token, call_id) || !ValidateGateUserToken(uid, token))
+    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
+    const std::string& call_id = auth_request.call_id;
+    if (call_id.empty())
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
@@ -547,14 +518,14 @@ bool CallService::RejectCall(const memochat::json::JsonValue& request,
     return true;
 }
 
-bool CallService::CancelCall(const memochat::json::JsonValue& request,
+bool CallService::CancelCall(int uid,
+                             const memochat::json::JsonValue& request,
                              memochat::json::JsonValue& response,
                              const std::string& trace_id)
 {
-    int uid = 0;
-    std::string token;
-    std::string call_id;
-    if (!ParseAuthRequest(request, uid, token, call_id) || !ValidateGateUserToken(uid, token))
+    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
+    const std::string& call_id = auth_request.call_id;
+    if (call_id.empty())
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
@@ -592,14 +563,14 @@ bool CallService::CancelCall(const memochat::json::JsonValue& request,
     return true;
 }
 
-bool CallService::HangupCall(const memochat::json::JsonValue& request,
+bool CallService::HangupCall(int uid,
+                             const memochat::json::JsonValue& request,
                              memochat::json::JsonValue& response,
                              const std::string& trace_id)
 {
-    int uid = 0;
-    std::string token;
-    std::string call_id;
-    if (!ParseAuthRequest(request, uid, token, call_id) || !ValidateGateUserToken(uid, token))
+    const memochat::call::CallAuthRequestDto auth_request = memochat::call::CallAuthRequestFromJsonValue(request);
+    const std::string& call_id = auth_request.call_id;
+    if (call_id.empty())
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;
@@ -640,13 +611,12 @@ bool CallService::HangupCall(const memochat::json::JsonValue& request,
 }
 
 bool CallService::GetToken(int uid,
-                           const std::string& token,
                            const std::string& call_id,
                            const std::string& role,
                            memochat::json::JsonValue& response,
                            const std::string& trace_id)
 {
-    if (!ValidateGateUserToken(uid, token))
+    if (call_id.empty())
     {
         response["error"] = ErrorCodes::TokenInvalid;
         return true;

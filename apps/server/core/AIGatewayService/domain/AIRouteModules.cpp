@@ -7,6 +7,7 @@
 #include "logging/TraceContext.hpp"
 #include "AIServiceClient.hpp"
 #include "ConfigMgr.hpp"
+#include "support/BearerAccessAuth.hpp"
 #include "support/UserTokenValidator.hpp"
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -17,9 +18,9 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
-#include <limits>
 #include <string_view>
 #include <utility>
+#include <vector>
 #include "json/GlazeCompat.hpp"
 
 import memochat.ai.route_module_algorithms;
@@ -123,23 +124,6 @@ static std::string LowerAsciiCopy(std::string value)
     return value;
 }
 
-static bool StartsWithCaseInsensitive(std::string_view value, std::string_view prefix)
-{
-    if (value.size() < prefix.size())
-    {
-        return false;
-    }
-    for (std::size_t index = 0; index < prefix.size(); ++index)
-    {
-        if (std::tolower(static_cast<unsigned char>(value[index])) !=
-            std::tolower(static_cast<unsigned char>(prefix[index])))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 static std::string HeaderValue(std::shared_ptr<HttpConnection> connection, std::string_view name)
 {
     if (!connection)
@@ -157,150 +141,6 @@ static std::string HeaderValue(std::shared_ptr<HttpConnection> connection, std::
     return "";
 }
 
-static std::string QueryValue(std::shared_ptr<HttpConnection> connection, std::string_view name)
-{
-    if (!connection)
-    {
-        return "";
-    }
-    const auto& query = connection->GetParams();
-    const auto iter = query.find(std::string(name));
-    if (iter == query.end())
-    {
-        return "";
-    }
-    return iter->second;
-}
-
-static bool TryParseInt32(std::string value, int32_t& out)
-{
-    value = TrimCopy(std::move(value));
-    if (value.empty())
-    {
-        return false;
-    }
-    try
-    {
-        std::size_t parsed = 0;
-        const long long raw = std::stoll(value, &parsed, 10);
-        if (parsed != value.size() || raw < std::numeric_limits<int32_t>::min() ||
-            raw > std::numeric_limits<int32_t>::max())
-        {
-            return false;
-        }
-        out = static_cast<int32_t>(raw);
-        return true;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
-static std::string AuthorizationToken(const std::string& authorization)
-{
-    std::string value = TrimCopy(authorization);
-    if (value.empty())
-    {
-        return "";
-    }
-    if (StartsWithCaseInsensitive(value, "bearer "))
-    {
-        return TrimCopy(value.substr(7));
-    }
-    if (StartsWithCaseInsensitive(value, "token "))
-    {
-        return TrimCopy(value.substr(6));
-    }
-    return value;
-}
-
-static std::string ExtractUserToken(std::shared_ptr<HttpConnection> connection, const json::JsonValue* body_root)
-{
-    for (std::string_view header_name : {"x-user-token", "x-auth-token"})
-    {
-        const std::string header_token = TrimCopy(HeaderValue(connection, header_name));
-        if (!header_token.empty())
-        {
-            return header_token;
-        }
-    }
-
-    const std::string auth_token = AuthorizationToken(HeaderValue(connection, "authorization"));
-    if (!auth_token.empty())
-    {
-        return auth_token;
-    }
-
-    const std::string query_token = TrimCopy(QueryValue(connection, "token"));
-    if (!query_token.empty())
-    {
-        return query_token;
-    }
-
-    if (body_root != nullptr)
-    {
-        return TrimCopy(json::glaze_safe_get<std::string>(*body_root, "token", ""));
-    }
-    return "";
-}
-
-static bool UseAuthUidCandidate(int32_t candidate_uid, int32_t& auth_uid)
-{
-    if (candidate_uid <= 0)
-    {
-        return false;
-    }
-    if (auth_uid <= 0)
-    {
-        auth_uid = candidate_uid;
-        return true;
-    }
-    return auth_uid == candidate_uid;
-}
-
-static bool UseAuthUidText(std::string value, int32_t& auth_uid)
-{
-    value = TrimCopy(std::move(value));
-    if (value.empty())
-    {
-        return true;
-    }
-    int32_t uid = 0;
-    return TryParseInt32(value, uid) && UseAuthUidCandidate(uid, auth_uid);
-}
-
-static bool ResolveAuthenticatedUid(std::shared_ptr<HttpConnection> connection,
-                                    const json::JsonValue* body_root,
-                                    int32_t fallback_uid,
-                                    int32_t& auth_uid)
-{
-    auth_uid = 0;
-    if (fallback_uid > 0 && !UseAuthUidCandidate(fallback_uid, auth_uid))
-    {
-        return false;
-    }
-    for (std::string_view header_name : {"x-user-id", "x-uid"})
-    {
-        if (!UseAuthUidText(HeaderValue(connection, header_name), auth_uid))
-        {
-            return false;
-        }
-    }
-    if (!UseAuthUidText(QueryValue(connection, "uid"), auth_uid))
-    {
-        return false;
-    }
-    if (body_root != nullptr && json::glaze_has_key(*body_root, "uid"))
-    {
-        if (!UseAuthUidCandidate(json::glaze_safe_get<int>(*body_root, "uid", 0), auth_uid))
-        {
-            return false;
-        }
-    }
-    return auth_uid > 0;
-}
-
 static void WriteAuthFailure(std::shared_ptr<HttpConnection> connection)
 {
     if (!connection)
@@ -316,38 +156,20 @@ static void WriteAuthFailure(std::shared_ptr<HttpConnection> connection)
     WriteJsonResponse(connection, root);
 }
 
-static bool RequireConnectionUserAuth(std::shared_ptr<HttpConnection> connection,
-                                      const json::JsonValue* body_root,
-                                      int32_t fallback_uid = 0,
-                                      int32_t* authenticated_uid = nullptr)
+static bool RequireConnectionUserAuth(std::shared_ptr<HttpConnection> connection, int32_t* authenticated_uid = nullptr)
 {
-    int32_t uid = 0;
-    const std::string token = ExtractUserToken(connection, body_root);
-    if (!ResolveAuthenticatedUid(connection, body_root, fallback_uid, uid) ||
-        memochat::gate::services::ai::service_modules::ShouldRejectUserAuth(uid, token.empty()) ||
-        !memochat::auth::ValidateUserToken(uid, token))
+    const std::string token = memochat::auth::ExtractBearerAccessToken(HeaderValue(connection, "authorization"));
+    int uid = 0;
+    if (token.empty() || !memochat::auth::ResolveUserIdFromToken(token, uid))
     {
         WriteAuthFailure(connection);
         return false;
     }
     if (authenticated_uid != nullptr)
     {
-        *authenticated_uid = uid;
+        *authenticated_uid = static_cast<int32_t>(uid);
     }
     return true;
-}
-
-static const json::JsonValue* ParseOptionalBodyRoot(const std::string& body, json::JsonValue& body_root)
-{
-    if (body.empty())
-    {
-        return nullptr;
-    }
-    if (!json::reader_parse(body, body_root))
-    {
-        return nullptr;
-    }
-    return &body_root;
 }
 
 static std::string ConfigValue(std::string_view section, std::string_view key)
@@ -416,16 +238,68 @@ static std::string BuildPrefixProxyTarget(std::shared_ptr<HttpConnection> connec
     return orchestrator_prefix + target.substr(gate_prefix.size());
 }
 
+static bool IsUidQueryItem(std::string_view item)
+{
+    const size_t equal_pos = item.find('=');
+    const std::string_view key = item.substr(0, equal_pos == std::string_view::npos ? item.size() : equal_pos);
+    return key == "uid";
+}
+
+static std::string PrefixProxyTargetWithTrustedUid(std::string target, int32_t auth_uid)
+{
+    const size_t query_pos = target.find('?');
+    const std::string path = query_pos == std::string::npos ? target : target.substr(0, query_pos);
+    const std::string query = query_pos == std::string::npos ? std::string() : target.substr(query_pos + 1);
+
+    std::vector<std::string> items;
+    size_t start = 0;
+    while (start <= query.size())
+    {
+        const size_t end = query.find('&', start);
+        const std::string item = end == std::string::npos ? query.substr(start) : query.substr(start, end - start);
+        if (!item.empty() && !IsUidQueryItem(item))
+        {
+            items.push_back(item);
+        }
+        if (end == std::string::npos)
+        {
+            break;
+        }
+        start = end + 1;
+    }
+
+    items.push_back("uid=" + std::to_string(auth_uid));
+    std::string next = path + "?";
+    for (size_t index = 0; index < items.size(); ++index)
+    {
+        if (index > 0)
+        {
+            next += "&";
+        }
+        next += items[index];
+    }
+    return next;
+}
+
+static std::string PrefixProxyBodyWithTrustedUid(std::string body, int32_t auth_uid)
+{
+    json::JsonValue root;
+    if (!body.empty() && json::glaze_parse(root, body) && root.isObject())
+    {
+        root["uid"] = auth_uid;
+        return json::glaze_stringify(root);
+    }
+    return body;
+}
+
 static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection,
                                       http::verb verb,
                                       const std::string& gate_prefix,
                                       const std::string& orchestrator_prefix,
                                       const std::string& log_name)
 {
-    json::JsonValue auth_body_root;
-    const json::JsonValue* auth_body =
-        ParseOptionalBodyRoot(verb == http::verb::get ? std::string() : IncomingBodyString(connection), auth_body_root);
-    if (!RequireConnectionUserAuth(connection, auth_body))
+    int32_t auth_uid = 0;
+    if (!RequireConnectionUserAuth(connection, &auth_uid))
     {
         return;
     }
@@ -433,7 +307,11 @@ static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection
     const std::string host = AiOrchestratorHost();
     const std::string port = AiOrchestratorPort();
     const int timeout_sec = AiOrchestratorTimeoutSec();
-    const std::string target = BuildPrefixProxyTarget(connection, gate_prefix, orchestrator_prefix);
+    std::string target = BuildPrefixProxyTarget(connection, gate_prefix, orchestrator_prefix);
+    if (verb == http::verb::get || verb == http::verb::delete_)
+    {
+        target = PrefixProxyTargetWithTrustedUid(std::move(target), auth_uid);
+    }
 
     try
     {
@@ -452,7 +330,7 @@ static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection
         if (verb == http::verb::post)
         {
             req.set(http::field::content_type, "application/json");
-            req.body() = IncomingBodyString(connection);
+            req.body() = PrefixProxyBodyWithTrustedUid(IncomingBodyString(connection), auth_uid);
         }
         req.prepare_payload();
 
@@ -507,12 +385,13 @@ static void ProxyAiOrchestratorPet(std::shared_ptr<HttpConnection> connection, h
     ProxyAiOrchestratorPrefix(connection, verb, "/ai/pet", "/pet", "gate.ai.pet.proxy");
 }
 
-static void ProxyAiOrchestratorPetStream(std::shared_ptr<HttpConnection> connection)
+static void ProxyAiOrchestratorPetStream(std::shared_ptr<HttpConnection> connection, int32_t auth_uid)
 {
     const std::string host = AiOrchestratorHost();
     const std::string port = AiOrchestratorPort();
     const int timeout_sec = AiOrchestratorTimeoutSec();
-    const std::string target = BuildPrefixProxyTarget(connection, "/ai/pet", "/pet");
+    const std::string target =
+        PrefixProxyTargetWithTrustedUid(BuildPrefixProxyTarget(connection, "/ai/pet", "/pet"), auth_uid);
 
     try
     {
@@ -662,7 +541,8 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
                            const std::string target = connection ? connection->RequestTargetString() : std::string();
                            if (target.find("/stream") != std::string::npos)
                            {
-                               if (!RequireConnectionUserAuth(connection, nullptr))
+                               int32_t auth_uid = 0;
+                               if (!RequireConnectionUserAuth(connection, &auth_uid))
                                {
                                    return true;
                                }
@@ -671,9 +551,9 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
                                    connection->StartSseStream();
                                }
                                GateWorkerPool::GetInstance()->post(
-                                   [connection]()
+                                   [connection, auth_uid]()
                                    {
-                                       ProxyAiOrchestratorPetStream(connection);
+                                       ProxyAiOrchestratorPetStream(connection, auth_uid);
                                    });
                                return true;
                            }
@@ -704,14 +584,13 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
                               << "data: {\"error\":1,\"message\":\"invalid json\"}\n\n";
                           return true;
                       }
-                      const int32_t request_uid = json::glaze_safe_get<int>(src_root, "uid", 0);
                       std::string session_id = json::glaze_safe_get<std::string>(src_root, "session_id", "");
                       std::string content = json::glaze_safe_get<std::string>(src_root, "content", "");
                       std::string model_type = json::glaze_safe_get<std::string>(src_root, "model_type", "ollama");
                       std::string model_name = json::glaze_safe_get<std::string>(src_root, "model_name", "");
                       std::string metadata_json = ExtractMetadataJson(src_root);
                       int32_t auth_uid = 0;
-                      if (!RequireConnectionUserAuth(connection, &src_root, request_uid, &auth_uid))
+                      if (!RequireConnectionUserAuth(connection, &auth_uid))
                       {
                           return true;
                       }

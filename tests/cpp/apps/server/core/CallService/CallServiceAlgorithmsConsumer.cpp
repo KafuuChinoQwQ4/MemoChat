@@ -27,11 +27,6 @@ int NormalizeTokenTtlSec(int value)
     return memochat::call::service::modules::NormalizeTokenTtlSec(value);
 }
 
-bool HasValidAuthRequest(int uid, bool token_empty)
-{
-    return memochat::call::service::modules::HasValidAuthRequest(uid, token_empty);
-}
-
 bool HasValidStartPeer(int uid, int peer_uid)
 {
     return memochat::call::service::modules::HasValidStartPeer(uid, peer_uid);

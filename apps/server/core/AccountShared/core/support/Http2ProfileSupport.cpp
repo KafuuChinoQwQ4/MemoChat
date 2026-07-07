@@ -32,7 +32,7 @@ memochat::json::JsonValue MakeError(int error_code, const std::string& message)
     return resp;
 }
 
-ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
+ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req, const std::string& access_token)
 {
     ProfileResult result;
     if (!gateauthsupport::HasProfileUpdateRequiredFields(req))
@@ -43,7 +43,6 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     }
 
     const auto profile_request = gateauthsupport::ProfileUpdateRequestFromJsonValue(req);
-    const auto token = profile_request.token;
     const auto name = profile_request.name;
     const auto nick = profile_request.nick;
     const auto desc = profile_request.desc;
@@ -59,7 +58,7 @@ ProfileResult HandleUserUpdateProfile(const memochat::json::JsonValue& req)
     // ResolveUserIdFromToken; any uid field in the request DTO is never used to
     // drive database operations, so no IDOR vulnerability exists here.
     int uid = 0;
-    if (!memochat::auth::ResolveUserIdFromToken(token, uid))
+    if (!memochat::auth::ResolveUserIdFromToken(access_token, uid))
     {
         result.error = ErrorCodes::TokenInvalid;
         result.message = "token invalid";

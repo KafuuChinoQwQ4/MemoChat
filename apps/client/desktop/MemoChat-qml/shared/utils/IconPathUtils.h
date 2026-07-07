@@ -1,6 +1,8 @@
 #ifndef ICONPATHUTILS_H
 #define ICONPATHUTILS_H
 
+#include "../media/AuthenticatedMediaCache.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QString>
@@ -28,36 +30,6 @@ inline void setIconDownloadAuthContext(int uid, const QString& token)
     iconDownloadAuthToken() = token.trimmed();
 }
 
-inline QString attachMediaDownloadAuth(QString icon)
-{
-    const int uid = iconDownloadAuthUid();
-    const QString token = iconDownloadAuthToken();
-    if (uid <= 0 || token.isEmpty())
-    {
-        return icon;
-    }
-
-    QUrl url(icon);
-    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
-    {
-        return icon;
-    }
-
-    const QString path = url.path();
-    if (!path.endsWith(QStringLiteral("/media/download")) && !path.contains(QStringLiteral("/media/download")))
-    {
-        return icon;
-    }
-
-    QUrlQuery query(url);
-    query.removeAllQueryItems(QStringLiteral("uid"));
-    query.removeAllQueryItems(QStringLiteral("token"));
-    query.addQueryItem(QStringLiteral("uid"), QString::number(uid));
-    query.addQueryItem(QStringLiteral("token"), token);
-    url.setQuery(query);
-    return url.toString();
-}
-
 inline bool isMediaDownloadPath(const QString& path)
 {
     // Must start with exactly "/media/download" followed by end-of-string or "?"
@@ -70,6 +42,49 @@ inline bool isMediaDownloadPath(const QString& path)
         return false;
     }
     return path.size() == kBase.size() || path.at(kBase.size()) == QLatin1Char('?');
+}
+
+inline QString stripMediaDownloadLegacyAuthQuery(QString icon)
+{
+    QUrl url(icon);
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile())
+    {
+        return icon;
+    }
+
+    const QString path = url.path();
+    if (!isMediaDownloadPath(path))
+    {
+        return icon;
+    }
+
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("uid"));
+    query.removeAllQueryItems(QStringLiteral("token"));
+    url.setQuery(query);
+    return url.toString();
+}
+
+inline QString resolveMediaDownloadForQml(QString icon, const QString& accessToken)
+{
+    const QString sanitized = stripMediaDownloadLegacyAuthQuery(icon);
+    const QString token = accessToken.trimmed();
+    if (token.isEmpty())
+    {
+        return sanitized;
+    }
+
+    QUrl url(sanitized);
+    if (!url.isValid() || url.scheme().isEmpty() || url.isLocalFile() || !isMediaDownloadPath(url.path()))
+    {
+        return sanitized;
+    }
+    return memochat::media::resolveAuthenticatedMediaDownloadUrl(sanitized, token);
+}
+
+inline QString attachMediaDownloadAuth(QString icon)
+{
+    return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());
 }
 
 inline bool isLocalMediaHost(const QString& host)

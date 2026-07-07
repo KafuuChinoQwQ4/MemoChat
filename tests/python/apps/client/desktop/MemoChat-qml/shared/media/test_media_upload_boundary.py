@@ -95,6 +95,43 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         self.assertIn("MediaUploadResult uploadLocalFile(const MediaUploadRequest& request", service)
         self.assertIn("bool uploadLocalFile(const QString& localFileUrl", service)
 
+    def test_authenticated_media_downloads_use_bearer_cache_bridge(self):
+        cache_header = (MEDIA_DIR / "AuthenticatedMediaCache.h").read_text(encoding="utf-8")
+        cache_source = (MEDIA_DIR / "AuthenticatedMediaCache.cpp").read_text(encoding="utf-8")
+        icon_utils = (QML_DIR / "shared/utils/IconPathUtils.h").read_text(encoding="utf-8")
+        chat_content = (QML_DIR / "features/chat/model/ChatMessageModelContent.cpp").read_text(encoding="utf-8")
+        shared_manifest = (QML_DIR / "shared/sources.cmake").read_text(encoding="utf-8")
+
+        self.assertTrue((MEDIA_DIR / "AuthenticatedMediaCache.h").is_file())
+        self.assertTrue((MEDIA_DIR / "AuthenticatedMediaCache.cpp").is_file())
+        self.assertIn("shared/media/AuthenticatedMediaCache.h", shared_manifest)
+        self.assertIn("shared/media/AuthenticatedMediaCache.cpp", shared_manifest)
+        self.assertIn("QString resolveAuthenticatedMediaDownloadUrl", cache_header)
+        self.assertIn("QStandardPaths::CacheLocation", cache_source)
+        self.assertIn('QStringLiteral("authenticated-media")', cache_source)
+        self.assertIn("QSaveFile file(path);", cache_source)
+        self.assertIn(
+            'request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8());',
+            cache_source,
+        )
+        self.assertIn("QNetworkRequest::NoLessSafeRedirectPolicy", cache_source)
+        self.assertIn("timer.start(4000);", cache_source)
+
+        self.assertIn('#include "../media/AuthenticatedMediaCache.h"', icon_utils)
+        self.assertIn("inline QString stripMediaDownloadLegacyAuthQuery", icon_utils)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("uid"));', icon_utils)
+        self.assertIn('query.removeAllQueryItems(QStringLiteral("token"));', icon_utils)
+        self.assertIn("return resolveMediaDownloadForQml(icon, iconDownloadAuthToken());", icon_utils)
+        self.assertIn("memochat::media::resolveAuthenticatedMediaDownloadUrl(sanitized, token)", icon_utils)
+        self.assertIn("return resolveMediaDownloadForQml(urlText, _download_token);", chat_content)
+
+        for source in (icon_utils, chat_content):
+            with self.subTest(source=source[:32]):
+                self.assertNotIn('query.addQueryItem("uid"', source)
+                self.assertNotIn('query.addQueryItem("token"', source)
+                self.assertNotIn('addQueryItem(QStringLiteral("uid"', source)
+                self.assertNotIn('addQueryItem(QStringLiteral("token"', source)
+
     def test_avatar_and_chunked_routes_are_preserved(self):
         service = (MEDIA_DIR / "MediaUploadService.cpp").read_text(encoding="utf-8")
         uploads = (MEDIA_DIR / "MediaUploadServiceUploads.cpp").read_text(encoding="utf-8")
@@ -114,7 +151,8 @@ class MediaUploadBoundaryTests(unittest.TestCase):
         telemetry_header = (CORE_NETWORK_DIR / "TelemetryUtils.h").read_text(encoding="utf-8")
         telemetry_source = (CORE_NETWORK_DIR / "TelemetryUtils.cpp").read_text(encoding="utf-8")
 
-        self.assertIn('statusQuery.addQueryItem("token", token);', uploads)
+        self.assertNotIn('statusQuery.addQueryItem("token", token);', uploads)
+        self.assertIn('headers.append({QByteArrayLiteral("Authorization")', uploads)
         self.assertIn("QString redactedUrlForTelemetry(const QUrl& url);", telemetry_header)
         for sensitive_key in ("token", "login_ticket", "media_key", "varifycode"):
             with self.subTest(sensitive_key=sensitive_key):

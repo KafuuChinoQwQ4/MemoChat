@@ -11,23 +11,17 @@ namespace memochat::call
 
 struct CallAuthRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string call_id;
 };
 
 struct CallStartRequestDto
 {
-    int uid = 0;
-    std::string token;
     int peer_uid = 0;
     std::string call_type;
 };
 
 struct CallTokenRequestDto
 {
-    int uid = 0;
-    std::string token;
     std::string call_id;
     std::string role;
 };

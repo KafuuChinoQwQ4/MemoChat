@@ -205,7 +205,12 @@ class SecretExternalizationContractTests(unittest.TestCase):
             'chat-auth-secret: {{ required "secrets.chatAuthSecret is required" .Values.secrets.chatAuthSecret | quote }}',
             k8s_secret,
         )
+        self.assertIn(
+            'jwt-access-secret: {{ required "secrets.jwtAccessSecret is required" .Values.secrets.jwtAccessSecret | quote }}',
+            k8s_secret,
+        )
         self.assertNotIn("chatAuthSecret: memochat-dev-chat-secret", k8s_values)
+        self.assertNotIn("jwtAccessSecret: memochat-dev-access-token-secret", k8s_values)
         self.assertNotIn("livekitApiKey: devkey", k8s_values)
         self.assertNotIn("livekitApiSecret: secret", k8s_values)
         self.assertNotIn("apiKey: devkey", k8s_values)
@@ -239,6 +244,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "externalServices.livekit.apiSecret",
             "aiOrchestrator.dependencies.neo4jPassword",
             "secrets.chatAuthSecret",
+            "secrets.jwtAccessSecret",
             "secrets.authRefreshPepper",
             "secrets.livekitApiKey",
             "secrets.livekitApiSecret",
@@ -297,6 +303,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
         self.assertIn("creationPolicy: Owner", external_secret_template)
         self.assertIn("kubernetes.io/tls", external_secret_template)
         for key in (
+            "jwt-access-secret",
             "auth-refresh-pepper",
             "minio-access-key",
             "minio-secret-key",
@@ -311,6 +318,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
 
         combined_workloads = gate_template + "\n" + focused_template + "\n" + ai_template
         for env_name in (
+            "MEMOCHAT_AUTHTOKEN_JWTSECRET",
             "MEMOCHAT_AUTH_REFRESH_PEPPER",
             "MEMOCHAT_MINIO_ACCESSKEY",
             "MEMOCHAT_MINIO_SECRETKEY",
@@ -326,6 +334,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
         docs = read(SECRET_DOC)
         for token in (
             "MEMOCHAT_CHATAUTH_HMACSECRET",
+            "MEMOCHAT_AUTHTOKEN_JWTSECRET",
             "MEMOCHAT_EMAIL_SMTPPASS",
             "MEMOCHAT_MINIO_SECRETKEY",
             "MINIO_SECRET_KEY",

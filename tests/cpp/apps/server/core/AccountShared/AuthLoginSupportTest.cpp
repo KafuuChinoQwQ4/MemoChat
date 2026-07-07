@@ -77,6 +77,24 @@ TEST(AuthLoginSupportTest, ChatTicketTtlIsClampedToFiveMinutes)
     EXPECT_EQ(gateauthsupport::GetChatTicketTtlSec(), 300);
 }
 
+TEST(AuthLoginSupportTest, AccessTokenTtlIsShortAndConfigurable)
+{
+    ScopedEnvVar ttl("MEMOCHAT_AUTHTOKEN_ACCESSTOKENTTLSEC", "999999999");
+
+    EXPECT_EQ(gateauthsupport::GetAccessTokenTtlSec(), 3600);
+}
+
+TEST(AuthLoginSupportTest, JwtAccessTokenConfigUsesEnvOverrides)
+{
+    ScopedEnvVar secret("MEMOCHAT_AUTHTOKEN_JWTSECRET", "abcdefghijklmnopqrstuvwxyz123456");
+    ScopedEnvVar issuer("MEMOCHAT_AUTHTOKEN_JWTISSUER", "memochat-test");
+    ScopedEnvVar audience("MEMOCHAT_AUTHTOKEN_JWTAUDIENCE", "memochat-test-http");
+
+    EXPECT_EQ(gateauthsupport::GetJwtAccessSecret(), "abcdefghijklmnopqrstuvwxyz123456");
+    EXPECT_EQ(gateauthsupport::GetJwtAccessIssuer(), "memochat-test");
+    EXPECT_EQ(gateauthsupport::GetJwtAccessAudience(), "memochat-test-http");
+}
+
 TEST(AuthLoginSupportTest, WebTransportEndpointRequiresRuntimeProviderAndAdvertiseGates)
 {
     ScopedEnvVar enable_wt("MEMOCHAT_ENABLE_WEBTRANSPORT", nullptr);
