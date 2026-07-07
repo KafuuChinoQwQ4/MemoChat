@@ -9,9 +9,6 @@ import { formatMessageTime } from "@/shared/lib/time"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 
 export function DialogListPanel() {
-  // Subscribe to the dialogs Map (stable reference), sort in useMemo.
-  // Never call getDialogList() directly in a selector — it returns a new
-  // array every call, causing Zustand to force an infinite re-render loop.
   const dialogsMap = useEntityStore((s) => s.dialogs)
   const dialogs = useMemo(
     () =>
@@ -25,7 +22,19 @@ export function DialogListPanel() {
 
   return (
     <GlassScrollArea style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "12px 12px 8px", fontWeight: 600, fontSize: 15 }}>消息</div>
+      {/* Panel header */}
+      <div style={{
+        padding: "14px 14px 10px",
+        fontWeight: 700,
+        fontSize: 16,
+        color: "var(--text-primary)",
+        letterSpacing: "-0.01em",
+        flexShrink: 0,
+      }}>
+        消息
+      </div>
+
+      {/* Conversation items */}
       {dialogs.map((d) => {
         const isActive = d.peerId === selectedPeerId
         const title = d.isGroup
@@ -39,32 +48,78 @@ export function DialogListPanel() {
               display: "flex",
               alignItems: "center",
               gap: 10,
-              padding: "8px 12px",
+              padding: "9px 12px",
+              margin: "1px 6px",
               border: "none",
               cursor: "pointer",
               background: isActive ? "var(--tint-selected)" : "transparent",
               textAlign: "left",
-              width: "100%",
-              borderRadius: 8,
-              transition: "background 100ms ease",
+              width: "calc(100% - 12px)",
+              borderRadius: 10,
+              transition: "background 120ms ease",
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              if (!isActive) e.currentTarget.style.background = "var(--dialog-item-hover)"
+            }}
+            onMouseLeave={(e) => {
+              if (!isActive) e.currentTarget.style.background = "transparent"
             }}
           >
-            <Avatar src={d.avatar} name={title} size={40} />
+            <Avatar src={d.avatar} name={title} size={42} />
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 500, fontSize: 14, color: "var(--text-primary)" }}>{title}</span>
-                <span style={{ fontSize: 11, color: "var(--text-disabled)" }}>{formatMessageTime(d.lastMsgTime)}</span>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+                gap: 4,
+                marginBottom: 2,
+              }}>
+                <span style={{
+                  fontWeight: 500,
+                  fontSize: 14,
+                  color: "var(--text-primary)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1,
+                }}>
+                  {title}
+                </span>
+                <span style={{
+                  fontSize: 11,
+                  color: "var(--text-disabled)",
+                  flexShrink: 0,
+                }}>
+                  {formatMessageTime(d.lastMsgTime)}
+                </span>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {d.draftText ? <span style={{ color: "var(--color-badge)" }}>草稿: {d.draftText}</span> : d.lastMsgContent}
+              <div style={{
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                lineHeight: 1.4,
+              }}>
+                {d.draftText
+                  ? <span style={{ color: "var(--color-badge)" }}>草稿: {d.draftText}</span>
+                  : d.lastMsgContent}
               </div>
             </div>
             {d.unreadCount > 0 && <Badge count={d.unreadCount} />}
           </button>
         )
       })}
+
       {dialogs.length === 0 && (
-        <div style={{ textAlign: "center", color: "var(--text-disabled)", fontSize: 13, padding: 32 }}>
+        <div style={{
+          textAlign: "center",
+          color: "var(--text-disabled)",
+          fontSize: 13,
+          padding: "40px 16px",
+          lineHeight: 1.6,
+        }}>
           暂无消息
         </div>
       )}

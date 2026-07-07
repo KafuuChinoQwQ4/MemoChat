@@ -44,4 +44,6 @@ export const ENDPOINTS = {
     r18Search: "/api/r18/search",
     r18SourceEnable: "/api/r18/source/enable",
     r18SourceDisable: "/api/r18/source/disable",
+    r18ComicChapters: "/api/r18/comic/chapters",
+    r18ChapterImages: "/api/r18/chapter/images",
 };

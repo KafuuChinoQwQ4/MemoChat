@@ -30,9 +30,11 @@ export function ComposerBar({ onSend }: ComposerBarProps) {
     <div style={{
       display: "flex",
       gap: 8,
-      padding: "8px 12px",
-      borderTop: "1px solid var(--divider)",
-      background: "rgba(255,255,255,0.05)",
+      padding: "10px 14px",
+      borderTop: "1px solid var(--composer-border)",
+      background: "var(--composer-bg)",
+      backdropFilter: "blur(16px) saturate(1.4)",
+      WebkitBackdropFilter: "blur(16px) saturate(1.4)",
       alignItems: "flex-end",
     }}>
       <textarea
@@ -40,29 +42,39 @@ export function ComposerBar({ onSend }: ComposerBarProps) {
         value={composerText}
         onChange={(e) => setComposerText(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = "var(--composer-input-focus-border)"
+          e.currentTarget.style.boxShadow = "var(--composer-input-focus-shadow)"
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = "var(--composer-input-border)"
+          e.currentTarget.style.boxShadow = "none"
+        }}
         placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
         rows={1}
         style={{
           flex: 1,
           resize: "none",
-          border: "1px solid rgba(0,0,0,0.1)",
-          borderRadius: 8,
-          padding: "8px 12px",
+          border: "1px solid var(--composer-input-border)",
+          borderRadius: 10,
+          padding: "9px 13px",
           fontSize: 14,
-          background: "rgba(255,255,255,0.6)",
+          background: "var(--composer-input-bg)",
+          color: "var(--text-primary)",
           outline: "none",
-          minHeight: 36,
+          minHeight: 38,
           maxHeight: 120,
           overflowY: "auto",
           lineHeight: 1.5,
           fontFamily: "var(--font-family-zh)",
+          transition: "border-color 150ms ease, box-shadow 150ms ease",
         }}
       />
       <GlassButton
         variant="primary"
         onClick={submit}
         disabled={!composerText.trim()}
-        style={{ padding: "8px 18px", flexShrink: 0 }}
+        style={{ padding: "9px 20px", flexShrink: 0 }}
       >
         发送
       </GlassButton>

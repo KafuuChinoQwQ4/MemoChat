@@ -52,4 +52,39 @@
   --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-spring: 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
   --enter-duration: 200ms;
+
+  /* ── Message bubbles (light defaults) ─────────────────────── */
+  --bubble-self-bg: rgba(177, 217, 255, 0.88);
+  --bubble-self-border: rgba(101, 165, 233, 0.80);
+  --bubble-self-color: rgba(18, 40, 65, 0.94);
+  --bubble-self-shadow: 0 2px 8px rgba(64, 130, 205, 0.14);
+  --bubble-other-bg: rgba(255, 255, 255, 0.80);
+  --bubble-other-border: rgba(200, 210, 225, 0.70);
+  --bubble-other-color: rgba(20, 28, 40, 0.92);
+  --bubble-other-shadow: 0 2px 8px rgba(30, 45, 65, 0.08);
+
+  /* ── Conversation area ─────────────────────────────────────── */
+  --conversation-bg: linear-gradient(180deg, #f0f4fb 0%, #e8f0f8 100%);
+  --conversation-topbar-bg: rgba(255, 255, 255, 0.72);
+  --conversation-topbar-border: rgba(148, 163, 184, 0.16);
+  --conversation-topbar-color: rgba(15, 23, 42, 0.94);
+
+  /* ── Time separator ────────────────────────────────────────── */
+  --time-sep-bg: rgba(155, 170, 190, 0.32);
+  --time-sep-color: rgba(45, 60, 82, 0.68);
+
+  /* ── Composer bar ──────────────────────────────────────────── */
+  --composer-bg: rgba(255, 255, 255, 0.55);
+  --composer-border: rgba(148, 163, 184, 0.16);
+  --composer-input-bg: rgba(255, 255, 255, 0.72);
+  --composer-input-border: rgba(0, 0, 0, 0.09);
+  --composer-input-focus-border: rgba(88, 158, 212, 0.70);
+  --composer-input-focus-shadow: 0 0 0 3px rgba(88, 158, 212, 0.14);
+
+  /* ── Dialog list ───────────────────────────────────────────── */
+  --dialog-item-hover: rgba(0, 0, 0, 0.04);
+
+  /* ── Avatar ────────────────────────────────────────────────── */
+  --avatar-ring: rgba(255, 255, 255, 0.60);
+  --avatar-bg: rgba(100, 140, 180, 0.20);
 }
