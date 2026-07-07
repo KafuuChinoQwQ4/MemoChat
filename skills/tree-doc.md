@@ -33,14 +33,14 @@ description: Use when adding, deleting, moving, or renaming any file or folder, 
 - `## 子目录` 表：每个直接子文件夹一行，链接 `[`<名>/`](<名>/_TREE.md)`；本层无子目录则省略整段。
 - `## 文件` 表：每个直接文件一行，文件名用反引号、**不**加链接；本层无文件则省略整段。
 - `_TREE.md` 自身不列入文件表。
-- 指向「不在文档范围内」的子目录（外部 skill 快照 `skills/superpowers`、`skills/mattpocock`，运行期 `artifacts/`、二进制资源 `live2d/` 等）只写纯文本行 + 「未文档化」标注，**不要**加 `_TREE.md` 链接（否则成为死链）。
+- 指向「不在文档范围内」的子目录（外部 skill 快照 `skills/superpowers`、`skills/mattpocock`、`skills/awesomedesign`，运行期 `artifacts/`、二进制资源 `live2d/` 等）只写纯文本行 + 「未文档化」标注，**不要**加 `_TREE.md` 链接（否则成为死链）。
 - 末尾保留标记行：`<!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->`。
 - 概括用中文，简洁说「大概作用」，不逐行复述代码。
 
 ## 文档范围（哪些文件夹需要 `_TREE.md`）
 
 - 纳入：被 git 跟踪的源码文件夹，覆盖 `apps/`、`infra/`、`tools/`、`tests/`、`cmake/`、`docs/`、`skills/`（仅本层）、`.github/` 及仓库根。
-- 排除：`build*/`、`.venv/`、`.ai/`、`artifacts/` 与运行期产物、各类缓存（`.pytest_cache/`、`.ruff_cache/`、`__pycache__/`）、`.git/`，以及外部 skill 快照 `skills/superpowers/**`、`skills/mattpocock/**`。
+- 排除：`build*/`、`.venv/`、`.ai/`、`artifacts/` 与运行期产物、各类缓存（`.pytest_cache/`、`.ruff_cache/`、`__pycache__/`）、`.git/`，以及外部 skill 快照 `skills/superpowers/**`、`skills/mattpocock/**`、`skills/awesomedesign/**`。
 - 新建的文件夹若落在「纳入」范围，就要补 `_TREE.md`；落在「排除」范围则不需要。
 
 ## 收尾验证
