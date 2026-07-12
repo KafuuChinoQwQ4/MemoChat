@@ -5,6 +5,7 @@
 #include "RedisMgr.hpp"
 #include "data.hpp"
 
+#include <charconv>
 #include <iostream>
 
 import memochat.chat.user_support_algorithms;
@@ -31,7 +32,14 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
     rtvalue["error"] = ErrorCodes::Success;
     const std::string base_key = USER_BASE_INFO + uid_str;
 
-    auto user_info = PostgresMgr::GetInstance()->GetUser(std::stoi(uid_str));
+    int uid = 0;
+    const auto parsed = std::from_chars(uid_str.data(), uid_str.data() + uid_str.size(), uid);
+    if (parsed.ec != std::errc{} || parsed.ptr != uid_str.data() + uid_str.size() || uid <= 0)
+    {
+        rtvalue["error"] = ErrorCodes::UidInvalid;
+        return;
+    }
+    auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
     if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;

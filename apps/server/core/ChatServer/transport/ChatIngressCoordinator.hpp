@@ -21,7 +21,7 @@ public:
     explicit ChatIngressCoordinator(boost::asio::io_context& io_context);
     ~ChatIngressCoordinator();
 
-    void Start(const memochat::cluster::ChatNodeDescriptor& self_node);
+    bool Start(const memochat::cluster::ChatNodeDescriptor& self_node, std::string* error = nullptr);
     void Stop();
 
     std::shared_ptr<CServer> tcpServer() const;

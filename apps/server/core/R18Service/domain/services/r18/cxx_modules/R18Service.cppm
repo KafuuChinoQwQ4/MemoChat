@@ -34,7 +34,7 @@ const char* ImportManifestJsonField()
 
 const char* DefaultImportFileName()
 {
-    return "source.zip";
+    return "source.js";
 }
 
 bool ShouldRejectImportPayload(bool encoded_empty, bool decode_ok)
@@ -47,6 +47,21 @@ const char* InvalidPluginPackagePayloadMessage()
     return "invalid plugin package payload";
 }
 
+const char* DefaultSourceAdminHeader()
+{
+    return "X-MemoChat-R18-Source-Admin-Key";
+}
+
+const char* SourceAdminRequiredMessage()
+{
+    return "R18 source administrator authorization required";
+}
+
+bool ShouldRejectSourceAdminAuth(bool key_configured, bool supplied_empty, bool token_matches)
+{
+    return !key_configured || supplied_empty || !token_matches;
+}
+
 int SuccessHttpStatus()
 {
     return 200;
@@ -55,6 +70,11 @@ int SuccessHttpStatus()
 int UnauthorizedHttpStatus()
 {
     return 401;
+}
+
+int ForbiddenHttpStatus()
+{
+    return 403;
 }
 
 int BadGatewayHttpStatus()

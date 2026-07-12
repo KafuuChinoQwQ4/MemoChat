@@ -267,12 +267,12 @@ TEST(MomentsOutputDtosTest, ConvertsMomentWithFlattenedProfileAndArrays)
     std::string body;
     std::string error;
     bool encoded = false;
-    ASSERT_NO_THROW(encoded = memochat::gate::services::moments::EncodeMomentOutput(dto, &body, &error));
+    encoded = memochat::gate::services::moments::EncodeMomentOutput(dto, &body, &error);
     ASSERT_TRUE(encoded) << error;
     SCOPED_TRACE(body);
 
     memochat::json::JsonValue parsed_root;
-    ASSERT_NO_THROW(parsed_root = memochat::gate::services::moments::ToJsonValue(dto));
+    parsed_root = memochat::gate::services::moments::ToJsonValue(dto);
     const memochat::json::JsonValue root = parsed_root;
     ASSERT_TRUE(root.isObject()) << root.toStyledString();
     ASSERT_TRUE(root.isMember("moment_id")) << root.toStyledString();

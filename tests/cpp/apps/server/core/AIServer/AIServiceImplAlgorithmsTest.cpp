@@ -3,6 +3,13 @@
 namespace memochat::tests::ai::impl
 {
 const char* RpcKind();
+const char* DefaultInternalAuthHeader();
+const char* DefaultInternalKeyEnv();
+bool ShouldRejectInternalAuth(bool key_configured,
+                              bool supplied_empty,
+                              bool token_matches,
+                              bool local_environment,
+                              bool loopback_bind);
 const char* ChatSpan();
 const char* ChatStreamSpan();
 const char* SmartSpan();
@@ -34,6 +41,8 @@ TEST(AIServiceImplAlgorithmsTest, ExposesRpcKindAndChatSessionSpanNames)
     using namespace memochat::tests::ai::impl;
 
     EXPECT_STREQ(RpcKind(), "gRPC");
+    EXPECT_STREQ(DefaultInternalAuthHeader(), "X-MemoChat-AI-Internal-Key");
+    EXPECT_STREQ(DefaultInternalKeyEnv(), "MEMOCHAT_AI_INTERNAL_API_KEY");
     EXPECT_STREQ(ChatSpan(), "AIService.Chat");
     EXPECT_STREQ(ChatStreamSpan(), "AIService.ChatStream");
     EXPECT_STREQ(SmartSpan(), "AIService.Smart");
@@ -43,6 +52,20 @@ TEST(AIServiceImplAlgorithmsTest, ExposesRpcKindAndChatSessionSpanNames)
     EXPECT_STREQ(DeleteSessionSpan(), "AIService.DeleteSession");
     EXPECT_STREQ(UpdateSessionSpan(), "AIService.UpdateSession");
     EXPECT_STREQ(ListModelsSpan(), "AIService.ListModels");
+}
+
+TEST(AIServiceImplAlgorithmsTest, RequiresInternalAuthExceptLocalLoopbackKeylessDevelopment)
+{
+    using namespace memochat::tests::ai::impl;
+
+    EXPECT_FALSE(ShouldRejectInternalAuth(true, false, true, false, false));
+    EXPECT_TRUE(ShouldRejectInternalAuth(true, true, false, true, true));
+    EXPECT_TRUE(ShouldRejectInternalAuth(true, false, false, true, true));
+
+    EXPECT_FALSE(ShouldRejectInternalAuth(false, true, false, true, true));
+    EXPECT_TRUE(ShouldRejectInternalAuth(false, true, false, false, true));
+    EXPECT_TRUE(ShouldRejectInternalAuth(false, true, false, true, false));
+    EXPECT_TRUE(ShouldRejectInternalAuth(false, true, false, false, false));
 }
 
 TEST(AIServiceImplAlgorithmsTest, ExposesProviderKnowledgeMemoryAndAgentSpanNames)

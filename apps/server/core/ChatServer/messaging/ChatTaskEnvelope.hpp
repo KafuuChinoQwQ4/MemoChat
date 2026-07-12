@@ -30,10 +30,12 @@ struct ConsumedTask
     bool parsed = false;
 };
 
-TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
-                               const std::string& routing_key,
-                               const memochat::json::JsonValue& payload,
-                               int delay_ms,
-                               int max_retries);
+bool BuildTaskEnvelope(const std::string& task_type,
+                       const std::string& routing_key,
+                       const memochat::json::JsonValue& payload,
+                       int delay_ms,
+                       int max_retries,
+                       TaskEnvelope* envelope,
+                       std::string* error = nullptr);
 bool ParseTaskEnvelope(const std::string& serialized, TaskEnvelope& envelope);
 std::string SerializeTaskEnvelope(const TaskEnvelope& envelope);

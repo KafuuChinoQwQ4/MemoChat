@@ -66,6 +66,16 @@ WebTransportSession::WebTransportSession(SendFrameCallback send_callback,
 
 WebTransportSession::~WebTransportSession() = default;
 
+bool WebTransportSession::Ready() const noexcept
+{
+    return _state.Ready();
+}
+
+const std::string& WebTransportSession::startupError() const noexcept
+{
+    return _state.startupError();
+}
+
 std::shared_ptr<WebTransportSession> WebTransportSession::Self()
 {
     return shared_from_this();

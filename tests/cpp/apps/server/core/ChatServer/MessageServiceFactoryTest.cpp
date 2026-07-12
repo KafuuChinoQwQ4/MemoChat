@@ -4,7 +4,6 @@
 #include "MessageServiceFactory.hpp"
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -59,7 +58,11 @@ TEST(MessageServiceFactoryTest, RemoteBackendRequiresEndpoint)
 {
     FakeMessageServiceConfig config("grpc", "");
 
-    EXPECT_THROW((void) CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr),
-                 std::runtime_error);
-    EXPECT_THROW((void) CreateGroupMessageService(config, nullptr, nullptr, nullptr, nullptr), std::runtime_error);
+    std::string private_error;
+    std::string group_error;
+    EXPECT_EQ(CreatePrivateMessageService(config, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &private_error),
+              nullptr);
+    EXPECT_EQ(CreateGroupMessageService(config, nullptr, nullptr, nullptr, nullptr, &group_error), nullptr);
+    EXPECT_EQ(private_error, "Message service remote endpoint is empty: grpc");
+    EXPECT_EQ(group_error, "Message service remote endpoint is empty: grpc");
 }

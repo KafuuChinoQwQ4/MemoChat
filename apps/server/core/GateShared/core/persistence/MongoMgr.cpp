@@ -21,6 +21,16 @@ MongoMgr::MongoMgr()
 {
 }
 
+bool MongoMgr::Ready() const noexcept
+{
+    return _dao.Ready();
+}
+
+const std::string& MongoMgr::StartupError() const noexcept
+{
+    return _dao.StartupError();
+}
+
 bool MongoMgr::InsertMomentContent(const MomentContentInfo& content)
 {
     return _dao.InsertMomentContent(content);

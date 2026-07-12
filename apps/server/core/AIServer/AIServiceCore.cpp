@@ -1,16 +1,12 @@
 ﻿#include "AIServiceCore.hpp"
 #include "AIServiceClient.hpp"
 #include "AIServiceJsonMapper.hpp"
-#include "ConversationContext.hpp"
 #include "db/AISessionRepo.hpp"
 #include "ConfigMgr.hpp"
 #include "logging/Logger.hpp"
 #include <chrono>
 #include <string>
 #include <string_view>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/string_generator.hpp>
-#include <boost/uuid/random_generator.hpp>
 
 import memochat.ai.core_algorithms;
 
@@ -228,7 +224,7 @@ AIServiceCore::AIServiceCore()
 
 AIServiceCore::~AIServiceCore() = default;
 
-std::string
+AISessionCreateResult
 AIServiceCore::GetOrCreateSessionId(int32_t uid, const std::string& model_type, const std::string& model_name)
 {
     if (core_modules::ShouldCreateSessionFromRequest(model_type.empty(), model_name.empty()))
@@ -265,7 +261,14 @@ grpc::Status AIServiceCore::HandleChat(const ai::AIChatReq& req, ai::AIChatRsp* 
     std::string session_id = req.session_id();
     if (session_id.empty())
     {
-        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
+        auto created_session = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
+        if (!created_session)
+        {
+            reply->set_code(core_modules::ServiceUnavailableCode());
+            reply->set_message(core_modules::SessionCreateFailedMessage());
+            return grpc::Status::OK;
+        }
+        session_id = *created_session;
     }
     else if (!_session_repo->GetSession(req.from_uid(), session_id))
     {
@@ -337,7 +340,16 @@ grpc::Status AIServiceCore::HandleChatStream(const ai::AIChatReq& req,
     std::string session_id = req.session_id();
     if (session_id.empty())
     {
-        session_id = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
+        auto created_session = GetOrCreateSessionId(req.from_uid(), req.model_type(), req.model_name());
+        if (!created_session)
+        {
+            ai::AIChatStreamChunk err;
+            err.set_chunk(core_modules::SessionCreateFailedMessage());
+            err.set_is_final(true);
+            writer->Write(err);
+            return grpc::Status::OK;
+        }
+        session_id = *created_session;
     }
     else if (!_session_repo->GetSession(req.from_uid(), session_id))
     {
@@ -471,12 +483,22 @@ grpc::Status AIServiceCore::CreateSession(const ai::AICreateSessionReq& req, ai:
 {
     reply->set_code(core_modules::SuccessCode());
     reply->set_message(core_modules::OkMessage());
-    std::string session_id = GetOrCreateSessionId(req.uid(), req.model_type(), req.model_name());
-    auto info = _session_repo->GetSession(req.uid(), session_id);
-    if (info)
+    auto created_session = GetOrCreateSessionId(req.uid(), req.model_type(), req.model_name());
+    if (!created_session)
     {
-        reply->set_allocated_session(info.release());
+        reply->set_code(core_modules::ServiceUnavailableCode());
+        reply->set_message(core_modules::SessionCreateFailedMessage());
+        return grpc::Status::OK;
     }
+    const std::string& session_id = *created_session;
+    auto info = _session_repo->GetSession(req.uid(), session_id);
+    if (!info)
+    {
+        reply->set_code(core_modules::ServiceUnavailableCode());
+        reply->set_message(core_modules::SessionCreateFailedMessage());
+        return grpc::Status::OK;
+    }
+    reply->set_allocated_session(info.release());
     return grpc::Status::OK;
 }
 

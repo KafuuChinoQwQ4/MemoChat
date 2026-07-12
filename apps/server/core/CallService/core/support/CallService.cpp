@@ -6,10 +6,10 @@
 #include "ChatGrpcClient.hpp"
 #include "ConfigMgr.hpp"
 #include "RedisMgr.hpp"
+#include "random/Uuid.hpp"
 #include "logging/Logger.hpp"
 #include "json/GlazeCompat.hpp"
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <charconv>
 #include <chrono>
 #include <sstream>
 #include <unordered_map>
@@ -32,16 +32,18 @@ namespace session_math_modules = memochat::call::session_math::modules;
 
 const short kCallEventMsgId = session_math_modules::CallEventNotifyMsgId();
 
+int ParseIntOrDefault(const std::string& raw, int fallback)
+{
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return !raw.empty() && ec == std::errc{} && ptr == raw.data() + raw.size() ? value : fallback;
+}
+
 int64_t NowMs()
 {
     return static_cast<int64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
             .count());
-}
-
-std::string NewId()
-{
-    return boost::uuids::to_string(boost::uuids::random_generator()());
 }
 
 std::string DisplayName(const CallUserProfile& profile)
@@ -216,11 +218,11 @@ CallService::CallConfig CallService::LoadConfig() const
     if (!room_prefix.empty())
         cfg.room_prefix = room_prefix;
     if (!ring_timeout.empty())
-        cfg.ring_timeout_sec = service_modules::NormalizeRingTimeoutSec(std::atoi(ring_timeout.c_str()));
+        cfg.ring_timeout_sec = service_modules::NormalizeRingTimeoutSec(ParseIntOrDefault(ring_timeout, 0));
     if (!busy_key_ttl.empty())
-        cfg.busy_key_ttl_sec = service_modules::NormalizeBusyKeyTtlSec(std::atoi(busy_key_ttl.c_str()));
+        cfg.busy_key_ttl_sec = service_modules::NormalizeBusyKeyTtlSec(ParseIntOrDefault(busy_key_ttl, 0));
     if (!token_ttl.empty())
-        cfg.token_ttl_sec = service_modules::NormalizeTokenTtlSec(std::atoi(token_ttl.c_str()));
+        cfg.token_ttl_sec = service_modules::NormalizeTokenTtlSec(ParseIntOrDefault(token_ttl, 0));
     return cfg;
 }
 
@@ -404,7 +406,16 @@ bool CallService::StartCall(int uid,
     }
 
     CallSessionInfo session;
-    session.call_id = NewId();
+    std::string uuid_error;
+    if (!memochat::random::GenerateUuid(session.call_id, &uuid_error))
+    {
+        memolog::LogError(
+            "call.start.id_generation_failed",
+            "call identifier generation failed",
+            {{"uid", std::to_string(uid)}, {"peer_uid", std::to_string(peer_uid)}, {"error", uuid_error}});
+        response["error"] = ErrorCodes::RPCFailed;
+        return true;
+    }
     session.room_name = cfg.room_prefix + "-" + session.call_id.substr(0, session_math_modules::RoomShortIdLength());
     session.call_type = call_type;
     session.caller_uid = uid;

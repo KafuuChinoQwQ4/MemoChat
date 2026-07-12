@@ -15,7 +15,7 @@ Helm 配置、本所有权矩阵三者一致**时才算真实落地——`test_d
 | LoginServer | `memo_account` | `memo_account_app` |
 | AccountServer | `memo_account` | `memo_account_app` |
 | ChatServer ingress | `memo_pg` chat-owned legacy name | `memochat` |
-| R18GatewayServer | `memo_pg` legacy shared | `memochat` legacy shared |
+| R18GatewayServer | `memo_account` policy read/write | `memo_account_app` |
 | AIServer | `memo_pg` legacy shared | `memochat` |
 
 说明:
@@ -23,7 +23,9 @@ Helm 配置、本所有权矩阵三者一致**时才算真实落地——`test_d
 - Register/Login/Account 共享 `memo_account`(账号域),用 `memo_account_app` 角色。
 - ChatServer 主库仍是历史名 `memo_pg`(chat 域自有),用 `memochat` 角色;ChatServer ingress
   和独立 chat worker 配置另有 `[AccountPostgres]` 桥接 `memo_account` 以读账号资料。
-- R18 与 AIServer 仍共享 legacy `memo_pg` / `memochat`,属历史遗留共享,未拆分。
+- R18Gateway 的源内容仍由自身文件/Redis 设施管理；账号域只拥有成人确认与 R18 访问策略，
+  因此 R18Gateway 以 `memo_account_app` 访问 `memo_account` 的策略字段。
+- AIServer 仍使用 legacy `memo_pg` / `memochat`,属历史遗留共享,未拆分。
 
 ## 其他数据存储
 

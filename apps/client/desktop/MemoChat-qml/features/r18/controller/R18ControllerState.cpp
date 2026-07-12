@@ -77,13 +77,22 @@ void R18Controller::setSearchState(int page, bool hasMore)
     emit searchStateChanged();
 }
 
-void R18Controller::setPendingDeleteSourceId(const QString& sourceId)
+void R18Controller::setAccessState(bool resolved, bool allowed, bool revoked)
 {
-    const QString normalizedSourceId = sourceId.trimmed();
-    if (_pending_delete_source_id == normalizedSourceId)
+    if (_access_resolved == resolved && _access_allowed == allowed && _access_revoked == revoked)
     {
         return;
     }
-    _pending_delete_source_id = normalizedSourceId;
-    emit pendingDeleteSourceChanged();
+    _access_resolved = resolved;
+    _access_allowed = allowed;
+    _access_revoked = revoked;
+    if (!allowed)
+    {
+        _sources.clear();
+        _comics.clear();
+        _chapters.clear();
+        _pages.clear();
+        _history.clear();
+    }
+    emit accessChanged();
 }

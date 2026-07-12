@@ -9,6 +9,7 @@
 #include "support/BearerAccessAuth.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -227,7 +228,12 @@ void AssignQueryInt(const memochat::gate::routing::GateRequest& request, const c
     const auto iter = request.query.find(key);
     if (iter != request.query.end())
     {
-        value = std::stoi(iter->second);
+        int parsed = 0;
+        const auto [ptr, ec] = std::from_chars(iter->second.data(), iter->second.data() + iter->second.size(), parsed);
+        if (ec == std::errc{} && ptr == iter->second.data() + iter->second.size())
+        {
+            value = parsed;
+        }
     }
 }
 
@@ -236,7 +242,12 @@ void AssignQueryInt32(const memochat::gate::routing::GateRequest& request, const
     const auto iter = request.query.find(key);
     if (iter != request.query.end())
     {
-        value = static_cast<int32_t>(std::stoi(iter->second));
+        int32_t parsed = 0;
+        const auto [ptr, ec] = std::from_chars(iter->second.data(), iter->second.data() + iter->second.size(), parsed);
+        if (ec == std::errc{} && ptr == iter->second.data() + iter->second.size())
+        {
+            value = parsed;
+        }
     }
 }
 

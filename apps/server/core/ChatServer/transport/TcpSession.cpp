@@ -2,13 +2,9 @@
 
 #include "CServer.hpp"
 #include "ChatFrameDispatch.hpp"
-#include "runtime/AsioCoScheduler.hpp"
-
-#include <exec/asio/use_sender.hpp>
-#include <exec/start_detached.hpp>
-#include <stdexec/execution.hpp>
 
 #include <iostream>
+#include <cstring>
 #include <limits>
 
 #ifdef _WIN32
@@ -65,8 +61,7 @@ void TcpSession::Start()
     ::setsockopt(native_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
     ::setsockopt(native_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
 #endif
-    auto& ioc = static_cast<boost::asio::io_context&>(_socket.get_executor().context());
-    exec::start_detached(stdexec::on(memochat::runtime::IoContextScheduler{&ioc}, ReadLoop(shared_from_this())));
+    ReadHeader();
 }
 
 void TcpSession::Send(std::string msg, short msgid)
@@ -143,117 +138,124 @@ std::string TcpSession::transportName() const
     return "tcp";
 }
 
-exec::task<void> TcpSession::ReadLoop(std::shared_ptr<CSession> self)
+void TcpSession::ReadHeader()
 {
-    namespace net = boost::asio;
-    using exec::asio::use_sender;
-
-    try
+    if (_b_close.load())
     {
-        while (!_b_close)
+        return;
+    }
+    auto self = std::static_pointer_cast<TcpSession>(weak_from_this().lock());
+    if (!self)
+    {
+        return;
+    }
+    boost::asio::async_read(_socket,
+                            boost::asio::buffer(_data, HEAD_TOTAL_LEN),
+                            boost::asio::transfer_exactly(HEAD_TOTAL_LEN),
+                            [self = std::move(self)](const boost::system::error_code& error, std::size_t)
+                            {
+                                if (error)
+                                {
+                                    self->HandleReadFailure(error);
+                                    return;
+                                }
+                                auto* server = self->Server();
+                                if (server == nullptr || !server->CheckValid(self->GetSessionId()))
+                                {
+                                    self->Close();
+                                    return;
+                                }
+
+                                self->_recv_head_node->Clear();
+                                std::memcpy(self->_recv_head_node->_data, self->_data, HEAD_TOTAL_LEN);
+
+                                short msg_id = 0;
+                                std::memcpy(&msg_id, self->_recv_head_node->_data, HEAD_ID_LEN);
+                                msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
+                                if (msg_id <= 0 || msg_id > MAX_LENGTH)
+                                {
+                                    std::cout << "invalid msg_id is " << msg_id << std::endl;
+                                    server->ClearSession(self->GetSessionId());
+                                    return;
+                                }
+
+                                short msg_len = 0;
+                                std::memcpy(&msg_len, self->_recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
+                                msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
+                                if (msg_len < 0 || msg_len > MAX_LENGTH)
+                                {
+                                    std::cout << "invalid data length is " << msg_len << std::endl;
+                                    server->ClearSession(self->GetSessionId());
+                                    return;
+                                }
+                                self->ReadBody(msg_id, msg_len);
+                            });
+}
+
+void TcpSession::ReadBody(short msg_id, short msg_len)
+{
+    auto self = std::static_pointer_cast<TcpSession>(weak_from_this().lock());
+    if (!self)
+    {
+        return;
+    }
+    boost::asio::async_read(
+        _socket,
+        boost::asio::buffer(_data, static_cast<std::size_t>(msg_len)),
+        boost::asio::transfer_exactly(static_cast<std::size_t>(msg_len)),
+        [self = std::move(self), msg_id, msg_len](const boost::system::error_code& error, std::size_t)
         {
-            co_await net::async_read(_socket,
-                                     net::buffer(_data, HEAD_TOTAL_LEN),
-                                     net::transfer_exactly(HEAD_TOTAL_LEN),
-                                     use_sender);
-
+            if (error)
             {
-                auto* srv = Server();
-                if (srv == nullptr || !srv->CheckValid(GetSessionId()))
-                {
-                    Close();
-                    co_return;
-                }
+                self->HandleReadFailure(error);
+                return;
             }
-
-            _recv_head_node->Clear();
-            memcpy(_recv_head_node->_data, _data, HEAD_TOTAL_LEN);
-
-            short msg_id = 0;
-            memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
-            msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
-            if (msg_id > MAX_LENGTH)
+            auto* server = self->Server();
+            if (server == nullptr || !server->CheckValid(self->GetSessionId()))
             {
-                std::cout << "invalid msg_id is " << msg_id << std::endl;
-                if (auto* srv = Server(); srv != nullptr)
-                {
-                    srv->ClearSession(GetSessionId());
-                }
-                co_return;
+                self->Close();
+                return;
             }
-
-            short msg_len = 0;
-            memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-            msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
-            if (msg_len > MAX_LENGTH)
-            {
-                std::cout << "invalid data length is " << msg_len << std::endl;
-                if (auto* srv = Server(); srv != nullptr)
-                {
-                    srv->ClearSession(GetSessionId());
-                }
-                co_return;
-            }
-
-            co_await net::async_read(_socket, net::buffer(_data, msg_len), net::transfer_exactly(msg_len), use_sender);
-
-            {
-                auto* srv = Server();
-                if (srv == nullptr || !srv->CheckValid(GetSessionId()))
-                {
-                    Close();
-                    co_return;
-                }
-            }
-
             memochat::chatserver::transport::PostInboundChatFrame(
                 self,
                 msg_id,
-                std::string_view(_data, static_cast<std::size_t>(msg_len)));
-        }
-    }
-    catch (const boost::system::system_error& e)
+                std::string_view(self->_data, static_cast<std::size_t>(msg_len)));
+            self->ReadHeader();
+        });
+}
+
+void TcpSession::HandleReadFailure(const boost::system::error_code& error)
+{
+    if (error != boost::asio::error::operation_aborted)
     {
-        std::cout << "handle read failed, error is " << e.what() << std::endl;
-        Close();
-        DealExceptionSession();
+        std::cout << "handle read failed, error is " << error.message() << std::endl;
     }
-    catch (const std::exception& e)
-    {
-        std::cout << "ReadLoop exception is " << e.what() << std::endl;
-        Close();
-    }
-    co_return;
+    Close();
+    DealExceptionSession();
 }
 
 void TcpSession::HandleWrite(const boost::system::error_code& error, std::shared_ptr<CSession> shared_self)
 {
-    try
+    if (!error)
     {
-        auto self = shared_from_this();
-        (void) self;
-        if (!error)
+        std::lock_guard<std::mutex> lock(_send_lock);
+        if (!_send_que.empty())
         {
-            std::lock_guard<std::mutex> lock(_send_lock);
             _send_que.pop();
-            if (!_send_que.empty())
-            {
-                auto& msgnode = _send_que.front();
-                boost::asio::async_write(
-                    _socket,
-                    boost::asio::buffer(msgnode->_data, msgnode->_total_len),
-                    std::bind(&TcpSession::HandleWrite, this, std::placeholders::_1, std::move(shared_self)));
-            }
         }
-        else
+        if (!_send_que.empty())
         {
-            std::cout << "handle write failed, error is " << error.what() << std::endl;
-            Close();
-            DealExceptionSession();
+            auto& msgnode = _send_que.front();
+            boost::asio::async_write(
+                _socket,
+                boost::asio::buffer(msgnode->_data, msgnode->_total_len),
+                std::bind(&TcpSession::HandleWrite, this, std::placeholders::_1, std::move(shared_self)));
         }
     }
-    catch (std::exception& e)
+    else
     {
-        std::cerr << "Exception code : " << e.what() << std::endl;
+        std::cout << "handle write failed, error is " << error.message() << std::endl;
+        Close();
+        DealExceptionSession();
     }
 }

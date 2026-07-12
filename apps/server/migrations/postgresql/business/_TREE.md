@@ -1,6 +1,6 @@
 # business/ 目录树
 
-> 业务库 PostgreSQL 迁移序列：按编号演进用户/好友、聊天事件外发、朋友圈、AI Agent 与 A2A 对局，以及媒体/朋友圈/通话/账号的库拆分 schema。
+> 业务库 PostgreSQL 迁移序列：按编号演进用户/好友、聊天事件外发、朋友圈、AI Agent、R18 访问策略与各业务库拆分 schema。
 
 ## 文件
 
@@ -22,5 +22,6 @@
 | `010_password_hash.sql` | 为账号表增加 `password_hash` 慢哈希密码列 |
 | `011_auth_refresh_tokens.sql` | 为账号库增加 refresh token 轮换/吊销表 |
 | `012_media_access_grants.sql` | 为媒体下载增加显式授权 grant 表 |
+| `013_r18_access_policy.sql` | 为账号表增加默认拒绝、可撤销的 R18 成人确认与访问状态 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

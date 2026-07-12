@@ -25,7 +25,6 @@ export interface SessionState {
   token: string | null
   loginTicket: string | null
   ticketExpireMs: number | null
-  refreshToken: string | null
   protocolVersion: number
   chatEndpoints: ChatEndpointInfo[]
   profile: UserProfile | null

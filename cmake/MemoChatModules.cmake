@@ -1,5 +1,15 @@
 option(MEMOCHAT_ENABLE_GNU_STD_MODULES "Build libstdc++ std/std.compat modules for GNU module consumers" ON)
 
+function(memochat_gnu_module_dialect out_variant out_options)
+    if(MEMOCHAT_NO_EXCEPTIONS)
+        set(${out_variant} "no-exceptions" PARENT_SCOPE)
+        set(${out_options} "-fno-exceptions" PARENT_SCOPE)
+    else()
+        set(${out_variant} "exceptions" PARENT_SCOPE)
+        set(${out_options} "" PARENT_SCOPE)
+    endif()
+endfunction()
+
 function(memochat_find_gnu_std_module_source module_file out_var)
     execute_process(
         COMMAND ${CMAKE_CXX_COMPILER} -dumpfullversion -dumpversion
@@ -49,7 +59,8 @@ function(memochat_prepare_gnu_std_modules out_cmis out_stamps out_mapper_lines o
         endif()
         memochat_find_gnu_std_module_source(std.compat _std_compat_module_source)
 
-        set(_std_module_build_dir "${CMAKE_BINARY_DIR}/CMakeFiles/memochat_gnu_std_modules")
+        memochat_gnu_module_dialect(_module_variant _module_dialect_options)
+        set(_std_module_build_dir "${CMAKE_BINARY_DIR}/CMakeFiles/memochat_gnu_std_modules/${_module_variant}")
         set(_std_gcm_cache_dir "${_std_module_build_dir}/gcm.cache")
         set(_std_mapper_file "${_std_module_build_dir}/std.mapper")
         set(_std_cmi "${_std_gcm_cache_dir}/std.gcm")
@@ -68,6 +79,7 @@ function(memochat_prepare_gnu_std_modules out_cmis out_stamps out_mapper_lines o
                 $<$<CONFIG:Debug>:-g>
                 $<$<NOT:$<CONFIG:Debug>>:-O3>
                 -std=c++${CMAKE_CXX_STANDARD}
+                ${_module_dialect_options}
                 -fmodules
                 -fmodule-mapper=${_std_mapper_file}
                 -c "${_std_module_source}"
@@ -99,6 +111,7 @@ function(memochat_prepare_gnu_std_modules out_cmis out_stamps out_mapper_lines o
                     $<$<CONFIG:Debug>:-g>
                     $<$<NOT:$<CONFIG:Debug>>:-O3>
                     -std=c++${CMAKE_CXX_STANDARD}
+                    ${_module_dialect_options}
                     -fmodules
                     -fmodule-mapper=${_std_mapper_file}
                     -c "${_std_compat_module_source}"
@@ -174,7 +187,8 @@ function(memochat_enable_gnu_modules target_name)
         message(FATAL_ERROR "MemoChat custom CMI management requires C++20 or newer")
     endif()
 
-    set(_module_build_dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target_name}.modules")
+    memochat_gnu_module_dialect(_module_variant _module_dialect_options)
+    set(_module_build_dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target_name}.modules/${_module_variant}")
     set(_gcm_cache_dir "${_module_build_dir}/gcm.cache")
     set(_mapper_file "${_module_build_dir}/module.mapper")
     set(_module_objects)
@@ -249,6 +263,7 @@ function(memochat_enable_gnu_modules target_name)
                 $<$<CONFIG:Debug>:-g>
                 $<$<NOT:$<CONFIG:Debug>>:-O3>
                 -std=c++${CMAKE_CXX_STANDARD}
+                ${_module_dialect_options}
                 -fmodules
                 -fmodule-mapper=${_mapper_file}
                 ${_module_include_args}

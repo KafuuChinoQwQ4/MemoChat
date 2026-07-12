@@ -182,11 +182,11 @@ bool StoreUserToken(int uid, const std::string& token, int ttl_seconds)
     return true;
 }
 
-void DeleteUserToken(int uid)
+bool DeleteUserToken(int uid)
 {
     if (uid <= 0)
     {
-        return;
+        return false;
     }
     const std::string token_key = USERTOKENPREFIX + std::to_string(uid);
     std::string token;
@@ -198,6 +198,8 @@ void DeleteUserToken(int uid)
             RedisMgr::GetInstance()->Del(lookup_key);
         }
     }
-    RedisMgr::GetInstance()->Del(token_key);
+    // The uid binding is authoritative. A stale reverse lookup is harmless
+    // because ResolveUserIdFromToken revalidates this binding before accepting.
+    return RedisMgr::GetInstance()->Del(token_key);
 }
 } // namespace memochat::auth

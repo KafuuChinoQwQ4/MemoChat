@@ -11,6 +11,8 @@ class PostgresMgr : public Singleton<PostgresMgr>
 
 public:
     ~PostgresMgr();
+    bool Ready();
+    const std::string& startupError() const noexcept;
     int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
     bool CheckEmail(const std::string& name, const std::string& email);
     bool UpdatePwd(const std::string& email, const std::string& pwd);

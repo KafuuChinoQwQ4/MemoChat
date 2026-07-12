@@ -36,27 +36,47 @@ ChatOutboxService::~ChatOutboxService()
     Stop();
 }
 
-void ChatOutboxService::Start()
+bool ChatOutboxService::Start(std::string* error)
 {
-    if (_thread.joinable())
+    if (_thread.Joinable())
     {
-        return;
+        if (error != nullptr)
+        {
+            error->clear();
+        }
+        return true;
     }
     _stop = false;
-    _thread = std::thread(&ChatOutboxService::RunLoop, this);
+    if (!_thread.Start(
+            [this]() noexcept
+            {
+                RunLoop();
+            },
+            error))
+    {
+        _stop = true;
+        return false;
+    }
     memolog::LogInfo("chat.outbox.started",
                      "chat outbox relay started",
                      {{"batch_size", std::to_string(_config.outbox_batch_size)},
                       {"retry_base_ms", std::to_string(_config.outbox_retry_base_ms)},
                       {"retry_max_ms", std::to_string(_config.outbox_retry_max_ms)}});
+    return true;
 }
 
 void ChatOutboxService::Stop()
 {
     _stop = true;
-    if (_thread.joinable())
+    if (_thread.Joinable())
     {
-        _thread.join();
+        std::string error;
+        if (!_thread.Join(&error))
+        {
+            memolog::LogError("chat.outbox.thread_join_failed",
+                              "chat outbox relay thread join failed",
+                              {{"error", error}});
+        }
     }
     memolog::LogInfo("chat.outbox.stopped", "chat outbox relay stopped");
 }

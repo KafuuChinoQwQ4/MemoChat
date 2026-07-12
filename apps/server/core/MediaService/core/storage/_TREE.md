@@ -6,10 +6,10 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `MediaStorage.cpp` | 媒体存储抽象接口的公共实现 |
-| `MediaStorage.hpp` | 媒体存储抽象接口声明 |
-| `S3MediaStorage.cpp` | 基于 S3/MinIO 的存储实现 |
-| `S3MediaStorage.hpp` | S3 媒体存储实现声明 |
+| `MediaStorage.cpp` | 媒体存储抽象接口、本地目录写入预检及所选后端启动/关闭生命周期实现 |
+| `MediaStorage.hpp` | 带 Ready/StartupError 启动契约的媒体存储抽象接口声明 |
+| `S3MediaStorage.cpp` | 基于 S3/MinIO 的存储实现及启用、凭据、端点和桶可达性预检 |
+| `S3MediaStorage.hpp` | 带显式启动状态的 S3 媒体存储实现声明 |
 
 ## 子目录
 

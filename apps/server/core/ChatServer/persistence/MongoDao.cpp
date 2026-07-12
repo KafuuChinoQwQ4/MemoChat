@@ -2,22 +2,15 @@
 
 #include "ConfigMgr.hpp"
 
-#include <chrono>
-#include <iostream>
+#include <bson/bson.h>
+#include <mongoc/mongoc.h>
 
-#include <bsoncxx/builder/basic/array.hpp>
-#include <bsoncxx/builder/basic/document.hpp>
-#include <bsoncxx/builder/basic/kvp.hpp>
-#include <bsoncxx/json.hpp>
-#include <bsoncxx/types.hpp>
-#include <mongocxx/client.hpp>
-#include <mongocxx/exception/exception.hpp>
-#include <mongocxx/instance.hpp>
-#include <mongocxx/options/find.hpp>
-#include <mongocxx/options/index.hpp>
-#include <mongocxx/options/replace.hpp>
-#include <mongocxx/pool.hpp>
-#include <mongocxx/uri.hpp>
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <string>
 
 import memochat.chat.mongo_dao_algorithms;
 
@@ -25,68 +18,316 @@ namespace mongo_dao_modules = memochat::chat::persistence::mongo_dao::modules;
 
 namespace
 {
-using bsoncxx::builder::basic::kvp;
-using bsoncxx::builder::basic::make_document;
-using bsoncxx::builder::basic::sub_array;
-using bsoncxx::builder::basic::sub_document;
-
 constexpr int64_t kMessageRevokeWindowMsMongoDao = 5 * 60 * 1000;
 
-mongocxx::instance& MongoInstance()
+class BsonDocument
 {
-    static mongocxx::instance instance{};
-    return instance;
-}
+public:
+    BsonDocument()
+    {
+        bson_init(&value_);
+    }
+
+    BsonDocument(const BsonDocument&) = delete;
+    BsonDocument& operator=(const BsonDocument&) = delete;
+
+    ~BsonDocument()
+    {
+        bson_destroy(&value_);
+    }
+
+    bson_t* get() noexcept
+    {
+        return &value_;
+    }
+
+    const bson_t* get() const noexcept
+    {
+        return &value_;
+    }
+
+private:
+    bson_t value_{};
+};
+
+struct CollectionDeleter
+{
+    void operator()(mongoc_collection_t* collection) const noexcept
+    {
+        if (collection != nullptr)
+        {
+            mongoc_collection_destroy(collection);
+        }
+    }
+};
+
+struct CursorDeleter
+{
+    void operator()(mongoc_cursor_t* cursor) const noexcept
+    {
+        if (cursor != nullptr)
+        {
+            mongoc_cursor_destroy(cursor);
+        }
+    }
+};
+
+using CollectionPtr = std::unique_ptr<mongoc_collection_t, CollectionDeleter>;
+using CursorPtr = std::unique_ptr<mongoc_cursor_t, CursorDeleter>;
 
 bool ParseBool(const std::string& raw)
 {
     return mongo_dao_modules::ParseBoolText(raw.c_str());
 }
 
-std::string GetString(const bsoncxx::document::view& view, const char* key, const std::string& default_value = "")
+void LogMongoError(const char* operation, const std::string& error)
 {
-    auto element = view[key];
-    if (!element || element.type() != bsoncxx::type::k_string)
-    {
-        return default_value;
-    }
-    return std::string(element.get_string().value);
+    std::cerr << "[MongoDao] " << operation << " failed: " << error << std::endl;
 }
 
-int GetInt(const bsoncxx::document::view& view, const char* key, int default_value = 0)
+void LogMongoError(const char* operation, const bson_error_t& error)
 {
-    auto element = view[key];
-    if (!element)
+    LogMongoError(operation, memo::db::MongoErrorMessage(error));
+}
+
+bool AppendString(bson_t* document, const char* key, const std::string& value)
+{
+    if (document == nullptr || value.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+    {
+        return false;
+    }
+    return bson_append_utf8(document, key, -1, value.data(), static_cast<int>(value.size()));
+}
+
+bool AppendInt(bson_t* document, const char* key, int value)
+{
+    return document != nullptr && bson_append_int32(document, key, -1, value);
+}
+
+bool AppendInt64(bson_t* document, const char* key, int64_t value)
+{
+    return document != nullptr && bson_append_int64(document, key, -1, value);
+}
+
+bool AppendBool(bson_t* document, const char* key, bool value)
+{
+    return document != nullptr && bson_append_bool(document, key, -1, value);
+}
+
+bool AppendDocument(bson_t* parent, const char* key, const BsonDocument& child)
+{
+    return parent != nullptr && bson_append_document(parent, key, -1, child.get());
+}
+
+bool AppendArray(bson_t* parent, const char* key, const BsonDocument& child)
+{
+    return parent != nullptr && bson_append_array(parent, key, -1, child.get());
+}
+
+std::string GetString(const bson_t* document, const char* key, const std::string& default_value = "")
+{
+    bson_iter_t value{};
+    if (document == nullptr || !bson_iter_init_find(&value, document, key) || !BSON_ITER_HOLDS_UTF8(&value))
     {
         return default_value;
     }
-    if (element.type() == bsoncxx::type::k_int32)
+    uint32_t length = 0;
+    const char* text = bson_iter_utf8(&value, &length);
+    return text == nullptr ? default_value : std::string(text, length);
+}
+
+int64_t GetInt64(const bson_t* document, const char* key, int64_t default_value = 0)
+{
+    bson_iter_t value{};
+    if (document == nullptr || !bson_iter_init_find(&value, document, key))
     {
-        return element.get_int32().value;
+        return default_value;
     }
-    if (element.type() == bsoncxx::type::k_int64)
+    if (BSON_ITER_HOLDS_INT64(&value))
     {
-        return static_cast<int>(element.get_int64().value);
+        return bson_iter_int64(&value);
+    }
+    if (BSON_ITER_HOLDS_INT32(&value))
+    {
+        return bson_iter_int32(&value);
     }
     return default_value;
 }
 
-int64_t GetInt64(const bsoncxx::document::view& view, const char* key, int64_t default_value = 0)
+int GetInt(const bson_t* document, const char* key, int default_value = 0)
 {
-    auto element = view[key];
-    if (!element)
+    const int64_t value = GetInt64(document, key, default_value);
+    if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max())
     {
         return default_value;
     }
-    if (element.type() == bsoncxx::type::k_int64)
+    return static_cast<int>(value);
+}
+
+CollectionPtr
+OpenCollection(mongoc_client_t* client, const std::string& database_name, const std::string& collection_name)
+{
+    if (client == nullptr)
     {
-        return element.get_int64().value;
+        return {};
     }
-    if (element.type() == bsoncxx::type::k_int32)
+    return CollectionPtr(mongoc_client_get_collection(client, database_name.c_str(), collection_name.c_str()));
+}
+
+bool CreateIndex(mongoc_collection_t* collection,
+                 const BsonDocument& keys,
+                 const char* name,
+                 bool unique,
+                 std::string& error)
+{
+    BsonDocument options;
+    if (!bson_append_utf8(options.get(), "name", -1, name, -1) ||
+        (unique && !AppendBool(options.get(), "unique", true)))
     {
-        return element.get_int32().value;
+        error = "failed to construct index options";
+        return false;
     }
-    return default_value;
+
+    std::unique_ptr<mongoc_index_model_t, decltype(&mongoc_index_model_destroy)> model(
+        mongoc_index_model_new(keys.get(), options.get()),
+        &mongoc_index_model_destroy);
+    if (!model)
+    {
+        error = "mongoc_index_model_new returned null";
+        return false;
+    }
+
+    mongoc_index_model_t* models[] = {model.get()};
+    BsonDocument reply;
+    bson_error_t driver_error{};
+    if (!mongoc_collection_create_indexes_with_opts(collection, models, 1, nullptr, reply.get(), &driver_error))
+    {
+        error = memo::db::MongoErrorMessage(driver_error);
+        return false;
+    }
+    return true;
+}
+
+bool ReplaceOne(mongoc_collection_t* collection,
+                const BsonDocument& filter,
+                const BsonDocument& replacement,
+                const char* operation)
+{
+    BsonDocument options;
+    BsonDocument reply;
+    if (!AppendBool(options.get(), "upsert", true))
+    {
+        LogMongoError(operation, "failed to construct replace options");
+        return false;
+    }
+    bson_error_t error{};
+    if (!mongoc_collection_replace_one(collection, filter.get(), replacement.get(), options.get(), reply.get(), &error))
+    {
+        LogMongoError(operation, error);
+        return false;
+    }
+    return true;
+}
+
+bool UpdateOneMatched(mongoc_collection_t* collection,
+                      const BsonDocument& filter,
+                      const BsonDocument& update,
+                      const char* operation)
+{
+    BsonDocument reply;
+    bson_error_t error{};
+    if (!mongoc_collection_update_one(collection, filter.get(), update.get(), nullptr, reply.get(), &error))
+    {
+        LogMongoError(operation, error);
+        return false;
+    }
+    return GetInt64(reply.get(), "matchedCount") > 0;
+}
+
+bool CursorHasError(mongoc_cursor_t* cursor, const char* operation)
+{
+    bson_error_t error{};
+    if (mongoc_cursor_error(cursor, &error))
+    {
+        LogMongoError(operation, error);
+        return true;
+    }
+    return false;
+}
+
+bool AppendPrivateMessage(BsonDocument& document, const PrivateMessageInfo& msg, const std::string& conv_key)
+{
+    return AppendString(document.get(), "_id", msg.msg_id) && AppendString(document.get(), "msg_id", msg.msg_id) &&
+           AppendString(document.get(), "conv_key", conv_key) &&
+           AppendInt(document.get(), "conv_uid_min", msg.conv_uid_min) &&
+           AppendInt(document.get(), "conv_uid_max", msg.conv_uid_max) &&
+           AppendInt(document.get(), "from_uid", msg.from_uid) && AppendInt(document.get(), "to_uid", msg.to_uid) &&
+           AppendString(document.get(), "content", msg.content) &&
+           AppendInt64(document.get(), "reply_to_server_msg_id", msg.reply_to_server_msg_id) &&
+           AppendString(document.get(), "forward_meta_json", msg.forward_meta_json) &&
+           AppendInt64(document.get(), "edited_at_ms", msg.edited_at_ms) &&
+           AppendInt64(document.get(), "deleted_at_ms", msg.deleted_at_ms) &&
+           AppendInt64(document.get(), "created_at", msg.created_at);
+}
+
+bool AppendGroupMessage(BsonDocument& document, const GroupMessageInfo& msg)
+{
+    return AppendString(document.get(), "_id", msg.msg_id) && AppendString(document.get(), "msg_id", msg.msg_id) &&
+           AppendInt64(document.get(), "group_id", msg.group_id) &&
+           AppendInt64(document.get(), "server_msg_id", msg.server_msg_id) &&
+           AppendInt64(document.get(), "group_seq", msg.group_seq) &&
+           AppendInt(document.get(), "from_uid", msg.from_uid) &&
+           AppendString(document.get(), "msg_type", msg.msg_type) &&
+           AppendString(document.get(), "content", msg.content) &&
+           AppendString(document.get(), "mentions_json", msg.mentions_json) &&
+           AppendString(document.get(), "file_name", msg.file_name) && AppendString(document.get(), "mime", msg.mime) &&
+           AppendInt(document.get(), "size", msg.size) &&
+           AppendInt64(document.get(), "reply_to_server_msg_id", msg.reply_to_server_msg_id) &&
+           AppendString(document.get(), "forward_meta_json", msg.forward_meta_json) &&
+           AppendInt64(document.get(), "edited_at_ms", msg.edited_at_ms) &&
+           AppendInt64(document.get(), "deleted_at_ms", msg.deleted_at_ms) &&
+           AppendInt64(document.get(), "created_at", msg.created_at) &&
+           AppendString(document.get(), "from_name", msg.from_name) &&
+           AppendString(document.get(), "from_nick", msg.from_nick) &&
+           AppendString(document.get(), "from_icon", msg.from_icon);
+}
+
+void ReadPrivateMessage(const bson_t* document, PrivateMessageInfo& info)
+{
+    info.msg_id = GetString(document, "_id");
+    info.conv_uid_min = GetInt(document, "conv_uid_min");
+    info.conv_uid_max = GetInt(document, "conv_uid_max");
+    info.from_uid = GetInt(document, "from_uid");
+    info.to_uid = GetInt(document, "to_uid");
+    info.content = GetString(document, "content");
+    info.reply_to_server_msg_id = GetInt64(document, "reply_to_server_msg_id");
+    info.forward_meta_json = GetString(document, "forward_meta_json");
+    info.edited_at_ms = GetInt64(document, "edited_at_ms");
+    info.deleted_at_ms = GetInt64(document, "deleted_at_ms");
+    info.created_at = GetInt64(document, "created_at");
+}
+
+void ReadGroupMessage(const bson_t* document, GroupMessageInfo& info)
+{
+    info.msg_id = GetString(document, "_id");
+    info.group_id = GetInt64(document, "group_id");
+    info.server_msg_id = GetInt64(document, "server_msg_id");
+    info.group_seq = GetInt64(document, "group_seq");
+    info.from_uid = GetInt(document, "from_uid");
+    info.msg_type = GetString(document, "msg_type", "text");
+    info.content = GetString(document, "content");
+    info.mentions_json = GetString(document, "mentions_json", "[]");
+    info.file_name = GetString(document, "file_name");
+    info.mime = GetString(document, "mime");
+    info.size = GetInt(document, "size");
+    info.reply_to_server_msg_id = GetInt64(document, "reply_to_server_msg_id");
+    info.forward_meta_json = GetString(document, "forward_meta_json");
+    info.edited_at_ms = GetInt64(document, "edited_at_ms");
+    info.deleted_at_ms = GetInt64(document, "deleted_at_ms");
+    info.created_at = GetInt64(document, "created_at");
+    info.from_name = GetString(document, "from_name");
+    info.from_nick = GetString(document, "from_nick");
+    info.from_icon = GetString(document, "from_icon");
 }
 } // namespace
 
@@ -95,13 +336,11 @@ MongoDao::MongoDao()
     init_ok_ = Init();
 }
 
-MongoDao::~MongoDao()
-{
-}
+MongoDao::~MongoDao() = default;
 
 bool MongoDao::Enabled() const
 {
-    return mongo_dao_modules::IsEnabled(enabled_, init_ok_, pool_ != nullptr);
+    return mongo_dao_modules::IsEnabled(enabled_, init_ok_, pool_.IsOpen());
 }
 
 bool MongoDao::Init()
@@ -131,57 +370,58 @@ bool MongoDao::Init()
         group_collection_name_ = "group_messages";
     }
 
-    try
+    std::string error;
+    if (!pool_.Open(uri_, error))
     {
-        (void) MongoInstance();
-        pool_.reset(new mongocxx::pool(mongocxx::uri{uri_}));
-        return EnsureIndexes();
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] init failed: " << e.what() << std::endl;
-        pool_.reset();
+        LogMongoError("init", error);
         return false;
     }
+    return EnsureIndexes();
 }
 
 bool MongoDao::EnsureIndexes()
 {
-    if (!mongo_dao_modules::CanEnsureIndexes(pool_ != nullptr))
+    if (!mongo_dao_modules::CanEnsureIndexes(pool_.IsOpen()))
     {
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    if (!client)
     {
-        auto client = pool_->acquire();
-        auto db = (*client)[database_name_];
-        auto private_collection = db[private_collection_name_];
-        auto group_collection = db[group_collection_name_];
-
-        mongocxx::options::index private_conv_opts;
-        private_conv_opts.name("idx_conv_time");
-        private_collection.create_index(make_document(kvp("conv_key", 1), kvp("created_at", -1), kvp("_id", -1)),
-                                        private_conv_opts);
-
-        mongocxx::options::index group_seq_opts;
-        group_seq_opts.name("idx_group_seq");
-        group_seq_opts.unique(true);
-        group_collection.create_index(make_document(kvp("group_id", 1), kvp("group_seq", -1), kvp("server_msg_id", -1)),
-                                      group_seq_opts);
-
-        mongocxx::options::index group_time_opts;
-        group_time_opts.name("idx_group_time");
-        group_collection.create_index(make_document(kvp("group_id", 1), kvp("created_at", -1), kvp("_id", -1)),
-                                      group_time_opts);
-
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] ensure indexes failed: " << e.what() << std::endl;
+        LogMongoError("ensure indexes", "Mongo client pool returned no client");
         return false;
     }
+    auto private_collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    auto group_collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!private_collection || !group_collection)
+    {
+        LogMongoError("ensure indexes", "failed to open Mongo collection");
+        return false;
+    }
+
+    BsonDocument private_conv_keys;
+    BsonDocument group_seq_keys;
+    BsonDocument group_time_keys;
+    if (!AppendInt(private_conv_keys.get(), "conv_key", 1) || !AppendInt(private_conv_keys.get(), "created_at", -1) ||
+        !AppendInt(private_conv_keys.get(), "_id", -1) || !AppendInt(group_seq_keys.get(), "group_id", 1) ||
+        !AppendInt(group_seq_keys.get(), "group_seq", -1) || !AppendInt(group_seq_keys.get(), "server_msg_id", -1) ||
+        !AppendInt(group_time_keys.get(), "group_id", 1) || !AppendInt(group_time_keys.get(), "created_at", -1) ||
+        !AppendInt(group_time_keys.get(), "_id", -1))
+    {
+        LogMongoError("ensure indexes", "failed to construct index keys");
+        return false;
+    }
+
+    std::string error;
+    if (!CreateIndex(private_collection.get(), private_conv_keys, "idx_conv_time", false, error) ||
+        !CreateIndex(group_collection.get(), group_seq_keys, "idx_group_seq", true, error) ||
+        !CreateIndex(group_collection.get(), group_time_keys, "idx_group_time", false, error))
+    {
+        LogMongoError("ensure indexes", error);
+        return false;
+    }
+    return true;
 }
 
 std::string MongoDao::BuildPrivateConvKey(int uid_a, int uid_b) const
@@ -198,35 +438,23 @@ bool MongoDao::SavePrivateMessage(const PrivateMessageInfo& msg)
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][private_collection_name_];
-        bsoncxx::builder::basic::document doc;
-        doc.append(kvp("_id", msg.msg_id),
-                   kvp("msg_id", msg.msg_id),
-                   kvp("conv_key", BuildPrivateConvKey(msg.conv_uid_min, msg.conv_uid_max)),
-                   kvp("conv_uid_min", msg.conv_uid_min),
-                   kvp("conv_uid_max", msg.conv_uid_max),
-                   kvp("from_uid", msg.from_uid),
-                   kvp("to_uid", msg.to_uid),
-                   kvp("content", msg.content),
-                   kvp("reply_to_server_msg_id", msg.reply_to_server_msg_id),
-                   kvp("forward_meta_json", msg.forward_meta_json),
-                   kvp("edited_at_ms", msg.edited_at_ms),
-                   kvp("deleted_at_ms", msg.deleted_at_ms),
-                   kvp("created_at", msg.created_at));
-
-        mongocxx::options::replace replace_opts;
-        replace_opts.upsert(true);
-        collection.replace_one(make_document(kvp("_id", msg.msg_id)), doc.view(), replace_opts);
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] SavePrivateMessage failed: " << e.what() << std::endl;
+        LogMongoError("SavePrivateMessage", "failed to acquire Mongo collection");
         return false;
     }
+
+    BsonDocument filter;
+    BsonDocument document;
+    if (!AppendString(filter.get(), "_id", msg.msg_id) ||
+        !AppendPrivateMessage(document, msg, BuildPrivateConvKey(msg.conv_uid_min, msg.conv_uid_max)))
+    {
+        LogMongoError("SavePrivateMessage", "failed to construct BSON document");
+        return false;
+    }
+    return ReplaceOne(collection.get(), filter, document, "SavePrivateMessage");
 }
 
 bool MongoDao::GetPrivateHistory(const int& uid,
@@ -244,65 +472,80 @@ bool MongoDao::GetPrivateHistory(const int& uid,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][private_collection_name_];
-        const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
-
-        bsoncxx::builder::basic::document filter;
-        filter.append(kvp("conv_key", BuildPrivateConvKey(uid, peer_uid)));
-        if (mongo_dao_modules::ShouldApplyPrivateTieBreaker(before_ts, before_msg_id.empty()))
-        {
-            filter.append(kvp("$or",
-                              [&](sub_array arr)
-                              {
-                                  arr.append(make_document(kvp("created_at", make_document(kvp("$lt", before_ts)))));
-                                  arr.append(make_document(kvp("created_at", before_ts),
-                                                           kvp("_id", make_document(kvp("$lt", before_msg_id)))));
-                              }));
-        }
-        else if (mongo_dao_modules::ShouldApplyTimestampFilter(before_ts))
-        {
-            filter.append(kvp("created_at", make_document(kvp("$lt", before_ts))));
-        }
-
-        mongocxx::options::find opts;
-        opts.sort(make_document(kvp("created_at", -1), kvp("_id", -1)));
-        opts.limit(final_limit + 1);
-
-        auto cursor = collection.find(filter.view(), opts);
-        for (auto&& doc : cursor)
-        {
-            auto info = std::make_shared<PrivateMessageInfo>();
-            info->msg_id = GetString(doc, "_id");
-            info->conv_uid_min = GetInt(doc, "conv_uid_min");
-            info->conv_uid_max = GetInt(doc, "conv_uid_max");
-            info->from_uid = GetInt(doc, "from_uid");
-            info->to_uid = GetInt(doc, "to_uid");
-            info->content = GetString(doc, "content");
-            info->reply_to_server_msg_id = GetInt64(doc, "reply_to_server_msg_id");
-            info->forward_meta_json = GetString(doc, "forward_meta_json");
-            info->edited_at_ms = GetInt64(doc, "edited_at_ms");
-            info->deleted_at_ms = GetInt64(doc, "deleted_at_ms");
-            info->created_at = GetInt64(doc, "created_at");
-            messages.push_back(info);
-        }
-
-        if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
-        {
-            has_more = true;
-            messages.resize(final_limit);
-        }
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] GetPrivateHistory failed: " << e.what() << std::endl;
-        messages.clear();
-        has_more = false;
+        LogMongoError("GetPrivateHistory", "failed to acquire Mongo collection");
         return false;
     }
+
+    const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
+    BsonDocument filter;
+    if (!AppendString(filter.get(), "conv_key", BuildPrivateConvKey(uid, peer_uid)))
+    {
+        return false;
+    }
+    if (mongo_dao_modules::ShouldApplyPrivateTieBreaker(before_ts, before_msg_id.empty()))
+    {
+        BsonDocument created_before;
+        BsonDocument first_clause;
+        BsonDocument id_before;
+        BsonDocument second_clause;
+        BsonDocument clauses;
+        if (!AppendInt64(created_before.get(), "$lt", before_ts) ||
+            !AppendDocument(first_clause.get(), "created_at", created_before) ||
+            !AppendInt64(second_clause.get(), "created_at", before_ts) ||
+            !AppendString(id_before.get(), "$lt", before_msg_id) ||
+            !AppendDocument(second_clause.get(), "_id", id_before) ||
+            !AppendDocument(clauses.get(), "0", first_clause) || !AppendDocument(clauses.get(), "1", second_clause) ||
+            !AppendArray(filter.get(), "$or", clauses))
+        {
+            return false;
+        }
+    }
+    else if (mongo_dao_modules::ShouldApplyTimestampFilter(before_ts))
+    {
+        BsonDocument created_before;
+        if (!AppendInt64(created_before.get(), "$lt", before_ts) ||
+            !AppendDocument(filter.get(), "created_at", created_before))
+        {
+            return false;
+        }
+    }
+
+    BsonDocument sort;
+    BsonDocument options;
+    if (!AppendInt(sort.get(), "created_at", -1) || !AppendInt(sort.get(), "_id", -1) ||
+        !AppendDocument(options.get(), "sort", sort) || !AppendInt64(options.get(), "limit", final_limit + 1))
+    {
+        return false;
+    }
+
+    CursorPtr cursor(mongoc_collection_find_with_opts(collection.get(), filter.get(), options.get(), nullptr));
+    if (!cursor)
+    {
+        LogMongoError("GetPrivateHistory", "mongoc_collection_find_with_opts returned null");
+        return false;
+    }
+    const bson_t* document = nullptr;
+    while (mongoc_cursor_next(cursor.get(), &document))
+    {
+        auto info = std::make_shared<PrivateMessageInfo>();
+        ReadPrivateMessage(document, *info);
+        messages.push_back(std::move(info));
+    }
+    if (CursorHasError(cursor.get(), "GetPrivateHistory"))
+    {
+        messages.clear();
+        return false;
+    }
+    if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
+    {
+        has_more = true;
+        messages.resize(final_limit);
+    }
+    return true;
 }
 
 bool MongoDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_ptr<PrivateMessageInfo>& message)
@@ -313,37 +556,36 @@ bool MongoDao::GetPrivateMessageByMsgId(const std::string& msg_id, std::shared_p
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][private_collection_name_];
-        auto result = collection.find_one(make_document(kvp("_id", msg_id)));
-        if (!result)
-        {
-            return false;
-        }
-
-        auto view = result->view();
-        auto info = std::make_shared<PrivateMessageInfo>();
-        info->msg_id = GetString(view, "_id");
-        info->conv_uid_min = GetInt(view, "conv_uid_min");
-        info->conv_uid_max = GetInt(view, "conv_uid_max");
-        info->from_uid = GetInt(view, "from_uid");
-        info->to_uid = GetInt(view, "to_uid");
-        info->content = GetString(view, "content");
-        info->reply_to_server_msg_id = GetInt64(view, "reply_to_server_msg_id");
-        info->forward_meta_json = GetString(view, "forward_meta_json");
-        info->edited_at_ms = GetInt64(view, "edited_at_ms");
-        info->deleted_at_ms = GetInt64(view, "deleted_at_ms");
-        info->created_at = GetInt64(view, "created_at");
-        message = info;
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] GetPrivateMessageByMsgId failed: " << e.what() << std::endl;
+        LogMongoError("GetPrivateMessageByMsgId", "failed to acquire Mongo collection");
         return false;
     }
+    BsonDocument filter;
+    BsonDocument options;
+    if (!AppendString(filter.get(), "_id", msg_id) || !AppendInt64(options.get(), "limit", 1))
+    {
+        return false;
+    }
+
+    CursorPtr cursor(mongoc_collection_find_with_opts(collection.get(), filter.get(), options.get(), nullptr));
+    const bson_t* document = nullptr;
+    if (!cursor)
+    {
+        return false;
+    }
+    if (!mongoc_cursor_next(cursor.get(), &document))
+    {
+        CursorHasError(cursor.get(), "GetPrivateMessageByMsgId");
+        return false;
+    }
+
+    auto info = std::make_shared<PrivateMessageInfo>();
+    ReadPrivateMessage(document, *info);
+    message = std::move(info);
+    return true;
 }
 
 bool MongoDao::UpdatePrivateMessageContent(const int& uid,
@@ -362,11 +604,8 @@ bool MongoDao::UpdatePrivateMessageContent(const int& uid,
     edited_at_ms = mongo_dao_modules::SelectOperationTimestamp(edited_at_ms, now_ms);
 
     std::shared_ptr<PrivateMessageInfo> message;
-    if (!GetPrivateMessageByMsgId(msg_id, message) || !message)
-    {
-        return false;
-    }
-    if (!mongo_dao_modules::IsPrivateMessageOwner(message->conv_uid_min,
+    if (!GetPrivateMessageByMsgId(msg_id, message) || !message ||
+        !mongo_dao_modules::IsPrivateMessageOwner(message->conv_uid_min,
                                                   message->conv_uid_max,
                                                   message->from_uid,
                                                   uid,
@@ -375,22 +614,22 @@ bool MongoDao::UpdatePrivateMessageContent(const int& uid,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][private_collection_name_];
-        auto update = make_document(kvp("$set",
-                                        make_document(kvp("content", content),
-                                                      kvp("edited_at_ms", edited_at_ms),
-                                                      kvp("deleted_at_ms", static_cast<int64_t>(0)))));
-        auto result = collection.update_one(make_document(kvp("_id", msg_id)), update.view());
-        return result && result->matched_count() > 0;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] UpdatePrivateMessageContent failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument filter;
+    BsonDocument fields;
+    BsonDocument update;
+    if (!AppendString(filter.get(), "_id", msg_id) || !AppendString(fields.get(), "content", content) ||
+        !AppendInt64(fields.get(), "edited_at_ms", edited_at_ms) || !AppendInt64(fields.get(), "deleted_at_ms", 0) ||
+        !AppendDocument(update.get(), "$set", fields))
+    {
+        return false;
+    }
+    return UpdateOneMatched(collection.get(), filter, update, "UpdatePrivateMessageContent");
 }
 
 bool MongoDao::RevokePrivateMessage(const int& uid,
@@ -426,31 +665,30 @@ bool MongoDao::RevokePrivateMessage(const int& uid,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, private_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][private_collection_name_];
-        const int conv_min = mongo_dao_modules::MinInt(uid, peer_uid);
-        const int conv_max = mongo_dao_modules::MaxInt(uid, peer_uid);
-        auto update = make_document(kvp("$set",
-                                        make_document(kvp("content", "[消息已撤回]"),
-                                                      kvp("deleted_at_ms", deleted_at_ms),
-                                                      kvp("edited_at_ms", static_cast<int64_t>(0)))));
-        auto filter = make_document(
-            kvp("_id", msg_id),
-            kvp("conv_uid_min", conv_min),
-            kvp("conv_uid_max", conv_max),
-            kvp("from_uid", uid),
-            kvp("deleted_at_ms", static_cast<int64_t>(0)),
-            kvp("created_at", make_document(kvp("$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao))));
-        auto result = collection.update_one(filter.view(), update.view());
-        return result && result->matched_count() > 0;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] RevokePrivateMessage failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument created_after;
+    BsonDocument filter;
+    BsonDocument fields;
+    BsonDocument update;
+    const int conv_min = mongo_dao_modules::MinInt(uid, peer_uid);
+    const int conv_max = mongo_dao_modules::MaxInt(uid, peer_uid);
+    if (!AppendString(filter.get(), "_id", msg_id) || !AppendInt(filter.get(), "conv_uid_min", conv_min) ||
+        !AppendInt(filter.get(), "conv_uid_max", conv_max) || !AppendInt(filter.get(), "from_uid", uid) ||
+        !AppendInt64(filter.get(), "deleted_at_ms", 0) ||
+        !AppendInt64(created_after.get(), "$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao) ||
+        !AppendDocument(filter.get(), "created_at", created_after) ||
+        !AppendString(fields.get(), "content", "[消息已撤回]") ||
+        !AppendInt64(fields.get(), "deleted_at_ms", deleted_at_ms) || !AppendInt64(fields.get(), "edited_at_ms", 0) ||
+        !AppendDocument(update.get(), "$set", fields))
+    {
+        return false;
+    }
+    return UpdateOneMatched(collection.get(), filter, update, "RevokePrivateMessage");
 }
 
 bool MongoDao::SaveGroupMessage(const GroupMessageInfo& msg)
@@ -460,42 +698,19 @@ bool MongoDao::SaveGroupMessage(const GroupMessageInfo& msg)
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][group_collection_name_];
-        bsoncxx::builder::basic::document doc;
-        doc.append(kvp("_id", msg.msg_id),
-                   kvp("msg_id", msg.msg_id),
-                   kvp("group_id", msg.group_id),
-                   kvp("server_msg_id", msg.server_msg_id),
-                   kvp("group_seq", msg.group_seq),
-                   kvp("from_uid", msg.from_uid),
-                   kvp("msg_type", msg.msg_type),
-                   kvp("content", msg.content),
-                   kvp("mentions_json", msg.mentions_json),
-                   kvp("file_name", msg.file_name),
-                   kvp("mime", msg.mime),
-                   kvp("size", msg.size),
-                   kvp("reply_to_server_msg_id", msg.reply_to_server_msg_id),
-                   kvp("forward_meta_json", msg.forward_meta_json),
-                   kvp("edited_at_ms", msg.edited_at_ms),
-                   kvp("deleted_at_ms", msg.deleted_at_ms),
-                   kvp("created_at", msg.created_at),
-                   kvp("from_name", msg.from_name),
-                   kvp("from_nick", msg.from_nick),
-                   kvp("from_icon", msg.from_icon));
-
-        mongocxx::options::replace replace_opts;
-        replace_opts.upsert(true);
-        collection.replace_one(make_document(kvp("_id", msg.msg_id)), doc.view(), replace_opts);
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] SaveGroupMessage failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument filter;
+    BsonDocument document;
+    if (!AppendString(filter.get(), "_id", msg.msg_id) || !AppendGroupMessage(document, msg))
+    {
+        return false;
+    }
+    return ReplaceOne(collection.get(), filter, document, "SaveGroupMessage");
 }
 
 bool MongoDao::GetGroupHistory(const int64_t& group_id,
@@ -512,67 +727,65 @@ bool MongoDao::GetGroupHistory(const int64_t& group_id,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][group_collection_name_];
-        const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
-
-        bsoncxx::builder::basic::document filter;
-        filter.append(kvp("group_id", group_id));
-        if (mongo_dao_modules::ShouldApplyGroupSeqFilter(before_seq))
-        {
-            filter.append(kvp("group_seq", make_document(kvp("$lt", before_seq))));
-        }
-        else if (mongo_dao_modules::ShouldApplyGroupTimestampFilter(before_seq, before_ts))
-        {
-            filter.append(kvp("created_at", make_document(kvp("$lt", before_ts))));
-        }
-
-        mongocxx::options::find opts;
-        opts.sort(make_document(kvp("group_seq", -1), kvp("server_msg_id", -1)));
-        opts.limit(final_limit + 1);
-
-        auto cursor = collection.find(filter.view(), opts);
-        for (auto&& doc : cursor)
-        {
-            auto info = std::make_shared<GroupMessageInfo>();
-            info->msg_id = GetString(doc, "_id");
-            info->group_id = GetInt64(doc, "group_id");
-            info->server_msg_id = GetInt64(doc, "server_msg_id");
-            info->group_seq = GetInt64(doc, "group_seq");
-            info->from_uid = GetInt(doc, "from_uid");
-            info->msg_type = GetString(doc, "msg_type", "text");
-            info->content = GetString(doc, "content");
-            info->mentions_json = GetString(doc, "mentions_json", "[]");
-            info->file_name = GetString(doc, "file_name");
-            info->mime = GetString(doc, "mime");
-            info->size = GetInt(doc, "size");
-            info->reply_to_server_msg_id = GetInt64(doc, "reply_to_server_msg_id");
-            info->forward_meta_json = GetString(doc, "forward_meta_json");
-            info->edited_at_ms = GetInt64(doc, "edited_at_ms");
-            info->deleted_at_ms = GetInt64(doc, "deleted_at_ms");
-            info->created_at = GetInt64(doc, "created_at");
-            info->from_name = GetString(doc, "from_name");
-            info->from_nick = GetString(doc, "from_nick");
-            info->from_icon = GetString(doc, "from_icon");
-            messages.push_back(info);
-        }
-
-        if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
-        {
-            has_more = true;
-            messages.resize(final_limit);
-        }
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] GetGroupHistory failed: " << e.what() << std::endl;
-        messages.clear();
-        has_more = false;
         return false;
     }
+    const int final_limit = mongo_dao_modules::ClampHistoryLimit(limit);
+    BsonDocument filter;
+    if (!AppendInt64(filter.get(), "group_id", group_id))
+    {
+        return false;
+    }
+    if (mongo_dao_modules::ShouldApplyGroupSeqFilter(before_seq))
+    {
+        BsonDocument before;
+        if (!AppendInt64(before.get(), "$lt", before_seq) || !AppendDocument(filter.get(), "group_seq", before))
+        {
+            return false;
+        }
+    }
+    else if (mongo_dao_modules::ShouldApplyGroupTimestampFilter(before_seq, before_ts))
+    {
+        BsonDocument before;
+        if (!AppendInt64(before.get(), "$lt", before_ts) || !AppendDocument(filter.get(), "created_at", before))
+        {
+            return false;
+        }
+    }
+
+    BsonDocument sort;
+    BsonDocument options;
+    if (!AppendInt(sort.get(), "group_seq", -1) || !AppendInt(sort.get(), "server_msg_id", -1) ||
+        !AppendDocument(options.get(), "sort", sort) || !AppendInt64(options.get(), "limit", final_limit + 1))
+    {
+        return false;
+    }
+    CursorPtr cursor(mongoc_collection_find_with_opts(collection.get(), filter.get(), options.get(), nullptr));
+    if (!cursor)
+    {
+        return false;
+    }
+    const bson_t* document = nullptr;
+    while (mongoc_cursor_next(cursor.get(), &document))
+    {
+        auto info = std::make_shared<GroupMessageInfo>();
+        ReadGroupMessage(document, *info);
+        messages.push_back(std::move(info));
+    }
+    if (CursorHasError(cursor.get(), "GetGroupHistory"))
+    {
+        messages.clear();
+        return false;
+    }
+    if (mongo_dao_modules::HasMorePage(static_cast<int>(messages.size()), final_limit))
+    {
+        has_more = true;
+        messages.resize(final_limit);
+    }
+    return true;
 }
 
 bool MongoDao::GetGroupMessageByMsgId(const int64_t& group_id,
@@ -585,45 +798,35 @@ bool MongoDao::GetGroupMessageByMsgId(const int64_t& group_id,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][group_collection_name_];
-        auto result = collection.find_one(make_document(kvp("group_id", group_id), kvp("_id", msg_id)));
-        if (!result)
-        {
-            return false;
-        }
-
-        auto view = result->view();
-        auto info = std::make_shared<GroupMessageInfo>();
-        info->msg_id = GetString(view, "_id");
-        info->group_id = GetInt64(view, "group_id");
-        info->server_msg_id = GetInt64(view, "server_msg_id");
-        info->group_seq = GetInt64(view, "group_seq");
-        info->from_uid = GetInt(view, "from_uid");
-        info->msg_type = GetString(view, "msg_type", "text");
-        info->content = GetString(view, "content");
-        info->mentions_json = GetString(view, "mentions_json", "[]");
-        info->file_name = GetString(view, "file_name");
-        info->mime = GetString(view, "mime");
-        info->size = GetInt(view, "size");
-        info->reply_to_server_msg_id = GetInt64(view, "reply_to_server_msg_id");
-        info->forward_meta_json = GetString(view, "forward_meta_json");
-        info->edited_at_ms = GetInt64(view, "edited_at_ms");
-        info->deleted_at_ms = GetInt64(view, "deleted_at_ms");
-        info->created_at = GetInt64(view, "created_at");
-        info->from_name = GetString(view, "from_name");
-        info->from_nick = GetString(view, "from_nick");
-        info->from_icon = GetString(view, "from_icon");
-        message = info;
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] GetGroupMessageByMsgId failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument filter;
+    BsonDocument options;
+    if (!AppendInt64(filter.get(), "group_id", group_id) || !AppendString(filter.get(), "_id", msg_id) ||
+        !AppendInt64(options.get(), "limit", 1))
+    {
+        return false;
+    }
+
+    CursorPtr cursor(mongoc_collection_find_with_opts(collection.get(), filter.get(), options.get(), nullptr));
+    const bson_t* document = nullptr;
+    if (!cursor)
+    {
+        return false;
+    }
+    if (!mongoc_cursor_next(cursor.get(), &document))
+    {
+        CursorHasError(cursor.get(), "GetGroupMessageByMsgId");
+        return false;
+    }
+    auto info = std::make_shared<GroupMessageInfo>();
+    ReadGroupMessage(document, *info);
+    message = std::move(info);
+    return true;
 }
 
 bool MongoDao::UpdateGroupMessageContent(const int64_t& group_id,
@@ -642,28 +845,26 @@ bool MongoDao::UpdateGroupMessageContent(const int64_t& group_id,
             .count());
     edited_at_ms = mongo_dao_modules::SelectOperationTimestamp(edited_at_ms, now_ms);
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][group_collection_name_];
-        auto update = make_document(kvp("$set",
-                                        make_document(kvp("content", content),
-                                                      kvp("msg_type", "text"),
-                                                      kvp("mentions_json", "[]"),
-                                                      kvp("file_name", ""),
-                                                      kvp("mime", ""),
-                                                      kvp("size", 0),
-                                                      kvp("edited_at_ms", edited_at_ms),
-                                                      kvp("deleted_at_ms", static_cast<int64_t>(0)))));
-        auto result =
-            collection.update_one(make_document(kvp("group_id", group_id), kvp("_id", msg_id)), update.view());
-        return result && result->matched_count() > 0;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] UpdateGroupMessageContent failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument filter;
+    BsonDocument fields;
+    BsonDocument update;
+    if (!AppendInt64(filter.get(), "group_id", group_id) || !AppendString(filter.get(), "_id", msg_id) ||
+        !AppendString(fields.get(), "content", content) ||
+        !AppendString(fields.get(), "msg_type", std::string("text")) ||
+        !AppendString(fields.get(), "mentions_json", std::string("[]")) ||
+        !AppendString(fields.get(), "file_name", std::string()) || !AppendString(fields.get(), "mime", std::string()) ||
+        !AppendInt(fields.get(), "size", 0) || !AppendInt64(fields.get(), "edited_at_ms", edited_at_ms) ||
+        !AppendInt64(fields.get(), "deleted_at_ms", 0) || !AppendDocument(update.get(), "$set", fields))
+    {
+        return false;
+    }
+    return UpdateOneMatched(collection.get(), filter, update, "UpdateGroupMessageContent");
 }
 
 bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
@@ -681,11 +882,8 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
     deleted_at_ms = mongo_dao_modules::SelectOperationTimestamp(deleted_at_ms, now_ms);
 
     std::shared_ptr<GroupMessageInfo> message;
-    if (!GetGroupMessageByMsgId(group_id, msg_id, message) || !message)
-    {
-        return false;
-    }
-    if (!mongo_dao_modules::CanApplyGroupMessageRevoke(message->from_uid,
+    if (!GetGroupMessageByMsgId(group_id, msg_id, message) || !message ||
+        !mongo_dao_modules::CanApplyGroupMessageRevoke(message->from_uid,
                                                        operator_uid,
                                                        message->deleted_at_ms,
                                                        message->created_at,
@@ -695,26 +893,25 @@ bool MongoDao::RevokeGroupMessage(const int64_t& group_id,
         return false;
     }
 
-    try
+    auto client = pool_.Acquire();
+    auto collection = OpenCollection(client.get(), database_name_, group_collection_name_);
+    if (!client || !collection)
     {
-        auto client = pool_->acquire();
-        auto collection = (*client)[database_name_][group_collection_name_];
-        auto update = make_document(kvp("$set",
-                                        make_document(kvp("content", "[消息已撤回]"),
-                                                      kvp("deleted_at_ms", deleted_at_ms),
-                                                      kvp("edited_at_ms", static_cast<int64_t>(0)))));
-        auto filter = make_document(
-            kvp("group_id", group_id),
-            kvp("_id", msg_id),
-            kvp("from_uid", operator_uid),
-            kvp("deleted_at_ms", static_cast<int64_t>(0)),
-            kvp("created_at", make_document(kvp("$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao))));
-        auto result = collection.update_one(filter.view(), update.view());
-        return result && result->matched_count() > 0;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[MongoDao] RevokeGroupMessage failed: " << e.what() << std::endl;
         return false;
     }
+    BsonDocument created_after;
+    BsonDocument filter;
+    BsonDocument fields;
+    BsonDocument update;
+    if (!AppendInt64(filter.get(), "group_id", group_id) || !AppendString(filter.get(), "_id", msg_id) ||
+        !AppendInt(filter.get(), "from_uid", operator_uid) || !AppendInt64(filter.get(), "deleted_at_ms", 0) ||
+        !AppendInt64(created_after.get(), "$gte", deleted_at_ms - kMessageRevokeWindowMsMongoDao) ||
+        !AppendDocument(filter.get(), "created_at", created_after) ||
+        !AppendString(fields.get(), "content", "[消息已撤回]") ||
+        !AppendInt64(fields.get(), "deleted_at_ms", deleted_at_ms) || !AppendInt64(fields.get(), "edited_at_ms", 0) ||
+        !AppendDocument(update.get(), "$set", fields))
+    {
+        return false;
+    }
+    return UpdateOneMatched(collection.get(), filter, update, "RevokeGroupMessage");
 }

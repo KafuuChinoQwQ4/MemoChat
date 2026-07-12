@@ -10,11 +10,13 @@ ENV_EXAMPLE = REPO_ROOT / ".env.example"
 GITIGNORE = REPO_ROOT / ".gitignore"
 CI_WORKFLOW = REPO_ROOT / ".github/workflows/ci.yml"
 AUTH_SERVICE = SERVER_CORE / "AccountShared/domain/services/auth/AuthService.cpp"
+AUTH_SERVICE_MODULE = SERVER_CORE / "AccountShared/domain/services/auth/cxx_modules/AuthService.cppm"
 AUTH_CACHE = SERVER_CORE / "AccountShared/core/cache/AuthCache.cpp"
 AUTH_CACHE_HEADER = SERVER_CORE / "AccountShared/core/cache/AuthCache.hpp"
 AUTH_RATE_LIMITER = SERVER_CORE / "AccountShared/core/support/AuthLoginRateLimiter.cpp"
 AUTH_RATE_LIMITER_HEADER = SERVER_CORE / "AccountShared/core/support/AuthLoginRateLimiter.hpp"
 AUTH_LOGIN_SUPPORT = SERVER_CORE / "AccountShared/core/support/AuthLoginSupport.cpp"
+ACCOUNT_ASYNC_SIDE_EFFECTS = SERVER_CORE / "AccountShared/core/async/GateAsyncSideEffects.cpp"
 CHAT_SESSION_CONFIG = SERVER_CORE / "ChatServer/config/ChatSessionConfig.cpp"
 INI_CONFIG = SERVER_CORE / "common/runtime/IniConfig.cpp"
 SECRET_DOC = SERVER_CORE / "docs/secret-management.md"
@@ -34,6 +36,7 @@ POSTGRES_DAO_ACCOUNT = SERVER_CORE / "GateShared/core/persistence/PostgresDaoAcc
 POSTGRES_DAO_HEADER = SERVER_CORE / "GateShared/core/persistence/PostgresDao.hpp"
 GATE_DOMAIN_SERVER = SERVER_CORE / "GateShared/app/GateDomainServer.cpp"
 CHAT_SERVER = SERVER_CORE / "ChatServer/app/ChatServer.cpp"
+AIGATEWAY_SERVER = SERVER_CORE / "AIGatewayService/app/AIGatewayServer.cpp"
 CHAT_LOGIC_SYSTEM = SERVER_CORE / "ChatServer/domain/orchestration/LogicSystem.cpp"
 CHAT_PRIVATE_MESSAGE = SERVER_CORE / "ChatServer/domain/message/PrivateMessageService.cpp"
 CHAT_GROUP_MESSAGE = SERVER_CORE / "ChatServer/domain/message/GroupMessageService.cpp"
@@ -58,10 +61,22 @@ AIGATEWAY_ROUTE_MODULE = SERVER_CORE / "AIGatewayService/domain/AIRouteModules.c
 AIGATEWAY_CONFIG = SERVER_CORE / "AIGatewayService/aigateway.ini"
 AISERVER_IMPL = SERVER_CORE / "AIServer/AIServiceImpl.cpp"
 AISERVER_CLIENT = SERVER_CORE / "AIServer/AIServiceClient.cpp"
+AISERVER_CLIENT_MODULE = SERVER_CORE / "AIServer/cxx_modules/AIServiceClient.cppm"
 AISERVER_CORE = SERVER_CORE / "AIServer/AIServiceCore.cpp"
+AISERVER_CORE_HEADER = SERVER_CORE / "AIServer/AIServiceCore.hpp"
+AISERVER_CMAKE = SERVER_CORE / "AIServer/CMakeLists.txt"
+AISERVER_JSON_DTOS = SERVER_CORE / "AIServer/AIServiceJsonDtos.cpp"
+AISERVER_JSON_DTOS_HEADER = SERVER_CORE / "AIServer/AIServiceJsonDtos.hpp"
+AISERVER_CONVERSATION_CONTEXT = SERVER_CORE / "AIServer/ConversationContext.cpp"
+AISERVER_CONVERSATION_CONTEXT_HEADER = SERVER_CORE / "AIServer/ConversationContext.hpp"
+AISERVER_CONVERSATION_CONTEXT_MODULE = SERVER_CORE / "AIServer/cxx_modules/ConversationContext.cppm"
 AISERVER_SESSION_REPO = SERVER_CORE / "AIServer/db/AISessionRepo.cpp"
 AISERVER_SESSION_REPO_HEADER = SERVER_CORE / "AIServer/db/AISessionRepo.hpp"
 AISERVER_CONFIG = SERVER_CORE / "AIServer/config.ini"
+K8S_CONFIGMAP_SERVICES = (
+    REPO_ROOT / "infra/deploy/kubernetes/charts/memochat/templates/bootstrap/configmap-services.yaml"
+)
+K8S_AI_DEPLOYMENT = REPO_ROOT / "infra/deploy/kubernetes/charts/memochat/templates/prod/ai.yaml"
 AIORCH_CONFIG = SERVER_CORE / "AIOrchestrator/config.py"
 AIORCH_CONFIG_YAML = SERVER_CORE / "AIOrchestrator/config.yaml"
 AIORCH_MODEL_ROUTER = SERVER_CORE / "AIOrchestrator/api/model_router.py"
@@ -80,6 +95,17 @@ BASELINE_MIGRATION = REPO_ROOT / "apps/server/migrations/postgresql/business/001
 ACCOUNT_SCHEMA_MIGRATION = REPO_ROOT / "apps/server/migrations/postgresql/business/009_memo_account_schema.sql"
 REFRESH_TOKEN_MIGRATION = REPO_ROOT / "apps/server/migrations/postgresql/business/011_auth_refresh_tokens.sql"
 BUSINESS_INIT = REPO_ROOT / "infra/deploy/local/init/postgresql/001-business.sql"
+ACCOUNT_SERVICE_APPS = (
+    SERVER_CORE / "LoginService/app/LoginServer.cpp",
+    SERVER_CORE / "RegisterService/app/RegisterServer.cpp",
+    SERVER_CORE / "AccountService/app/AccountServer.cpp",
+)
+ACCOUNT_SERVICE_INIS = (
+    SERVER_CORE / "LoginService/login.ini",
+    SERVER_CORE / "RegisterService/register.ini",
+    SERVER_CORE / "AccountService/account.ini",
+)
+RABBIT_TOPOLOGY = REPO_ROOT / "tools/scripts/infra-init/init_rabbitmq_topology.ps1"
 
 
 def read(path: Path) -> str:
@@ -480,6 +506,143 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("_session_repo->GetSession(req.uid(), session_id)", create_body)
         self.assertIn("_session_repo->GetSession(req.uid(), req.session_id())", update_body)
 
+    def test_ai_session_creation_failures_are_explicit_and_stop_before_side_effects(self):
+        repo_header = read(AISERVER_SESSION_REPO_HEADER)
+        repo = read(AISERVER_SESSION_REPO)
+        core_header = read(AISERVER_CORE_HEADER)
+        core = read(AISERVER_CORE)
+
+        self.assertIn("enum class AISessionCreateError", repo_header)
+        self.assertIn(
+            "using AISessionCreateResult = std::expected<std::string, AISessionCreateError>",
+            compact(repo_header),
+        )
+        self.assertIn("AISessionCreateResult Create(int32_t uid", repo_header)
+        self.assertIn("AISessionCreateResult GetOrCreateSessionId(int32_t uid", compact(core_header))
+
+        create_repo_body = function_body(repo, "AISessionCreateResult AISessionRepo::Create")
+        self.assertIn("std::unexpected", create_repo_body)
+        self.assertNotIn("return {};", create_repo_body)
+
+        chat_body = function_body(core, "grpc::Status AIServiceCore::HandleChat")
+        self.assertIn("auto created_session = GetOrCreateSessionId", chat_body)
+        self.assertIn("if (!created_session)", chat_body)
+        self.assertIn("core_modules::ServiceUnavailableCode()", chat_body)
+        self.assertIn("core_modules::SessionCreateFailedMessage()", chat_body)
+        self.assertLess(chat_body.index("if (!created_session)"), chat_body.index("SaveUserMessage"))
+        self.assertLess(chat_body.index("if (!created_session)"), chat_body.index("_ai_client->Chat("))
+
+        stream_body = function_body(core, "grpc::Status AIServiceCore::HandleChatStream")
+        self.assertIn("auto created_session = GetOrCreateSessionId", stream_body)
+        self.assertIn("if (!created_session)", stream_body)
+        self.assertIn("core_modules::SessionCreateFailedMessage()", stream_body)
+        self.assertLess(stream_body.index("if (!created_session)"), stream_body.index("SaveUserMessage"))
+        self.assertLess(stream_body.index("if (!created_session)"), stream_body.index("_ai_client->ChatStream("))
+
+        create_body = function_body(core, "grpc::Status AIServiceCore::CreateSession")
+        self.assertIn("auto created_session = GetOrCreateSessionId", create_body)
+        self.assertIn("if (!created_session)", create_body)
+        self.assertIn("core_modules::ServiceUnavailableCode()", create_body)
+        self.assertIn("core_modules::SessionCreateFailedMessage()", create_body)
+        self.assertLess(create_body.index("if (!created_session)"), create_body.index("_session_repo->GetSession"))
+
+    def test_ai_orchestrator_timeout_distinguishes_empty_and_invalid_configuration(self):
+        client = read(AISERVER_CLIENT)
+        client_module = read(AISERVER_CLIENT_MODULE)
+
+        self.assertIn("enum class PositiveIntParseStatus", client_module)
+        self.assertIn("struct PositiveIntParseResult", client_module)
+        self.assertIn("PositiveIntParseResult ParsePositiveIntOr", client_module)
+        self.assertNotIn("int ParsePositiveIntOr(const std::string& raw", client)
+        self.assertIn("client_modules::ParsePositiveIntOr", client)
+        self.assertIn("PositiveIntParseStatus::Invalid", client)
+        self.assertIn('"ai.client.timeout_invalid"', client)
+        self.assertIn('"fallback_sec"', client)
+
+    def test_dead_conversation_context_module_is_removed(self):
+        core_header = read(AISERVER_CORE_HEADER)
+        core = read(AISERVER_CORE)
+        json_dtos_header = read(AISERVER_JSON_DTOS_HEADER)
+        json_dtos = read(AISERVER_JSON_DTOS)
+        service_cmake = read(AISERVER_CMAKE)
+
+        self.assertFalse(AISERVER_CONVERSATION_CONTEXT.exists())
+        self.assertFalse(AISERVER_CONVERSATION_CONTEXT_HEADER.exists())
+        self.assertFalse(AISERVER_CONVERSATION_CONTEXT_MODULE.exists())
+
+        for source in (core_header, core, json_dtos_header, json_dtos, service_cmake):
+            with self.subTest(source=source[:80]):
+                self.assertNotIn("ConversationContext", source)
+                self.assertNotIn("_session_cache", source)
+
+    def test_aigateway_to_aiserver_grpc_requires_internal_caller_auth(self):
+        gateway_client = read(AIGATEWAY_AI_CLIENT)
+        gateway_config = read(AIGATEWAY_CONFIG)
+        server_impl = read(AISERVER_IMPL)
+        server_config = read(AISERVER_CONFIG)
+        configmap = read(K8S_CONFIGMAP_SERVICES)
+        ai_deployment = read(K8S_AI_DEPLOYMENT)
+
+        self.assertIn("PrepareAIServerContext", gateway_client)
+        self.assertIn("ctx.AddMetadata(AIServerInternalMetadataKey(), key)", gateway_client)
+        self.assertEqual(
+            gateway_client.count("PrepareAIServerContext(ctx"),
+            gateway_client.count("grpc::ClientContext ctx;"),
+        )
+
+        for method in ("makeRegisterApiProviderCall", "makeDeleteApiProviderCall"):
+            body = function_body(gateway_client, method)
+            self.assertLess(body.index("PrepareAIServerContext(ctx"), body.index("AttachProviderAdminMetadata(ctx)"))
+
+        rpc_methods = (
+            "Chat",
+            "ChatStream",
+            "Smart",
+            "GetHistory",
+            "CreateSession",
+            "ListSessions",
+            "DeleteSession",
+            "UpdateSession",
+            "ListModels",
+            "RegisterApiProvider",
+            "DeleteApiProvider",
+            "KbUpload",
+            "KbSearch",
+            "KbList",
+            "KbDelete",
+            "MemoryList",
+            "MemoryCreate",
+            "MemoryDelete",
+            "AgentTaskCreate",
+            "AgentTaskList",
+            "AgentTaskGet",
+            "AgentTaskCancel",
+            "AgentTaskResume",
+            "Confirm",
+        )
+        for method in rpc_methods:
+            with self.subTest(method=method):
+                body = function_body(server_impl, f"AIServiceImpl::{method}(")
+                self.assertIn("RequireAIServerInternalMetadata(context)", body)
+                self.assertLess(body.index("RequireAIServerInternalMetadata(context)"), body.index("_core->"))
+
+        for method in ("RegisterApiProvider", "DeleteApiProvider"):
+            body = function_body(server_impl, f"AIServiceImpl::{method}(")
+            self.assertLess(
+                body.index("RequireAIServerInternalMetadata(context)"),
+                body.index("RequireProviderAdminMetadata(context)"),
+            )
+
+        for config in (gateway_config, server_config):
+            self.assertIn("InternalAuthHeader=X-MemoChat-AI-Internal-Key", config)
+            self.assertIn("InternalApiKeyEnv=MEMOCHAT_AI_INTERNAL_API_KEY", config)
+
+        self.assertIn("[AIServer]\nHost=127.0.0.1", server_config)
+        self.assertGreaterEqual(configmap.count("InternalAuthHeader=X-MemoChat-AI-Internal-Key"), 2)
+        self.assertGreaterEqual(configmap.count("InternalApiKeyEnv=MEMOCHAT_AI_INTERNAL_API_KEY"), 2)
+        self.assertIn("Host=0.0.0.0", configmap)
+        self.assertIn("name: MEMOCHAT_AI_INTERNAL_API_KEY", ai_deployment)
+
     def test_ai_pet_proxy_sse_and_orchestrator_memory_are_owner_scoped(self):
         route_module = read(AIGATEWAY_ROUTE_MODULE)
         aiserver_client = read(AISERVER_CLIENT)
@@ -563,7 +726,11 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn(
             "RedisMgr::GetInstance()->SetEx(lookup_key, std::to_string(uid), ttl_seconds)", user_token_validator
         )
-        self.assertIn("boost::uuids::random_generator()()", issue_body)
+        self.assertIn("memochat::random::GenerateUuid(access_jti, &uuid_error)", issue_body)
+        self.assertIn("memochat::random::GenerateUuid(ticket_jti, &uuid_error)", issue_body)
+        self.assertLess(
+            issue_body.index("GenerateUuid(access_jti"), issue_body.index("JwtAccessTokenClaims access_claims")
+        )
         self.assertIn("JwtAccessTokenClaims access_claims", issue_body)
         self.assertIn("access_claims.uid = userInfo.uid", issue_body)
         self.assertIn("access_claims.sub = std::to_string(userInfo.uid)", issue_body)
@@ -575,10 +742,24 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("memochat::auth::ResolveUserIdFromToken(access_token, uid)", http2_media)
         self.assertNotIn("ValidateUserTokenLocal(uid, token)", http2_media)
 
-        self.assertIn("void DeleteVerificationCode", auth_cache_header)
-        self.assertIn("RedisMgr::GetInstance()->Del(BuildVerificationCodeKey(email));", auth_cache)
+        self.assertIn("bool ConsumeVerificationCode", auth_cache_header)
+        self.assertIn("redis.call('GET', KEYS[1]) == ARGV[1]", auth_cache)
+        self.assertIn("return redis.call('DEL', KEYS[1])", auth_cache)
         self.assertLess(
-            reset_body.index("UpdatePassword(email, pwd)"), reset_body.index("DeleteVerificationCode(email)")
+            reset_body.index("credential_guard.Acquire"),
+            reset_body.index("GetVerificationCode(email, varify_code)"),
+        )
+        self.assertLess(
+            reset_body.index("GetVerificationCode(email, varify_code)"),
+            reset_body.index("ConsumeVerificationCode(email, reset_pwd_request.varifycode)"),
+        )
+        self.assertLess(
+            reset_body.index("ConsumeVerificationCode(email, reset_pwd_request.varifycode)"),
+            reset_body.index("UpdatePassword(email, pwd)"),
+        )
+        self.assertLess(
+            reset_body.index("InvalidatePasswordResetRedisState(email, reset_uid"),
+            reset_body.index("UpdatePassword(email, pwd)"),
         )
 
         login_body = function_body(auth_service, "bool AuthService::HandleUserLogin")
@@ -605,7 +786,12 @@ class SecurityHardeningContractTests(unittest.TestCase):
 
         self.assertIn("std::string jti;", ticket)
         self.assertIn('"jti"', ticket)
-        self.assertIn("claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());", auth_service)
+        issue_body = function_body(auth_service, "bool IssueLoginSessionForUser")
+        self.assertIn("memochat::random::GenerateUuid(ticket_jti, &uuid_error)", issue_body)
+        self.assertIn("claims.jti = std::move(ticket_jti);", issue_body)
+        self.assertLess(
+            issue_body.index("GenerateUuid(ticket_jti"), issue_body.index("claims.jti = std::move(ticket_jti)")
+        )
         self.assertIn("ConsumeLoginTicketJti", session)
         self.assertIn("chat_login_ticket_jti:", session_repository)
         self.assertIn("SetNxEx", session_repository)
@@ -780,6 +966,18 @@ class SecurityHardeningContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, source)
 
+    def test_account_local_rate_limit_fallback_is_bounded_and_fail_closed_at_capacity(self):
+        source = read(AUTH_RATE_LIMITER)
+        header = read(AUTH_RATE_LIMITER_HEADER)
+
+        self.assertIn('#include "AuthLocalFallbackCounterStore.hpp"', source)
+        self.assertIn("AuthLocalFallbackCounterStore", source)
+        self.assertIn("kLocalFallbackCounterCapacity", source)
+        self.assertIn("CapacityExhausted", source)
+        self.assertIn("result.redis_error = true;", source)
+        self.assertNotIn("std::unordered_map<std::string, LocalCounterState>& LocalFallbackCounters()", source)
+        self.assertIn("BoundedFailOpen", header)
+
     def test_success_clears_email_bucket_but_not_shared_ip_bucket(self):
         source = read(AUTH_RATE_LIMITER)
         clear_body = function_body(source, "void ClearLoginFailureCounters")
@@ -833,6 +1031,46 @@ class SecurityHardeningContractTests(unittest.TestCase):
                 self.assertIn("IsWellKnownDevHmacSecret", source)
                 self.assertIn("MEMOCHAT_CHATAUTH_HMACSECRET", source)
 
+        chat_secret_body = function_body(auth_login, "std::string GetChatAuthSecret")
+        jwt_secret_body = function_body(auth_login, "std::string GetJwtAccessSecret")
+        for body in (chat_secret_body, jwt_secret_body):
+            with self.subTest(body_hash=hash(body)):
+                self.assertNotIn("MEMOCHAT_ENV", body)
+                self.assertNotIn("std::abort", body)
+
+    def test_account_cache_invalidation_is_direct_redis_without_rabbit_side_channel(self):
+        auth_service = read(AUTH_SERVICE)
+        reset_body = function_body(auth_service, "bool AuthService::HandleResetPwd")
+        invalidate_body = function_body(auth_service, "bool InvalidatePasswordResetRedisState")
+        async_source = read(ACCOUNT_ASYNC_SIDE_EFFECTS)
+        topology = read(RABBIT_TOPOLOGY)
+
+        self.assertEqual(2, reset_body.count("InvalidatePasswordResetRedisState(email, reset_uid"))
+        self.assertIn("gateauthsupport::InvalidateLoginCacheByEmail(email)", invalidate_body)
+        self.assertIn("AuthCache::Instance().DeleteHttpToken(uid)", invalidate_body)
+        self.assertIn("gateauthsupport::InvalidateLoginCacheByUid(uid)", invalidate_body)
+        self.assertNotIn("PublishCacheInvalidate", reset_body)
+
+        for token in ("MEMOCHAT_ENABLE_RABBITMQ", "amqp_", "PublishRabbit", "ConsumeCacheInvalidateLoop"):
+            with self.subTest(token=token):
+                self.assertNotIn(token, async_source)
+        for app in ACCOUNT_SERVICE_APPS:
+            source = read(app)
+            self.assertNotIn("GateAsyncSideEffects::Instance().Start", source)
+            self.assertNotIn("GateAsyncSideEffects::Instance().Stop", source)
+        for ini in ACCOUNT_SERVICE_INIS:
+            self.assertNotIn("[RabbitMQ]", read(ini))
+        self.assertNotIn("gate.cache.invalidate.q", topology)
+
+    def test_account_kafka_factory_failure_destroys_caller_owned_config_once(self):
+        source = read(ACCOUNT_ASYNC_SIDE_EFFECTS)
+        create_pos = source.index("producer = rd_kafka_new")
+        failure_pos = source.index("if (producer == nullptr)", create_pos)
+        failure_body = source[failure_pos : source.index("_kafka_producer = producer", failure_pos)]
+
+        self.assertEqual(1, failure_body.count("rd_kafka_conf_destroy(config);"))
+        self.assertNotIn("takes ownership of config on both success and failure", failure_body)
+
     def test_env_example_documents_fail_closed_secret_model(self):
         env_example = read(ENV_EXAMPLE)
 
@@ -846,28 +1084,56 @@ class SecurityHardeningContractTests(unittest.TestCase):
         auth_secret = read(AUTH_SECRET)
         gate_domain = read(GATE_DOMAIN_SERVER)
         chat_server = read(CHAT_SERVER)
+        aigateway_server = read(AIGATEWAY_SERVER)
 
         self.assertIn("IsProductionSecretEnforcementEnabled", auth_secret)
         self.assertIn("MEMOCHAT_ALLOW_DEV_SECRETS", auth_secret)
         self.assertIn("return !IsDevSecretsAllowed();", auth_secret)
         self.assertIn("RequireNonDefaultChatAuthSecretInProduction", auth_secret)
+        self.assertIn("RequireNonDefaultJwtAccessSecretInProduction", auth_secret)
         self.assertIn("ChatAuth.HmacSecret must be non-default; set", auth_secret)
         self.assertIn("ChatAuth.HmacSecret must be at least 32 bytes", auth_secret)
+        self.assertIn("AuthToken.JwtSecret must be non-default; set", auth_secret)
+        self.assertIn("AuthToken.JwtSecret must be at least 32 bytes", auth_secret)
 
         self.assertIn('#include "auth/AuthSecret.hpp"', gate_domain)
         self.assertIn('GetValue("ChatAuth", "HmacSecret")', gate_domain)
-        self.assertIn("RequireNonDefaultChatAuthSecretInProduction(service_name, chat_auth_secret)", gate_domain)
+        self.assertIn(
+            "RequireNonDefaultChatAuthSecretInProduction(service_name, chat_auth_secret, startup_error)",
+            gate_domain,
+        )
+        self.assertIn(
+            "RequireNonDefaultJwtAccessSecretInProduction(service_name, jwt_access_secret, startup_error)",
+            gate_domain,
+        )
         self.assertLess(
             gate_domain.index("RequireNonDefaultChatAuthSecretInProduction"),
-            gate_domain.index("std::make_shared<CServer>(ioc, port)->Start();"),
+            gate_domain.index("std::make_shared<CServer>(ioc)"),
         )
 
         self.assertIn('#include "auth/AuthSecret.hpp"', chat_server)
         self.assertIn('GetValue("ChatAuth", "HmacSecret")', chat_server)
-        self.assertIn('RequireNonDefaultChatAuthSecretInProduction("ChatServer", chat_auth_secret)', chat_server)
+        self.assertIn(
+            'RequireNonDefaultChatAuthSecretInProduction("ChatServer", chat_auth_secret, startup_error)',
+            chat_server,
+        )
         self.assertLess(
             chat_server.index("RequireNonDefaultChatAuthSecretInProduction"),
             chat_server.index("builder.AddListeningPort"),
+        )
+
+        self.assertIn('#include "auth/AuthSecret.hpp"', aigateway_server)
+        self.assertIn('GetValue("AuthToken", "JwtSecret")', aigateway_server)
+        self.assertIn("RequireNonDefaultJwtAccessSecretInProduction", aigateway_server)
+        self.assertIn('"AIGatewayServer",', aigateway_server)
+        self.assertIn("jwt_access_secret,", aigateway_server)
+        self.assertLess(
+            aigateway_server.index("RequireNonDefaultJwtAccessSecretInProduction"),
+            aigateway_server.index("RedisMgr::GetInstance()"),
+        )
+        self.assertLess(
+            aigateway_server.index("RequireNonDefaultJwtAccessSecretInProduction"),
+            aigateway_server.index("std::make_shared<CServer>(ioc)"),
         )
 
     def test_service_ini_files_do_not_commit_weak_dependency_credentials(self):
@@ -969,20 +1235,80 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn('root["refresh_token"]', auth_service)
         self.assertRegex(
             auth_service,
-            r"const auto rotated\s*=\s*account::AccountPersistence::Instance\(\)\.RotateRefreshToken\s*\(",
+            r"const auto rotated\s*=\s*account_persistence\.RotateRefreshToken\s*\(",
         )
+
+    def test_web_login_never_issues_refresh_token_to_browser_javascript(self):
+        auth_service = read(AUTH_SERVICE)
+        auth_module = read(AUTH_SERVICE_MODULE)
+        login_body = function_body(auth_service, "bool AuthService::HandleUserLogin")
+
+        self.assertIn(
+            "bool ShouldIssueRefreshToken(const char* client_marker, unsigned long client_marker_size)", auth_module
+        )
+        self.assertIn('HeaderValue(request, "x-memochat-client")', login_body)
+        self.assertIn("auth_algo::ShouldIssueRefreshToken", login_body)
+        self.assertIn("AttachIssuedRefreshToken", login_body)
 
     def test_password_reset_deletes_redis_http_token_after_successful_update(self):
         auth_service = read(AUTH_SERVICE)
         account_header = read(ACCOUNT_PERSISTENCE_HEADER)
         account = read(ACCOUNT_PERSISTENCE)
         reset_body = function_body(auth_service, "bool AuthService::HandleResetPwd")
+        invalidate_body = function_body(auth_service, "bool InvalidatePasswordResetRedisState")
 
         self.assertIn("FindUserByEmail", account_header)
         self.assertIn("PostgresMgr::GetInstance()->TestProcedure(email, uid, name)", account)
-        self.assertLess(reset_body.index("account_persistence.UpdatePassword"), reset_body.index("FindUserByEmail"))
-        self.assertIn("AuthCache::Instance().DeleteHttpToken(reset_uid);", reset_body)
-        self.assertIn("gateauthsupport::InvalidateLoginCacheByUid(reset_uid);", reset_body)
+        find_index = reset_body.index("account_persistence.FindUserByEmail")
+        first_revoke_index = reset_body.index("InvalidatePasswordResetRedisState(email, reset_uid")
+        update_index = reset_body.index("account_persistence.UpdatePassword")
+        second_revoke_index = reset_body.index(
+            "InvalidatePasswordResetRedisState(email, reset_uid", first_revoke_index + 1
+        )
+        self.assertLess(find_index, first_revoke_index)
+        self.assertLess(first_revoke_index, update_index)
+        self.assertLess(update_index, second_revoke_index)
+        self.assertIn("AuthCache::Instance().DeleteHttpToken(uid)", invalidate_body)
+        self.assertNotIn("DeleteVerificationCode(email)", invalidate_body)
+        self.assertIn("ConsumeVerificationCode(email, reset_pwd_request.varifycode)", reset_body)
+        self.assertIn('root["error"] = ErrorCodes::RPCFailed', reset_body)
+
+    def test_credential_mutations_serialize_login_reset_and_refresh_token_issue(self):
+        auth_service = read(AUTH_SERVICE)
+        auth_cache = read(AUTH_CACHE)
+        auth_cache_header = read(AUTH_CACHE_HEADER)
+        account = read(ACCOUNT_PERSISTENCE)
+        account_header = read(ACCOUNT_PERSISTENCE_HEADER)
+        dao = read(POSTGRES_DAO_ACCOUNT)
+        login_body = function_body(auth_service, "bool AuthService::HandleUserLogin")
+        reset_body = function_body(auth_service, "bool AuthService::HandleResetPwd")
+        refresh_body = function_body(auth_service, "bool AuthService::HandleAuthRefresh")
+
+        self.assertIn("bool TryAcquireCredentialMutationLock", auth_cache_header)
+        self.assertIn("bool ReleaseCredentialMutationLock", auth_cache_header)
+        self.assertIn("'SET', KEYS[1], ARGV[1], 'NX', 'PX'", auth_cache)
+        self.assertIn("redis.call('GET', KEYS[1]) == ARGV[1]", auth_cache)
+        self.assertIn("class CredentialMutationGuard", auth_service)
+
+        self.assertLess(login_body.index("credential_guard.Acquire"), login_body.index("CheckPassword"))
+        self.assertLess(login_body.index("CheckPassword"), login_body.index("IssueLoginSessionForUser"))
+        self.assertLess(reset_body.index("credential_guard.Acquire"), reset_body.index("GetVerificationCode"))
+        self.assertLess(reset_body.index("GetVerificationCode"), reset_body.index("ConsumeVerificationCode"))
+        self.assertLess(reset_body.index("ConsumeVerificationCode"), reset_body.index("UpdatePassword"))
+
+        self.assertIn("ResolveActiveRefreshTokenUserId", account_header)
+        self.assertIn("IsRefreshTokenActiveForUid", account_header)
+        self.assertIn("PostgresMgr::GetInstance()->ResolveActiveRefreshTokenUserId", account)
+        self.assertIn("bool PostgresDao::ResolveActiveRefreshTokenUserId", dao)
+        self.assertIn("revoked_at IS NULL AND rotated_at IS NULL", dao)
+        self.assertLess(
+            refresh_body.index("ResolveActiveRefreshTokenUserId"), refresh_body.index("credential_guard.Acquire")
+        )
+        self.assertLess(refresh_body.index("credential_guard.Acquire"), refresh_body.index("RotateRefreshToken"))
+        self.assertLess(refresh_body.index("RotateRefreshToken"), refresh_body.index("IsRefreshTokenActiveForUid"))
+        self.assertLess(
+            refresh_body.index("IsRefreshTokenActiveForUid"), refresh_body.index("IssueLoginSessionForUser")
+        )
 
     def test_auth_refresh_route_contract_is_registered_and_uses_login_response(self):
         route_module = read(AUTH_ROUTE_MODULE)

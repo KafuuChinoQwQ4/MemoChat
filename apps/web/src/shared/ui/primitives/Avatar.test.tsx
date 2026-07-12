@@ -11,7 +11,6 @@ describe("Avatar", () => {
       token: "tok value",
       loginTicket: "ticket",
       ticketExpireMs: Date.now() + 60_000,
-      refreshToken: "refresh",
       protocolVersion: 3,
       chatEndpoints: [],
       profile: { uid: 42, name: "tester", email: "t@example.test", icon: "" },

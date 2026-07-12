@@ -72,6 +72,7 @@ MEMOCHAT_AUTHTOKEN_JWTSECRET
 | Call LiveKit API secret | `[Call] ApiSecret` | `MEMOCHAT_CALL_APISECRET` |
 | R18 Picacg API key | 进程环境 | `MEMOCHAT_R18_PICACG_API_KEY` |
 | R18 Picacg HMAC key | 进程环境 | `MEMOCHAT_R18_PICACG_HMAC_KEY` |
+| R18 全局内容源管理 key | `[R18SourceAdmin] AdminKey` | `MEMOCHAT_R18SOURCEADMIN_ADMINKEY` |
 | AI Postgres 密码 | AI compose/env override | `MEMOCHAT_AI_POSTGRES__PASSWORD` |
 | AI RabbitMQ 密码 | AI compose/env override | `MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD` |
 | AI Redis 密码 | AI compose/env override | `MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD` |
@@ -102,10 +103,17 @@ MEMOCHAT_AUTHTOKEN_JWTSECRET
 `MINIO_SECRET_KEY` 注入。`CallService/callgateway.ini` 不提交可用 LiveKit secret;`ApiKey`
 和 `ApiSecret` 必须通过 `MEMOCHAT_CALL_APIKEY` / `MEMOCHAT_CALL_APISECRET` 注入。
 
-## R18 Picacg
+## R18 控制面与 Picacg
 
 Picacg adapter 不提交 API key 或 HMAC key。启用官方源时,通过
 `MEMOCHAT_R18_PICACG_API_KEY` 和 `MEMOCHAT_R18_PICACG_HMAC_KEY` 注入;未注入时请求快速失败。
+图片代理还必须通过 `[R18Picacg] AllowedImageHosts`（环境变量
+`MEMOCHAT_R18PICACG_ALLOWEDIMAGEHOSTS`）配置逗号分隔的精确媒体 host；空值会禁用远程图片代理，
+且不接受通配符、非 443 端口、私网解析地址或非 `/static/` 路径。
+
+导入、启用、停用和删除全局内容源属于运维控制面。除用户 bearer 身份外还必须注入
+`MEMOCHAT_R18SOURCEADMIN_ADMINKEY`；普通 Web/QML 客户端不持有该 key。配置缺失时控制面请求
+fail-closed。当前导入只允许有大小上限、默认禁用且不执行的 JavaScript 源，native ZIP/动态库不被接受。
 
 ## Docker Local Defaults
 

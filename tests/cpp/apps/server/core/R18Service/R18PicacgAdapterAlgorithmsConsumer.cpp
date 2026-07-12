@@ -102,14 +102,62 @@ const char* ImageReferer()
     return memochat::r18::picacg_adapter::modules::ImageReferer();
 }
 
-const char* NonHttpsImageRejectedMessage()
+const char* AllowedImageHostsConfigSection()
 {
-    return memochat::r18::picacg_adapter::modules::NonHttpsImageRejectedMessage();
+    return memochat::r18::picacg_adapter::modules::AllowedImageHostsConfigSection();
 }
 
-bool ShouldRejectImageScheme(bool scheme_is_https)
+const char* AllowedImageHostsConfigKey()
 {
-    return memochat::r18::picacg_adapter::modules::ShouldRejectImageScheme(scheme_is_https);
+    return memochat::r18::picacg_adapter::modules::AllowedImageHostsConfigKey();
+}
+
+const char* ImageTargetPrefix()
+{
+    return memochat::r18::picacg_adapter::modules::ImageTargetPrefix();
+}
+
+bool IsExactHostInPolicy(const char* host,
+                         unsigned long long host_size,
+                         const char* policy,
+                         unsigned long long policy_size)
+{
+    return memochat::r18::picacg_adapter::modules::IsExactHostInPolicy(host, host_size, policy, policy_size);
+}
+
+bool IsCanonicalAllowedImageUrl(bool scheme_is_https,
+                                bool port_is_443,
+                                bool has_userinfo,
+                                bool has_fragment,
+                                bool host_allowed,
+                                bool target_allowed)
+{
+    return memochat::r18::picacg_adapter::modules::IsCanonicalAllowedImageUrl(scheme_is_https,
+                                                                              port_is_443,
+                                                                              has_userinfo,
+                                                                              has_fragment,
+                                                                              host_allowed,
+                                                                              target_allowed);
+}
+
+bool IsPublicIpv4Address(unsigned int address)
+{
+    return memochat::r18::picacg_adapter::modules::IsPublicIpv4Address(address);
+}
+
+bool IsPublicIpv6Address(const unsigned char* bytes, unsigned long long size)
+{
+    return memochat::r18::picacg_adapter::modules::IsPublicIpv6Address(bytes, size);
+}
+
+unsigned long long MaxImageBytes()
+{
+    return memochat::r18::picacg_adapter::modules::MaxImageBytes();
+}
+
+bool IsAllowedImageContentType(bool jpeg, bool png, bool webp, bool gif, bool avif)
+{
+    return memochat::r18::picacg_adapter::modules::IsAllowedImageContentType(jpeg, png, webp, gif, avif);
 }
 
 const char* ImageUnavailableTitle()
@@ -127,13 +175,4 @@ bool ShouldUseImagePlaceholder(int status, bool body_empty)
     return memochat::r18::picacg_adapter::modules::ShouldUseImagePlaceholder(status, body_empty);
 }
 
-bool ShouldUseDefaultImageContentType(bool content_type_empty)
-{
-    return memochat::r18::picacg_adapter::modules::ShouldUseDefaultImageContentType(content_type_empty);
-}
-
-const char* DefaultImageContentType()
-{
-    return memochat::r18::picacg_adapter::modules::DefaultImageContentType();
-}
 } // namespace memochat::tests::r18::picacg_adapter

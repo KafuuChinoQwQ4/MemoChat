@@ -1,11 +1,10 @@
 /**
  * sessionStore — Zustand store for authentication + connection state.
  * Mirrors ShellViewModel session fields + AppChatRecoveryState machine.
- * Memory-only for access token/loginTicket; refreshToken via tokenStorage.
+ * Access token and loginTicket are memory-only.
  */
 import { create } from "zustand"
 import type { ConnState, SessionState, UserProfile, ChatEndpointInfo } from "./sessionTypes"
-import { tokenStorage } from "./tokenStorage"
 
 interface SessionActions {
   setLogin(params: {
@@ -13,7 +12,6 @@ interface SessionActions {
     token: string
     loginTicket: string
     ticketExpireMs: number
-    refreshToken: string
     protocolVersion: number
     chatEndpoints: ChatEndpointInfo[]
     profile: UserProfile
@@ -35,7 +33,6 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
   token: null,
   loginTicket: null,
   ticketExpireMs: null,
-  refreshToken: null,
   protocolVersion: 3,
   chatEndpoints: [],
   profile: null,
@@ -45,13 +42,11 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
 
   // --- actions ---
   setLogin(params) {
-    tokenStorage.saveRefreshToken(params.refreshToken)
     set({
       uid: params.uid,
       token: params.token,
       loginTicket: params.loginTicket,
       ticketExpireMs: params.ticketExpireMs,
-      refreshToken: params.refreshToken,
       protocolVersion: params.protocolVersion,
       chatEndpoints: params.chatEndpoints,
       profile: params.profile,
@@ -71,13 +66,11 @@ export const useSessionStore = create<SessionState & SessionActions>((set, get) 
     set((s) => ({ reconnectAttempts: s.reconnectAttempts + 1 })),
 
   clearSession() {
-    tokenStorage.clearAll()
     set({
       uid: null,
       token: null,
       loginTicket: null,
       ticketExpireMs: null,
-      refreshToken: null,
       chatEndpoints: [],
       profile: null,
       connState: "disconnected",

@@ -32,7 +32,6 @@ export interface LoginResponse {
   access_token: string
   login_ticket: string
   ticket_expire_ms: number
-  refresh_token: string
   protocol_version: number
   preferred_transport?: string
   fallback_transport?: string
@@ -123,7 +122,10 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
     email: creds.email,
     passwd: creds.password,
     client_ver: "3.0.0",
-  }, { auth: false })
+  }, {
+    auth: false,
+    headers: { "X-MemoChat-Client": "web" },
+  })
 
   const successCode: number = ErrorCodes.SUCCESS
   if (res.error !== successCode) {
@@ -135,7 +137,6 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
     token: res.access_token,
     loginTicket: res.login_ticket,
     ticketExpireMs: res.ticket_expire_ms,
-    refreshToken: res.refresh_token,
     protocolVersion: res.protocol_version,
     chatEndpoints: res.chat_endpoints.map((ep) => {
       const endpoint: ChatEndpointInfo = {

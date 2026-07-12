@@ -1,6 +1,6 @@
 # AIServer/ 目录树
 
-> 测试 AIServer 服务，覆盖 AI 服务核心算法、JSON 映射与对话上下文 JSON 持久化。
+> 测试 AIServer 服务，覆盖 AI 服务核心算法、JSON/protobuf 映射与仓储判定。
 
 ## 文件
 
@@ -13,7 +13,7 @@
 | `AIServiceImplAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入 AIServer gRPC service implementation 的 trace span 名称 |
 | `AIServiceImplAlgorithmsTest.cpp` | 验证 AIServer gRPC service implementation module 的 trace span 名称与 RPC 类型字面量 |
 | `AIServiceAlgorithmsTest.cpp` | 验证 AIServer module-backed 算法 wrapper 的成功判定与 limit 归一化 |
-| `AIServiceJsonMapperTest.cpp` | 验证 AI 服务 JSON/protobuf 映射、DTO 字段清单与对话上下文 JSON 兼容性 |
+| `AIServiceJsonMapperTest.cpp` | 验证 AI 服务 JSON/protobuf 映射与 DTO 字段清单 |
 | `AIServerRepositoryAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入 AIServer repository 默认值与结果判断算法 |
 | `AIServerRepositoryAlgorithmsTest.cpp` | 验证 AIServer repository schema 默认值、会话标题默认值和结果判断算法 |
 | `CMakeLists.txt` | 注册该测试目标的 CMake 配置 |

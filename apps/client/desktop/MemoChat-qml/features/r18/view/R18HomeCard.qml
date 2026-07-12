@@ -15,15 +15,10 @@ Rectangle {
     property color badgeFillColor: "#dce6f8"
     property color badgeTextColor: "#526173"
     property color arrowColor: "#2f343c"
-    property color importButtonColor: "#0c4f92"
-    property color importButtonHoverColor: "#0f61b0"
-    property color importButtonPressedColor: "#093d72"
-
     signal activated(string entryAction, int modeValue)
-    signal importRequested()
 
     width: ListView.view ? ListView.view.width : 240
-    height: root.entryAction === "import" ? 106 : 72
+    height: 72
     radius: 10
     color: homeCardMouse.containsMouse ? Qt.rgba(0.985, 0.988, 0.992, 1.0) : root.cardFillColor
     border.color: root.cardStrokeColor
@@ -41,7 +36,7 @@ Rectangle {
         anchors.leftMargin: 18
         anchors.rightMargin: 18
         anchors.topMargin: 16
-        anchors.bottomMargin: root.entryAction === "import" ? 16 : 14
+        anchors.bottomMargin: 14
         spacing: 8
 
         RowLayout {
@@ -79,29 +74,5 @@ Rectangle {
                 font.pixelSize: 24
             }
         }
-
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            visible: root.entryAction === "import"
-        }
-    }
-
-    GlassButton {
-        visible: root.entryAction === "import"
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.rightMargin: 18
-        anchors.bottomMargin: 14
-        width: 92
-        height: 40
-        text: "导入"
-        textPixelSize: 14
-        textColor: "#ffffff"
-        cornerRadius: 18
-        normalColor: root.importButtonColor
-        hoverColor: root.importButtonHoverColor
-        pressedColor: root.importButtonPressedColor
-        onClicked: root.importRequested()
     }
 }

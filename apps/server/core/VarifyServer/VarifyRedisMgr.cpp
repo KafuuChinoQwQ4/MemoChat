@@ -2,8 +2,8 @@
 #include "ConfigMgr.hpp"
 #include "common_lua_scripts.hpp"
 
+#include <charconv>
 #include <iostream>
-#include <cstdlib>
 #include <cstring>
 
 import memochat.varify.redis_algorithms;
@@ -14,13 +14,13 @@ namespace redis_modules = memochat::varify::redis::modules;
 
 VarifyRedisConPool::VarifyRedisConPool(size_t poolSize, const char* host, int port, const char* pwd)
     : poolSize_(poolSize)
-    , host_(host)
+    , host_(host == nullptr ? "" : host)
     , port_(port)
-    , pwd_(pwd)
+    , pwd_(pwd == nullptr ? "" : pwd)
 {
     for (size_t i = 0; i < poolSize_; ++i)
     {
-        auto* context = redisConnect(host, port);
+        auto* context = redisConnect(host_.c_str(), port);
         if (context == nullptr || context->err != 0)
         {
             if (context != nullptr)
@@ -30,9 +30,9 @@ VarifyRedisConPool::VarifyRedisConPool(size_t poolSize, const char* host, int po
             continue;
         }
 
-        if (pwd && redis_modules::HasPassword(pwd[0]))
+        if (!pwd_.empty() && redis_modules::HasPassword(pwd_[0]))
         {
-            auto reply = (redisReply*) redisCommand(context, "AUTH %s", pwd);
+            auto reply = (redisReply*) redisCommand(context, "AUTH %s", pwd_.c_str());
             if (!redis_modules::HasReply(reply != nullptr) ||
                 redis_modules::IsExpectedReplyType(reply->type, REDIS_REPLY_ERROR))
             {
@@ -47,17 +47,39 @@ VarifyRedisConPool::VarifyRedisConPool(size_t poolSize, const char* host, int po
         connections_.push(context);
     }
 
-    check_thread_ = std::thread(
-        [this]()
-        {
-            while (!b_stop_)
+    if (connections_.empty())
+    {
+        startup_error_ = "Varify Redis pool has no usable connections";
+        return;
+    }
+
+    std::string thread_error;
+    if (!check_thread_.Start(
+            [this]()
             {
-                std::this_thread::sleep_for(std::chrono::seconds(60));
-                if (b_stop_)
-                    break;
-                CheckThreadProc();
-            }
-        });
+                while (!b_stop_.load(std::memory_order_acquire))
+                {
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        if (cond_.wait_for(lock,
+                                           std::chrono::seconds(60),
+                                           [this]
+                                           {
+                                               return b_stop_.load(std::memory_order_acquire);
+                                           }))
+                        {
+                            break;
+                        }
+                    }
+                    CheckThreadProc();
+                }
+            },
+            &thread_error))
+    {
+        startup_error_ = "Varify Redis pool checker init failed: " + thread_error;
+        return;
+    }
+    ready_ = true;
 }
 
 VarifyRedisConPool::~VarifyRedisConPool()
@@ -71,31 +93,51 @@ redisContext* VarifyRedisConPool::GetConnection()
     cond_.wait(lock,
                [this]()
                {
-                   return b_stop_ || !connections_.empty();
+                   return b_stop_ || !ready_ || !connections_.empty();
                });
-    if (b_stop_)
+    if (b_stop_ || !ready_)
         return nullptr;
     auto* context = connections_.front();
     connections_.pop();
     return context;
 }
 
+bool VarifyRedisConPool::Ready() const noexcept
+{
+    return ready_;
+}
+
+const std::string& VarifyRedisConPool::StartupError() const noexcept
+{
+    return startup_error_;
+}
+
 void VarifyRedisConPool::ReturnConnection(redisContext* context)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (b_stop_)
+    {
+        redisFree(context);
         return;
+    }
     connections_.push(context);
     cond_.notify_one();
 }
 
 void VarifyRedisConPool::Close()
 {
-    b_stop_ = true;
-    cond_.notify_all();
-    if (check_thread_.joinable())
+    if (b_stop_.exchange(true))
     {
-        check_thread_.join();
+        return;
+    }
+    cond_.notify_all();
+    if (check_thread_.Joinable())
+    {
+        std::string thread_error;
+        if (!check_thread_.Join(&thread_error))
+        {
+            std::cerr << "varify redis pool checker join failed: " << thread_error << std::endl;
+        }
     }
     std::lock_guard<std::mutex> lock(mutex_);
     while (!connections_.empty())
@@ -136,7 +178,13 @@ VarifyRedisMgr::VarifyRedisMgr()
     int port = redis_modules::DefaultRedisPort();
     if (!port_str.empty())
     {
-        port = std::atoi(port_str.c_str());
+        int configured_port = 0;
+        const auto [ptr, ec] = std::from_chars(port_str.data(), port_str.data() + port_str.size(), configured_port);
+        if (ec == std::errc{} && ptr == port_str.data() + port_str.size() && configured_port > 0 &&
+            configured_port <= 65535)
+        {
+            port = configured_port;
+        }
     }
     pool_.reset(new VarifyRedisConPool(redis_modules::DefaultConnectionPoolSize(), host.c_str(), port, pwd.c_str()));
 }
@@ -150,6 +198,17 @@ VarifyRedisMgr& VarifyRedisMgr::Instance()
 {
     static VarifyRedisMgr mgr;
     return mgr;
+}
+
+bool VarifyRedisMgr::Ready() const noexcept
+{
+    return pool_ && pool_->Ready();
+}
+
+const std::string& VarifyRedisMgr::StartupError() const noexcept
+{
+    static const std::string allocation_error = "Varify Redis pool allocation failed";
+    return pool_ ? pool_->StartupError() : allocation_error;
 }
 
 redisContext* GetContext(VarifyRedisConPool* pool)

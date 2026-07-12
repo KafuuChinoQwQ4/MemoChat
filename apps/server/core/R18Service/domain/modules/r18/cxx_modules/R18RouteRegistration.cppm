@@ -17,6 +17,16 @@ const char* SourcesPath()
     return "/api/r18/sources";
 }
 
+const char* R18AccessStatusPath()
+{
+    return "/api/r18/access";
+}
+
+const char* R18AccessAttestPath()
+{
+    return "/api/r18/access/attest";
+}
+
 const char* SourceImportPath()
 {
     return "/api/r18/source/import";

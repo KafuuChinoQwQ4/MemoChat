@@ -168,6 +168,14 @@ WebTransportChatServer::openProviderSession(WebTransportSendFrameCallback send_c
             }
         });
 
+    if (!session->Ready())
+    {
+        memolog::LogError("webtransport.session.uuid_failed",
+                          "WebTransport session UUID generation failed",
+                          {{"error", session->startupError()}});
+        return nullptr;
+    }
+
     {
         std::lock_guard<std::mutex> lock(_session_mutex);
         _sessions.emplace(session->sessionId(), session);

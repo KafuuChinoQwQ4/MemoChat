@@ -11,6 +11,10 @@ class R18Service
 public:
     static R18Service& Instance();
 
+    bool HandleAccessStatus(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleAccessAttest(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
     bool HandleListSources(const memochat::gate::routing::GateRequest& request,
                            memochat::gate::routing::GateResponse& response);
     bool HandleImportSource(const memochat::gate::routing::GateRequest& request,

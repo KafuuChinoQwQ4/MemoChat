@@ -5,25 +5,12 @@
 
 import memochat.chat.user_profile_algorithms;
 
-#include <exception>
-
 namespace
 {
 
 template <typename T> bool WriteTypedJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::WriteTypedJson(value, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::WriteTypedJson(value, out, error_out);
 }
 
 } // namespace
@@ -64,18 +51,7 @@ bool EncodeChatUserProfileCache(const ChatUserProfileDto& profile, std::string* 
 
 bool DecodeChatUserProfileCache(std::string_view body, ChatUserProfileDto* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::ReadTypedJson(body, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::ReadTypedJson(body, out, error_out);
 }
 
 memochat::json::JsonValue ChatUserProfileToJsonValue(const ChatUserProfileDto& profile, bool include_icon)

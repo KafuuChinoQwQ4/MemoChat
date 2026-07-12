@@ -11,6 +11,7 @@
 #include "ports/ISessionRegistry.hpp"
 
 #include <memory>
+#include <string>
 
 std::unique_ptr<IPrivateMessageService> CreateInProcessPrivateMessageService(ISessionRegistry* session_registry,
                                                                              IOnlineRouteStore* online_route_store,
@@ -30,10 +31,12 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
                                                                     IMessageRepository* message_repository,
                                                                     IRelationRepository* relation_repository,
                                                                     IDeliveryGateway* delivery_gateway,
-                                                                    IEventPublisher* event_publisher);
+                                                                    IEventPublisher* event_publisher,
+                                                                    std::string* error = nullptr);
 
 std::unique_ptr<IGroupMessageService> CreateGroupMessageService(const IMessageServiceConfig& message_service_config,
                                                                 IMessageRepository* message_repository,
                                                                 IRelationRepository* relation_repository,
                                                                 IDeliveryGateway* delivery_gateway,
-                                                                IEventPublisher* event_publisher);
+                                                                IEventPublisher* event_publisher,
+                                                                std::string* error = nullptr);

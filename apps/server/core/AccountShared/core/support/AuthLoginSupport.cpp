@@ -12,6 +12,7 @@
 #include "logging/Logger.hpp"
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <climits>
 #include <cstdlib>
@@ -26,6 +27,13 @@ constexpr const char* kMinClientVersion = "2.0.0";
 constexpr int kLoginProtocolVersion = 3;
 constexpr auto kChatRouteClusterCacheTtl = std::chrono::seconds(60);
 std::atomic<uint64_t> g_gate_route_rr_counter{0};
+
+int ParseIntOrDefault(const std::string& raw, int fallback)
+{
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return !raw.empty() && ec == std::errc{} && ptr == raw.data() + raw.size() ? value : fallback;
+}
 
 bool IsTruthyFlag(const char* raw)
 {
@@ -56,7 +64,7 @@ bool EqualsIgnoreCase(std::string left, std::string right)
     return left == right;
 }
 
-memochat::cluster::ChatClusterConfig LoadChatClusterConfigSnapshot()
+memochat::cluster::ChatClusterConfig LoadChatClusterConfigSnapshot(std::string* error_out)
 {
     static std::mutex cache_mutex;
     static memochat::cluster::ChatClusterConfig cached_cluster;
@@ -68,13 +76,30 @@ memochat::cluster::ChatClusterConfig LoadChatClusterConfigSnapshot()
     if (!has_cached_cluster || now - cached_at >= kChatRouteClusterCacheTtl)
     {
         auto& cfg = ConfigMgr::Inst();
-        cached_cluster = memochat::cluster::LoadChatClusterConfig(
-            [&cfg](const std::string& section, const std::string& key)
+        memochat::cluster::ChatClusterConfig loaded_cluster;
+        std::string error;
+        if (!memochat::cluster::LoadChatClusterConfig(
+                [&cfg](const std::string& section, const std::string& key)
+                {
+                    return cfg.GetValue(section, key);
+                },
+                std::string(),
+                loaded_cluster,
+                error))
+        {
+            if (error_out != nullptr)
             {
-                return cfg.GetValue(section, key);
-            });
+                *error_out = std::move(error);
+            }
+            return {};
+        }
+        cached_cluster = std::move(loaded_cluster);
         cached_at = now;
         has_cached_cluster = true;
+    }
+    if (error_out != nullptr)
+    {
+        error_out->clear();
     }
     return cached_cluster;
 }
@@ -91,7 +116,7 @@ int GetLoginCacheTtlSec()
     {
         return 3600;
     }
-    return std::max(60, std::atoi(ttl.c_str()));
+    return std::max(60, ParseIntOrDefault(ttl, 3600));
 }
 
 int GetRefreshTokenTtlSec()
@@ -102,7 +127,7 @@ int GetRefreshTokenTtlSec()
     {
         return 30 * 24 * 60 * 60;
     }
-    return std::clamp(std::atoi(ttl.c_str()), 3600, 180 * 24 * 60 * 60);
+    return std::clamp(ParseIntOrDefault(ttl, 30 * 24 * 60 * 60), 3600, 180 * 24 * 60 * 60);
 }
 
 int GetAccessTokenTtlSec()
@@ -113,7 +138,7 @@ int GetAccessTokenTtlSec()
     {
         return 15 * 60;
     }
-    return std::clamp(std::atoi(ttl.c_str()), 60, 60 * 60);
+    return std::clamp(ParseIntOrDefault(ttl, 15 * 60), 60, 60 * 60);
 }
 
 } // namespace gateauthsupport
@@ -254,7 +279,7 @@ int GetChatTicketTtlSec()
     {
         return 20;
     }
-    return std::clamp(std::atoi(ttl.c_str()), 5, 300);
+    return std::clamp(ParseIntOrDefault(ttl, 20), 5, 300);
 }
 
 bool TryLoadCachedLoginProfile(const std::string& email, UserInfo& userInfo)
@@ -321,26 +346,29 @@ bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo)
     return true;
 }
 
-void InvalidateLoginCacheByEmail(const std::string& email)
+bool InvalidateLoginCacheByEmail(const std::string& email)
 {
-    if (!email.empty())
+    if (email.empty())
     {
-        memochat::gate::core::AuthCache::Instance().DeleteLoginProfileByEmail(email);
+        return true;
     }
+    return memochat::gate::core::AuthCache::Instance().DeleteLoginProfileByEmail(email);
 }
 
-void InvalidateLoginCacheByUid(int uid)
+bool InvalidateLoginCacheByUid(int uid)
 {
     if (uid <= 0)
     {
-        return;
+        return false;
     }
+    bool email_profile_deleted = true;
     std::string email;
     if (memochat::gate::core::AuthCache::Instance().LoadLoginProfileEmailByUid(uid, email) && !email.empty())
     {
-        memochat::gate::core::AuthCache::Instance().DeleteLoginProfileByEmail(email);
+        email_profile_deleted = memochat::gate::core::AuthCache::Instance().DeleteLoginProfileByEmail(email);
     }
-    memochat::gate::core::AuthCache::Instance().DeleteLoginProfileUid(uid);
+    const bool uid_mapping_deleted = memochat::gate::core::AuthCache::Instance().DeleteLoginProfileUid(uid);
+    return email_profile_deleted && uid_mapping_deleted;
 }
 
 std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot,
@@ -354,107 +382,104 @@ std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load
     {
         least_loaded_snapshot->clear();
     }
-    const auto cluster = LoadChatClusterConfigSnapshot();
-
-    try
-    {
-        std::vector<ChatRouteNode> nodes;
-        nodes.reserve(cluster.enabledNodes().size());
-        int min_online = INT_MAX;
-        for (const auto& node : cluster.enabledNodes())
-        {
-            ChatRouteNode route_node;
-            route_node.name = node.name;
-            route_node.host = node.tcp_host;
-            route_node.port = node.tcp_port;
-            if (IsQuicRolloutEnabled())
-            {
-                route_node.quic_host = node.quic_host;
-                route_node.quic_port = node.quic_port;
-            }
-            route_node.ws_enabled = node.ws_enabled || IsWebSocketRolloutEnabled();
-            route_node.ws_host = node.ws_host;
-            route_node.ws_port = node.ws_port;
-            route_node.ws_path = node.ws_path;
-            route_node.ws_tls = node.ws_tls;
-            route_node.wt_enabled = ShouldAdvertiseWebTransportEndpoint(node.wt_enabled);
-            route_node.wt_host = node.wt_host;
-            route_node.wt_port = node.wt_port;
-            route_node.wt_path = node.wt_path;
-            route_node.wt_tls = node.wt_tls;
-            const std::string online_users_key = std::string(SERVER_ONLINE_USERS_PREFIX) + node.name;
-            int online_count = 0;
-            const bool load_ok = RedisMgr::GetInstance()->SCard(online_users_key, online_count);
-            if (!load_ok || online_count < 0)
-            {
-                online_count = 0;
-            }
-            route_node.online_count = online_count;
-            nodes.push_back(route_node);
-            min_online = std::min(min_online, route_node.online_count);
-            if (load_snapshot)
-            {
-                std::ostringstream one;
-                one << node.name << "=" << route_node.online_count;
-                if (!load_ok)
-                {
-                    one << "(redis-fallback)";
-                }
-                load_snapshot->push_back(one.str());
-            }
-        }
-
-        std::sort(nodes.begin(),
-                  nodes.end(),
-                  [](const ChatRouteNode& lhs, const ChatRouteNode& rhs)
-                  {
-                      if (lhs.online_count != rhs.online_count)
-                      {
-                          return lhs.online_count < rhs.online_count;
-                      }
-                      return lhs.name < rhs.name;
-                  });
-
-        int priority = 0;
-        for (auto& node : nodes)
-        {
-            node.priority = priority++;
-            if (node.online_count == min_online && least_loaded_snapshot)
-            {
-                least_loaded_snapshot->push_back(node.name);
-            }
-        }
-
-        if (!nodes.empty())
-        {
-            const auto next_index =
-                static_cast<size_t>(g_gate_route_rr_counter.fetch_add(1, std::memory_order_relaxed));
-            const auto least_end = std::find_if(nodes.begin(),
-                                                nodes.end(),
-                                                [min_online](const ChatRouteNode& node)
-                                                {
-                                                    return node.online_count != min_online;
-                                                });
-            const auto least_count = static_cast<size_t>(std::distance(nodes.begin(), least_end));
-            if (least_count > 1)
-            {
-                const auto offset = static_cast<std::vector<ChatRouteNode>::difference_type>(next_index % least_count);
-                std::rotate(nodes.begin(), nodes.begin() + offset, least_end);
-            }
-        }
-        return nodes;
-    }
-    catch (const std::exception& ex)
+    std::string cluster_error;
+    const auto cluster = LoadChatClusterConfigSnapshot(&cluster_error);
+    if (!cluster_error.empty())
     {
         memolog::LogError("gate.route_select.config_error",
                           "failed to load local chat route config",
-                          {{"error_type", "cluster_config"}, {"error", ex.what()}});
+                          {{"error_type", "cluster_config"}, {"error", cluster_error}});
         if (load_snapshot)
         {
-            load_snapshot->push_back(std::string("config_error:") + ex.what());
+            load_snapshot->push_back(std::string("config_error:") + cluster_error);
         }
         return {};
     }
+
+    std::vector<ChatRouteNode> nodes;
+    nodes.reserve(cluster.enabledNodes().size());
+    int min_online = INT_MAX;
+    for (const auto& node : cluster.enabledNodes())
+    {
+        ChatRouteNode route_node;
+        route_node.name = node.name;
+        route_node.host = node.tcp_host;
+        route_node.port = node.tcp_port;
+        if (IsQuicRolloutEnabled())
+        {
+            route_node.quic_host = node.quic_host;
+            route_node.quic_port = node.quic_port;
+        }
+        route_node.ws_enabled = node.ws_enabled || IsWebSocketRolloutEnabled();
+        route_node.ws_host = node.ws_host;
+        route_node.ws_port = node.ws_port;
+        route_node.ws_path = node.ws_path;
+        route_node.ws_tls = node.ws_tls;
+        route_node.wt_enabled = ShouldAdvertiseWebTransportEndpoint(node.wt_enabled);
+        route_node.wt_host = node.wt_host;
+        route_node.wt_port = node.wt_port;
+        route_node.wt_path = node.wt_path;
+        route_node.wt_tls = node.wt_tls;
+        const std::string online_users_key = std::string(SERVER_ONLINE_USERS_PREFIX) + node.name;
+        int online_count = 0;
+        const bool load_ok = RedisMgr::GetInstance()->SCard(online_users_key, online_count);
+        if (!load_ok || online_count < 0)
+        {
+            online_count = 0;
+        }
+        route_node.online_count = online_count;
+        nodes.push_back(route_node);
+        min_online = std::min(min_online, route_node.online_count);
+        if (load_snapshot)
+        {
+            std::ostringstream one;
+            one << node.name << "=" << route_node.online_count;
+            if (!load_ok)
+            {
+                one << "(redis-fallback)";
+            }
+            load_snapshot->push_back(one.str());
+        }
+    }
+
+    std::sort(nodes.begin(),
+              nodes.end(),
+              [](const ChatRouteNode& lhs, const ChatRouteNode& rhs)
+              {
+                  if (lhs.online_count != rhs.online_count)
+                  {
+                      return lhs.online_count < rhs.online_count;
+                  }
+                  return lhs.name < rhs.name;
+              });
+
+    int priority = 0;
+    for (auto& node : nodes)
+    {
+        node.priority = priority++;
+        if (node.online_count == min_online && least_loaded_snapshot)
+        {
+            least_loaded_snapshot->push_back(node.name);
+        }
+    }
+
+    if (!nodes.empty())
+    {
+        const auto next_index = static_cast<size_t>(g_gate_route_rr_counter.fetch_add(1, std::memory_order_relaxed));
+        const auto least_end = std::find_if(nodes.begin(),
+                                            nodes.end(),
+                                            [min_online](const ChatRouteNode& node)
+                                            {
+                                                return node.online_count != min_online;
+                                            });
+        const auto least_count = static_cast<size_t>(std::distance(nodes.begin(), least_end));
+        if (least_count > 1)
+        {
+            const auto offset = static_cast<std::vector<ChatRouteNode>::difference_type>(next_index % least_count);
+            std::rotate(nodes.begin(), nodes.begin() + offset, least_end);
+        }
+    }
+    return nodes;
 }
 
 std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,

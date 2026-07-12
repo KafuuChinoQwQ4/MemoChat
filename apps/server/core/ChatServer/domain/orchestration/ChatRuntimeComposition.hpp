@@ -38,6 +38,9 @@ public:
     ChatRuntimeComposition(const ChatRuntimeComposition&) = delete;
     ChatRuntimeComposition& operator=(const ChatRuntimeComposition&) = delete;
 
+    bool Ready() const;
+    const std::string& startupError() const;
+
     ChatSessionService& SessionService();
     IRelationSessionService& RelationSessionService();
     IPrivateMessageService& PrivateMessageService();
@@ -54,7 +57,7 @@ public:
     PublishAsyncEvent(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error = nullptr);
     void DealTasks();
     void DealAsyncEvents();
-    void StartDeliveryRuntimeIfEnabled();
+    bool StartDeliveryRuntimeIfEnabled(std::string* error = nullptr);
     void StopDeliveryRuntime();
 
 private:
@@ -85,4 +88,6 @@ private:
     std::unique_ptr<IGroupMessageService> _group_message_service;
     std::unique_ptr<ChatSessionService> _chat_session_service;
     std::unique_ptr<ChatDeliveryRuntime> _delivery_runtime;
+    bool _ready = false;
+    std::string _startup_error;
 };

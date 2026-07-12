@@ -59,34 +59,8 @@ bool GateHttp3JsonSupport::HandleJsonPost(
     }
 
     std::string trace_id = connection->GetTraceId();
-    try
+    if (!fn)
     {
-        if (!fn(src_root, root, trace_id))
-        {
-            if (json_support_modules::ShouldForceErrorCode(root.isMember("error"),
-                                                           memochat::json::glaze_safe_get<int>(root, "error", 0)))
-            {
-                root["error"] = json_support_modules::ErrorCode();
-            }
-            std::string resp = memochat::json::writeString(root);
-            connection->SendResponse(json_support_modules::BadRequestStatus(),
-                                     resp,
-                                     json_support_modules::ResponseContentType());
-            return true;
-        }
-        root["error"] = json_support_modules::SuccessCode();
-        std::string resp = memochat::json::writeString(root);
-        connection->SendResponse(json_support_modules::OkStatus(), resp, json_support_modules::ResponseContentType());
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        // Log internally but never forward e.what() to the client — it may
-        // contain DB schema names, query fragments, or internal paths.
-        std::cerr << "[GateHttp3JsonSupport] unhandled exception"
-                  << " trace_id=" << connection->GetTraceId() << " request_id=" << connection->GetRequestId()
-                  << " what=" << e.what() << std::endl;
-
         root = memochat::json::glaze_empty_object();
         root["trace_id"] = connection->GetTraceId();
         root["request_id"] = connection->GetRequestId();
@@ -98,4 +72,22 @@ bool GateHttp3JsonSupport::HandleJsonPost(
                                  json_support_modules::ResponseContentType());
         return true;
     }
+
+    if (!fn(src_root, root, trace_id))
+    {
+        if (json_support_modules::ShouldForceErrorCode(root.isMember("error"),
+                                                       memochat::json::glaze_safe_get<int>(root, "error", 0)))
+        {
+            root["error"] = json_support_modules::ErrorCode();
+        }
+        std::string resp = memochat::json::writeString(root);
+        connection->SendResponse(json_support_modules::BadRequestStatus(),
+                                 resp,
+                                 json_support_modules::ResponseContentType());
+        return true;
+    }
+    root["error"] = json_support_modules::SuccessCode();
+    std::string resp = memochat::json::writeString(root);
+    connection->SendResponse(json_support_modules::OkStatus(), resp, json_support_modules::ResponseContentType());
+    return true;
 }

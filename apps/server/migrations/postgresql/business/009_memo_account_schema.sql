@@ -20,9 +20,13 @@ CREATE TABLE IF NOT EXISTS memo."user" (
     sex integer DEFAULT 0 NOT NULL,
     icon character varying(255) DEFAULT ''::character varying NOT NULL,
     user_id character varying(10),
+    adult_attested_at_ms bigint DEFAULT 0 NOT NULL,
+    r18_access_state smallint DEFAULT 0 NOT NULL,
     CONSTRAINT uq_user_email UNIQUE (email),
     CONSTRAINT uq_user_uid UNIQUE (uid),
-    CONSTRAINT uq_user_user_id UNIQUE (user_id)
+    CONSTRAINT uq_user_user_id UNIQUE (user_id),
+    CONSTRAINT ck_user_r18_access_state CHECK (r18_access_state IN (0, 1, 2)),
+    CONSTRAINT ck_user_adult_attested_at_ms CHECK (adult_attested_at_ms >= 0)
 );
 CREATE INDEX IF NOT EXISTS idx_user_name ON memo."user" USING btree (name);
 

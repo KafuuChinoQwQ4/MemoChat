@@ -4,7 +4,6 @@
 #include "json/TypedJsonCodec.hpp"
 
 #include <algorithm>
-#include <exception>
 #include <utility>
 
 import memochat.media.public_dto_algorithms;
@@ -34,18 +33,7 @@ bool ParseJsonForMediaPublic(std::string_view body, memochat::json::JsonValue* o
 
 template <typename T> bool WriteTypedJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::WriteTypedJson(value, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::WriteTypedJson(value, out, error_out);
 }
 
 template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& value)

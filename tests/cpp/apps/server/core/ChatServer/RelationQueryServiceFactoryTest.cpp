@@ -5,7 +5,6 @@
 #include "const.hpp"
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -101,7 +100,9 @@ TEST(RelationQueryServiceFactoryTest, RemoteBackendRequiresEndpoint)
 {
     FakeRelationQueryServiceConfig config("remote", "");
 
-    EXPECT_THROW((void) CreateRemoteRelationQueryService(config), std::runtime_error);
+    std::string error;
+    EXPECT_EQ(CreateRemoteRelationQueryService(config, &error), nullptr);
+    EXPECT_EQ(error, "Relation query service remote endpoint is empty: remote");
 }
 
 TEST(RelationQueryServiceFactoryTest, GrpcBackendFallsBackToInProcessWhenRemoteQueryFails)

@@ -20,6 +20,9 @@ public:
     explicit S3MediaStorage();
     ~S3MediaStorage() override;
 
+    bool Ready() const noexcept override;
+    const std::string& StartupError() const noexcept override;
+
     bool StoreMergedFile(const std::string& media_type,
                          const std::string& media_key,
                          const std::string& origin_file_name,
@@ -57,6 +60,7 @@ private:
     std::string _bucket_image;
     std::string _bucket_video;
     std::string _bucket_moments;
+    std::string _startup_error;
     bool _enabled = false;
     bool _allow_public_redirect = false;
 };

@@ -1,7 +1,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
-#include <thread>
+#include <string>
 #include "Singleton.hpp"
 #include "runtime/IoContextPool.hpp"
 
@@ -21,6 +21,8 @@ public:
 
     boost::asio::io_context& GetIOService();
     void Stop();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
 
 private:
     std::unique_ptr<memochat::runtime::IoContextPool> _pool;

@@ -260,6 +260,7 @@ focusedGateways:
       configSection: R18Gateway
       port: 8098
       replicaCount: 2
+      allowedImageHosts: ""
     register:
       serviceName: register
       target: RegisterServer
@@ -384,3 +385,4 @@ secrets:
   aiProviderAdminKey: ""
   r18PicacgApiKey: ""
   r18PicacgHmacKey: ""
+  r18SourceAdminKey: ""

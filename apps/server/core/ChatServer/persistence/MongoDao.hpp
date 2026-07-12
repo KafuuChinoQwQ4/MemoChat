@@ -1,12 +1,11 @@
 #pragma once
 
 #include "data.hpp"
+#include "db/MongoCCompat.hpp"
 
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <mongocxx/pool.hpp>
 
 class MongoDao
 {
@@ -64,5 +63,5 @@ private:
     std::string database_name_;
     std::string private_collection_name_;
     std::string group_collection_name_;
-    std::unique_ptr<mongocxx::pool> pool_;
+    memo::db::MongoClientPool pool_;
 };

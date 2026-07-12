@@ -1,5 +1,4 @@
 #include "GateDomainServer.hpp"
-#include "GateAsyncSideEffects.hpp"
 #include "GateRouteProfileRegistrar.hpp"
 
 // LoginServer — authentication, peeled off GateServer (gateserver split
@@ -10,18 +9,12 @@
 // through account-core side-effect hooks. It starts by default after Envoy cut-over.
 int main()
 {
-    return RunGateDomainServer(
-        memochat::gate::profiles::RegisterLogin,
-        "LoginServer",
-        "Login",
-        /*default_port=*/8102,
-        /*init_aws=*/false,
-        []()
-        {
-            GateAsyncSideEffects::Instance().Start();
-        },
-        []()
-        {
-            GateAsyncSideEffects::Instance().Stop();
-        });
+    return RunGateDomainServer(memochat::gate::profiles::RegisterLogin,
+                               "LoginServer",
+                               "Login",
+                               /*default_port=*/8102,
+                               /*init_aws=*/false,
+                               {},
+                               {},
+                               {.postgres = true, .redis = true});
 }

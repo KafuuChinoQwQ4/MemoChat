@@ -55,4 +55,27 @@ const char* PreferredTransport(bool has_quic_host, bool has_quic_port)
 {
     return (has_quic_host && has_quic_port) ? QuicTransport() : TcpTransport();
 }
+
+bool ShouldIssueRefreshToken(const char* client_marker, unsigned long client_marker_size)
+{
+    constexpr char kWebClient[] = "web";
+    constexpr unsigned long kWebClientSize = 3;
+    if (client_marker == nullptr || client_marker_size != kWebClientSize)
+    {
+        return true;
+    }
+    for (unsigned long index = 0; index < kWebClientSize; ++index)
+    {
+        char value = client_marker[index];
+        if (value >= 'A' && value <= 'Z')
+        {
+            value = static_cast<char>(value - 'A' + 'a');
+        }
+        if (value != kWebClient[index])
+        {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace memochat::account::auth_service::modules

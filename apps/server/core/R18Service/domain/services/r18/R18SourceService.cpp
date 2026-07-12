@@ -48,7 +48,12 @@ JsonValue ErrorData(const std::string& source_id, const std::string& message)
 
 std::filesystem::path ResolveDataRoot()
 {
-    const auto cwd = std::filesystem::current_path();
+    std::error_code ec;
+    const auto cwd = std::filesystem::current_path(ec);
+    if (ec)
+    {
+        return std::filesystem::path("data") / "r18" / "sources";
+    }
     std::string leaf = cwd.filename().string();
     modules::LowerAsciiInPlace(leaf.data(), leaf.size());
     const auto base = leaf.rfind(source_service::modules::GateShellPrefix(), 0) == 0 ? cwd.parent_path() : cwd;
@@ -157,6 +162,11 @@ R18SourceService& R18SourceService::Instance()
     return svc;
 }
 
+std::size_t SourceImportLimitBytes()
+{
+    return source_service::modules::MaxSourceImportBytes();
+}
+
 R18SourceService::R18SourceService()
 {
     data_root_ = ResolveDataRoot();
@@ -199,7 +209,7 @@ json::JsonValue R18SourceService::ListSources()
         const auto it = sources_.find(id);
         if (it == sources_.end())
             return;
-        json::JsonValue rec = R18SourceRecordToJsonValue(it->second);
+        json::JsonValue rec = R18SourceRecordToPublicJsonValue(it->second);
         if (!json::glaze_has_key(rec, "title") || json::glaze_safe_get<std::string>(rec, "title", "").empty())
             rec["title"] = it->second.name;
         json::glaze_append(arr, rec);
@@ -211,7 +221,7 @@ json::JsonValue R18SourceService::ListSources()
     {
         if (id != kJmSourceId && id != kPicacgSourceId && id != kMockSourceId)
         {
-            json::JsonValue rec = R18SourceRecordToJsonValue(source);
+            json::JsonValue rec = R18SourceRecordToPublicJsonValue(source);
             if (!json::glaze_has_key(rec, "title") || json::glaze_safe_get<std::string>(rec, "title", "").empty())
                 rec["title"] = source.name;
             json::glaze_append(arr, rec);
@@ -281,10 +291,17 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
                                                                  binary.size() >= 2 ? binary[1] : '\0',
                                                                  binary.size());
     const bool js_payload = LooksLikeJavaScript(file_name, manifest_json, binary);
-    if (!zip_payload && !js_payload)
+    if (source_service::modules::ShouldRejectSourceImport(zip_payload, js_payload, binary.size()))
     {
         if (error)
-            *error = source_service::modules::InvalidPackagePayloadMessage();
+        {
+            if (binary.size() > source_service::modules::MaxSourceImportBytes())
+                *error = source_service::modules::SourcePackageTooLargeMessage();
+            else if (zip_payload)
+                *error = source_service::modules::NativePackageRejectedMessage();
+            else
+                *error = source_service::modules::InvalidPackagePayloadMessage();
+        }
         return {};
     }
 
@@ -306,16 +323,13 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
             ? source_service::modules::DefaultVersion()
             : json::glaze_safe_get<std::string>(manifest, "version", source_service::modules::DefaultVersion());
     rec.version = NormalizePathSegment(rec.version, source_service::modules::DefaultVersion());
-    rec.format =
-        js_payload ? source_service::modules::SourceJsFormat()
-                   : json::glaze_safe_get<std::string>(manifest, "format", source_service::modules::NativeZipFormat());
+    rec.format = source_service::modules::SourceJsFormat();
     rec.source_url = manifest_json.empty() ? "" : json::glaze_safe_get<std::string>(manifest, "source_url", "");
     rec.catalog_url = manifest_json.empty() ? "" : json::glaze_safe_get<std::string>(manifest, "catalog_url", "");
     rec.enabled = false;
     rec.builtin = false;
-    rec.status = js_payload ? source_service::modules::StagedJsStatus() : source_service::modules::StagedStatus();
-    rec.message = js_payload ? "JavaScript source saved. Execution requires a MemoChat source runtime adapter."
-                             : "Package staged. Build/unpack validation is handled by the plugin host deployment step.";
+    rec.status = source_service::modules::StagedJsStatus();
+    rec.message = "JavaScript source saved. Execution requires a MemoChat source runtime adapter.";
 
     if (rec.id.empty())
     {
@@ -339,7 +353,7 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
             *error = source_service::modules::CreateDirFailedMessage();
         return {};
     }
-    const auto source_path = dir / (js_payload ? "source.js" : "source.zip");
+    const auto source_path = dir / "source.js";
     std::ofstream out(source_path, std::ios::binary | std::ios::trunc);
     if (!out.is_open())
     {
@@ -363,27 +377,29 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
 
 json::JsonValue R18SourceService::Search(const std::string& source_id, const std::string& keyword, int page)
 {
+    std::string dispatch_error;
+    if (!CanDispatchSource(source_id, &dispatch_error))
+        return ErrorData(source_id, dispatch_error);
+
     if (source_id == kJmSourceId)
     {
-        try
+        json::JsonValue result;
+        std::string error;
+        if (JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error))
         {
-            return JmSearch(keyword, source_service::modules::NormalizeSearchPage(page));
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            return ErrorData(kJmSourceId, exc.what());
-        }
+        return ErrorData(kJmSourceId, error);
     }
     if (source_id == kPicacgSourceId)
     {
-        try
+        json::JsonValue result;
+        std::string error;
+        if (PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error))
         {
-            return PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page));
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            return ErrorData(kPicacgSourceId, exc.what());
-        }
+        return ErrorData(kPicacgSourceId, error);
     }
 
     json::JsonValue data;
@@ -407,41 +423,43 @@ json::JsonValue R18SourceService::Search(const std::string& source_id, const std
 
 json::JsonValue R18SourceService::Detail(const std::string& source_id, const std::string& comic_id)
 {
+    std::string dispatch_error;
+    if (!CanDispatchSource(source_id, &dispatch_error))
+        return ErrorData(source_id, dispatch_error);
+
     if (source_id == kJmSourceId)
     {
-        try
+        json::JsonValue result;
+        std::string error;
+        if (JmDetail(comic_id, &result, &error))
         {
-            return JmDetail(comic_id);
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            json::JsonValue data;
-            data["source_id"] = kJmSourceId;
-            data["comic_id"] = comic_id;
-            data["title"] = "官方源请求失败";
-            data["description"] = exc.what();
-            data["cover"] = "";
-            data["chapters"] = json::JsonValue{json::array_t{}};
-            return data;
-        }
+        json::JsonValue data;
+        data["source_id"] = kJmSourceId;
+        data["comic_id"] = comic_id;
+        data["title"] = "官方源请求失败";
+        data["description"] = error;
+        data["cover"] = "";
+        data["chapters"] = json::JsonValue{json::array_t{}};
+        return data;
     }
     if (source_id == kPicacgSourceId)
     {
-        try
+        json::JsonValue result;
+        std::string error;
+        if (PicacgDetail(comic_id, &result, &error))
         {
-            return PicacgDetail(comic_id);
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            json::JsonValue data;
-            data["source_id"] = kPicacgSourceId;
-            data["comic_id"] = comic_id;
-            data["title"] = "官方源请求失败";
-            data["description"] = exc.what();
-            data["cover"] = "";
-            data["chapters"] = json::JsonValue{json::array_t{}};
-            return data;
-        }
+        json::JsonValue data;
+        data["source_id"] = kPicacgSourceId;
+        data["comic_id"] = comic_id;
+        data["title"] = "官方源请求失败";
+        data["description"] = error;
+        data["cover"] = "";
+        data["chapters"] = json::JsonValue{json::array_t{}};
+        return data;
     }
 
     const auto source = SourceSnapshot(source_id);
@@ -467,39 +485,41 @@ json::JsonValue R18SourceService::Detail(const std::string& source_id, const std
 
 json::JsonValue R18SourceService::Pages(const std::string& source_id, const std::string& chapter_id)
 {
+    std::string dispatch_error;
+    if (!CanDispatchSource(source_id, &dispatch_error))
+        return ErrorData(source_id, dispatch_error);
+
     if (source_id == kJmSourceId)
     {
-        try
+        json::JsonValue result;
+        std::string error;
+        if (JmPages(chapter_id, &result, &error))
         {
-            return JmPages(chapter_id);
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            json::JsonValue data;
-            data["source_id"] = kJmSourceId;
-            data["chapter_id"] = chapter_id;
-            data["error_message"] = exc.what();
-            data["pages"] = json::JsonValue{json::array_t{}};
-            return data;
-        }
+        json::JsonValue data;
+        data["source_id"] = kJmSourceId;
+        data["chapter_id"] = chapter_id;
+        data["error_message"] = error;
+        data["pages"] = json::JsonValue{json::array_t{}};
+        return data;
     }
     if (source_id == kPicacgSourceId)
     {
         const auto sep = chapter_id.find(':');
         const std::string comic_id = sep != std::string::npos ? chapter_id.substr(0, sep) : chapter_id;
-        try
+        json::JsonValue result;
+        std::string error;
+        if (PicacgPages(comic_id, chapter_id, &result, &error))
         {
-            return PicacgPages(comic_id, chapter_id);
+            return result;
         }
-        catch (const std::exception& exc)
-        {
-            json::JsonValue data;
-            data["source_id"] = kPicacgSourceId;
-            data["chapter_id"] = chapter_id;
-            data["error_message"] = exc.what();
-            data["pages"] = json::JsonValue{json::array_t{}};
-            return data;
-        }
+        json::JsonValue data;
+        data["source_id"] = kPicacgSourceId;
+        data["chapter_id"] = chapter_id;
+        data["error_message"] = error;
+        data["pages"] = json::JsonValue{json::array_t{}};
+        return data;
     }
 
     json::JsonValue data;
@@ -520,11 +540,26 @@ json::JsonValue R18SourceService::Pages(const std::string& source_id, const std:
 
 R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const std::string& image_url)
 {
+    std::string dispatch_error;
+    if (!CanDispatchSource(source_id, &dispatch_error))
+        return detail::FailedImage(dispatch_error);
+
     if (source_id == kJmSourceId && !image_url.empty())
         return JmFetchImage(image_cache_root_, image_url);
     if (source_id == kPicacgSourceId && !image_url.empty())
         return PicacgFetchImage(image_cache_root_, image_url);
     return detail::PlaceholderImage("R18 Source Image", "preview");
+}
+
+bool R18SourceService::CanDispatchSource(const std::string& source_id, std::string* error)
+{
+    const auto source = SourceSnapshot(source_id);
+    if (source_service::modules::ShouldDispatchSource(source.has_value(), source && source->enabled))
+        return true;
+    if (error != nullptr)
+        *error = source ? source_service::modules::SourceDisabledMessage()
+                        : source_service::modules::SourceNotFoundMessage();
+    return false;
 }
 
 std::optional<R18SourceRecord> R18SourceService::SourceSnapshot(const std::string& source_id)
@@ -541,9 +576,15 @@ std::optional<R18SourceRecord> R18SourceService::SourceSnapshot(const std::strin
 void R18SourceService::LoadLocked()
 {
     const auto manifest_path = data_root_ / "sources.json";
-    const bool has_shared_manifest = std::filesystem::exists(manifest_path);
+    std::error_code ec;
+    const bool has_shared_manifest = std::filesystem::exists(manifest_path, ec) && !ec;
     LoadManifestLocked(manifest_path);
-    const auto legacy_root = std::filesystem::current_path() / "data" / "r18" / "sources";
+    const auto cwd = std::filesystem::current_path(ec);
+    if (ec)
+    {
+        return;
+    }
+    const auto legacy_root = cwd / "data" / "r18" / "sources";
     if (!has_shared_manifest && legacy_root != data_root_)
     {
         const auto before = sources_.size();

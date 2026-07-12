@@ -6,8 +6,9 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
+
+#include "runtime/ExplicitThread.hpp"
 
 namespace memochat::runtime
 {
@@ -23,6 +24,11 @@ public:
     bool IsConnected() const
     {
         return _connected.load();
+    }
+
+    const std::string& startupError() const noexcept
+    {
+        return _startup_error;
     }
 
     bool Get(const std::string& key, std::string& value);
@@ -44,8 +50,9 @@ private:
 
     std::mutex _watch_mutex;
     std::vector<WatchCallback> _watch_callbacks;
-    std::thread _watch_thread;
-    std::thread _connect_thread;
+    ExplicitThread _watch_thread;
+    ExplicitThread _connect_thread;
+    std::string _startup_error;
 };
 
 class EtcdConfig
@@ -62,7 +69,15 @@ public:
         return _client && _client->IsConnected();
     }
 
+    const std::string& startupError() const noexcept
+    {
+        return _client->startupError();
+    }
+
     bool Get(const std::string& section, const std::string& key, std::string& value);
+    bool Set(const std::string& section, const std::string& key, const std::string& value, int64_t ttl = 0);
+    bool Delete(const std::string& section, const std::string& key);
+    std::vector<std::pair<std::string, std::string>> GetAll(const std::string& prefix);
     void SetChangeCallback(ChangeCallback callback);
 
     void StartWatch();

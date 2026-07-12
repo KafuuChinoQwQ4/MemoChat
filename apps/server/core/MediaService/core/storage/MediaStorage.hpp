@@ -9,6 +9,9 @@ class IMediaStorage
 public:
     virtual ~IMediaStorage() = default;
 
+    virtual bool Ready() const noexcept = 0;
+    virtual const std::string& StartupError() const noexcept = 0;
+
     virtual bool StoreMergedFile(const std::string& media_type,
                                  const std::string& media_key,
                                  const std::string& origin_file_name,
@@ -33,6 +36,9 @@ class LocalMediaStorage final : public IMediaStorage
 public:
     explicit LocalMediaStorage(const std::filesystem::path& uploads_root = {});
 
+    bool Ready() const noexcept override;
+    const std::string& StartupError() const noexcept override;
+
     bool StoreMergedFile(const std::string& media_type,
                          const std::string& media_key,
                          const std::string& origin_file_name,
@@ -55,7 +61,10 @@ public:
 private:
     std::filesystem::path _uploads_root;
     std::string _public_base_url;
+    std::string _startup_error;
     bool _allow_public_redirect = false;
 };
 
+bool InitializeMediaStorage(std::string* error = nullptr);
+void ShutdownMediaStorage();
 IMediaStorage& GetMediaStorage();

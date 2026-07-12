@@ -1,6 +1,5 @@
 #include "PostgresMgr.hpp"
 #include "logging/Logger.hpp"
-
 import memochat.chat.postgres_mgr_algorithms;
 
 namespace postgres_mgr_modules = memochat::chat::persistence::postgres_mgr::modules;
@@ -19,21 +18,29 @@ void PostgresMgr::EnsurePostgresDaoInitialized(PostgresMgr* mgr)
     {
         return;
     }
-    try
-    {
-        mgr->_dao = std::make_unique<PostgresDao>();
-    }
-    catch (const std::exception& e)
+    mgr->_dao = std::make_unique<PostgresDao>();
+    if (!mgr->_dao->Ready())
     {
         memolog::LogError(postgres_mgr_modules::InitFailureEvent(),
                           postgres_mgr_modules::InitFailureMessage(),
-                          {{"error", e.what()}});
-        throw;
+                          {{"error", mgr->_dao->startupError()}});
     }
 }
 
 PostgresMgr::PostgresMgr()
 {
+}
+
+bool PostgresMgr::Ready()
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao != nullptr && _dao->Ready();
+}
+
+const std::string& PostgresMgr::startupError() const noexcept
+{
+    static const std::string unavailable = "PostgresDao is not initialized";
+    return _dao == nullptr ? unavailable : _dao->startupError();
 }
 
 int PostgresMgr::RegUser(const std::string& name, const std::string& email, const std::string& pwd)

@@ -1,4 +1,5 @@
 #include "AuthLoginRateLimiter.hpp"
+#include "AuthLocalFallbackCounterStore.hpp"
 
 #include "common_lua_scripts.hpp"
 #include "ConfigMgr.hpp"
@@ -6,13 +7,11 @@
 #include "logging/Logger.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
-#include <chrono>
 #include <cstdlib>
-#include <mutex>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -42,6 +41,7 @@ constexpr int kDefaultResetPasswordIpMaxRequests = 30;
 constexpr int kDefaultAuthRefreshWindowSec = 60;
 constexpr int kDefaultAuthRefreshSubjectMaxRequests = 20;
 constexpr int kDefaultAuthRefreshIpMaxRequests = 120;
+constexpr std::size_t kLocalFallbackCounterCapacity = 50000;
 
 std::string Trim(std::string value)
 {
@@ -106,14 +106,13 @@ int ConfigInt(const std::string& section, const std::string& key, int default_va
     {
         return default_value;
     }
-    try
-    {
-        return std::clamp(std::stoi(raw), min_value, max_value);
-    }
-    catch (...)
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (ec != std::errc{} || ptr != raw.data() + raw.size())
     {
         return default_value;
     }
+    return std::clamp(value, min_value, max_value);
 }
 
 int LoginConfigInt(const std::string& key, int default_value, int min_value, int max_value)
@@ -144,6 +143,7 @@ std::string IpKey(const std::string& ip)
 struct RedisCounter
 {
     bool ok = false;
+    bool capacity_exhausted = false;
     long long count = 0;
     int ttl_sec = 0;
 };
@@ -210,42 +210,26 @@ std::string NormalizeBucketValue(AuthRateLimitBucket bucket, std::string_view va
     return normalized;
 }
 
-struct LocalCounterState
+AuthLocalFallbackCounterStore& LocalFallbackCounterStore()
 {
-    long long count = 0;
-    std::chrono::steady_clock::time_point expires_at{};
-};
-
-std::mutex& LocalFallbackMutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-std::unordered_map<std::string, LocalCounterState>& LocalFallbackCounters()
-{
-    static std::unordered_map<std::string, LocalCounterState> counters;
-    return counters;
+    static AuthLocalFallbackCounterStore store(kLocalFallbackCounterCapacity);
+    return store;
 }
 
 RedisCounter IncrementLocalFallbackCounter(const std::string& key, int window_sec)
 {
-    const auto now = std::chrono::steady_clock::now();
-    const auto ttl = std::chrono::seconds(window_sec);
-    std::lock_guard<std::mutex> lock(LocalFallbackMutex());
-    auto& state = LocalFallbackCounters()[key];
-    if (state.expires_at <= now)
-    {
-        state.count = 0;
-        state.expires_at = now + ttl;
-    }
-    ++state.count;
-
+    const auto fallback =
+        LocalFallbackCounterStore().Increment(key, window_sec, AuthLocalFallbackCounterStore::Clock::now());
     RedisCounter result;
+    result.ttl_sec = window_sec;
+    if (fallback.status == AuthLocalFallbackCounterStatus::CapacityExhausted)
+    {
+        result.capacity_exhausted = true;
+        return result;
+    }
     result.ok = true;
-    result.count = state.count;
-    result.ttl_sec =
-        std::max(1, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(state.expires_at - now).count()));
+    result.count = fallback.count;
+    result.ttl_sec = fallback.ttl_sec;
     return result;
 }
 
@@ -293,13 +277,11 @@ RedisCounter ReadCounter(const std::string& key, int window_sec)
         release();
         return result;
     }
-    try
+    int64_t count = 0;
+    const auto [ptr, ec] = std::from_chars(reply->str, reply->str + reply->len, count);
+    if (ec == std::errc{} && ptr == reply->str + reply->len)
     {
-        result.count = std::stoll(reply->str);
-    }
-    catch (...)
-    {
-        result.count = 0;
+        result.count = count;
     }
     freeReplyObject(reply);
 
@@ -385,6 +367,13 @@ void ApplyRedisCounterError(AuthLoginRateLimitResult& result, const std::string&
 
     result.fallback_active = true;
     const auto fallback = IncrementLocalFallbackCounter(std::string(kFallbackPrefix) + key, window_sec);
+    if (fallback.capacity_exhausted)
+    {
+        result.redis_error = true;
+        result.rate_limited = true;
+        result.retry_after_sec = std::max(result.retry_after_sec, window_sec);
+        return;
+    }
     if (fallback.count > max_requests)
     {
         result.rate_limited = true;

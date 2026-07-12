@@ -1,11 +1,11 @@
 #pragma once
 
 #include "KafkaConfig.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <atomic>
 #include <functional>
 #include <string>
-#include <thread>
 
 class ChatOutboxService
 {
@@ -18,7 +18,7 @@ public:
                       PublishRepairTaskFn publish_repair_task_fn = nullptr);
     ~ChatOutboxService();
 
-    void Start();
+    bool Start(std::string* error = nullptr);
     void Stop();
 
 private:
@@ -28,5 +28,5 @@ private:
     PublishFn _publish_fn;
     PublishRepairTaskFn _publish_repair_task_fn;
     std::atomic<bool> _stop{false};
-    std::thread _thread;
+    memochat::runtime::ExplicitThread _thread;
 };

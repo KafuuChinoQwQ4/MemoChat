@@ -8,14 +8,13 @@ add_executable(AIServer
     AIServiceJsonDtos.cpp
     AIServiceJsonMapper.cpp
     ConfigMgr.cpp
-    ConversationContext.cpp
     db/AISessionRepo.cpp
     db/AISmartLogRepo.cpp
 )
 
 set_target_properties(AIServer PROPERTIES FOLDER "Server")
 memochat_configure_server_target(AIServer)
-target_link_libraries(AIServer PRIVATE memochat_boost_stubs ${MEMOCHAT_PQXX_TARGET})
+target_link_libraries(AIServer PRIVATE memochat_boost_stubs ${MEMOCHAT_POSTGRES_TARGET})
 if(WIN32)
     # Environment variables: WINSDK_LIB_UM, WINSDK_LIB_UCRT, VC_TOOLS_LIB
     if(DEFINED ENV{WINSDK_LIB_UM} AND NOT "$ENV{WINSDK_LIB_UM}" STREQUAL "")
@@ -38,7 +37,6 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
         MODULES
             memochat.ai.client_algorithms=cxx_modules/AIServiceClient.cppm
             memochat.ai.core_algorithms=cxx_modules/AIServiceCore.cppm
-            memochat.ai.conversation_context_algorithms=cxx_modules/ConversationContext.cppm
             memochat.ai.impl_algorithms=cxx_modules/AIServiceImpl.cppm
             memochat.ai.json_dto_algorithms=cxx_modules/AIServiceJsonDto.cppm
             memochat.ai.repository_algorithms=cxx_modules/AIServerRepository.cppm
@@ -49,7 +47,6 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             AIServiceImpl.cpp
             AIServiceAlgorithms.cpp
             AIServiceJsonDtos.cpp
-            ConversationContext.cpp
             db/AISessionRepo.cpp
             db/AISmartLogRepo.cpp
     )

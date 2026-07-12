@@ -1,10 +1,20 @@
 #pragma once
 #include "common/proto/ai_message.pb.h"
+#include <expected>
 #include <grpcpp/grpcpp.h>
 #include <string>
 #include <vector>
 #include <ctime>
 #include <memory>
+
+enum class AISessionCreateError
+{
+    UuidGenerationFailed,
+    StorageUnavailable,
+    InsertFailed,
+};
+
+using AISessionCreateResult = std::expected<std::string, AISessionCreateError>;
 
 class AISessionRepo
 {
@@ -12,7 +22,7 @@ public:
     explicit AISessionRepo();
     ~AISessionRepo();
 
-    std::string Create(int32_t uid, const std::string& model_type, const std::string& model_name);
+    AISessionCreateResult Create(int32_t uid, const std::string& model_type, const std::string& model_name);
 
     bool SoftDelete(int32_t uid, const std::string& session_id);
 

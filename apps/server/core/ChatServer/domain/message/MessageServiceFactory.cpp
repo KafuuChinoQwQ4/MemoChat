@@ -5,8 +5,6 @@
 #include "PrivateMessageService.hpp"
 #include "logging/Logger.hpp"
 
-#include <stdexcept>
-
 import memochat.chat.service_factory_algorithms;
 
 std::unique_ptr<IPrivateMessageService> CreateInProcessPrivateMessageService(ISessionRegistry* session_registry,
@@ -41,7 +39,8 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
                                                                     IMessageRepository* message_repository,
                                                                     IRelationRepository* relation_repository,
                                                                     IDeliveryGateway* delivery_gateway,
-                                                                    IEventPublisher* event_publisher)
+                                                                    IEventPublisher* event_publisher,
+                                                                    std::string* error)
 {
     const auto backend = message_service_config.MessageServiceBackend();
     if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
@@ -58,7 +57,13 @@ std::unique_ptr<IPrivateMessageService> CreatePrivateMessageService(const IMessa
         const auto endpoint = message_service_config.MessageServiceEndpoint();
         if (endpoint.empty())
         {
-            throw std::runtime_error("Message service remote endpoint is empty: " + backend);
+            const std::string message = "Message service remote endpoint is empty: " + backend;
+            if (error != nullptr)
+            {
+                *error = message;
+            }
+            memolog::LogError("chat.message_service.endpoint_missing", message, {{"configured_backend", backend}});
+            return nullptr;
         }
         return std::make_unique<MessageGrpcServiceAdapter>(endpoint);
     }
@@ -78,7 +83,8 @@ std::unique_ptr<IGroupMessageService> CreateGroupMessageService(const IMessageSe
                                                                 IMessageRepository* message_repository,
                                                                 IRelationRepository* relation_repository,
                                                                 IDeliveryGateway* delivery_gateway,
-                                                                IEventPublisher* event_publisher)
+                                                                IEventPublisher* event_publisher,
+                                                                std::string* error)
 {
     const auto backend = message_service_config.MessageServiceBackend();
     if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
@@ -93,7 +99,13 @@ std::unique_ptr<IGroupMessageService> CreateGroupMessageService(const IMessageSe
         const auto endpoint = message_service_config.MessageServiceEndpoint();
         if (endpoint.empty())
         {
-            throw std::runtime_error("Message service remote endpoint is empty: " + backend);
+            const std::string message = "Message service remote endpoint is empty: " + backend;
+            if (error != nullptr)
+            {
+                *error = message;
+            }
+            memolog::LogError("chat.message_service.endpoint_missing", message, {{"configured_backend", backend}});
+            return nullptr;
         }
         return std::make_unique<MessageGrpcServiceAdapter>(endpoint);
     }

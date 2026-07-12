@@ -1,14 +1,11 @@
 #pragma once
+#include "db/AISessionRepo.hpp"
 #include <grpcpp/grpcpp.h>
 #include "common/proto/ai_message.grpc.pb.h"
 #include <memory>
 #include <string>
-#include <vector>
-#include <unordered_map>
 
 class AIServiceClient;
-class AISessionRepo;
-class ConversationContext;
 
 class AIServiceCore
 {
@@ -59,7 +56,8 @@ public:
     grpc::Status HandleConfirm(const ai::AIConfirmReq& req, ai::AIConfirmRsp* reply);
 
 private:
-    std::string GetOrCreateSessionId(int32_t uid, const std::string& model_type, const std::string& model_name);
+    AISessionCreateResult
+    GetOrCreateSessionId(int32_t uid, const std::string& model_type, const std::string& model_name);
     bool SaveUserMessage(const std::string& session_id,
                          int32_t uid,
                          const std::string& content,
@@ -72,7 +70,4 @@ private:
 
     std::unique_ptr<AIServiceClient> _ai_client;
     std::unique_ptr<AISessionRepo> _session_repo;
-
-    std::mutex _session_cache_mtx;
-    std::unordered_map<std::string, std::shared_ptr<ConversationContext>> _session_cache;
 };

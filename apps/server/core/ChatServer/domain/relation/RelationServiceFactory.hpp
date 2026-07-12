@@ -9,6 +9,7 @@
 #include "ports/IRelationService.hpp"
 
 #include <memory>
+#include <string>
 
 std::unique_ptr<IRelationService> CreateInProcessRelationService(IRelationRepository* relation_repository,
                                                                  IRelationBootstrapCache* relation_bootstrap_cache,
@@ -21,4 +22,5 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
                                                         IRelationBootstrapCache* relation_bootstrap_cache,
                                                         IDeliveryGateway* delivery_gateway,
                                                         IDeliveryTaskPublisher* task_publisher,
-                                                        IEventPublisher* event_publisher);
+                                                        IEventPublisher* event_publisher,
+                                                        std::string* error = nullptr);

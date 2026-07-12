@@ -3,7 +3,6 @@
 #include "RelationQueryGrpcClient.hpp"
 #include "logging/Logger.hpp"
 
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -95,20 +94,27 @@ private:
 } // namespace
 
 std::unique_ptr<IRelationQueryService>
-CreateRemoteRelationQueryService(const IRelationQueryServiceConfig& relation_query_service_config)
+CreateRemoteRelationQueryService(const IRelationQueryServiceConfig& relation_query_service_config, std::string* error)
 {
     const auto backend = relation_query_service_config.RelationQueryServiceBackend();
     const auto endpoint = relation_query_service_config.RelationQueryServiceEndpoint();
     if (endpoint.empty())
     {
-        throw std::runtime_error("Relation query service remote endpoint is empty: " + backend);
+        const std::string message = "Relation query service remote endpoint is empty: " + backend;
+        if (error != nullptr)
+        {
+            *error = message;
+        }
+        memolog::LogError("chat.relation_query_service.endpoint_missing", message, {{"configured_backend", backend}});
+        return nullptr;
     }
     return std::make_unique<RelationQueryGrpcClient>(endpoint);
 }
 
 IRelationQueryService* SelectRelationQueryService(const IRelationQueryServiceConfig& relation_query_service_config,
                                                   IRelationQueryService* inprocess_relation_query_service,
-                                                  std::unique_ptr<IRelationQueryService>& remote_relation_query_service)
+                                                  std::unique_ptr<IRelationQueryService>& remote_relation_query_service,
+                                                  std::string* error)
 {
     remote_relation_query_service.reset();
 
@@ -119,7 +125,11 @@ IRelationQueryService* SelectRelationQueryService(const IRelationQueryServiceCon
     }
     if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
-        auto primary = CreateRemoteRelationQueryService(relation_query_service_config);
+        auto primary = CreateRemoteRelationQueryService(relation_query_service_config, error);
+        if (!primary)
+        {
+            return nullptr;
+        }
         if (inprocess_relation_query_service != nullptr)
         {
             remote_relation_query_service =

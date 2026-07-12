@@ -89,6 +89,59 @@ def test_focused_gateway_configs_are_renderable_from_chart_configmap() -> None:
         assert f"Port={{{{ .Values.focusedGateways.services.{expected['service']}.port }}}}" in configmap
 
 
+def test_r18_gateway_uses_account_policy_db_and_operator_only_source_secret() -> None:
+    configmap = read_chart_file("templates/bootstrap/configmap-services.yaml")
+    focused = read_chart_file("templates/prod/focused-gateways.yaml")
+    secret = read_chart_file("templates/bootstrap/secret.yaml")
+
+    r18_config = configmap.split("  r18gateway.ini: |", 1)[1].split("  register.ini: |", 1)[0]
+    assert "User={{ .Values.externalServices.postgres.roles.account }}" in r18_config
+    assert "Database=memo_account" in r18_config
+    assert "[R18SourceAdmin]" in r18_config
+    assert "AdminKey=" in r18_config
+    assert "[R18Picacg]" in r18_config
+    assert "allowedImageHosts" in r18_config
+    assert "MEMOCHAT_R18SOURCEADMIN_ADMINKEY" in focused
+    assert "r18-source-admin-key" in focused
+    assert "secrets.r18SourceAdminKey" in secret
+
+
+def test_r18_account_policy_schema_is_migrated_before_gateway_rollout() -> None:
+    init = read_chart_file("templates/bootstrap/configmap-ops-init.yaml")
+    jobs = read_chart_file("templates/bootstrap/jobs.yaml")
+    entrypoint = (ROOT / "apps" / "server" / "core" / "R18Service" / "app" / "R18GatewayServer.cpp").read_text(
+        encoding="utf-8"
+    )
+
+    for token in (
+        "009_memo_account_schema.sql: |",
+        "013_r18_access_policy.sql: |",
+        "adult_attested_at_ms",
+        "r18_access_state",
+        "ck_user_r18_access_state",
+    ):
+        assert token in init
+    assert "-d memo_account" in jobs
+    assert "-f /migrations/009_memo_account_schema.sql" in jobs
+    assert "-f /migrations/013_r18_access_policy.sql" in jobs
+    assert "-v ON_ERROR_STOP=1" in jobs
+    assert ".postgres = true, .redis = true" in entrypoint
+
+
+def test_account_focused_services_do_not_restore_rabbit_cache_invalidation() -> None:
+    configmap = read_chart_file("templates/bootstrap/configmap-services.yaml")
+    focused = read_chart_file("templates/prod/focused-gateways.yaml")
+
+    blocks = (
+        configmap.split("  register.ini: |", 1)[1].split("  login.ini: |", 1)[0],
+        configmap.split("  login.ini: |", 1)[1].split("  account.ini: |", 1)[0],
+        configmap.split("  account.ini: |", 1)[1].split("  chat.ini: |", 1)[0],
+    )
+    for block in blocks:
+        assert "[RabbitMQ]" not in block
+    assert "MEMOCHAT_RABBITMQ_PASSWORD" not in focused
+
+
 def test_kubernetes_envoy_routes_each_domain_to_focused_cluster() -> None:
     envoy = read_chart_file("templates/lb/envoy.yaml")
 

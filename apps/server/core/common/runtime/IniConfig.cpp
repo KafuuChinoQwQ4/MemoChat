@@ -161,7 +161,12 @@ std::string IniSection::GetValue(const std::string& key) const
 
 std::string IniConfig::ResolvePath(const std::string& overridePath)
 {
-    boost::filesystem::path currentPath = boost::filesystem::current_path();
+    boost::system::error_code error;
+    boost::filesystem::path currentPath = boost::filesystem::current_path(error);
+    if (error)
+    {
+        currentPath = ".";
+    }
     boost::filesystem::path configPath =
         overridePath.empty() ? (currentPath / "config.ini") : boost::filesystem::path(overridePath);
     return configPath.string();
@@ -188,16 +193,8 @@ IniConfig::IniConfig(const std::string& configPath)
     const auto resolvedPath = ResolvePath(configPath);
     std::cout << "Config path: " << resolvedPath << std::endl;
 
-    try
+    if (!LoadIniFile(resolvedPath, _config))
     {
-        if (!LoadIniFile(resolvedPath, _config))
-        {
-            return;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[IniConfig] Error loading config file '" << resolvedPath << "': " << e.what() << std::endl;
         return;
     }
 

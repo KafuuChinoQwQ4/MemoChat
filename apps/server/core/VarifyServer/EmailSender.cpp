@@ -16,9 +16,9 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
+#include <charconv>
 #include <chrono>
 #include <cstring>
-#include <thread>
 #include <random>
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
@@ -128,11 +128,10 @@ bool parse_smtp_status_line(const std::string& line, int* code, bool* more_lines
     if (!code || !more_lines || !email_sender_modules::HasStatusCodePrefix(line.size()))
         return false;
 
-    try
-    {
-        *code = std::stoi(line.substr(0, 3));
-    }
-    catch (...)
+    const char* begin = line.data();
+    const char* end = begin + 3;
+    const auto [ptr, ec] = std::from_chars(begin, end, *code);
+    if (ec != std::errc{} || ptr != end)
     {
         return false;
     }
@@ -184,12 +183,12 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
     int port = email_sender_modules::DefaultSmtpPort();
     if (!port_str.empty())
     {
-        try
+        int configured_port = 0;
+        const auto [ptr, ec] = std::from_chars(port_str.data(), port_str.data() + port_str.size(), configured_port);
+        if (ec == std::errc{} && ptr == port_str.data() + port_str.size() && configured_port > 0 &&
+            configured_port <= 65535)
         {
-            port = std::stoi(port_str);
-        }
-        catch (...)
-        {
+            port = configured_port;
         }
     }
 

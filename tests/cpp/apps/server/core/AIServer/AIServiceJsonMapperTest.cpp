@@ -1,13 +1,11 @@
 #include "AIServiceJsonMapper.hpp"
 
 #include "AIServiceJsonDtos.hpp"
-#include "ConversationContext.hpp"
 #include "reflection/StdReflectionIntrospection.hpp"
 
 #include <gtest/gtest.h>
 
 #include <array>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -25,11 +23,6 @@ static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIKn
     std::array<std::string_view, 2>{"code", "knowledge_bases"}));
 static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIKbDeleteJsonDto>(
     std::array<std::string_view, 2>{"code", "message"}));
-static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::AIChatMessageJsonDto>(
-    std::array<std::string_view, 4>{"msg_id", "role", "content", "created_at"}));
-static_assert(memochat::reflection::FieldNamesEqual<ai_service_json_mapper::ConversationContextJsonDto>(
-    std::array<std::string_view,
-               7>{"session_id", "uid", "model_type", "model_name", "created_at", "last_active_at", "messages"}));
 #endif
 
 namespace
@@ -295,102 +288,4 @@ TEST(AIServiceJsonMapperTest, KnowledgeBaseDeletePreservesLegacyMissingMessageDe
 
     EXPECT_EQ(reply.code(), 0);
     EXPECT_TRUE(reply.message().empty());
-}
-
-TEST(ConversationContextJsonTest, RoundTripsStableContextFields)
-{
-    ConversationContext context;
-    context.session_id = "session-1";
-    context.uid = 42;
-    context.model_type = "ollama";
-    context.model_name = "qwen3:4b";
-    context.created_at = 1000;
-    context.last_active_at = 2000;
-
-    ChatMessage user_message;
-    user_message.msg_id = "msg-1";
-    user_message.role = "user";
-    user_message.content = "hello";
-    user_message.created_at = 1100;
-    context.messages.push_back(user_message);
-
-    ChatMessage assistant_message;
-    assistant_message.msg_id = "msg-2";
-    assistant_message.role = "assistant";
-    assistant_message.content = "world";
-    assistant_message.created_at = 1200;
-    context.messages.push_back(assistant_message);
-
-    const std::string body = context.ToJson();
-    memochat::json::JsonValue root;
-    ASSERT_TRUE(memochat::json::glaze_parse(root, body));
-    EXPECT_EQ(root["session_id"].asString(), "session-1");
-    EXPECT_EQ(root["uid"].asInt(), 42);
-    const memochat::json::JsonValue messages = root["messages"];
-    ASSERT_TRUE(messages.isArray());
-    ASSERT_EQ(messages.size(), 2);
-    EXPECT_EQ(messages[0]["role"].asString(), "user");
-    EXPECT_EQ(messages[1]["content"].asString(), "world");
-
-    const ConversationContext decoded = ConversationContext::FromJson(body);
-    EXPECT_EQ(decoded.session_id, "session-1");
-    EXPECT_EQ(decoded.uid, 42);
-    EXPECT_EQ(decoded.model_type, "ollama");
-    EXPECT_EQ(decoded.model_name, "qwen3:4b");
-    EXPECT_EQ(decoded.created_at, 1000);
-    EXPECT_EQ(decoded.last_active_at, 2000);
-    ASSERT_EQ(decoded.messages.size(), 2);
-    EXPECT_EQ(decoded.messages[0].msg_id, "msg-1");
-    EXPECT_EQ(decoded.messages[1].role, "assistant");
-}
-
-TEST(ConversationContextJsonTest, FromJsonKeepsMissingAndWrongTypeDefaults)
-{
-    const ConversationContext decoded = ConversationContext::FromJson(R"json(
-        {
-          "session_id": 7,
-          "uid": "bad",
-          "model_type": false,
-          "model_name": [],
-          "created_at": "bad",
-          "last_active_at": "bad",
-          "messages": [
-            {
-              "msg_id": 9,
-              "role": {},
-              "content": [],
-              "created_at": "bad"
-            }
-          ]
-        }
-    )json");
-
-    EXPECT_TRUE(decoded.session_id.empty());
-    EXPECT_EQ(decoded.uid, 0);
-    EXPECT_TRUE(decoded.model_type.empty());
-    EXPECT_TRUE(decoded.model_name.empty());
-    EXPECT_EQ(decoded.created_at, 0);
-    EXPECT_EQ(decoded.last_active_at, 0);
-    ASSERT_EQ(decoded.messages.size(), 1);
-    EXPECT_TRUE(decoded.messages[0].msg_id.empty());
-    EXPECT_TRUE(decoded.messages[0].role.empty());
-    EXPECT_TRUE(decoded.messages[0].content.empty());
-    EXPECT_EQ(decoded.messages[0].created_at, 0);
-}
-
-TEST(ConversationContextJsonTest, FromJsonRejectsMalformedJsonAndIgnoresNonArrayMessages)
-{
-    EXPECT_THROW(static_cast<void>(ConversationContext::FromJson("not-json")), std::runtime_error);
-
-    const ConversationContext decoded = ConversationContext::FromJson(R"json(
-        {
-          "session_id": "session-1",
-          "uid": 42,
-          "messages": {}
-        }
-    )json");
-
-    EXPECT_EQ(decoded.session_id, "session-1");
-    EXPECT_EQ(decoded.uid, 42);
-    EXPECT_TRUE(decoded.messages.empty());
 }

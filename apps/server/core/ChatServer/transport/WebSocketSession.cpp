@@ -44,6 +44,16 @@ WebSocketSession::WebSocketSession(tcp::socket&& socket,
 
 WebSocketSession::~WebSocketSession() = default;
 
+bool WebSocketSession::Ready() const noexcept
+{
+    return _state.Ready();
+}
+
+const std::string& WebSocketSession::startupError() const noexcept
+{
+    return _state.startupError();
+}
+
 std::shared_ptr<WebSocketSession> WebSocketSession::Self()
 {
     return shared_from_this();

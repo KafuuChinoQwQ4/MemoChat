@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdlib>
 #include <functional>
 #include <set>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -143,15 +143,19 @@ inline bool ParseOptionalFlag(const std::string& raw, bool fallback)
     return fallback;
 }
 
-inline std::string
-ReadRequiredValue(const ConfigValueGetter& getter, const std::string& section, const std::string& key)
+inline bool ReadRequiredValue(const ConfigValueGetter& getter,
+                              const std::string& section,
+                              const std::string& key,
+                              std::string& value,
+                              std::string& error)
 {
-    const std::string value = TrimCopy(getter(section, key));
+    value = TrimCopy(getter(section, key));
     if (value.empty())
     {
-        throw std::runtime_error("missing required cluster config: [" + section + "] " + key);
+        error = "missing required cluster config: [" + section + "] " + key;
+        return false;
     }
-    return value;
+    return true;
 }
 
 inline std::string
@@ -160,12 +164,16 @@ ReadOptionalValue(const ConfigValueGetter& getter, const std::string& section, c
     return getter ? TrimCopy(getter(section, key)) : "";
 }
 
-inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& getter,
-                                                     const std::string& self_node_name = "")
+inline bool LoadStaticChatClusterConfig(const ConfigValueGetter& getter,
+                                        const std::string& self_node_name,
+                                        ChatClusterConfig& out,
+                                        std::string& error)
 {
+    error.clear();
     if (!getter)
     {
-        throw std::runtime_error("cluster config getter is not set");
+        error = "cluster config getter is not set";
+        return false;
     }
 
     ChatClusterConfig config;
@@ -176,13 +184,20 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
     }
     if (config.discovery_mode != "static")
     {
-        throw std::runtime_error("unsupported cluster discovery mode: " + config.discovery_mode);
+        error = "unsupported cluster discovery mode: " + config.discovery_mode;
+        return false;
     }
 
-    const std::vector<std::string> node_sections = SplitCsv(ReadRequiredValue(getter, "Cluster", "Nodes"));
+    std::string nodes_value;
+    if (!ReadRequiredValue(getter, "Cluster", "Nodes", nodes_value, error))
+    {
+        return false;
+    }
+    const std::vector<std::string> node_sections = SplitCsv(nodes_value);
     if (node_sections.empty())
     {
-        throw std::runtime_error("cluster config has no node sections");
+        error = "cluster config has no node sections";
+        return false;
     }
 
     std::unordered_set<std::string> seen_names;
@@ -195,9 +210,12 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
     for (const auto& section : node_sections)
     {
         ChatNodeDescriptor node;
-        node.name = ReadRequiredValue(getter, section, "Name");
-        node.tcp_host = ReadRequiredValue(getter, section, "TcpHost");
-        node.tcp_port = ReadRequiredValue(getter, section, "TcpPort");
+        if (!ReadRequiredValue(getter, section, "Name", node.name, error) ||
+            !ReadRequiredValue(getter, section, "TcpHost", node.tcp_host, error) ||
+            !ReadRequiredValue(getter, section, "TcpPort", node.tcp_port, error))
+        {
+            return false;
+        }
         node.quic_host = ReadOptionalValue(getter, section, "QuicHost");
         node.quic_port = ReadOptionalValue(getter, section, "QuicPort");
         node.ws_enabled = ParseOptionalFlag(getter(section, "WsEnabled"), false);
@@ -210,19 +228,24 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
         node.wt_port = ReadOptionalValue(getter, section, "WtPort");
         node.wt_path = ReadOptionalValue(getter, section, "WtPath");
         node.wt_tls = ParseOptionalFlag(getter(section, "WtTls"), false);
-        node.rpc_host = ReadRequiredValue(getter, section, "RpcHost");
-        node.rpc_port = ReadRequiredValue(getter, section, "RpcPort");
+        if (!ReadRequiredValue(getter, section, "RpcHost", node.rpc_host, error) ||
+            !ReadRequiredValue(getter, section, "RpcPort", node.rpc_port, error))
+        {
+            return false;
+        }
         node.enabled = ParseEnabledFlag(getter(section, "Enabled"));
 
         if (!seen_names.insert(node.name).second)
         {
-            throw std::runtime_error("duplicate chat node name: " + node.name);
+            error = "duplicate chat node name: " + node.name;
+            return false;
         }
 
         const auto tcp_endpoint = std::make_pair(node.tcp_host, node.tcp_port);
         if (!tcp_endpoints.insert(tcp_endpoint).second)
         {
-            throw std::runtime_error("duplicate chat tcp endpoint: " + node.tcp_host + ":" + node.tcp_port);
+            error = "duplicate chat tcp endpoint: " + node.tcp_host + ":" + node.tcp_port;
+            return false;
         }
 
         if (!node.quic_host.empty() && !node.quic_port.empty())
@@ -230,7 +253,8 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
             const auto quic_endpoint = std::make_pair(node.quic_host, node.quic_port);
             if (!quic_endpoints.insert(quic_endpoint).second)
             {
-                throw std::runtime_error("duplicate chat quic endpoint: " + node.quic_host + ":" + node.quic_port);
+                error = "duplicate chat quic endpoint: " + node.quic_host + ":" + node.quic_port;
+                return false;
             }
         }
 
@@ -246,12 +270,14 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
             }
             if (node.ws_port.empty())
             {
-                throw std::runtime_error("missing enabled websocket endpoint port: " + node.name);
+                error = "missing enabled websocket endpoint port: " + node.name;
+                return false;
             }
             const auto ws_endpoint = std::make_pair(node.ws_host, node.ws_port);
             if (!ws_endpoints.insert(ws_endpoint).second)
             {
-                throw std::runtime_error("duplicate chat websocket endpoint: " + node.ws_host + ":" + node.ws_port);
+                error = "duplicate chat websocket endpoint: " + node.ws_host + ":" + node.ws_port;
+                return false;
             }
         }
 
@@ -267,19 +293,22 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
             }
             if (node.wt_port.empty())
             {
-                throw std::runtime_error("missing enabled webtransport endpoint port: " + node.name);
+                error = "missing enabled webtransport endpoint port: " + node.name;
+                return false;
             }
             const auto wt_endpoint = std::make_pair(node.wt_host, node.wt_port);
             if (!wt_endpoints.insert(wt_endpoint).second)
             {
-                throw std::runtime_error("duplicate chat webtransport endpoint: " + node.wt_host + ":" + node.wt_port);
+                error = "duplicate chat webtransport endpoint: " + node.wt_host + ":" + node.wt_port;
+                return false;
             }
         }
 
         const auto rpc_endpoint = std::make_pair(node.rpc_host, node.rpc_port);
         if (!rpc_endpoints.insert(rpc_endpoint).second)
         {
-            throw std::runtime_error("duplicate chat rpc endpoint: " + node.rpc_host + ":" + node.rpc_port);
+            error = "duplicate chat rpc endpoint: " + node.rpc_host + ":" + node.rpc_port;
+            return false;
         }
 
         config.nodes.push_back(node);
@@ -287,7 +316,8 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
 
     if (config.enabledNodes().empty())
     {
-        throw std::runtime_error("cluster config has no enabled chat nodes");
+        error = "cluster config has no enabled chat nodes";
+        return false;
     }
 
     if (!self_node_name.empty())
@@ -295,15 +325,18 @@ inline ChatClusterConfig LoadStaticChatClusterConfig(const ConfigValueGetter& ge
         const ChatNodeDescriptor* self_node = config.findNode(self_node_name);
         if (self_node == nullptr)
         {
-            throw std::runtime_error("self chat node missing from cluster config: " + self_node_name);
+            error = "self chat node missing from cluster config: " + self_node_name;
+            return false;
         }
         if (!self_node->enabled)
         {
-            throw std::runtime_error("self chat node is disabled in cluster config: " + self_node_name);
+            error = "self chat node is disabled in cluster config: " + self_node_name;
+            return false;
         }
     }
 
-    return config;
+    out = std::move(config);
+    return true;
 }
 
 inline std::string GetEnvOrEmpty(const char* name)
@@ -322,15 +355,9 @@ inline int ParsePositiveIntOrDefault(const std::string& raw, int fallback)
     {
         return fallback;
     }
-    try
-    {
-        const int value = std::stoi(raw);
-        return value > 0 ? value : fallback;
-    }
-    catch (...)
-    {
-        return fallback;
-    }
+    int value = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return parsed.ec == std::errc{} && parsed.ptr == raw.data() + raw.size() && value > 0 ? value : fallback;
 }
 
 inline std::string ResolveSelfNodeName(const ConfigValueGetter& getter)
@@ -360,23 +387,36 @@ inline std::string ResolveSelfNodeName(const ConfigValueGetter& getter)
     return self_name;
 }
 
-inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGetter& getter,
-                                                             const std::string& self_node_name = "")
+inline bool LoadK8sStatefulSetChatClusterConfig(const ConfigValueGetter& getter,
+                                                const std::string& self_node_name,
+                                                ChatClusterConfig& out,
+                                                std::string& error)
 {
+    error.clear();
     if (!getter)
     {
-        throw std::runtime_error("cluster config getter is not set");
+        error = "cluster config getter is not set";
+        return false;
     }
 
     ChatClusterConfig config;
     config.discovery_mode = "k8s-statefulset";
 
-    const std::string service_name = ReadRequiredValue(getter, "Cluster", "ServiceName");
-    const std::string namespace_name = ReadRequiredValue(getter, "Cluster", "Namespace");
-    const int replicas = ParsePositiveIntOrDefault(ReadRequiredValue(getter, "Cluster", "Replicas"), 1);
-    const std::string tcp_port = ReadRequiredValue(getter, "Cluster", "TcpPort");
+    std::string service_name;
+    std::string namespace_name;
+    std::string replicas_value;
+    std::string tcp_port;
+    std::string rpc_port;
+    if (!ReadRequiredValue(getter, "Cluster", "ServiceName", service_name, error) ||
+        !ReadRequiredValue(getter, "Cluster", "Namespace", namespace_name, error) ||
+        !ReadRequiredValue(getter, "Cluster", "Replicas", replicas_value, error) ||
+        !ReadRequiredValue(getter, "Cluster", "TcpPort", tcp_port, error) ||
+        !ReadRequiredValue(getter, "Cluster", "RpcPort", rpc_port, error))
+    {
+        return false;
+    }
+    const int replicas = ParsePositiveIntOrDefault(replicas_value, 1);
     const std::string quic_port = ReadOptionalValue(getter, "Cluster", "QuicPort");
-    const std::string rpc_port = ReadRequiredValue(getter, "Cluster", "RpcPort");
     const std::string domain = TrimCopy(getter("Cluster", "Domain"));
     const std::string cluster_domain = domain.empty() ? "cluster.local" : domain;
 
@@ -396,42 +436,52 @@ inline ChatClusterConfig LoadK8sStatefulSetChatClusterConfig(const ConfigValueGe
         node.enabled = true;
         if (!seen_names.insert(node.name).second)
         {
-            throw std::runtime_error("duplicate k8s chat node name: " + node.name);
+            error = "duplicate k8s chat node name: " + node.name;
+            return false;
         }
         config.nodes.push_back(node);
     }
 
     if (config.nodes.empty())
     {
-        throw std::runtime_error("k8s cluster config has no nodes");
+        error = "k8s cluster config has no nodes";
+        return false;
     }
 
     const std::string resolved_self = self_node_name.empty() ? ResolveSelfNodeName(getter) : self_node_name;
     if (!resolved_self.empty() && config.findNode(resolved_self) == nullptr)
     {
-        throw std::runtime_error("self chat node missing from k8s cluster config: " + resolved_self);
+        error = "self chat node missing from k8s cluster config: " + resolved_self;
+        return false;
     }
 
-    return config;
+    out = std::move(config);
+    return true;
 }
 
-inline ChatClusterConfig LoadChatClusterConfig(const ConfigValueGetter& getter, const std::string& self_node_name = "")
+inline bool LoadChatClusterConfig(const ConfigValueGetter& getter,
+                                  const std::string& self_node_name,
+                                  ChatClusterConfig& out,
+                                  std::string& error)
 {
+    error.clear();
     if (!getter)
     {
-        throw std::runtime_error("cluster config getter is not set");
+        error = "cluster config getter is not set";
+        return false;
     }
 
     const std::string discovery_mode = TrimCopy(getter("Cluster", "DiscoveryMode"));
     if (discovery_mode == "k8s-statefulset")
     {
-        return LoadK8sStatefulSetChatClusterConfig(getter, self_node_name);
+        return LoadK8sStatefulSetChatClusterConfig(getter, self_node_name, out, error);
     }
     if (discovery_mode == "etcd")
     {
-        throw std::runtime_error("etcd discovery mode requires EtcdClusterDiscovery class");
+        error = "etcd discovery mode requires EtcdClusterDiscovery class";
+        return false;
     }
-    return LoadStaticChatClusterConfig(getter, self_node_name);
+    return LoadStaticChatClusterConfig(getter, self_node_name, out, error);
 }
 
 } // namespace memochat::cluster

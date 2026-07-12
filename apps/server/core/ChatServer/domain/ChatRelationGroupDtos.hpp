@@ -4,7 +4,6 @@
 #include "json/TypedJsonCodec.hpp"
 
 #include <cstdint>
-#include <exception>
 #include <optional>
 #include <string>
 #include <vector>
@@ -101,18 +100,7 @@ struct ChatDialogRowDto
 
 template <typename T> inline bool WriteChatOutputJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::WriteTypedJson(value, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::WriteTypedJson(value, out, error_out);
 }
 
 template <typename T> inline memochat::json::JsonValue ChatOutputDtoToJsonValue(const T& value)

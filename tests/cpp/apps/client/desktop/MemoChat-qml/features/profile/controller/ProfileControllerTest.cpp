@@ -203,8 +203,8 @@ TEST(ProfileControllerTest, SendSaveProfileAllowsMissingGateway)
 {
     ProfileController controller(nullptr);
 
-    EXPECT_NO_THROW(controller.sendSaveProfile(
+    controller.sendSaveProfile(
         7,
         QStringLiteral("access"),
-                       QStringLiteral("name"), QStringLiteral("nick"), QStringLiteral("desc"), QStringLiteral("icon")));
+                       QStringLiteral("name"), QStringLiteral("nick"), QStringLiteral("desc"), QStringLiteral("icon"));
 }

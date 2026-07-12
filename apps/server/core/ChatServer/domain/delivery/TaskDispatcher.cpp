@@ -8,7 +8,6 @@
 #include "logging/TraceContext.hpp"
 
 #include <chrono>
-#include <exception>
 #include "json/GlazeCompat.hpp"
 #include <thread>
 
@@ -54,7 +53,11 @@ bool TaskDispatcher::PublishTask(const std::string& task_type,
         }
         return false;
     }
-    auto envelope = BuildTaskEnvelope(task_type, routing_key, payload, delay_ms, max_retries);
+    TaskEnvelope envelope;
+    if (!BuildTaskEnvelope(task_type, routing_key, payload, delay_ms, max_retries, &envelope, error))
+    {
+        return false;
+    }
     return _task_bus->Publish(envelope, error);
 }
 
@@ -74,43 +77,15 @@ void TaskDispatcher::DealTasks()
     {
         ConsumedTask task;
         std::string consume_error;
-        bool handled = false;
-        try
-        {
-            handled = _task_bus && _task_bus->ConsumeOnce(TaskRoutingKeys(), task, &consume_error);
-        }
-        catch (const std::bad_alloc& error)
-        {
-            memolog::LogError("chat.task.dispatcher.consume_bad_alloc",
-                              "task dispatcher stopped after task bus allocation failure",
-                              {{"error", error.what()}});
-            break;
-        }
-        catch (const std::exception& error)
-        {
-            memolog::LogWarn("chat.task.dispatcher.consume_exception",
-                             "task dispatcher caught task bus exception",
-                             {{"error", error.what()}});
-            if (_stop_requested())
-            {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
-            continue;
-        }
-        catch (...)
-        {
-            memolog::LogWarn("chat.task.dispatcher.consume_unknown_exception",
-                             "task dispatcher caught unknown task bus exception");
-            if (_stop_requested())
-            {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
-            continue;
-        }
+        const bool handled = _task_bus && _task_bus->ConsumeOnce(TaskRoutingKeys(), task, &consume_error);
         if (!handled)
         {
+            if (!consume_error.empty())
+            {
+                memolog::LogWarn("chat.task.dispatcher.consume_failed",
+                                 "task bus consume failed",
+                                 {{"error", consume_error}});
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(task_dispatcher_modules::NoTaskSleepMs()));
             continue;
         }

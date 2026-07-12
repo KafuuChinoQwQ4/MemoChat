@@ -10,7 +10,6 @@ Item {
 
     property var sourceModel: null
     property string currentSourceId: ""
-    property string pendingDeleteSourceId: ""
     property bool loading: false
     property color itemFillColor: Qt.rgba(1, 1, 1, 0.14)
     property color itemHoverFillColor: Qt.rgba(0.75, 0.87, 1.0, 0.22)
@@ -26,9 +25,7 @@ Item {
     property color importButtonHoverColor: "#0f61b0"
     property color importButtonPressedColor: "#093d72"
 
-    signal sourceEnabledChanged(string sourceId, bool enabled)
     signal importedSourceOpenRequested(string sourceId)
-    signal importedSourceDeleteRequested(string sourceId)
 
     function modelCount(model) {
         return model && model.count !== undefined ? model.count : 0
@@ -57,17 +54,6 @@ Item {
         return id === "mock" || id === "jm.official" || id === "picacg.official"
     }
 
-    function sourceIsImported(data, format, url) {
-        var formatText = format ? String(format) : ""
-        if (formatText === "source-js" || formatText === "zip" || formatText === "staged-js") {
-            return true
-        }
-        if (data && data.path && String(data.path).length > 0) {
-            return true
-        }
-        return url && String(url).length > 0
-    }
-
     function sourceIdFromRow(sourceId, itemId, data) {
         if (sourceId && sourceId.length > 0) {
             return sourceId
@@ -92,7 +78,7 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "已导入漫画源"
+            text: "可用漫画源"
             color: root.textPrimaryColor
             font.pixelSize: 18
             font.bold: true
@@ -102,7 +88,7 @@ Item {
         Text {
             Layout.fillWidth: true
             visible: root.modelCount(root.sourceModel) === 0 && !root.loading
-            text: "暂无已导入漫画源，导入后会显示在这里"
+            text: "当前没有可用漫画源"
             color: root.textMutedColor
             font.pixelSize: 13
             horizontalAlignment: Text.AlignHCenter
@@ -129,16 +115,10 @@ Item {
 
                 readonly property string resolvedSourceId: root.sourceIdFromRow(sourceId, itemId, data)
                 readonly property bool reservedSource: builtin || root.sourceIsReserved(resolvedSourceId, data)
-                readonly property bool importedSource: root.sourceIsImported(data, format, url)
-
                 sourceId: resolvedSourceId
                 statusText: root.sourceStatusText(status, format)
                 sourceUrl: url || message || ""
-                enabledState: data.enabled === undefined ? true : data.enabled
-                hasEnabledState: data.enabled !== undefined
-                deleting: root.pendingDeleteSourceId === resolvedSourceId
                 builtinSource: reservedSource
-                canDelete: resolvedSourceId.length > 0 && !root.loading && !reservedSource && importedSource
                 selected: root.currentSourceId === resolvedSourceId
                 itemFillColor: root.itemFillColor
                 itemHoverFillColor: root.itemHoverFillColor
@@ -153,14 +133,8 @@ Item {
                 importButtonColor: root.importButtonColor
                 importButtonHoverColor: root.importButtonHoverColor
                 importButtonPressedColor: root.importButtonPressedColor
-                onEnableToggled: function(sourceId, enabled) {
-                    root.sourceEnabledChanged(sourceId, enabled)
-                }
                 onOpenRequested: function(sourceId) {
                     root.importedSourceOpenRequested(sourceId)
-                }
-                onDeleteRequested: function(sourceId) {
-                    root.importedSourceDeleteRequested(sourceId)
                 }
             }
         }

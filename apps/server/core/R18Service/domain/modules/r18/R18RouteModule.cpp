@@ -14,6 +14,20 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
 
     registry.Register(
         modules::GetMethod(),
+        modules::R18AccessStatusPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleAccessStatus(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::R18AccessAttestPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleAccessAttest(request, response);
+        });
+    registry.Register(
+        modules::GetMethod(),
         modules::SourcesPath(),
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {

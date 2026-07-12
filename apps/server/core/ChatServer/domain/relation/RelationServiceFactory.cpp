@@ -4,8 +4,6 @@
 #include "RelationGrpcServiceAdapter.hpp"
 #include "logging/Logger.hpp"
 
-#include <stdexcept>
-
 import memochat.chat.service_factory_algorithms;
 
 std::unique_ptr<IRelationService> CreateInProcessRelationService(IRelationRepository* relation_repository,
@@ -26,7 +24,8 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
                                                         IRelationBootstrapCache* relation_bootstrap_cache,
                                                         IDeliveryGateway* delivery_gateway,
                                                         IDeliveryTaskPublisher* task_publisher,
-                                                        IEventPublisher* event_publisher)
+                                                        IEventPublisher* event_publisher,
+                                                        std::string* error)
 {
     const auto backend = relation_service_config.RelationServiceBackend();
     if (memochat::chat::factory::modules::IsInProcessBackend(backend.data(), backend.size()))
@@ -42,7 +41,13 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
         const auto endpoint = relation_service_config.RelationServiceEndpoint();
         if (endpoint.empty())
         {
-            throw std::runtime_error("Relation service remote endpoint is empty: " + backend);
+            const std::string message = "Relation service remote endpoint is empty: " + backend;
+            if (error != nullptr)
+            {
+                *error = message;
+            }
+            memolog::LogError("chat.relation_service.endpoint_missing", message, {{"configured_backend", backend}});
+            return nullptr;
         }
         return std::make_unique<RelationGrpcServiceAdapter>(endpoint);
     }

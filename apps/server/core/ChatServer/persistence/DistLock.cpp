@@ -5,11 +5,9 @@
 #include <chrono>
 #include <thread>
 #include <cstdlib>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <hiredis/hiredis.h>
 #include "chat_lua_scripts.hpp"
+#include "random/Uuid.hpp"
 
 import memochat.chat.dist_lock_algorithms;
 
@@ -21,16 +19,21 @@ DistLock& DistLock::Inst()
     return lock;
 }
 
-static std::string generateUUID()
+static bool GenerateLockId(std::string& value, std::string& error)
 {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    return to_string(uuid);
+    return memochat::random::GenerateUuid(value, &error);
 }
 
 std::string
 DistLock::acquireLock(redisContext* context, const std::string& lockName, int lockTimeout, int acquireTimeout)
 {
-    std::string identifier = generateUUID();
+    std::string identifier;
+    std::string uuid_error;
+    if (!GenerateLockId(identifier, uuid_error))
+    {
+        std::cerr << "distributed lock UUID generation failed: " << uuid_error << std::endl;
+        return {};
+    }
     std::string lockKey = "lock:" + lockName;
     auto endTime = std::chrono::steady_clock::now() + std::chrono::seconds(acquireTimeout);
 

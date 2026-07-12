@@ -1,5 +1,7 @@
 #include "logging/TelemetryConfig.hpp"
 
+#include <charconv>
+
 import memochat.logging.config_algorithms;
 import memochat.logging.telemetry_config_algorithms;
 
@@ -43,17 +45,13 @@ bool ParseBool(const std::string& raw, bool fallback)
 
 double ParseDouble(const std::string& raw, double fallback)
 {
-    try
+    if (raw.empty())
     {
-        if (!raw.empty())
-        {
-            return std::stod(raw);
-        }
+        return fallback;
     }
-    catch (...)
-    {
-    }
-    return fallback;
+    double value = 0.0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return parsed.ec == std::errc{} && parsed.ptr == raw.data() + raw.size() ? value : fallback;
 }
 
 } // namespace

@@ -22,6 +22,23 @@ set(CMAKE_CXX_STANDARD ${MEMOCHAT_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(MEMOCHAT_NO_EXCEPTIONS "Compile project-owned C++ without exception handling" ON)
+if(MEMOCHAT_NO_EXCEPTIONS)
+    add_compile_definitions(
+        BOOST_EXCEPTION_DISABLE
+        BOOST_NO_EXCEPTIONS
+        FMT_EXCEPTIONS=0
+        SPDLOG_NO_EXCEPTIONS
+    )
+    if(MSVC)
+        add_compile_definitions(_HAS_EXCEPTIONS=0)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/EHs-c->)
+    else()
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>)
+    endif()
+    message(STATUS "MemoChat C++ exceptions: disabled")
+endif()
+
 find_program(CMAKE_RC_COMPILER NAMES rc.exe
     HINTS "$ENV{WINSDK_BIN}"
           "$ENV{VC_TOOLS_BIN}"
@@ -60,6 +77,11 @@ else()
 endif()
 
 if(BUILD_SERVER OR BUILD_TESTS)
+    # Database adapter tests are a sibling of apps/server/core, so discover
+    # these imported C targets at the repository root and make them visible to both.
+    find_package(PostgreSQL REQUIRED)
+    find_package(bson-1.0 CONFIG REQUIRED)
+    find_package(mongoc-1.0 CONFIG REQUIRED)
     add_subdirectory(apps/server/core)
 endif()
 

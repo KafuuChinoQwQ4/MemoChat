@@ -1,21 +1,16 @@
-// CServer accept/timer 循环协程化 —— 停机/不泄漏验收(P2-3)
+// CServer accept/timer 异步回调 —— 停机/不泄漏验收
 //
-// 验证 P2 把 CServer 的 StartAccept→HandleAccept 递归 + on_timer 自递归 async_wait
-// 换成 exec::task<void> AcceptLoop()/TimerLoop() + exec::start_detached 后:
-//   ① StopTimer() 的 _timer.cancel() 能让挂在 co_await async_wait 上的 TimerLoop
-//      优雅退出(operation_aborted → set_stopped → 栈展开 → self 释放);
-//   ② 两个循环协程释放各自 self 后,CServer 析构、不泄漏。
+// 验证 StopTimer() 取消 accept/timer、关闭会话后，异步回调不会继续调度，
+// weak_ptr 捕获也不会阻止 CServer 析构。
 //
-// 本测试只走 TimerLoop 路径(StartTimer/StopTimer),不调 Start():AcceptLoop 首行
-// 即 AsioIOServicePool::GetInstance()(惰性起 hardware_concurrency 线程池),会让单测
-// 变重且依赖该单例。AcceptLoop 的取消语义已由 test_asioexec_prodpath.cpp 的
-// AcceptorCancelStopsCoroutineGracefully 通用坐实(与 TimerLoop 同构),此处聚焦
-// TimerLoop 的真实 CServer 集成 + 析构不泄漏。TimerLoop 的 Redis/Config 调用只在
-// 60s 定时器**触发**时发生,本测试在触发前就 StopTimer,故无需任何 Docker 依赖。
+// 本测试只走定时器路径，不调 Start()，避免启动 AsioIOServicePool。
+// Redis/Config 调用只在 60s 定时器触发时发生；测试在触发前 StopTimer，
+// 因此无需 Docker 依赖。
 
 #include <gtest/gtest.h>
 
 #include "CServer.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <boost/asio.hpp>
 
@@ -31,11 +26,15 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
 {
     net::io_context server_ctx; // CServer 的 acceptor + timer 绑定的 io_context
     auto work = net::make_work_guard(server_ctx);
-    std::thread io_thread(
-        [&]
+    memochat::runtime::ExplicitThread io_thread;
+    std::string thread_error;
+    ASSERT_TRUE(io_thread.Start(
+        [&server_ctx]() noexcept
         {
             server_ctx.run();
-        });
+        },
+        &thread_error))
+        << thread_error;
 
     std::weak_ptr<CServer> weak;
     {
@@ -43,18 +42,16 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
         auto server = std::make_shared<CServer>(server_ctx, /*port=*/0);
         weak = server;
 
-        server->StartTimer(); // spawn TimerLoop(shared_from_this()) → co_await async_wait(首轮 60s,挂起)
+        server->StartTimer(); // 安排首轮 60s async_wait。
 
-        // 给 io 线程时间把 TimerLoop 挂到 async_wait 上。self 是传值协程参数,StartTimer() 在本地强
-        // 引用 server 仍持有时求值 shared_from_this() 并存入协程帧,帧自 spawn 即续命(与 GateShared 统一)。
+        // 给 io 线程时间挂起 async_wait；回调只捕获 weak_ptr。
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        EXPECT_FALSE(weak.expired()) << "TimerLoop 协程帧应已自持 server";
+        EXPECT_FALSE(weak.expired()) << "测试作用域仍应持有 server";
 
-        // StopTimer:_stopping=true + _timer.cancel() → operation_aborted → set_stopped →
-        // TimerLoop 优雅展开 → 释放 self。_acceptor.cancel/close 无害(无 AcceptLoop 在跑)。
+        // StopTimer 设置 stopping 并取消 accept/timer；无 accept 回调在运行。
         server->StopTimer();
 
-        // 离开作用域:本地强引用落,仅 TimerLoop 协程帧的 self(若已展开则随之析构)。
+        // 离开作用域后只剩异步设施中的 weak_ptr。
     }
 
     // 等 CServer 析构(weak 失效),最多 ~2s。
@@ -69,11 +66,11 @@ TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    EXPECT_TRUE(released) << "StopTimer 后 TimerLoop 未退出 / CServer 未析构 —— 协程帧泄漏了 server";
+    EXPECT_TRUE(released) << "StopTimer 后 CServer 未析构，异步回调仍持有 server";
 
     work.reset();
-    if (io_thread.joinable())
-        io_thread.join();
+    if (io_thread.Joinable())
+        ASSERT_TRUE(io_thread.Join(&thread_error)) << thread_error;
 
     EXPECT_TRUE(weak.expired());
 }
@@ -85,11 +82,15 @@ TEST(CServerLifetime, ProductionShutdownOrder_StopTimerBeforeIoContextStop)
 {
     net::io_context server_ctx;
     auto work = net::make_work_guard(server_ctx);
-    std::thread io_thread(
-        [&]
+    memochat::runtime::ExplicitThread io_thread;
+    std::string thread_error;
+    ASSERT_TRUE(io_thread.Start(
+        [&server_ctx]() noexcept
         {
             server_ctx.run();
-        });
+        },
+        &thread_error))
+        << thread_error;
 
     std::weak_ptr<CServer> weak;
     {
@@ -124,8 +125,8 @@ TEST(CServerLifetime, ProductionShutdownOrder_StopTimerBeforeIoContextStop)
     }
     EXPECT_TRUE(released) << "生产停机顺序下 CServer 未能正常析构";
 
-    if (io_thread.joinable())
-        io_thread.join();
+    if (io_thread.Joinable())
+        ASSERT_TRUE(io_thread.Join(&thread_error)) << thread_error;
 }
 
 } // namespace

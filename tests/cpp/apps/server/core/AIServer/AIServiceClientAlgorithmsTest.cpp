@@ -1,7 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <utility>
+
 namespace memochat::tests::ai::client
 {
+int ParsePositiveIntValue(const char* raw, unsigned long raw_size, int fallback);
+bool PositiveIntWasConfigured(const char* raw, unsigned long raw_size, int fallback);
+bool PositiveIntWasEmpty(const char* raw, unsigned long raw_size, int fallback);
+bool PositiveIntWasInvalid(const char* raw, unsigned long raw_size, int fallback);
 int DefaultTimeoutSec();
 int DefaultAgentTaskLimit();
 int HttpVersion();
@@ -46,6 +52,27 @@ bool ShouldStoreFinalChunkResult(bool final_flag, bool out_result_present);
 bool ShouldFallbackStreamResult(bool saw_final, bool out_result_present);
 bool IsLineTrimChar(char ch);
 } // namespace memochat::tests::ai::client
+
+TEST(AIServiceClientAlgorithmsTest, ClassifiesPositiveTimeoutConfiguration)
+{
+    using namespace memochat::tests::ai::client;
+
+    EXPECT_EQ(ParsePositiveIntValue("300", 3, 17), 300);
+    EXPECT_TRUE(PositiveIntWasConfigured("300", 3, 17));
+
+    EXPECT_EQ(ParsePositiveIntValue("", 0, 17), 17);
+    EXPECT_TRUE(PositiveIntWasEmpty("", 0, 17));
+
+    for (const auto [raw, size] : {std::pair{"0", 1UL},
+                                   std::pair{"-1", 2UL},
+                                   std::pair{"abc", 3UL},
+                                   std::pair{"12x", 3UL},
+                                   std::pair{"2147483648", 10UL}})
+    {
+        EXPECT_EQ(ParsePositiveIntValue(raw, size, 17), 17) << raw;
+        EXPECT_TRUE(PositiveIntWasInvalid(raw, size, 17)) << raw;
+    }
+}
 
 TEST(AIServiceClientAlgorithmsTest, ExposesHttpDefaultsAndRoutePaths)
 {

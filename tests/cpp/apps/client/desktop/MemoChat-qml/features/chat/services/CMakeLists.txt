@@ -525,7 +525,10 @@ if(EXISTS "${PRIVATE_CHAT_EVENT_SERVICE_SOURCE}" AND EXISTS "${PRIVATE_CHAT_EVEN
     )
 
     add_dependencies(gtest_tests private_chat_event_service_gtest)
-    gtest_discover_tests(private_chat_event_service_gtest TEST_DISCOVERY_MODE POST_BUILD)
+    gtest_discover_tests(private_chat_event_service_gtest
+        TEST_DISCOVERY_MODE POST_BUILD
+        PROPERTIES RESOURCE_LOCK "private_chat_event_service_cache"
+    )
 else()
     message(STATUS "private_chat_event_service_gtest skipped until PrivateChatEventService lands")
 endif()

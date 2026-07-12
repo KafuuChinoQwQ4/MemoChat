@@ -28,14 +28,6 @@ target_include_directories(GateServerHttp3 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../common
 )
 
-# MongoDB include paths (transitively needed by GateHttp3ServiceRoutes.cpp via MongoMgr.hpp)
-# Environment variables: VCPKG_INSTALLED_DIR (defined via CMake cache)
-target_include_directories(GateServerHttp3 PRIVATE
-    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include"
-    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/mongocxx/v_noabi"
-    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/bsoncxx/v_noabi"
-)
-
 target_link_libraries(GateServerHttp3 PUBLIC
     GateServerCore
     memochat_boost_stubs

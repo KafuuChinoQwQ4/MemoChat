@@ -48,8 +48,6 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: jwt-access-secret } }
             - name: MEMOCHAT_AUTH_REFRESH_PEPPER
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: auth-refresh-pepper } }
-            - name: MEMOCHAT_RABBITMQ_PASSWORD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
             {{- if eq $name "aigateway" }}
             - name: MEMOCHAT_AI_INTERNAL_API_KEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-internal-api-key } }
@@ -69,6 +67,8 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: minio-secret-key } }
             {{- end }}
             {{- if eq $name "r18gateway" }}
+            - name: MEMOCHAT_R18SOURCEADMIN_ADMINKEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-source-admin-key } }
             - name: MEMOCHAT_R18_PICACG_API_KEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-picacg-api-key } }
             - name: MEMOCHAT_R18_PICACG_HMAC_KEY

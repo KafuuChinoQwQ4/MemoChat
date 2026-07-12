@@ -44,10 +44,10 @@ export const ENDPOINTS = {
   mediaUpload:      "/media/upload",
 
   // R18
+  r18Access:         "/api/r18/access",
+  r18AccessAttest:   "/api/r18/access/attest",
   r18Sources:        "/api/r18/sources",
   r18Search:         "/api/r18/search",
-  r18SourceEnable:   "/api/r18/source/enable",
-  r18SourceDisable:  "/api/r18/source/disable",
-  r18ComicChapters:  "/api/r18/comic/chapters",
-  r18ChapterImages:  "/api/r18/chapter/images",
+  r18ComicDetail:    "/api/r18/comic/detail",
+  r18ChapterPages:   "/api/r18/chapter/pages",
 } as const

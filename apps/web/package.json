@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run type-check && vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "smoke:websocket": "node ../../tools/scripts/dev/browser_websocket_smoke.mjs",
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@tanstack/react-query": "5.83.0",

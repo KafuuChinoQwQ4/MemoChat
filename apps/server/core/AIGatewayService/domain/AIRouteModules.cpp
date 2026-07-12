@@ -9,12 +9,11 @@
 #include "ConfigMgr.hpp"
 #include "support/BearerAccessAuth.hpp"
 #include "support/UserTokenValidator.hpp"
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 #include <boost/beast/http.hpp>
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -78,14 +77,13 @@ static int AiOrchestratorTimeoutSec()
     {
         return 300;
     }
-    try
-    {
-        return memochat::gate::modules::ai::route_algorithms::AtLeast(std::stoi(raw), 1);
-    }
-    catch (...)
+    int timeout = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), timeout);
+    if (ec != std::errc{} || ptr != raw.data() + raw.size())
     {
         return 300;
     }
+    return memochat::gate::modules::ai::route_algorithms::AtLeast(timeout, 1);
 }
 
 static std::string TrimCopy(std::string value)
@@ -335,6 +333,19 @@ static std::string PrefixProxyBodyWithTrustedUid(std::string body, int32_t auth_
     return "{\"uid\":" + std::to_string(auth_uid) + ",\"_payload\":" + body + "}";
 }
 
+static void WriteAiProxyFailure(const std::shared_ptr<HttpConnection>& connection,
+                                const std::string& target,
+                                const std::string& log_name,
+                                const std::string& error)
+{
+    json::JsonValue root = json::JsonValue{};
+    root["code"] = 503;
+    root["message"] = std::string("AIOrchestrator proxy failed: ") + error;
+    connection->GetResponse().result(http::status::service_unavailable);
+    WriteJsonResponse(connection, root);
+    memolog::LogError(log_name + ".failed", "AI prefix proxy failed", {{"target", target}, {"error", error}});
+}
+
 static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection,
                                       http::verb verb,
                                       const std::string& gate_prefix,
@@ -356,66 +367,68 @@ static void ProxyAiOrchestratorPrefix(std::shared_ptr<HttpConnection> connection
         target = PrefixProxyTargetWithTrustedUid(std::move(target), auth_uid);
     }
 
-    try
+    net::io_context ioc;
+    tcp::resolver resolver(ioc);
+    beast::tcp_stream stream(ioc);
+    beast::error_code ec;
+    const auto endpoints = resolver.resolve(host, port, ec);
+    if (ec)
     {
-        net::io_context ioc;
-        tcp::resolver resolver(ioc);
-        beast::tcp_stream stream(ioc);
-        stream.expires_after(std::chrono::seconds(timeout_sec));
-        stream.connect(resolver.resolve(host, port));
-
-        http::request<http::string_body> req{verb, target, 11};
-        req.set(http::field::host, host);
-        req.set(http::field::accept, "*/*");
-        req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
-        req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
-        MaybeSetAiOrchestratorInternalAuth(req);
-        if (verb == http::verb::post)
-        {
-            req.set(http::field::content_type, "application/json");
-            req.body() = PrefixProxyBodyWithTrustedUid(IncomingBodyString(connection), auth_uid);
-        }
-        req.prepare_payload();
-
-        http::write(stream, req);
-        beast::flat_buffer buffer;
-        http::response<http::string_body> res;
-        stream.expires_after(std::chrono::seconds(timeout_sec));
-        http::read(stream, buffer, res);
-        beast::error_code shutdown_ec;
-        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
-
-        connection->GetResponse().result(res.result());
-        const auto content_type_it = res.base().find(http::field::content_type);
-        const std::string upstream_content_type =
-            content_type_it != res.base().end()
-                ? std::string(content_type_it->value().data(), content_type_it->value().size())
-                : std::string();
-        connection->GetResponse().set(http::field::content_type,
-                                      upstream_content_type.empty() ? "application/json; charset=utf-8"
-                                                                    : upstream_content_type);
-        beast::ostream(connection->GetResponse().body()) << res.body();
-        memolog::LogInfo(log_name + ".ok",
-                         "AI prefix proxy returned",
-                         {
-                             {"target", target},
-                             {"status", std::to_string(res.result_int())},
-                         });
+        WriteAiProxyFailure(connection, target, log_name, ec.message());
+        return;
     }
-    catch (const std::exception& exc)
+    stream.expires_after(std::chrono::seconds(timeout_sec));
+    stream.connect(endpoints, ec);
+    if (ec)
     {
-        json::JsonValue root = json::JsonValue{};
-        root["code"] = 503;
-        root["message"] = std::string("AIOrchestrator proxy failed: ") + exc.what();
-        connection->GetResponse().result(http::status::service_unavailable);
-        WriteJsonResponse(connection, root);
-        memolog::LogError(log_name + ".failed",
-                          "AI prefix proxy failed",
-                          {
-                              {"target", target},
-                              {"error", exc.what()},
-                          });
+        WriteAiProxyFailure(connection, target, log_name, ec.message());
+        return;
     }
+
+    http::request<http::string_body> req{verb, target, 11};
+    req.set(http::field::host, host);
+    req.set(http::field::accept, "*/*");
+    req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
+    req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
+    MaybeSetAiOrchestratorInternalAuth(req);
+    if (verb == http::verb::post)
+    {
+        req.set(http::field::content_type, "application/json");
+        req.body() = PrefixProxyBodyWithTrustedUid(IncomingBodyString(connection), auth_uid);
+    }
+    req.prepare_payload();
+
+    http::write(stream, req, ec);
+    if (ec)
+    {
+        WriteAiProxyFailure(connection, target, log_name, ec.message());
+        return;
+    }
+    beast::flat_buffer buffer;
+    http::response<http::string_body> res;
+    stream.expires_after(std::chrono::seconds(timeout_sec));
+    http::read(stream, buffer, res, ec);
+    beast::error_code shutdown_ec;
+    stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
+    if (ec)
+    {
+        WriteAiProxyFailure(connection, target, log_name, ec.message());
+        return;
+    }
+
+    connection->GetResponse().result(res.result());
+    const auto content_type_it = res.base().find(http::field::content_type);
+    const std::string upstream_content_type =
+        content_type_it != res.base().end()
+            ? std::string(content_type_it->value().data(), content_type_it->value().size())
+            : std::string();
+    connection->GetResponse().set(http::field::content_type,
+                                  upstream_content_type.empty() ? "application/json; charset=utf-8"
+                                                                : upstream_content_type);
+    beast::ostream(connection->GetResponse().body()) << res.body();
+    memolog::LogInfo(log_name + ".ok",
+                     "AI prefix proxy returned",
+                     {{"target", target}, {"status", std::to_string(res.result_int())}});
 }
 
 static void ProxyAiOrchestratorGame(std::shared_ptr<HttpConnection> connection, http::verb verb)
@@ -436,112 +449,125 @@ static void ProxyAiOrchestratorPetStream(std::shared_ptr<HttpConnection> connect
     const std::string target =
         PrefixProxyTargetWithTrustedUid(BuildPrefixProxyTarget(connection, "/ai/pet", "/pet"), auth_uid);
 
-    try
-    {
-        net::io_context ioc;
-        tcp::resolver resolver(ioc);
-        beast::tcp_stream stream(ioc);
-        stream.expires_after(std::chrono::seconds(timeout_sec));
-        stream.connect(resolver.resolve(host, port));
-
-        http::request<http::string_body> req{http::verb::get, target, 11};
-        req.set(http::field::host, host);
-        req.set(http::field::accept, "text/event-stream");
-        req.set(http::field::cache_control, "no-cache");
-        req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
-        req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
-        MaybeSetAiOrchestratorInternalAuth(req);
-        req.prepare_payload();
-
-        http::write(stream, req);
-
-        beast::flat_buffer buffer;
-        http::response_parser<http::dynamic_body> parser;
-        parser.body_limit((std::numeric_limits<std::uint64_t>::max)());
-        stream.expires_after(std::chrono::seconds(timeout_sec));
-        http::read_header(stream, buffer, parser);
-
-        auto forward_body = [&]()
-        {
-            auto& body = parser.get().body();
-            if (!connection || body.size() == 0)
-            {
-                return;
-            }
-            std::string chunk = beast::buffers_to_string(body.data());
-            body.consume(body.size());
-            if (!chunk.empty())
-            {
-                connection->WriteStreamChunk(std::move(chunk));
-            }
-        };
-
-        if (parser.get().result() != http::status::ok)
-        {
-            json::JsonValue event = json::JsonValue{};
-            event["type"] = "pet.error";
-            event["message"] = "AIOrchestrator returned " + std::to_string(parser.get().result_int());
-            if (connection)
-            {
-                connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
-            }
-            forward_body();
-        }
-        else
-        {
-            forward_body();
-            while (!parser.is_done())
-            {
-                beast::error_code ec;
-                stream.expires_after(std::chrono::seconds(timeout_sec));
-                http::read_some(stream, buffer, parser, ec);
-                forward_body();
-                if (!ec)
-                {
-                    continue;
-                }
-                if (ec == http::error::need_buffer)
-                {
-                    continue;
-                }
-                if (ec == net::error::eof)
-                {
-                    break;
-                }
-                memolog::LogWarn("gate.ai.pet.proxy.stream.read_failed",
-                                 "AI pet stream read failed",
-                                 {
-                                     {"target", target},
-                                     {"error", ec.message()},
-                                 });
-                break;
-            }
-        }
-
-        beast::error_code shutdown_ec;
-        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
-        memolog::LogInfo("gate.ai.pet.proxy.stream.ok",
-                         "AI pet stream proxy finished",
-                         {
-                             {"target", target},
-                         });
-    }
-    catch (const std::exception& exc)
+    auto fail = [&](const std::string& error)
     {
         json::JsonValue event = json::JsonValue{};
         event["type"] = "pet.error";
-        event["message"] = std::string("AIOrchestrator pet stream failed: ") + exc.what();
+        event["message"] = std::string("AIOrchestrator pet stream failed: ") + error;
         if (connection)
         {
             connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
         }
         memolog::LogError("gate.ai.pet.proxy.stream.failed",
                           "AI pet stream proxy failed",
-                          {
-                              {"target", target},
-                              {"error", exc.what()},
-                          });
+                          {{"target", target}, {"error", error}});
+    };
+
+    net::io_context ioc;
+    tcp::resolver resolver(ioc);
+    beast::tcp_stream stream(ioc);
+    beast::error_code ec;
+    const auto endpoints = resolver.resolve(host, port, ec);
+    if (ec)
+    {
+        fail(ec.message());
+        if (connection)
+            connection->FinishStream();
+        return;
     }
+    stream.expires_after(std::chrono::seconds(timeout_sec));
+    stream.connect(endpoints, ec);
+    if (ec)
+    {
+        fail(ec.message());
+        if (connection)
+            connection->FinishStream();
+        return;
+    }
+
+    http::request<http::string_body> req{http::verb::get, target, 11};
+    req.set(http::field::host, host);
+    req.set(http::field::accept, "text/event-stream");
+    req.set(http::field::cache_control, "no-cache");
+    req.set("X-Trace-Id", connection ? connection->GetTraceId() : "");
+    req.set("X-Request-Id", connection ? connection->GetRequestId() : "");
+    MaybeSetAiOrchestratorInternalAuth(req);
+    req.prepare_payload();
+
+    http::write(stream, req, ec);
+    if (ec)
+    {
+        fail(ec.message());
+        if (connection)
+            connection->FinishStream();
+        return;
+    }
+
+    beast::flat_buffer buffer;
+    http::response_parser<http::dynamic_body> parser;
+    parser.body_limit((std::numeric_limits<std::uint64_t>::max)());
+    stream.expires_after(std::chrono::seconds(timeout_sec));
+    http::read_header(stream, buffer, parser, ec);
+    if (ec)
+    {
+        fail(ec.message());
+        if (connection)
+            connection->FinishStream();
+        return;
+    }
+
+    auto forward_body = [&]()
+    {
+        auto& body = parser.get().body();
+        if (!connection || body.size() == 0)
+        {
+            return;
+        }
+        std::string chunk = beast::buffers_to_string(body.data());
+        body.consume(body.size());
+        if (!chunk.empty())
+        {
+            connection->WriteStreamChunk(std::move(chunk));
+        }
+    };
+
+    if (parser.get().result() != http::status::ok)
+    {
+        json::JsonValue event = json::JsonValue{};
+        event["type"] = "pet.error";
+        event["message"] = "AIOrchestrator returned " + std::to_string(parser.get().result_int());
+        if (connection)
+        {
+            connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
+        }
+        forward_body();
+    }
+    else
+    {
+        forward_body();
+        while (!parser.is_done())
+        {
+            stream.expires_after(std::chrono::seconds(timeout_sec));
+            http::read_some(stream, buffer, parser, ec);
+            forward_body();
+            if (!ec || ec == http::error::need_buffer)
+            {
+                continue;
+            }
+            if (ec == net::error::eof)
+            {
+                break;
+            }
+            memolog::LogWarn("gate.ai.pet.proxy.stream.read_failed",
+                             "AI pet stream read failed",
+                             {{"target", target}, {"error", ec.message()}});
+            break;
+        }
+    }
+
+    beast::error_code shutdown_ec;
+    stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_ec);
+    memolog::LogInfo("gate.ai.pet.proxy.stream.ok", "AI pet stream proxy finished", {{"target", target}});
 
     if (connection)
     {
@@ -650,74 +676,54 @@ void AIHttpServiceRoutes::RegisterRoutes(LogicSystem& logic)
                       memolog::LogInfo("gate.ai.chat_stream.call",
                                        "calling AIServer ChatStream",
                                        {{"uid", std::to_string(auth_uid)}});
-                      try
-                      {
-                          g_ai_stream_client->ChatStream(
-                              auth_uid,
-                              session_id,
-                              content,
-                              model_type,
-                              model_name,
-                              metadata_json,
-                              [&connection](const std::string& chunk,
-                                            bool is_final,
-                                            const std::string& msg_id,
-                                            int64_t total_tokens,
-                                            const std::string& trace_id,
-                                            const std::string& skill,
-                                            const std::string& feedback_summary,
-                                            const std::string& observations_json,
-                                            const std::string& events_json)
+                      g_ai_stream_client->ChatStream(
+                          auth_uid,
+                          session_id,
+                          content,
+                          model_type,
+                          model_name,
+                          metadata_json,
+                          [&connection](const std::string& chunk,
+                                        bool is_final,
+                                        const std::string& msg_id,
+                                        int64_t total_tokens,
+                                        const std::string& trace_id,
+                                        const std::string& skill,
+                                        const std::string& feedback_summary,
+                                        const std::string& observations_json,
+                                        const std::string& events_json)
+                          {
+                              json::JsonValue event = json::JsonValue{};
+                              event["chunk"] = chunk;
+                              event["is_final"] = is_final;
+                              event["msg_id"] = msg_id;
+                              event["total_tokens"] = total_tokens;
+                              event["trace_id"] = trace_id;
+                              event["skill"] = skill;
+                              event["feedback_summary"] = feedback_summary;
+                              json::JsonValue observations;
+                              if (!observations_json.empty() && json::reader_parse(observations_json, observations))
                               {
-                                  json::JsonValue event = json::JsonValue{};
-                                  event["chunk"] = chunk;
-                                  event["is_final"] = is_final;
-                                  event["msg_id"] = msg_id;
-                                  event["total_tokens"] = total_tokens;
-                                  event["trace_id"] = trace_id;
-                                  event["skill"] = skill;
-                                  event["feedback_summary"] = feedback_summary;
-                                  json::JsonValue observations;
-                                  if (!observations_json.empty() && json::reader_parse(observations_json, observations))
-                                  {
-                                      event["observations"] = observations;
-                                  }
-                                  else
-                                  {
-                                      event["observations"] = json::array_t{};
-                                  }
-                                  json::JsonValue events;
-                                  if (!events_json.empty() && json::reader_parse(events_json, events))
-                                  {
-                                      event["events"] = events;
-                                  }
-                                  else
-                                  {
-                                      event["events"] = json::array_t{};
-                                  }
-                                  std::string event_str = json::glaze_stringify(event);
-                                  event_str = "data: " + event_str + "\n\n";
-                                  connection->WriteStreamChunk(std::move(event_str));
-                              },
-                              nullptr);
-                      }
-                      catch (const std::exception& e)
-                      {
-                          memolog::LogError("gate.ai.chat_stream.exception",
-                                            "AIServer ChatStream threw",
-                                            {{"uid", std::to_string(auth_uid)}, {"error", e.what()}});
-                          json::JsonValue event = json::JsonValue{};
-                          event["chunk"] = std::string("AIServer unavailable: ") + e.what();
-                          event["is_final"] = true;
-                          event["msg_id"] = "";
-                          event["total_tokens"] = 0;
-                          event["trace_id"] = "";
-                          event["skill"] = "";
-                          event["feedback_summary"] = "";
-                          event["observations"] = json::array_t{};
-                          event["events"] = json::array_t{};
-                          connection->WriteStreamChunk("data: " + json::glaze_stringify(event) + "\n\n");
-                      }
+                                  event["observations"] = observations;
+                              }
+                              else
+                              {
+                                  event["observations"] = json::array_t{};
+                              }
+                              json::JsonValue events;
+                              if (!events_json.empty() && json::reader_parse(events_json, events))
+                              {
+                                  event["events"] = events;
+                              }
+                              else
+                              {
+                                  event["events"] = json::array_t{};
+                              }
+                              std::string event_str = json::glaze_stringify(event);
+                              event_str = "data: " + event_str + "\n\n";
+                              connection->WriteStreamChunk(std::move(event_str));
+                          },
+                          nullptr);
                       connection->FinishStream();
                       memolog::LogInfo("gate.ai.chat_stream.result",
                                        "AIServer ChatStream returned",

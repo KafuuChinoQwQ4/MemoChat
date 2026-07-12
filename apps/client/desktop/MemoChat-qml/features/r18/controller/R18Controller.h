@@ -31,7 +31,9 @@ class R18Controller : public QObject
     Q_PROPERTY(int currentPageIndex READ currentPageIndex NOTIFY currentPageChanged)
     Q_PROPERTY(int currentSearchPage READ currentSearchPage NOTIFY searchStateChanged)
     Q_PROPERTY(bool currentSearchHasMore READ currentSearchHasMore NOTIFY searchStateChanged)
-    Q_PROPERTY(QString pendingDeleteSourceId READ pendingDeleteSourceId NOTIFY pendingDeleteSourceChanged)
+    Q_PROPERTY(bool accessResolved READ accessResolved NOTIFY accessChanged)
+    Q_PROPERTY(bool accessAllowed READ accessAllowed NOTIFY accessChanged)
+    Q_PROPERTY(bool accessRevoked READ accessRevoked NOTIFY accessChanged)
 
 public:
     explicit R18Controller(ClientGateway* gateway, QObject* parent = nullptr);
@@ -100,25 +102,28 @@ public:
     {
         return _current_search_has_more;
     }
-    QString pendingDeleteSourceId() const
+    bool accessResolved() const
     {
-        return _pending_delete_source_id;
+        return _access_resolved;
     }
-
+    bool accessAllowed() const
+    {
+        return _access_allowed;
+    }
+    bool accessRevoked() const
+    {
+        return _access_revoked;
+    }
+    Q_INVOKABLE void refreshAccess();
+    Q_INVOKABLE void attestAdult();
     Q_INVOKABLE void refreshSources();
     Q_INVOKABLE void refreshHistory();
     Q_INVOKABLE void refreshOfficialSources(const QString& catalogUrl = QString());
-    Q_INVOKABLE void importOfficialSource(int row);
-    Q_INVOKABLE void importSourceUrl(const QString& sourceUrl);
-    Q_INVOKABLE QString pickSourcePackage();
     Q_INVOKABLE QString pickSourceCatalogPath();
     Q_INVOKABLE void selectSource(const QString& sourceId);
     Q_INVOKABLE void search(const QString& keyword, int page = 1);
     Q_INVOKABLE void openComic(const QString& sourceId, const QString& comicId);
     Q_INVOKABLE void openChapter(const QString& sourceId, const QString& chapterId);
-    Q_INVOKABLE void enableSource(const QString& sourceId, bool enabled);
-    Q_INVOKABLE void deleteSource(const QString& sourceId);
-    Q_INVOKABLE void importSourcePackage(const QString& filePath, const QString& manifestJson = QString());
     Q_INVOKABLE void toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited);
     Q_INVOKABLE void
     updateHistory(const QString& sourceId, const QString& comicId, const QString& chapterId, int pageIndex);
@@ -133,24 +138,21 @@ signals:
     void currentPageChanged();
     void officialSourceCatalogUrlChanged();
     void searchStateChanged();
-    void pendingDeleteSourceChanged();
+    void accessChanged();
 
 private:
     void postJson(const QString& path, const QJsonObject& payload, const QString& op);
     void getJson(const QUrl& url, const QString& op);
     void applyAuthHeader(QNetworkRequest& request) const;
     void setOfficialSourceCatalogUrl(const QString& url);
-    QJsonObject officialSourceManifest(const QVariantMap& item, const QUrl& scriptUrl) const;
-    QJsonObject sourceUrlManifest(const QUrl& scriptUrl) const;
     QUrl resolveOfficialSourceUrl(const QVariantMap& item) const;
-    void downloadAndImportSource(const QUrl& scriptUrl, const QVariantMap& item);
     void setLoading(bool loading);
     void setError(const QString& error);
     void setStatusText(const QString& statusText);
     void setCurrentFavorite(bool favorite);
     void setCurrentPageIndex(int pageIndex);
     void setSearchState(int page, bool hasMore);
-    void setPendingDeleteSourceId(const QString& sourceId);
+    void setAccessState(bool resolved, bool allowed, bool revoked);
     void handleResponse(const QString& op, const QJsonObject& root);
 
     ClientGateway* _gateway = nullptr;
@@ -173,5 +175,7 @@ private:
     int _current_search_page = 0;
     bool _current_search_has_more = false;
     int _pending_search_page = 0;
-    QString _pending_delete_source_id;
+    bool _access_resolved = false;
+    bool _access_allowed = false;
+    bool _access_revoked = false;
 };

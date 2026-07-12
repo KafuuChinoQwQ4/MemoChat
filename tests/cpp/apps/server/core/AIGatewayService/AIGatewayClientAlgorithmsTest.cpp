@@ -4,6 +4,9 @@ namespace memochat::tests::ai::gateway_client
 {
 const char* DefaultAIServerHost();
 const char* DefaultAIServerPort();
+const char* DefaultAIServerInternalAuthHeader();
+const char* DefaultAIServerInternalKeyEnv();
+bool ShouldRejectAIServerAuthConfiguration(bool key_configured, bool local_environment, bool loopback_target);
 bool ShouldUseDefaultHost(bool host_empty);
 bool ShouldUseDefaultPort(bool port_empty);
 const char* DefaultApiProviderAdapter();
@@ -32,6 +35,17 @@ TEST(AIGatewayClientAlgorithmsTest, ExposesStableAIServerTargetDefaults)
 {
     EXPECT_STREQ(tc::DefaultAIServerHost(), "127.0.0.1");
     EXPECT_STREQ(tc::DefaultAIServerPort(), "8095");
+    EXPECT_STREQ(tc::DefaultAIServerInternalAuthHeader(), "X-MemoChat-AI-Internal-Key");
+    EXPECT_STREQ(tc::DefaultAIServerInternalKeyEnv(), "MEMOCHAT_AI_INTERNAL_API_KEY");
+}
+
+TEST(AIGatewayClientAlgorithmsTest, FailsClosedUnlessKeylessTargetIsLocalLoopback)
+{
+    EXPECT_FALSE(tc::ShouldRejectAIServerAuthConfiguration(true, false, false));
+    EXPECT_FALSE(tc::ShouldRejectAIServerAuthConfiguration(false, true, true));
+    EXPECT_TRUE(tc::ShouldRejectAIServerAuthConfiguration(false, false, true));
+    EXPECT_TRUE(tc::ShouldRejectAIServerAuthConfiguration(false, true, false));
+    EXPECT_TRUE(tc::ShouldRejectAIServerAuthConfiguration(false, false, false));
 }
 
 TEST(AIGatewayClientAlgorithmsTest, PreservesEmptyFieldFallbackGuards)

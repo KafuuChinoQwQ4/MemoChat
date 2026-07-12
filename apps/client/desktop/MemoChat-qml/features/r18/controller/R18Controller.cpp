@@ -6,30 +6,21 @@
 #include <QUrl>
 #include <QUrlQuery>
 
-namespace
-{
-bool isReservedR18SourceId(const QString& sourceId)
-{
-    if (sourceId == QStringLiteral("mock"))
-    {
-        return true;
-    }
-    if (sourceId == QStringLiteral("jm.official"))
-    {
-        return true;
-    }
-    if (sourceId == QStringLiteral("picacg.official"))
-    {
-        return true;
-    }
-    return false;
-}
-} // namespace
-
 R18Controller::R18Controller(ClientGateway* gateway, QObject* parent)
     : QObject(parent)
     , _gateway(gateway)
 {
+}
+
+void R18Controller::refreshAccess()
+{
+    QUrl url(gate_url_prefix + QStringLiteral("/api/r18/access"));
+    getJson(url, QStringLiteral("access"));
+}
+
+void R18Controller::attestAdult()
+{
+    postJson(QStringLiteral("/api/r18/access/attest"), QJsonObject{}, QStringLiteral("access_attest"));
 }
 
 void R18Controller::refreshSources()
@@ -116,36 +107,6 @@ void R18Controller::openChapter(const QString& sourceId, const QString& chapterI
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
     payload[QStringLiteral("chapter_id")] = chapterId;
     postJson(QStringLiteral("/api/r18/chapter/pages"), payload, QStringLiteral("pages"));
-}
-
-void R18Controller::enableSource(const QString& sourceId, bool enabled)
-{
-    QJsonObject payload;
-    payload[QStringLiteral("source_id")] = sourceId;
-    postJson(enabled ? QStringLiteral("/api/r18/source/enable")
-                     : QStringLiteral("/api/r18/source/disable"), payload, QStringLiteral("source_state"));
-}
-
-void R18Controller::deleteSource(const QString& sourceId)
-{
-    const QString normalizedSourceId = sourceId.trimmed();
-    if (normalizedSourceId.isEmpty())
-    {
-        setError(QStringLiteral("删除漫画源失败: 源 ID 为空"));
-        return;
-    }
-    if (isReservedR18SourceId(normalizedSourceId))
-    {
-        setPendingDeleteSourceId({});
-        setError(QStringLiteral("内置漫画源不能删除，请删除已导入的 JS 漫画源"));
-        return;
-    }
-
-    QJsonObject payload;
-    payload[QStringLiteral("source_id")] = normalizedSourceId;
-    setPendingDeleteSourceId(normalizedSourceId);
-    setStatusText(QStringLiteral("正在删除漫画源: %1").arg(normalizedSourceId));
-    postJson(QStringLiteral("/api/r18/source/delete"), payload, QStringLiteral("source_delete"));
 }
 
 void R18Controller::toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited)

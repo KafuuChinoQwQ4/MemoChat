@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IWebTransportProvider.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -8,7 +9,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -64,7 +64,7 @@ private:
     WebTransportListenOptions _options;
     WebTransportProviderSessionHooks _hooks;
     lws_context* _context = nullptr;
-    std::thread _service_thread;
+    memochat::runtime::ExplicitThread _service_thread;
     std::atomic_bool _running{false};
     std::atomic_bool _stopping{false};
     mutable std::mutex _mutex;

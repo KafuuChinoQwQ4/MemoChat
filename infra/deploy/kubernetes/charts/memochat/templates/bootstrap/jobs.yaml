@@ -21,13 +21,19 @@ spec:
             - sh
             - -c
             - >
-              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              psql -v ON_ERROR_STOP=1 -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              -U {{ .Values.externalServices.postgres.user }} -d memo_account
+              -f /migrations/009_memo_account_schema.sql &&
+              psql -v ON_ERROR_STOP=1 -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              -U {{ .Values.externalServices.postgres.user }} -d memo_account
+              -f /migrations/013_r18_access_policy.sql &&
+              psql -v ON_ERROR_STOP=1 -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
               -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
               -f /migrations/001_business_baseline.sql &&
-              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              psql -v ON_ERROR_STOP=1 -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
               -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
               -f /migrations/002_chat_event_outbox.sql &&
-              psql -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
+              psql -v ON_ERROR_STOP=1 -h {{ .Values.externalServices.postgres.host }} -p {{ .Values.externalServices.postgres.port }}
               -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
               -f /migrations/001_memo_ops_baseline.sql
           volumeMounts:

@@ -7,6 +7,7 @@
 - 对于 WSLg/Linux 的玻璃效果和透明圆角窗口，避免使用未遮罩的 `ShaderEffectSource`/`MultiEffect`、整窗 `layer.*`、`QRegion` mask，以及依赖 `Rectangle.clip` 来裁剪圆角子元素。应使用 Linux 专用的抗锯齿 QML/Shape 外壳，带透明内边距，并且不要有方形背景板。
 
 ## 项目规则
+- C++ 不引入异常处理：C++ 代码中不使用 try-catch；调用链中的错误通过返回值、错误码或断言处理，不依赖异常传播。工业链路中 C++ 异常开销大、链路长，默认不引入。涉及必须调用可能抛出的第三方/平台 API 时，须在注释中说明原因并最小化捕获范围。
 - 不向后兼容：3.0 不兼容 2.0，开发阶段一律按最新协议/数据格式实现，旧客户端靠强制更新机制拦截升级，不靠代码兼容。改字段直接换新 key，不写"读新回退旧"的双读、不留旧字段别名、不写历史数据迁移读路径。删这类旧兼容前先按 `skills/no-backward-compat.md` 分类，避免误删平台/库适配、错误兜底、强制更新机制本身。
 - 保持实现简洁，优先复用现有模式和 helper；不要为任务范围外的抽象、兼容层或顺手重构显著增加代码量。
 - C++ 标准按目标分开：服务端 C++ 目标遵循 `MEMOCHAT_CXX_STANDARD`，当前为 C++26；Qt/QML 客户端和 MemoOps 目标遵循 `MEMOCHAT_QT_CXX_STANDARD`，当前为 C++23，Qt 版本以当前 CMake preset/cache 的 6.8.x kit 为准。

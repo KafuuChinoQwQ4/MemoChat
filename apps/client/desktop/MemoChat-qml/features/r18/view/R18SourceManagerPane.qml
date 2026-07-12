@@ -52,10 +52,7 @@ Item {
     signal officialCatalogRefreshRequested()
     signal presetSourceSelected(string sourceId)
     signal sourceCatalogPathRequested()
-    signal officialSourceImportRequested(int sourceIndex)
     signal importedSourceOpenRequested(string sourceId)
-    signal importedSourceDeleteRequested(string sourceId)
-    signal sourceEnabledChanged(string sourceId, bool enabled)
     signal sourceFeedKeywordEdited(string keyword)
     signal sourceFeedRequested(string keyword)
     signal sourceTagsRequested()
@@ -141,7 +138,7 @@ Item {
 
             Repeater {
                 model: [
-                    { "title": "添加", "mode": 0, "width": 92 },
+                    { "title": "源列表", "mode": 0, "width": 92 },
                     { "title": "官方目录", "mode": 1, "width": 104 },
                     { "title": "漫画", "mode": 2, "width": 92 },
                     { "title": "标签", "mode": 3, "width": 92 }
@@ -209,7 +206,6 @@ Item {
                         Layout.fillHeight: true
                         sourceModel: root.r18Controller ? root.r18Controller.sourceModel : null
                         currentSourceId: root.currentSourceId
-                        pendingDeleteSourceId: root.r18Controller ? root.r18Controller.pendingDeleteSourceId : ""
                         loading: root.loading
                         itemFillColor: root.itemFillColor
                         itemHoverFillColor: root.itemHoverFillColor
@@ -224,16 +220,8 @@ Item {
                         importButtonColor: root.homeImportButtonColor
                         importButtonHoverColor: root.homeImportButtonHoverColor
                         importButtonPressedColor: root.homeImportButtonPressedColor
-                        onSourceEnabledChanged: function(sourceId, enabled) {
-                            root.sourceEnabledChanged(sourceId, enabled)
-                        }
                         onImportedSourceOpenRequested: function(sourceId) {
                             root.importedSourceOpenRequested(sourceId)
-                        }
-                        onImportedSourceDeleteRequested: function(sourceId) {
-                            root.pendingDeleteSourceId = sourceId || ""
-                            root.pendingDeleteSourceTitle = root.sourceTitleForId(root.pendingDeleteSourceId)
-                            pendingDeleteDialog.open()
                         }
                     }
                 }
@@ -261,9 +249,6 @@ Item {
                 onOfficialCatalogRefreshRequested: root.officialCatalogRefreshRequested()
                 onSourceHelpToggled: root.sourceHelpToggled()
                 onPresetSourceSelected: function(sourceId) { root.presetSourceSelected(sourceId) }
-                onOfficialSourceImportRequested: function(sourceIndex) {
-                    root.officialSourceImportRequested(sourceIndex)
-                }
             }
 
             R18SourceFeedPane {
@@ -313,37 +298,4 @@ Item {
         }
     }
 
-    property string pendingDeleteSourceId: ""
-    property string pendingDeleteSourceTitle: ""
-
-    Dialog {
-        id: pendingDeleteDialog
-        modal: true
-        title: "删除漫画源"
-        standardButtons: Dialog.Cancel | Dialog.Ok
-        anchors.centerIn: Overlay.overlay
-
-        Text {
-            width: 280
-            text: root.pendingDeleteSourceId.length > 0
-                  ? ("确认删除漫画源 “" + (root.pendingDeleteSourceTitle || root.pendingDeleteSourceId)
-                     + "”？\n确认后会从已导入源列表移除。")
-                  : "确认删除这个漫画源？"
-            color: root.textPrimaryColor
-            font.pixelSize: 13
-            wrapMode: Text.Wrap
-        }
-
-        onAccepted: {
-            if (root.pendingDeleteSourceId.length > 0) {
-                root.importedSourceDeleteRequested(root.pendingDeleteSourceId)
-            }
-            root.pendingDeleteSourceId = ""
-            root.pendingDeleteSourceTitle = ""
-        }
-        onRejected: {
-            root.pendingDeleteSourceId = ""
-            root.pendingDeleteSourceTitle = ""
-        }
-    }
 }

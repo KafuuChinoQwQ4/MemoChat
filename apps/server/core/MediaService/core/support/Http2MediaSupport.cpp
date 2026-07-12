@@ -8,11 +8,11 @@
 #include "RedisMgr.hpp"
 #include "const.hpp"
 #include "logging/Logger.hpp"
+#include "random/Uuid.hpp"
 #include "support/UserTokenValidator.hpp"
 
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -20,6 +20,7 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -28,6 +29,22 @@ import memochat.media.config_algorithms;
 
 namespace
 {
+template <typename Integer> bool ParseIntegerLocal(std::string_view raw, Integer* out)
+{
+    if (out == nullptr || raw.empty())
+    {
+        return false;
+    }
+    Integer value{};
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (ec != std::errc{} || ptr != raw.data() + raw.size())
+    {
+        return false;
+    }
+    *out = value;
+    return true;
+}
+
 struct MediaUploadGrantSpecLocal
 {
     std::vector<int> grant_uids;
@@ -238,7 +255,9 @@ std::string GuessContentTypeLocal(const std::string& fileName, const std::string
 
 std::filesystem::path UploadRootLocal()
 {
-    return std::filesystem::current_path() / "uploads";
+    std::error_code filesystem_error;
+    const auto current_path = std::filesystem::current_path(filesystem_error);
+    return filesystem_error ? std::filesystem::path("uploads") : current_path / "uploads";
 }
 
 std::filesystem::path ChunkRootLocal()
@@ -267,35 +286,71 @@ bool ResolveAccessTokenUidLocal(const std::string& access_token, int& uid)
     return memochat::auth::ResolveUserIdFromToken(access_token, uid);
 }
 
-std::set<int> ListUploadedChunkIndexesLocal(const std::filesystem::path& chunk_dir)
+bool ListUploadedChunkIndexesLocal(const std::filesystem::path& chunk_dir, std::set<int>* indexes, std::string* error)
 {
-    std::set<int> indexes;
-    if (!std::filesystem::exists(chunk_dir))
-        return indexes;
-    for (const auto& entry : std::filesystem::directory_iterator(chunk_dir))
+    if (indexes == nullptr)
     {
-        if (!entry.is_regular_file())
-            continue;
-        const std::string stem = entry.path().stem().string();
-        if (stem.empty())
-            continue;
-        bool digits = std::all_of(stem.begin(),
-                                  stem.end(),
-                                  [](char c)
-                                  {
-                                      return std::isdigit(static_cast<unsigned char>(c));
-                                  });
-        if (!digits)
-            continue;
-        try
+        if (error != nullptr)
+            *error = "uploaded chunk output is null";
+        return false;
+    }
+    indexes->clear();
+    if (error != nullptr)
+        error->clear();
+
+    std::error_code filesystem_error;
+    const bool chunk_dir_exists = std::filesystem::exists(chunk_dir, filesystem_error);
+    if (filesystem_error)
+    {
+        if (error != nullptr)
+            *error = "check chunk directory failed: " + filesystem_error.message();
+        return false;
+    }
+    if (!chunk_dir_exists)
+        return true;
+
+    std::filesystem::directory_iterator entry(chunk_dir, filesystem_error);
+    if (filesystem_error)
+    {
+        if (error != nullptr)
+            *error = "open chunk directory failed: " + filesystem_error.message();
+        return false;
+    }
+    const std::filesystem::directory_iterator end;
+    while (entry != end)
+    {
+        std::error_code entry_error;
+        const bool regular_file = entry->is_regular_file(entry_error);
+        if (entry_error)
         {
-            indexes.insert(std::stoi(stem));
+            if (error != nullptr)
+                *error = "inspect chunk entry failed: " + entry_error.message();
+            return false;
         }
-        catch (...)
+        if (regular_file)
         {
+            const std::string stem = entry->path().stem().string();
+            const bool digits = !stem.empty() && std::all_of(stem.begin(),
+                                                             stem.end(),
+                                                             [](char c)
+                                                             {
+                                                                 return std::isdigit(static_cast<unsigned char>(c));
+                                                             });
+            int index = 0;
+            if (digits && ParseIntegerLocal(stem, &index))
+            {
+                indexes->insert(index);
+            }
+        }
+        entry.increment(filesystem_error);
+        if (filesystem_error)
+        {
+            if (error != nullptr)
+                *error = "iterate chunk directory failed: " + filesystem_error.message();
+            return false;
         }
     }
-    return indexes;
+    return true;
 }
 
 bool SaveJsonFileLocal(const std::filesystem::path& path, const memochat::json::JsonValue& root)
@@ -313,7 +368,8 @@ bool SaveJsonFileLocal(const std::filesystem::path& path, const memochat::json::
 
 bool LoadJsonFileLocal(const std::filesystem::path& path, memochat::json::JsonValue& root)
 {
-    if (!std::filesystem::exists(path))
+    std::error_code filesystem_error;
+    if (!std::filesystem::exists(path, filesystem_error) || filesystem_error)
         return false;
     std::ifstream ifs(path, std::ios::binary);
     if (!ifs.is_open())
@@ -347,39 +403,33 @@ IMediaStorage& MediaStorageForLocal(const std::string& provider)
     return GetMediaStorage();
 }
 
-std::string NewIdStringLocal()
+bool NewIdStringLocal(std::string* value, std::string* error)
 {
-    return boost::uuids::to_string(boost::uuids::random_generator()());
+    if (value == nullptr)
+    {
+        if (error != nullptr)
+        {
+            *error = "identifier output is null";
+        }
+        return false;
+    }
+    return memochat::random::GenerateUuid(*value, error);
 }
 
 int64_t ParseConfigInt64Local(const std::string& raw, int64_t fallback)
 {
-    if (raw.empty())
+    int64_t value = 0;
+    if (!ParseIntegerLocal(raw, &value) || value <= 0)
         return fallback;
-    try
-    {
-        int64_t v = std::stoll(raw);
-        return v <= 0 ? fallback : v;
-    }
-    catch (...)
-    {
-        return fallback;
-    }
+    return value;
 }
 
 int ParseConfigIntLocal(const std::string& raw, int fallback)
 {
-    if (raw.empty())
+    int value = 0;
+    if (!ParseIntegerLocal(raw, &value) || value <= 0)
         return fallback;
-    try
-    {
-        int v = std::stoi(raw);
-        return v <= 0 ? fallback : v;
-    }
-    catch (...)
-    {
-        return fallback;
-    }
+    return value;
 }
 
 struct MediaConfigLocal
@@ -486,7 +536,17 @@ MediaResult HandleUploadMediaInit(const std::string& access_token,
         return result;
     }
 
-    const std::string upload_id = NewIdStringLocal();
+    std::string upload_id;
+    std::string id_error;
+    if (!NewIdStringLocal(&upload_id, &id_error))
+    {
+        memolog::LogError("media.upload.id_generation_failed",
+                          "upload identifier generation failed",
+                          {{"uid", std::to_string(uid)}, {"error", id_error}});
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = "generate upload id failed";
+        return result;
+    }
     int chunk_size = cfg.chunk_size_bytes;
     int total_chunks = static_cast<int>((file_size + chunk_size - 1) / chunk_size);
     std::error_code ec;
@@ -686,7 +746,15 @@ MediaResult HandleUploadMediaStatus(const std::string& access_token, const std::
     response_dto.upload_id = upload_id;
     response_dto.total_chunks = session.total_chunks;
     response_dto.chunk_size = session.chunk_size;
-    for (int idx : ListUploadedChunkIndexesLocal(ChunkDirForLocal(upload_id)))
+    std::set<int> uploaded;
+    std::string list_error;
+    if (!ListUploadedChunkIndexesLocal(ChunkDirForLocal(upload_id), &uploaded, &list_error))
+    {
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = list_error;
+        return result;
+    }
+    for (int idx : uploaded)
     {
         response_dto.uploaded_chunks.push_back(idx);
     }
@@ -737,7 +805,14 @@ MediaResult HandleUploadMediaComplete(const std::string& access_token, const std
     }
 
     std::filesystem::path chunk_dir = ChunkDirForLocal(upload_id);
-    std::set<int> uploaded = ListUploadedChunkIndexesLocal(chunk_dir);
+    std::set<int> uploaded;
+    std::string list_error;
+    if (!ListUploadedChunkIndexesLocal(chunk_dir, &uploaded, &list_error))
+    {
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = list_error;
+        return result;
+    }
     for (int i = 0; i < total_chunks; ++i)
     {
         if (uploaded.find(i) == uploaded.end())
@@ -789,7 +864,17 @@ MediaResult HandleUploadMediaComplete(const std::string& access_token, const std
         return result;
     }
 
-    std::string media_key = NewIdStringLocal();
+    std::string media_key;
+    std::string id_error;
+    if (!NewIdStringLocal(&media_key, &id_error))
+    {
+        memolog::LogError("media.upload.id_generation_failed",
+                          "media identifier generation failed",
+                          {{"uid", std::to_string(uid)}, {"error", id_error}});
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = "generate media id failed";
+        return result;
+    }
     std::string storage_path;
     std::string storage_error;
     IMediaStorage& storage = MediaStorageForLocal(storage_provider);
@@ -891,7 +976,17 @@ MediaResult HandleUploadMediaSimple(const std::string& access_token,
 
     std::string safe_name = SanitizeFileNameLocal(file_name);
     std::string safe_mime = mime.empty() ? GuessContentTypeLocal(safe_name, "") : mime;
-    std::string media_key = NewIdStringLocal();
+    std::string media_key;
+    std::string id_error;
+    if (!NewIdStringLocal(&media_key, &id_error))
+    {
+        memolog::LogError("media.upload.id_generation_failed",
+                          "media identifier generation failed",
+                          {{"uid", std::to_string(uid)}, {"error", id_error}});
+        result.error = ErrorCodes::MediaUploadFailed;
+        result.message = "generate media id failed";
+        return result;
+    }
     std::filesystem::path temp_dir = ChunkRootLocal() / ("legacy_" + media_key);
     std::error_code ec;
     std::filesystem::create_directories(temp_dir, ec);

@@ -8,10 +8,11 @@
 | --- | --- |
 | [`auth/`](auth/_TREE.md) | 认证密钥、密码哈希与跨服务登录票据定义 |
 | [`cluster/`](cluster/_TREE.md) | 集群节点发现（含 Etcd 实现） |
-| [`db/`](db/_TREE.md) | 数据库（pqxx）兼容垫片 |
+| [`db/`](db/_TREE.md) | 基于 libpq 的无异常 PostgreSQL 访问适配层 |
 | [`json/`](json/_TREE.md) | Glaze JSON 序列化兼容层 |
 | [`logging/`](logging/_TREE.md) | 日志、脱敏与 OpenTelemetry 遥测 |
 | [`proto/`](proto/_TREE.md) | 跨服务共享的 gRPC/protobuf 定义 |
+| [`random/`](random/_TREE.md) | 返回码式安全随机 UUID 生成 |
 | [`reflection/`](reflection/_TREE.md) | C++26 标准反射编译期字段元信息辅助层 |
 | [`runtime/`](runtime/_TREE.md) | 运行时配置与 IO 上下文池等基础设施 |
 

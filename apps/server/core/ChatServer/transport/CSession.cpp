@@ -2,6 +2,7 @@
 
 #include "ChatSessionCleanupSupport.hpp"
 #include "json/GlazeCompat.hpp"
+#include "random/Uuid.hpp"
 
 #include <iostream>
 #include <utility>
@@ -26,8 +27,7 @@ CSession::CSession(IChatSessionHost* host)
     : _server(host)
     , _user_uid(0)
 {
-    boost::uuids::uuid a_uuid = boost::uuids::random_generator()();
-    _session_id = boost::uuids::to_string(a_uuid);
+    memochat::random::GenerateUuid(_session_id, &_startup_error);
     _last_heartbeat = std::time(nullptr);
     _last_online_route_refresh = 0;
 }
@@ -40,6 +40,16 @@ CSession::~CSession()
 std::string& CSession::GetSessionId()
 {
     return _session_id;
+}
+
+bool CSession::Ready() const noexcept
+{
+    return _startup_error.empty();
+}
+
+const std::string& CSession::startupError() const noexcept
+{
+    return _startup_error;
 }
 
 void CSession::SetUserId(int uid)
@@ -94,7 +104,7 @@ void CSession::NotifyOffline(int uid)
     Send(JsonToWireString(rtvalue), ID_NOTIFY_OFF_LINE_REQ);
 }
 
-bool CSession::IsHeartbeatExpired(std::time_t& now)
+bool CSession::IsHeartbeatExpired(std::time_t now)
 {
     return isHeartbeatExpired(now);
 }

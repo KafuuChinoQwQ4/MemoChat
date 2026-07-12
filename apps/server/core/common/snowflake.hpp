@@ -3,7 +3,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <stdexcept>
 #include <mutex>
 
 class snowflake_nonlock
@@ -52,20 +51,21 @@ public:
 
     snowflake& operator=(const snowflake&) = delete;
 
-    void init(int64_t workerid, int64_t datacenterid)
+    bool init(int64_t workerid, int64_t datacenterid)
     {
         if (workerid > MAX_WORKER_ID || workerid < 0)
         {
-            throw std::runtime_error("worker Id can't be greater than 31 or less than 0");
+            return false;
         }
 
         if (datacenterid > MAX_DATACENTER_ID || datacenterid < 0)
         {
-            throw std::runtime_error("datacenter Id can't be greater than 31 or less than 0");
+            return false;
         }
 
         workerid_ = workerid;
         datacenterid_ = datacenterid;
+        return true;
     }
 
     int64_t nextid()

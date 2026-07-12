@@ -51,8 +51,8 @@ int GetRefreshTokenTtlSec();
 bool TryLoadCachedLoginProfile(const std::string& email, UserInfo& userInfo);
 void CacheLoginProfile(const std::string& email, const UserInfo& userInfo);
 bool RefreshLoginProfileFromDb(const std::string& email, UserInfo& userInfo);
-void InvalidateLoginCacheByEmail(const std::string& email);
-void InvalidateLoginCacheByUid(int uid);
+bool InvalidateLoginCacheByEmail(const std::string& email);
+bool InvalidateLoginCacheByUid(int uid);
 std::vector<ChatRouteNode> LoadGateChatRouteNodes(std::vector<std::string>* load_snapshot = nullptr,
                                                   std::vector<std::string>* least_loaded_snapshot = nullptr);
 std::vector<ChatRouteNode> SelectChatRouteForLogin(int uid,

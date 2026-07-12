@@ -134,8 +134,6 @@ EXPECTED_GROUPS = {
         "PostgresDaoUsers.cpp",
         "PostgresMgr.cpp",
         "PostgresMgr.hpp",
-        "PostgresPool.cpp",
-        "PostgresPool.hpp",
         "ChatMessageRepository.cpp",
         "ChatMessageRepository.hpp",
         "ChatOutboxRepairScheduler.cpp",
@@ -271,7 +269,6 @@ EXPECTED_MICROSERVICE_TARGETS = {
         "persistence/PostgresDaoPrivateMessages.cpp",
         "persistence/PostgresDaoUsers.cpp",
         "persistence/PostgresMgr.cpp",
-        "persistence/PostgresPool.cpp",
         "persistence/ChatMessageRepository.cpp",
         "persistence/ChatRelationRepository.cpp",
         "persistence/RedisRelationBootstrapCache.cpp",
@@ -510,7 +507,9 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertTrue(worker_source.is_file(), "ChatDeliveryWorker source is missing")
 
         worker = worker_source.read_text(encoding="utf-8")
-        self.assertIn("memolog::Logger::Init(delivery_worker_modules::LoggerName(), log_cfg)", worker)
+        self.assertIn(
+            "if (!memolog::Logger::Init(delivery_worker_modules::LoggerName(), log_cfg, &startup_error))", worker
+        )
         self.assertIn("memolog::Telemetry::Init(delivery_worker_modules::LoggerName(), telemetry_cfg)", worker)
         self.assertIn("LogicSystem::GetInstance()", worker)
         self.assertNotIn("ChatIngressCoordinator", worker)
@@ -605,7 +604,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            "memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg)",
+            "if (!memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg, &startup_error))",
             "memolog::Telemetry::Init(relation_query_service_modules::LoggerName(), telemetry_cfg)",
             "ChatRelationInternalGrpcService",
             "ChatRelationService",
@@ -613,7 +612,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "RedisRelationBootstrapCache",
             "grpc::ServerBuilder",
             "builder.RegisterService(&relation_grpc_service)",
-            "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
+            "if (!ParseConfigPath(argc, argv, config_path, startup_error))",
+            "ConfigMgr::InitConfigPath(config_path)",
             'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Host", relation_query_service_modules::DefaultRpcHost())',
             'ConfigValueOrDefault(cfg, "RelationQueryRpc", "Port", relation_query_service_modules::DefaultRpcPort())',
         ):
@@ -701,7 +701,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            "memolog::Logger::Init(relation_service_worker_modules::LoggerName(), log_cfg)",
+            "if (!memolog::Logger::Init(relation_service_worker_modules::LoggerName(), log_cfg, &startup_error))",
             "memolog::Telemetry::Init(relation_service_worker_modules::LoggerName(), telemetry_cfg)",
             "ChatRelationInternalGrpcService",
             "ChatRelationService",
@@ -709,7 +709,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "RedisRelationBootstrapCache",
             "grpc::ServerBuilder",
             "builder.RegisterService(&relation_grpc_service)",
-            "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
+            "if (!ParseConfigPath(argc, argv, config_path, startup_error))",
+            "ConfigMgr::InitConfigPath(config_path)",
             'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Host", relation_service_worker_modules::DefaultRpcHost())',
             'ConfigValueOrDefault(cfg, "RelationServiceRpc", "Port", relation_service_worker_modules::DefaultRpcPort())',
         ):
@@ -797,7 +798,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
         source = service_source.read_text(encoding="utf-8")
         for token in (
-            "memolog::Logger::Init(message_service_modules::LoggerName(), log_cfg)",
+            "if (!memolog::Logger::Init(message_service_modules::LoggerName(), log_cfg, &startup_error))",
             "memolog::Telemetry::Init(message_service_modules::LoggerName(), telemetry_cfg)",
             "ChatMessageInternalGrpcService",
             "PrivateMessageService",
@@ -810,7 +811,8 @@ class ChatServerStructureTests(unittest.TestCase):
             "grpc::ServerBuilder",
             "static_cast<chatinternal::ChatPrivateMessageInternalService::Service*>(&message_grpc_service)",
             "static_cast<chatinternal::ChatGroupMessageInternalService::Service*>(&message_grpc_service)",
-            "ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv))",
+            "if (!ParseConfigPath(argc, argv, config_path, startup_error))",
+            "ConfigMgr::InitConfigPath(config_path)",
             'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Host", message_service_modules::DefaultRpcHost())',
             'ConfigValueOrDefault(cfg, "MessageServiceRpc", "Port", message_service_modules::DefaultRpcPort())',
         ):
@@ -1223,16 +1225,18 @@ class ChatServerStructureTests(unittest.TestCase):
         runtime_header = runtime_header_path.read_text(encoding="utf-8")
         self.assertIn("class ChatDeliveryRuntime", runtime_header)
         self.assertIn("using LoopFn = std::function<void()>", runtime_header)
-        self.assertIn("void Start()", runtime_header)
+        self.assertIn("bool Start(std::string* error = nullptr)", runtime_header)
         self.assertIn("void StopAndJoin()", runtime_header)
         self.assertIn("bool StopRequested() const", runtime_header)
 
         runtime_source = runtime_source_path.read_text(encoding="utf-8")
-        self.assertIn("std::thread(&ChatDeliveryRuntime::RunLoop", runtime_source)
+        self.assertNotIn("std::thread", runtime_source)
+        self.assertIn("if (!_event_worker_thread.Start(", runtime_source)
+        self.assertIn("if (!_task_worker_thread.Start(", runtime_source)
         self.assertIn("delivery_runtime_modules::StopRequestedWhenStarting()", runtime_source)
         self.assertIn("delivery_runtime_modules::StopRequestedWhenStopping()", runtime_source)
-        self.assertIn("_event_worker_thread.joinable()", runtime_source)
-        self.assertIn("_task_worker_thread.joinable()", runtime_source)
+        self.assertIn("_event_worker_thread.Joinable()", runtime_source)
+        self.assertIn("_task_worker_thread.Joinable()", runtime_source)
 
         composition_header = runtime_composition_header()
         self.assertIn("class ChatDeliveryRuntime;", composition_header)
@@ -1248,7 +1252,7 @@ class ChatServerStructureTests(unittest.TestCase):
 
         composition_source = runtime_composition_source()
         self.assertIn("_delivery_runtime = std::make_unique<ChatDeliveryRuntime>", composition_source)
-        self.assertIn("_delivery_runtime->Start();", composition_source)
+        self.assertIn("return _delivery_runtime->Start(error);", composition_source)
         self.assertIn("_delivery_runtime->StopAndJoin();", composition_source)
         self.assertNotIn("std::thread(&LogicSystem::DealAsyncEvents", logic_source())
         self.assertNotIn("std::thread(&LogicSystem::DealTasks", logic_source())
@@ -2412,7 +2416,10 @@ class ChatServerStructureTests(unittest.TestCase):
         factory_source = factory_source_path.read_text(encoding="utf-8")
         self.assertIn('#include "ChatRelationService.hpp"', factory_source)
         self.assertIn('#include "logging/Logger.hpp"', factory_source)
-        self.assertIn("<stdexcept>", factory_source)
+        self.assertNotIn("<stdexcept>", factory_source)
+        self.assertNotIn("std::runtime_error", factory_source)
+        self.assertIn("std::string* error", factory_source)
+        self.assertIn("return nullptr", factory_source)
         self.assertIn("std::make_unique<ChatRelationService>", factory_source)
         self.assertIn('#include "RelationGrpcServiceAdapter.hpp"', factory_source)
         self.assertIn("memochat::chat::factory::modules::IsInProcessBackend", factory_source)
@@ -3039,7 +3046,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn('#include "PrivateMessageService.hpp"', factory_source)
         self.assertIn('#include "GroupMessageService.hpp"', factory_source)
         self.assertIn('#include "logging/Logger.hpp"', factory_source)
-        self.assertIn("<stdexcept>", factory_source)
+        self.assertNotIn("<stdexcept>", factory_source)
+        self.assertNotIn("std::runtime_error", factory_source)
+        self.assertIn("std::string* error", factory_source)
+        self.assertIn("return nullptr", factory_source)
         self.assertIn("std::make_unique<PrivateMessageService>", factory_source)
         self.assertIn("IRelationRepository* relation_repository", factory_source)
         self.assertIn("relation_repository,", factory_source)
@@ -3746,7 +3756,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("_private_message_service = CreatePrivateMessageService", composition_source)
         self.assertIn("*_message_service_config", composition_source)
         self.assertIn("_group_message_service =", composition_source)
-        self.assertIn("_delivery_runtime->Start();", composition_source)
+        self.assertIn("return _delivery_runtime->Start(error);", composition_source)
         self.assertIn("_composition = std::make_unique<ChatRuntimeComposition>(*this)", logic_source)
         self.assertNotIn("_chat_session_service = std::make_unique<ChatSessionService>", logic_source)
 
@@ -3879,21 +3889,19 @@ class ChatServerStructureTests(unittest.TestCase):
 
         app_source = (CHATSERVER_DIR / "app" / "ChatServer.cpp").read_text(encoding="utf-8")
         self.assertIn("const bool ingress_enabled = memochat::chatruntime::IsIngressEnabled();", app_source)
-        self.assertIn(
-            "if (ingress_enabled)\n        {\n            CleanupTrackedOnlineState(server_name);", app_source
-        )
-        self.assertIn(
-            "if (ingress_enabled)\n                {\n                    CleanupTrackedOnlineState(server_name);",
+        self.assertEqual(app_source.count("CleanupTrackedOnlineState(server_name);"), 2)
+        self.assertRegex(
             app_source,
+            r"if \(ingress_enabled\)\s*\{\s*ingress_coordinator =",
         )
-        self.assertIn("if (ingress_enabled)\n        {\n            ingress_coordinator =", app_source)
 
         composition_source = runtime_composition_source()
         self.assertIn(
-            "if (_delivery_runtime && memochat::chatruntime::IsWorkerEnabled())\n    {\n        _delivery_runtime->Start();",
+            "if (_delivery_runtime && memochat::chatruntime::IsWorkerEnabled())\n    {\n"
+            "        return _delivery_runtime->Start(error);",
             composition_source,
         )
-        self.assertIn("_composition->StartDeliveryRuntimeIfEnabled();", logic_source())
+        self.assertIn("if (!_composition->StartDeliveryRuntimeIfEnabled(&error))", logic_source())
         self.assertNotIn("_delivery_runtime->Start();\n}", logic_source())
 
         for config_name in (

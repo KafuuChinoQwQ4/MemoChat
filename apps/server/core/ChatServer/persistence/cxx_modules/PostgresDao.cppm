@@ -12,11 +12,6 @@ bool HasPostgresHost(bool host_empty)
     return !host_empty;
 }
 
-bool ShouldEnablePostgres(bool connection_string_empty)
-{
-    return !connection_string_empty;
-}
-
 const char* DefaultSslMode()
 {
     return "disable";
@@ -37,13 +32,4 @@ const char* SelectSchema(bool schema_empty, const char* schema)
     return schema_empty || schema == nullptr ? DefaultSchema() : schema;
 }
 
-int StartupPoolSize()
-{
-    return 16;
-}
-
-bool ShouldUsePostgresWarmupPath(bool postgres_enabled)
-{
-    return postgres_enabled;
-}
 } // namespace memochat::chat::persistence::postgres_dao::modules

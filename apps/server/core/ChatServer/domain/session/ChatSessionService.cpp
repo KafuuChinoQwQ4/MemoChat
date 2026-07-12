@@ -10,6 +10,7 @@
 #include "json/GlazeCompat.hpp"
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -280,17 +281,31 @@ void ChatSessionService::HandleLogin(const std::shared_ptr<IChatSession>& sessio
 
     if (!_session_config || _session_config->FeatureFlagDefaultTrue("chat_login_offline_push"))
     {
-        std::thread(
-            [this, session, uid]()
-            {
-                const int delay_ms = _session_config ? _session_config->LoginOfflinePushDelayMs() : 0;
-                if (delay_ms > 0)
+        memochat::runtime::ExplicitThread worker;
+        std::string thread_error;
+        if (!worker.Start(
+                [this, session, uid]() noexcept
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-                }
-                PushOfflineMessages(session, uid);
-            })
-            .detach();
+                    const int delay_ms = _session_config ? _session_config->LoginOfflinePushDelayMs() : 0;
+                    if (delay_ms > 0)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                    }
+                    PushOfflineMessages(session, uid);
+                },
+                &thread_error))
+        {
+            memolog::LogError("login.offline_push_thread_start_failed",
+                              "failed to start offline push worker",
+                              {{"uid", std::to_string(uid)}, {"error", thread_error}});
+            PushOfflineMessages(session, uid);
+        }
+        else if (!worker.Detach(&thread_error))
+        {
+            memolog::LogError("login.offline_push_thread_detach_failed",
+                              "failed to detach offline push worker",
+                              {{"uid", std::to_string(uid)}, {"error", thread_error}});
+        }
     }
 }
 
@@ -401,119 +416,103 @@ void ChatSessionService::HandleHeartbeat(const std::shared_ptr<IChatSession>& se
 
 void ChatSessionService::PushOfflineMessages(const std::shared_ptr<IChatSession>& session, int uid)
 {
-    try
+    if (!session)
     {
-        if (!session)
+        memolog::LogWarn("chat.login.offline_push_skipped",
+                         "offline push skipped for null session",
+                         {{"uid", std::to_string(uid)}});
+        return;
+    }
+
+    constexpr int kOfflineBatchSize = 50;
+    constexpr int kMaxOfflineBatches = 10;
+
+    memolog::LogInfo("chat.login.offline_push_start",
+                     "starting offline message push",
+                     {{"uid", std::to_string(uid)}, {"session_id", session->sessionId()}});
+
+    int pushed_total = 0;
+    int64_t pagination_cursor_ts = 0;
+    std::string pagination_cursor_msg_id;
+
+    for (int batch = 0; batch < kMaxOfflineBatches; ++batch)
+    {
+        std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
+        if (!_session_repository ||
+            !_session_repository->GetUndeliveredPrivateMessages(uid,
+                                                                pagination_cursor_ts,
+                                                                pagination_cursor_msg_id,
+                                                                kOfflineBatchSize,
+                                                                messages) ||
+            messages.empty())
         {
-            memolog::LogWarn("chat.login.offline_push_skipped",
-                             "offline push skipped for null session",
-                             {{"uid", std::to_string(uid)}});
-            return;
+            break;
         }
 
-        constexpr int kOfflineBatchSize = 50;
-        constexpr int kMaxOfflineBatches = 10;
-
-        memolog::LogInfo("chat.login.offline_push_start",
-                         "starting offline message push",
-                         {{"uid", std::to_string(uid)}, {"session_id", session->sessionId()}});
-
-        int pushed_total = 0;
-        int64_t pagination_cursor_ts = 0;
-        std::string pagination_cursor_msg_id;
-
-        for (int batch = 0; batch < kMaxOfflineBatches; ++batch)
+        // 按 from_uid 分组
+        std::map<int, std::vector<std::shared_ptr<PrivateMessageInfo>>> msgs_by_sender;
+        for (const auto& msg : messages)
         {
-            std::vector<std::shared_ptr<PrivateMessageInfo>> messages;
-            if (!_session_repository ||
-                !_session_repository->GetUndeliveredPrivateMessages(uid,
-                                                                    pagination_cursor_ts,
-                                                                    pagination_cursor_msg_id,
-                                                                    kOfflineBatchSize,
-                                                                    messages) ||
-                messages.empty())
+            if (msg && msg->from_uid != uid)
             {
-                break;
-            }
-
-            // 按 from_uid 分组
-            std::map<int, std::vector<std::shared_ptr<PrivateMessageInfo>>> msgs_by_sender;
-            for (const auto& msg : messages)
-            {
-                if (msg && msg->from_uid != uid)
-                {
-                    msgs_by_sender[msg->from_uid].push_back(msg);
-                    pagination_cursor_ts = msg->created_at;
-                    pagination_cursor_msg_id = msg->msg_id;
-                }
-            }
-
-            for (const auto& [sender_uid, sender_msgs] : msgs_by_sender)
-            {
-                std::string sender_public_user_id;
-                if (_relation_repository)
-                {
-                    const auto sender_info = _relation_repository->GetUserByUid(sender_uid);
-                    if (sender_info)
-                    {
-                        sender_public_user_id = sender_info->user_id;
-                    }
-                }
-                memochat::json::JsonValue text_array(memochat::json::array_t{});
-                for (const auto& msg : sender_msgs)
-                {
-                    msg->from_user_id = sender_public_user_id;
-                    const memochat::json::JsonValue element = memochat::chat::history::output::ToJsonValue(
-                        memochat::chat::history::output::ChatPrivateOfflinePushMessageFromInfo(*msg));
-                    append(text_array, element);
-                }
-
-                const memochat::json::JsonValue notify = memochat::chat::history::output::ToJsonValue(
-                    memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto{.error = ErrorCodes::Success,
-                                                                                     .fromuid = sender_uid,
-                                                                                     .touid = uid,
-                                                                                     .from_user_id =
-                                                                                         sender_public_user_id,
-                                                                                     .text_array = text_array});
-
-                session->send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
-                pushed_total += static_cast<int>(sender_msgs.size());
-
-                memolog::LogInfo("chat.login.offline_push_batch",
-                                 "pushed offline messages batch",
-                                 {{"uid", std::to_string(uid)},
-                                  {"from_uid", std::to_string(sender_uid)},
-                                  {"count", std::to_string(sender_msgs.size())}});
-            }
-
-            if (static_cast<int>(messages.size()) < kOfflineBatchSize)
-            {
-                break;
+                msgs_by_sender[msg->from_uid].push_back(msg);
+                pagination_cursor_ts = msg->created_at;
+                pagination_cursor_msg_id = msg->msg_id;
             }
         }
 
-        if (pushed_total <= 0)
+        for (const auto& [sender_uid, sender_msgs] : msgs_by_sender)
         {
-            memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages", {{"uid", std::to_string(uid)}});
-            return;
+            std::string sender_public_user_id;
+            if (_relation_repository)
+            {
+                const auto sender_info = _relation_repository->GetUserByUid(sender_uid);
+                if (sender_info)
+                {
+                    sender_public_user_id = sender_info->user_id;
+                }
+            }
+            memochat::json::JsonValue text_array(memochat::json::array_t{});
+            for (const auto& msg : sender_msgs)
+            {
+                msg->from_user_id = sender_public_user_id;
+                const memochat::json::JsonValue element = memochat::chat::history::output::ToJsonValue(
+                    memochat::chat::history::output::ChatPrivateOfflinePushMessageFromInfo(*msg));
+                append(text_array, element);
+            }
+
+            const memochat::json::JsonValue notify = memochat::chat::history::output::ToJsonValue(
+                memochat::chat::history::output::ChatPrivateOfflinePushNotifyDto{.error = ErrorCodes::Success,
+                                                                                 .fromuid = sender_uid,
+                                                                                 .touid = uid,
+                                                                                 .from_user_id = sender_public_user_id,
+                                                                                 .text_array = text_array});
+
+            session->send(JsonValueToWireString(notify), ID_NOTIFY_TEXT_CHAT_MSG_REQ);
+            pushed_total += static_cast<int>(sender_msgs.size());
+
+            memolog::LogInfo("chat.login.offline_push_batch",
+                             "pushed offline messages batch",
+                             {{"uid", std::to_string(uid)},
+                              {"from_uid", std::to_string(sender_uid)},
+                              {"count", std::to_string(sender_msgs.size())}});
         }
 
-        memolog::LogInfo("chat.login.offline_push_done",
-                         "offline message push completed",
-                         {{"uid", std::to_string(uid)},
-                          {"session_id", session->sessionId()},
-                          {"pushed_total", std::to_string(pushed_total)}});
+        if (static_cast<int>(messages.size()) < kOfflineBatchSize)
+        {
+            break;
+        }
     }
-    catch (const std::exception& e)
+
+    if (pushed_total <= 0)
     {
-        memolog::LogError("chat.login.offline_push_failed",
-                          "offline message push failed",
-                          {{"uid", std::to_string(uid)}, {"error", e.what()}});
+        memolog::LogInfo("chat.login.offline_push_skipped", "no unread messages", {{"uid", std::to_string(uid)}});
+        return;
     }
-    catch (...)
-    {
-        memolog::LogError("chat.login.offline_push_failed",
-                          "offline message push failed with unknown exception",
-                          {{"uid", std::to_string(uid)}});
-    }
+
+    memolog::LogInfo("chat.login.offline_push_done",
+                     "offline message push completed",
+                     {{"uid", std::to_string(uid)},
+                      {"session_id", session->sessionId()},
+                      {"pushed_total", std::to_string(pushed_total)}});
 }

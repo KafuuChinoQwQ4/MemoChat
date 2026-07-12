@@ -7,6 +7,7 @@
 #include "logging/Logger.hpp"
 
 #include <atomic>
+#include <charconv>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -235,10 +236,20 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
         {
             PCCERT_CONTEXT found_ctx = nullptr;
             std::vector<BYTE> targetHash;
-            for (size_t i = 0; i < cert_thumbprint.size(); i += 2)
+            if (cert_thumbprint.size() % 2 == 0)
             {
-                std::string byte_str = cert_thumbprint.substr(i, 2);
-                targetHash.push_back(static_cast<BYTE>(std::stoi(byte_str, nullptr, 16)));
+                for (size_t i = 0; i < cert_thumbprint.size(); i += 2)
+                {
+                    unsigned int byte = 0;
+                    const char* begin = cert_thumbprint.data() + i;
+                    const auto parsed = std::from_chars(begin, begin + 2, byte, 16);
+                    if (parsed.ec != std::errc{} || parsed.ptr != begin + 2 || byte > 0xff)
+                    {
+                        targetHash.clear();
+                        break;
+                    }
+                    targetHash.push_back(static_cast<BYTE>(byte));
+                }
             }
             for (PCCERT_CONTEXT ctx = CertEnumCertificatesInStore(hStore, nullptr); ctx != nullptr;
                  ctx = CertEnumCertificatesInStore(hStore, ctx))
@@ -304,8 +315,11 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
     }
 
     // Approach 3: Try CERTIFICATE_FILE (cert + key, no password)
-    if (!cred_loaded && !cert_file.empty() && !key_file.empty() && std::filesystem::exists(cert_file) &&
-        std::filesystem::exists(key_file))
+    std::error_code cert_file_error;
+    std::error_code key_file_error;
+    const bool cert_file_exists = !cert_file.empty() && std::filesystem::exists(cert_file, cert_file_error);
+    const bool key_file_exists = !key_file.empty() && std::filesystem::exists(key_file, key_file_error);
+    if (!cred_loaded && cert_file_exists && !cert_file_error && key_file_exists && !key_file_error)
     {
         QUIC_CERTIFICATE_FILE cert{};
         cert.CertificateFile = cert_file.c_str();
@@ -334,7 +348,9 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
     }
 
     // Approach 4: Try CERTIFICATE_PKCS12 (PFX blob with password) — mirrors GateServer fallback
-    if (!cred_loaded && !pfx_file.empty() && std::filesystem::exists(pfx_file))
+    std::error_code pfx_file_error;
+    const bool pfx_file_exists = !pfx_file.empty() && std::filesystem::exists(pfx_file, pfx_file_error);
+    if (!cred_loaded && pfx_file_exists && !pfx_file_error)
     {
         std::ifstream pfx_stream(pfx_file, std::ios::binary);
         if (pfx_stream)
@@ -591,6 +607,15 @@ QUIC_STATUS QUIC_API QuicChatServer::Impl::ListenerCallback(HQUIC, void* context
                                 live_owner.cleanupClosedSession(session_id);
                             });
         });
+
+    if (!connection_context->session->Ready())
+    {
+        memolog::LogError("quic.session.uuid_failed",
+                          "QUIC session UUID generation failed",
+                          {{"error", connection_context->session->startupError()}});
+        connection_context->closing = true;
+        return QUIC_STATUS_OUT_OF_MEMORY;
+    }
 
     {
         std::lock_guard<std::mutex> lock(owner->_session_mutex);

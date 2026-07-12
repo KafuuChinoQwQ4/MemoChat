@@ -13,11 +13,21 @@ static_assert(postgres_mgr_modules::IsCompleteForwardingSurface(postgres_mgr_mod
                                                                 postgres_mgr_modules::CallForwardCount(),
                                                                 postgres_mgr_modules::MediaForwardCount(),
                                                                 postgres_mgr_modules::MomentForwardCount()));
-static_assert(postgres_mgr_modules::ForwardingSurfaceCount() == 35u);
+static_assert(postgres_mgr_modules::ForwardingSurfaceCount() == 38u);
 } // namespace
 
 PostgresMgr::~PostgresMgr()
 {
+}
+
+bool PostgresMgr::Ready() const noexcept
+{
+    return _dao.Ready();
+}
+
+const std::string& PostgresMgr::StartupError() const noexcept
+{
+    return _dao.StartupError();
 }
 
 int PostgresMgr::RegUser(const std::string& name,
@@ -65,6 +75,11 @@ RefreshTokenRotationStatus PostgresMgr::RotateRefreshToken(const std::string& se
                                    user_agent,
                                    ip_hash,
                                    uid);
+}
+
+bool PostgresMgr::ResolveActiveRefreshTokenUserId(const std::string& selector, const std::string& verifier, int& uid)
+{
+    return _dao.ResolveActiveRefreshTokenUserId(selector, verifier, uid);
 }
 
 bool PostgresMgr::RevokeRefreshToken(const std::string& selector, const std::string& verifier, int& uid)
@@ -147,6 +162,16 @@ bool PostgresMgr::HasMediaAccess(int64_t media_id, int uid)
 bool PostgresMgr::GetUserInfo(int uid, UserInfo& user_info)
 {
     return _dao.GetUserInfo(uid, user_info);
+}
+
+bool PostgresMgr::GetR18AccessPolicy(int uid, R18AccessPolicyInfo& policy)
+{
+    return _dao.GetR18AccessPolicy(uid, policy);
+}
+
+bool PostgresMgr::AttestAdultForR18(int uid, int64_t attested_at_ms, R18AccessPolicyInfo& policy)
+{
+    return _dao.AttestAdultForR18(uid, attested_at_ms, policy);
 }
 
 bool PostgresMgr::TestProcedure(const std::string& email, int& uid, std::string& name)

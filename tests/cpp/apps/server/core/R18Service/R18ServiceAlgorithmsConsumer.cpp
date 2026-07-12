@@ -47,6 +47,21 @@ const char* InvalidPluginPackagePayloadMessage()
     return memochat::r18::service::modules::InvalidPluginPackagePayloadMessage();
 }
 
+const char* DefaultSourceAdminHeader()
+{
+    return memochat::r18::service::modules::DefaultSourceAdminHeader();
+}
+
+const char* SourceAdminRequiredMessage()
+{
+    return memochat::r18::service::modules::SourceAdminRequiredMessage();
+}
+
+bool ShouldRejectSourceAdminAuth(bool key_configured, bool supplied_empty, bool token_matches)
+{
+    return memochat::r18::service::modules::ShouldRejectSourceAdminAuth(key_configured, supplied_empty, token_matches);
+}
+
 int SuccessHttpStatus()
 {
     return memochat::r18::service::modules::SuccessHttpStatus();
@@ -55,6 +70,11 @@ int SuccessHttpStatus()
 int UnauthorizedHttpStatus()
 {
     return memochat::r18::service::modules::UnauthorizedHttpStatus();
+}
+
+int ForbiddenHttpStatus()
+{
+    return memochat::r18::service::modules::ForbiddenHttpStatus();
 }
 
 int BadGatewayHttpStatus()

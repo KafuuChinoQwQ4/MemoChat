@@ -4,11 +4,14 @@ namespace memochat::tests::r18::source_service
 {
 unsigned long long ZipMagicMinSize();
 bool IsZipMagic(char first, char second, unsigned long long size);
+unsigned long long MaxSourceImportBytes();
+bool ShouldRejectSourceImport(bool zip_payload, bool js_payload, unsigned long long size);
 int NormalizeSearchPage(int page);
 int PreviewChapterCount();
 int PreviewPageCount();
 unsigned long long ManifestProbeWindow();
 bool MatchesJsSourceProbe(bool has_class, bool has_comic_source, bool has_search);
+bool ShouldDispatchSource(bool source_found, bool source_enabled);
 const char* GateShellPrefix();
 const char* MockSourceId();
 const char* NativeFormat();
@@ -21,6 +24,9 @@ const char* DefaultVersion();
 const char* JmSourceVersion();
 const char* PicacgSourceVersion();
 const char* InvalidPackagePayloadMessage();
+const char* NativePackageRejectedMessage();
+const char* SourcePackageTooLargeMessage();
+const char* SourceDisabledMessage();
 const char* InvalidManifestMessage();
 const char* SourceIdEmptyMessage();
 const char* ReservedSourceIdMessage();
@@ -42,6 +48,18 @@ TEST(R18SourceServiceAlgorithmsTest, PinsZipMagicDetection)
     EXPECT_FALSE(IsZipMagic('P', 'Q', 100));
     EXPECT_FALSE(IsZipMagic('Q', 'K', 100));
     EXPECT_FALSE(IsZipMagic('\0', '\0', 0));
+}
+
+TEST(R18SourceServiceAlgorithmsTest, AcceptsOnlyBoundedJavaScriptImports)
+{
+    using namespace memochat::tests::r18::source_service;
+
+    EXPECT_EQ(MaxSourceImportBytes(), 1024u * 1024u);
+    EXPECT_FALSE(ShouldRejectSourceImport(false, true, MaxSourceImportBytes()));
+    EXPECT_TRUE(ShouldRejectSourceImport(false, true, MaxSourceImportBytes() + 1));
+    EXPECT_TRUE(ShouldRejectSourceImport(true, false, 4));
+    EXPECT_TRUE(ShouldRejectSourceImport(true, true, 128));
+    EXPECT_TRUE(ShouldRejectSourceImport(false, false, 128));
 }
 
 TEST(R18SourceServiceAlgorithmsTest, PinsSearchPageClamp)
@@ -76,6 +94,16 @@ TEST(R18SourceServiceAlgorithmsTest, PinsJsSourceProbeDecision)
     EXPECT_FALSE(MatchesJsSourceProbe(false, false, false));
 }
 
+TEST(R18SourceServiceAlgorithmsTest, DispatchRequiresAnEnabledSource)
+{
+    using namespace memochat::tests::r18::source_service;
+
+    EXPECT_TRUE(ShouldDispatchSource(true, true));
+    EXPECT_FALSE(ShouldDispatchSource(true, false));
+    EXPECT_FALSE(ShouldDispatchSource(false, true));
+    EXPECT_FALSE(ShouldDispatchSource(false, false));
+}
+
 TEST(R18SourceServiceAlgorithmsTest, PinsSourceLiterals)
 {
     using namespace memochat::tests::r18::source_service;
@@ -97,7 +125,10 @@ TEST(R18SourceServiceAlgorithmsTest, PinsErrorMessages)
 {
     using namespace memochat::tests::r18::source_service;
 
-    EXPECT_STREQ(InvalidPackagePayloadMessage(), "plugin package must be a zip file or JavaScript source");
+    EXPECT_STREQ(InvalidPackagePayloadMessage(), "source package must be JavaScript");
+    EXPECT_STREQ(NativePackageRejectedMessage(), "native source packages are not supported");
+    EXPECT_STREQ(SourcePackageTooLargeMessage(), "source package exceeds the 1 MiB limit");
+    EXPECT_STREQ(SourceDisabledMessage(), "source is disabled");
     EXPECT_STREQ(InvalidManifestMessage(), "manifest_json is invalid");
     EXPECT_STREQ(SourceIdEmptyMessage(), "source id is empty");
     EXPECT_STREQ(ReservedSourceIdMessage(), "source id is reserved for a built-in adapter");

@@ -17,9 +17,13 @@ CREATE TABLE IF NOT EXISTS "user" (
     sex integer NOT NULL DEFAULT 0,
     icon varchar(255) NOT NULL DEFAULT '',
     user_id varchar(10),
+    adult_attested_at_ms bigint NOT NULL DEFAULT 0,
+    r18_access_state smallint NOT NULL DEFAULT 0,
     CONSTRAINT uq_user_uid UNIQUE (uid),
     CONSTRAINT uq_user_email UNIQUE (email),
-    CONSTRAINT uq_user_user_id UNIQUE (user_id)
+    CONSTRAINT uq_user_user_id UNIQUE (user_id),
+    CONSTRAINT ck_user_r18_access_state CHECK (r18_access_state IN (0, 1, 2)),
+    CONSTRAINT ck_user_adult_attested_at_ms CHECK (adult_attested_at_ms >= 0)
 );
 CREATE INDEX IF NOT EXISTS idx_user_name ON "user"(name);
 

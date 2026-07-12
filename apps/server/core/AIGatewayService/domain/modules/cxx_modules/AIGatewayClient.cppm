@@ -25,6 +25,21 @@ const char* DefaultAIServerPort()
     return "8095";
 }
 
+const char* DefaultAIServerInternalAuthHeader()
+{
+    return "X-MemoChat-AI-Internal-Key";
+}
+
+const char* DefaultAIServerInternalKeyEnv()
+{
+    return "MEMOCHAT_AI_INTERNAL_API_KEY";
+}
+
+bool ShouldRejectAIServerAuthConfiguration(bool key_configured, bool local_environment, bool loopback_target)
+{
+    return !key_configured && !(local_environment && loopback_target);
+}
+
 // The empty-string fallback guards mirror the original `if (host.empty())` /
 // `if (port.empty())` decisions; the caller passes the emptiness bool.
 bool ShouldUseDefaultHost(bool host_empty)

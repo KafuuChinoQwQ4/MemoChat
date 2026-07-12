@@ -1,46 +1,31 @@
 /** Reset password form */
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { createAuthApi } from "@/features/auth/api/authApi"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
+import { BrandMark } from "@/shared/ui/primitives/BrandMark"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
-
-function BrandMark() {
-  return (
-    <svg
-      width="48"
-      height="48"
-      viewBox="0 0 48 48"
-      fill="none"
-      aria-hidden
-      style={{ display: "block" }}
-    >
-      <rect width="48" height="48" rx="14" fill="var(--color-brand-green)" />
-      <path
-        d="M11 15.5C11 13.567 12.567 12 14.5 12H33.5C35.433 12 37 13.567 37 15.5V28.5C37 30.433 35.433 32 33.5 32H26L19 37V32H14.5C12.567 32 11 30.433 11 28.5V15.5Z"
-        fill="white"
-        fillOpacity="0.95"
-      />
-      <circle cx="18.5" cy="22" r="2" fill="var(--color-brand-green)" />
-      <circle cx="24" cy="22" r="2" fill="var(--color-brand-green)" />
-      <circle cx="29.5" cy="22" r="2" fill="var(--color-brand-green)" />
-    </svg>
-  )
-}
 
 export function ResetPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [codeCooldown, setCodeCooldown] = useState(0)
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
   const [newPassword, setNewPassword] = useState("")
 
   const api = createAuthApi(getGateway().http)
+
+  useEffect(() => {
+    if (codeCooldown <= 0) return
+    const id = setInterval(() => setCodeCooldown(v => Math.max(0, v - 1)), 1000)
+    return () => clearInterval(id)
+  }, [codeCooldown])
 
   async function sendCode() {
     if (!email) {
@@ -50,7 +35,7 @@ export function ResetPage() {
     try {
       const res = await api.getVarifyCode(email)
       if (res.error !== 0) setError("发送验证码失败")
-      else setError(null)
+      else { setCodeCooldown(60); setError(null) }
     } catch {
       setError("网络错误")
     }
@@ -168,9 +153,10 @@ export function ResetPage() {
             <GlassButton
               type="button"
               onClick={() => { void sendCode() }}
+              disabled={codeCooldown > 0}
               style={{ flexShrink: 0, whiteSpace: "nowrap", marginBottom: 1 }}
             >
-              获取验证码
+              {codeCooldown > 0 ? `${codeCooldown}s 后重发` : "获取验证码"}
             </GlassButton>
           </div>
 

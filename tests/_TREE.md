@@ -14,7 +14,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `CMakeLists.txt` | 注册 C++ 测试子目录的 CMake 入口 |
+| `CMakeLists.txt` | 注册 C++ 测试子目录及无异常 Python 契约门禁的 CMake 入口 |
 | `__init__.py` | 将 tests 标记为 Python 包，支持包内导入 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

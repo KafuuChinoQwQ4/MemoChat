@@ -15,7 +15,7 @@
 | `MediaRouteSchemaTest.cpp` | 验证媒体生产路由只读 schema descriptor 与快照输出 |
 | `MediaServiceAlgorithmsConsumer.cpp` | 在测试目标中直接 import 媒体 service facade guard 算法 module，暴露响应与上传下载判断给 GTest。 |
 | `MediaServiceAlgorithmsTest.cpp` | 验证媒体 service facade module 的响应默认值、上传分片会话与下载 asset guard |
-| `MediaStorageTest.cpp` | 验证媒体存储目标通过 C++ module 算法识别大小写混合的扩展名 |
+| `MediaStorageTest.cpp` | 验证本地媒体读路径、路径逃逸防护、Ready 状态及不可写根目录的显式失败 |
 | `MediaUploadSessionDtoTest.cpp` | 验证媒体上传会话 DTO 的 JSON 编解码与字段清单 |
 | `S3MediaStorageAlgorithmsConsumer.cpp` | 在测试目标中直接 import S3 存储算法 module，暴露默认区域/桶、对象名净化字符策略与桶前缀判断给 GTest。 |
 | `S3MediaStorageAlgorithmsTest.cpp` | 验证 S3 存储 module 的默认字面量、对象名字符策略、启用判断与桶前缀 guard |

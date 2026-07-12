@@ -21,23 +21,14 @@
         "protobuf",
         "hiredis",
         "glaze",
-        {
-          "name": "stdexec",
-          "features": [
-            "asio"
-          ]
-        },
         "boost-asio",
         "boost-beast",
         "boost-filesystem",
-        "boost-property-tree",
-        "boost-uuid",
         "spdlog",
-        "cppkafka",
+        "librdkafka",
         "librabbitmq",
-        "mongo-cxx-driver",
+        "mongo-c-driver",
         "libpq",
-        "libpqxx",
         {
           "name": "nghttp2",
           "features": []

@@ -1,6 +1,7 @@
 #include "RedisMgr.hpp"
 #include "const.hpp"
 #include "ConfigMgr.hpp"
+#include <charconv>
 #include <unordered_map>
 #include <vector>
 #include <cstring>
@@ -9,6 +10,16 @@ import memochat.gate.redis_mgr_algorithms;
 
 namespace redis_mgr_modules = memochat::gate::redis_mgr::modules;
 
+namespace
+{
+int ParseIntOrZero(const std::string& raw)
+{
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return !raw.empty() && ec == std::errc{} && ptr == raw.data() + raw.size() ? value : 0;
+}
+} // namespace
+
 RedisMgr::RedisMgr()
 {
     auto& gCfgMgr = ConfigMgr::Inst();
@@ -16,12 +27,23 @@ RedisMgr::RedisMgr()
     auto port = gCfgMgr["Redis"]["Port"];
     auto pwd = gCfgMgr["Redis"]["Passwd"];
     auto pool_size_str = gCfgMgr["Redis"]["PoolSize"];
-    int pool_size = redis_mgr_modules::NormalizePoolSize(atoi(pool_size_str.c_str()));
-    _con_pool.reset(new RedisConPool(pool_size, host.c_str(), atoi(port.c_str()), pwd.c_str()));
+    int pool_size = redis_mgr_modules::NormalizePoolSize(ParseIntOrZero(pool_size_str));
+    _con_pool.reset(new RedisConPool(pool_size, host.c_str(), ParseIntOrZero(port), pwd.c_str()));
 }
 
 RedisMgr::~RedisMgr()
 {
+}
+
+bool RedisMgr::Ready() const noexcept
+{
+    return _con_pool && _con_pool->Ready();
+}
+
+const std::string& RedisMgr::StartupError() const noexcept
+{
+    static const std::string allocation_error = "redis pool allocation failed";
+    return _con_pool ? _con_pool->StartupError() : allocation_error;
 }
 
 bool RedisMgr::Get(const std::string& key, std::string& value)

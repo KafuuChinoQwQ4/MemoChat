@@ -12,6 +12,16 @@ bool IsZipMagic(char first, char second, unsigned long long size)
     return memochat::r18::source_service::modules::IsZipMagic(first, second, size);
 }
 
+unsigned long long MaxSourceImportBytes()
+{
+    return memochat::r18::source_service::modules::MaxSourceImportBytes();
+}
+
+bool ShouldRejectSourceImport(bool zip_payload, bool js_payload, unsigned long long size)
+{
+    return memochat::r18::source_service::modules::ShouldRejectSourceImport(zip_payload, js_payload, size);
+}
+
 int NormalizeSearchPage(int page)
 {
     return memochat::r18::source_service::modules::NormalizeSearchPage(page);
@@ -35,6 +45,11 @@ unsigned long long ManifestProbeWindow()
 bool MatchesJsSourceProbe(bool has_class, bool has_comic_source, bool has_search)
 {
     return memochat::r18::source_service::modules::MatchesJsSourceProbe(has_class, has_comic_source, has_search);
+}
+
+bool ShouldDispatchSource(bool source_found, bool source_enabled)
+{
+    return memochat::r18::source_service::modules::ShouldDispatchSource(source_found, source_enabled);
 }
 
 const char* GateShellPrefix()
@@ -95,6 +110,21 @@ const char* PicacgSourceVersion()
 const char* InvalidPackagePayloadMessage()
 {
     return memochat::r18::source_service::modules::InvalidPackagePayloadMessage();
+}
+
+const char* NativePackageRejectedMessage()
+{
+    return memochat::r18::source_service::modules::NativePackageRejectedMessage();
+}
+
+const char* SourcePackageTooLargeMessage()
+{
+    return memochat::r18::source_service::modules::SourcePackageTooLargeMessage();
+}
+
+const char* SourceDisabledMessage()
+{
+    return memochat::r18::source_service::modules::SourceDisabledMessage();
 }
 
 const char* InvalidManifestMessage()

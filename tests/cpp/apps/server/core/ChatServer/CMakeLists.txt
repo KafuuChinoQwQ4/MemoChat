@@ -1248,35 +1248,6 @@ endif()
 
 gtest_discover_tests(chatserver_redis_mgr_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
-add_executable(chatserver_postgres_pool_algorithms_gtest
-    main.cpp
-    PostgresPoolAlgorithmsConsumer.cpp
-    PostgresPoolAlgorithmsTest.cpp
-)
-
-target_link_libraries(chatserver_postgres_pool_algorithms_gtest PRIVATE
-    GTest_TestLib
-    memochat_server_deps
-)
-
-target_include_directories(chatserver_postgres_pool_algorithms_gtest PRIVATE
-    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer
-    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/persistence
-)
-
-add_dependencies(gtest_tests chatserver_postgres_pool_algorithms_gtest)
-
-if(MEMOCHAT_ENABLE_GNU_MODULES)
-    memochat_enable_gnu_modules(chatserver_postgres_pool_algorithms_gtest
-        MODULES
-            memochat.chat.postgres_pool_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/persistence/cxx_modules/PostgresPool.cppm
-        CONSUMER_SOURCES
-            PostgresPoolAlgorithmsConsumer.cpp
-    )
-endif()
-
-gtest_discover_tests(chatserver_postgres_pool_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
-
 add_executable(chatserver_user_profile_dto_gtest
     ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/domain/users/ChatUserProfileDto.cpp
     main.cpp
@@ -1999,11 +1970,13 @@ target_include_directories(chatserver_config_gtest PRIVATE
 
 add_dependencies(gtest_tests chatserver_config_gtest)
 
-gtest_discover_tests(chatserver_config_gtest TEST_DISCOVERY_MODE POST_BUILD)
+gtest_discover_tests(chatserver_config_gtest
+    TEST_DISCOVERY_MODE POST_BUILD
+    PROPERTIES ENVIRONMENT "MEMOCHAT_CHATAUTH_HMACSECRET=test-chat-secret"
+)
 
-# MessageDeliveryService primitive fanout/retry decision module (gtest-only:
-# MessageDeliveryService.cpp includes CSession.hpp / stdexec which ICEs GCC 16.1.1
-# under -fmodules, so production consumption is not enabled).
+# MessageDeliveryService primitive fanout/retry decision module (gtest-only;
+# production consumption remains disabled under GCC modules).
 add_executable(chatserver_message_delivery_service_algorithms_gtest
     main.cpp
     MessageDeliveryServiceAlgorithmsConsumer.cpp
@@ -2033,9 +2006,8 @@ endif()
 
 gtest_discover_tests(chatserver_message_delivery_service_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
-# ChatServiceImpl primitive gRPC-notify decision module (gtest-only:
-# ChatServiceImpl.cpp includes CSession.hpp / stdexec which ICEs GCC 16.1.1
-# under -fmodules, so production consumption is not enabled).
+# ChatServiceImpl primitive gRPC-notify decision module (gtest-only;
+# production consumption remains disabled under GCC modules).
 add_executable(chatserver_chat_service_impl_algorithms_gtest
     main.cpp
     ChatServiceImplAlgorithmsConsumer.cpp
@@ -2065,9 +2037,8 @@ endif()
 
 gtest_discover_tests(chatserver_chat_service_impl_algorithms_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
-# ChatRelationSessionAdapter forwarding-surface + guard decision module (gtest-only:
-# ChatRelationSessionAdapter.cpp includes CSession.hpp / stdexec which ICEs GCC
-# 16.1.1 under -fmodules, so production consumption is not enabled).
+# ChatRelationSessionAdapter forwarding-surface + guard decision module
+# (gtest-only; production consumption remains disabled under GCC modules).
 add_executable(chatserver_relation_session_adapter_algorithms_gtest
     main.cpp
     ChatRelationSessionAdapterAlgorithmsConsumer.cpp

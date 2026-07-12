@@ -10,19 +10,19 @@
 #include "logging/Logger.hpp"
 #include "logging/Telemetry.hpp"
 #include "logging/TelemetryConfig.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <grpcpp/grpcpp.h>
+#include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <memory>
-#include <stdexcept>
 #include <string>
-#include <thread>
 
 import memochat.chat.relation_query_service_runtime_algorithms;
 
@@ -53,8 +53,10 @@ private:
     std::function<void()> _fn;
 };
 
-std::string ParseConfigPath(int argc, char** argv)
+bool ParseConfigPath(int argc, char** argv, std::string& path, std::string& error)
 {
+    path.clear();
+    error.clear();
     for (int i = 1; i < argc; ++i)
     {
         const std::string arg = argv[i];
@@ -62,13 +64,16 @@ std::string ParseConfigPath(int argc, char** argv)
         {
             if (relation_query_service_modules::ShouldRejectMissingConfigValue(i + 1 < argc))
             {
-                throw std::runtime_error(relation_query_service_modules::MissingConfigValueMessage());
+                error = relation_query_service_modules::MissingConfigValueMessage();
+                return false;
             }
-            return argv[++i];
+            path = argv[++i];
+            continue;
         }
-        throw std::runtime_error(std::string(relation_query_service_modules::UnknownArgumentPrefix()) + arg);
+        error = std::string(relation_query_service_modules::UnknownArgumentPrefix()) + arg;
+        return false;
     }
-    return "";
+    return true;
 }
 
 std::string ConfigValueOrDefault(ConfigMgr& cfg,
@@ -93,16 +98,37 @@ void SetInstanceNameEnv(const std::string& instance_name)
 #endif
 }
 
-void InitSnowflake(ConfigMgr& cfg)
+bool ParseInt64Or(const std::string& raw, int64_t fallback, int64_t& value)
+{
+    if (raw.empty())
+    {
+        value = fallback;
+        return true;
+    }
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return parsed.ec == std::errc{} && parsed.ptr == raw.data() + raw.size();
+}
+
+bool InitSnowflake(ConfigMgr& cfg, std::string& error)
 {
     const auto datacenter_id_str = cfg.GetValue("Snowflake", "DatacenterId");
     const auto worker_id_str = cfg.GetValue("Snowflake", "WorkerId");
-    const int64_t datacenter_id = datacenter_id_str.empty()
-                                      ? relation_query_service_modules::DefaultSnowflakeDatacenterId()
-                                      : std::stoll(datacenter_id_str);
-    const int64_t worker_id =
-        worker_id_str.empty() ? relation_query_service_modules::DefaultSnowflakeWorkerId() : std::stoll(worker_id_str);
-    SnowflakeUtil::getInstance().init(worker_id, datacenter_id);
+    int64_t datacenter_id = 0;
+    int64_t worker_id = 0;
+    if (!ParseInt64Or(datacenter_id_str,
+                      relation_query_service_modules::DefaultSnowflakeDatacenterId(),
+                      datacenter_id) ||
+        !ParseInt64Or(worker_id_str, relation_query_service_modules::DefaultSnowflakeWorkerId(), worker_id))
+    {
+        error = "invalid Snowflake numeric configuration";
+        return false;
+    }
+    if (!SnowflakeUtil::getInstance().init(worker_id, datacenter_id))
+    {
+        error = "Snowflake WorkerId and DatacenterId must be in range 0..31";
+        return false;
+    }
+    return true;
 }
 
 std::string RelationQueryRpcAddress(ConfigMgr& cfg)
@@ -117,112 +143,154 @@ std::string RelationQueryRpcAddress(ConfigMgr& cfg)
 
 int main(int argc, char** argv)
 {
-    try
+    std::string config_path;
+    std::string startup_error;
+    if (!ParseConfigPath(argc, argv, config_path, startup_error))
     {
-        ConfigMgr::InitConfigPath(ParseConfigPath(argc, argv));
-        auto& cfg = ConfigMgr::Inst();
-
-        const auto service_name =
-            ConfigValueOrDefault(cfg, "SelfServer", "Name", relation_query_service_modules::DefaultServiceName());
-        SetInstanceNameEnv(service_name);
-        InitSnowflake(cfg);
-
-        const auto log_cfg = memolog::LogConfig::FromGetter(
-            [&cfg](const std::string& section, const std::string& key)
-            {
-                return cfg.GetValue(section, key);
-            });
-        const auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
-            [&cfg](const std::string& section, const std::string& key)
-            {
-                return cfg.GetValue(section, key);
-            });
-        memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg);
-        memolog::Telemetry::Init(relation_query_service_modules::LoggerName(), telemetry_cfg);
-
-        ScopeExit cleanup(
-            [service_name]()
-            {
-                RedisMgr::GetInstance()->DelCount(service_name);
-                RedisMgr::GetInstance()->Close();
-                memolog::Telemetry::Shutdown();
-                memolog::Logger::Shutdown();
-            });
-
-        const auto storage_init_start = std::chrono::steady_clock::now();
-        PostgresMgr::GetInstance();
-        memolog::LogInfo("relation_query.postgresql_ready",
-                         "ChatRelationQueryService postgresql ready",
-                         {{"name", service_name},
-                          {"storage_init_ms",
-                           std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                              std::chrono::steady_clock::now() - storage_init_start)
-                                              .count())}});
-
-        ChatRelationRepository relation_repository;
-        RedisRelationBootstrapCache relation_bootstrap_cache;
-        ChatRelationService relation_query_service(&relation_repository,
-                                                   &relation_bootstrap_cache,
-                                                   nullptr,
-                                                   nullptr,
-                                                   nullptr);
-        ChatRelationInternalGrpcService relation_grpc_service(&relation_query_service);
-
-        const auto server_address = RelationQueryRpcAddress(cfg);
-        grpc::ServerBuilder builder;
-        builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-        builder.RegisterService(&relation_grpc_service);
-
-        std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-        if (!server)
-        {
-            throw std::runtime_error("failed to start ChatRelationQueryService on " + server_address);
-        }
-
-        memolog::LogInfo("relation_query.start",
-                         "ChatRelationQueryService listening",
-                         {{"name", service_name}, {"rpc_address", server_address}});
-
-        boost::asio::io_context io_context;
-        boost::asio::signal_set signals(io_context
-#ifdef _WIN32
-                                        ,
-                                        SIGINT,
-                                        SIGBREAK
-#else
-                                        ,
-                                        SIGINT,
-                                        SIGTERM
-#endif
-        );
-        signals.async_wait(
-            [&io_context, &server](auto, auto)
-            {
-                if (server)
-                {
-                    server->Shutdown();
-                }
-                io_context.stop();
-            });
-        std::thread signal_thread(
-            [&io_context]()
-            {
-                io_context.run();
-            });
-
-        server->Wait();
-        io_context.stop();
-        signal_thread.join();
-
-        memolog::LogInfo("relation_query.stop", "ChatRelationQueryService stopped", {{"name", service_name}});
-        return EXIT_SUCCESS;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "ChatRelationQueryService fatal: " << e.what() << std::endl;
-        memolog::LogError("relation_query.fatal", "ChatRelationQueryService crashed", {{"error", e.what()}});
-        memolog::Telemetry::Shutdown();
-        memolog::Logger::Shutdown();
+        std::cerr << "ChatRelationQueryService fatal: " << startup_error << std::endl;
         return EXIT_FAILURE;
     }
+    ConfigMgr::InitConfigPath(config_path);
+    auto& cfg = ConfigMgr::Inst();
+
+    const auto service_name =
+        ConfigValueOrDefault(cfg, "SelfServer", "Name", relation_query_service_modules::DefaultServiceName());
+    SetInstanceNameEnv(service_name);
+    if (!InitSnowflake(cfg, startup_error))
+    {
+        std::cerr << "ChatRelationQueryService fatal: " << startup_error << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    const auto log_cfg = memolog::LogConfig::FromGetter(
+        [&cfg](const std::string& section, const std::string& key)
+        {
+            return cfg.GetValue(section, key);
+        });
+    const auto telemetry_cfg = memolog::TelemetryConfig::FromGetter(
+        [&cfg](const std::string& section, const std::string& key)
+        {
+            return cfg.GetValue(section, key);
+        });
+    if (!memolog::Logger::Init(relation_query_service_modules::LoggerName(), log_cfg, &startup_error))
+    {
+        std::cerr << "ChatRelationQueryService fatal: " << startup_error << std::endl;
+        return EXIT_FAILURE;
+    }
+    memolog::Telemetry::Init(relation_query_service_modules::LoggerName(), telemetry_cfg);
+
+    ScopeExit cleanup(
+        [service_name]()
+        {
+            RedisMgr::GetInstance()->DelCount(service_name);
+            RedisMgr::GetInstance()->Close();
+            memolog::Telemetry::Shutdown();
+            memolog::Logger::Shutdown();
+        });
+
+    const auto storage_init_start = std::chrono::steady_clock::now();
+    auto postgres_mgr = PostgresMgr::GetInstance();
+    if (!postgres_mgr->Ready())
+    {
+        memolog::LogError("relation_query.postgresql_init_failed",
+                          "ChatRelationQueryService PostgreSQL initialization failed",
+                          {{"error", postgres_mgr->startupError()}});
+        return EXIT_FAILURE;
+    }
+    memolog::LogInfo("relation_query.postgresql_ready",
+                     "ChatRelationQueryService postgresql ready",
+                     {{"name", service_name},
+                      {"storage_init_ms",
+                       std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                          std::chrono::steady_clock::now() - storage_init_start)
+                                          .count())}});
+
+    ChatRelationRepository relation_repository;
+    RedisRelationBootstrapCache relation_bootstrap_cache;
+    ChatRelationService relation_query_service(&relation_repository,
+                                               &relation_bootstrap_cache,
+                                               nullptr,
+                                               nullptr,
+                                               nullptr);
+    ChatRelationInternalGrpcService relation_grpc_service(&relation_query_service);
+
+    const auto server_address = RelationQueryRpcAddress(cfg);
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&relation_grpc_service);
+
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    if (!server)
+    {
+        memolog::LogError("relation_query.start_failed",
+                          "failed to start ChatRelationQueryService",
+                          {{"rpc_address", server_address}});
+        return EXIT_FAILURE;
+    }
+
+    memolog::LogInfo("relation_query.start",
+                     "ChatRelationQueryService listening",
+                     {{"name", service_name}, {"rpc_address", server_address}});
+
+    boost::asio::io_context io_context;
+    boost::asio::signal_set signals(io_context);
+    boost::system::error_code signal_error;
+#ifdef _WIN32
+    signals.add(SIGINT, signal_error);
+    if (!signal_error)
+    {
+        signals.add(SIGBREAK, signal_error);
+    }
+#else
+    signals.add(SIGINT, signal_error);
+    if (!signal_error)
+    {
+        signals.add(SIGTERM, signal_error);
+    }
+#endif
+    if (signal_error)
+    {
+        memolog::LogError("relation_query.signal_setup_failed",
+                          "ChatRelationQueryService failed to register shutdown signals",
+                          {{"error", signal_error.message()}});
+        server->Shutdown();
+        return EXIT_FAILURE;
+    }
+    signals.async_wait(
+        [&io_context, &server](auto, auto)
+        {
+            if (server)
+            {
+                server->Shutdown();
+            }
+            io_context.stop();
+        });
+    memochat::runtime::ExplicitThread signal_thread;
+    std::string thread_error;
+    if (!signal_thread.Start(
+            [&io_context]() noexcept
+            {
+                io_context.run();
+            },
+            &thread_error))
+    {
+        memolog::LogError("relation_query.thread_start_failed",
+                          "ChatRelationQueryService failed to start signal thread",
+                          {{"error", thread_error}});
+        server->Shutdown();
+        return EXIT_FAILURE;
+    }
+
+    server->Wait();
+    io_context.stop();
+    if (!signal_thread.Join(&thread_error))
+    {
+        memolog::LogError("relation_query.thread_join_failed",
+                          "ChatRelationQueryService failed to join signal thread",
+                          {{"error", thread_error}});
+        return EXIT_FAILURE;
+    }
+
+    memolog::LogInfo("relation_query.stop", "ChatRelationQueryService stopped", {{"name", service_name}});
+    return EXIT_SUCCESS;
 }

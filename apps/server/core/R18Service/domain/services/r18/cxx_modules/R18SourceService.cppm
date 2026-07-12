@@ -15,6 +15,16 @@ bool IsZipMagic(char first, char second, unsigned long long size)
     return size >= ZipMagicMinSize() && first == 'P' && second == 'K';
 }
 
+unsigned long long MaxSourceImportBytes()
+{
+    return 1024ULL * 1024ULL;
+}
+
+bool ShouldRejectSourceImport(bool zip_payload, bool js_payload, unsigned long long size)
+{
+    return size == 0 || zip_payload || !js_payload || size > MaxSourceImportBytes();
+}
+
 int NormalizeSearchPage(int page)
 {
     return page < 1 ? 1 : page;
@@ -38,6 +48,11 @@ unsigned long long ManifestProbeWindow()
 bool MatchesJsSourceProbe(bool has_class, bool has_comic_source, bool has_search)
 {
     return has_class && (has_comic_source || has_search);
+}
+
+bool ShouldDispatchSource(bool source_found, bool source_enabled)
+{
+    return source_found && source_enabled;
 }
 
 const char* GateShellPrefix()
@@ -97,7 +112,22 @@ const char* PicacgSourceVersion()
 
 const char* InvalidPackagePayloadMessage()
 {
-    return "plugin package must be a zip file or JavaScript source";
+    return "source package must be JavaScript";
+}
+
+const char* NativePackageRejectedMessage()
+{
+    return "native source packages are not supported";
+}
+
+const char* SourcePackageTooLargeMessage()
+{
+    return "source package exceeds the 1 MiB limit";
+}
+
+const char* SourceDisabledMessage()
+{
+    return "source is disabled";
 }
 
 const char* InvalidManifestMessage()
