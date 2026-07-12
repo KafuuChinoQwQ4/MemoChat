@@ -37,6 +37,8 @@ public:
     void Send(char* msg, short max_length, short msgid);
     void Send(std::string msg, short msgid);
     void Close();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
 
     std::string sessionId() const override;
     int userId() const override;

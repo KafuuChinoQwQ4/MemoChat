@@ -14,17 +14,20 @@
 #include "GateRouteProfileRegistrar.hpp"
 #include "GateWorkerPool.hpp"
 #include "LogicSystem.hpp"
+#include "RedisMgr.hpp"
 #include "domain/AIHttpServiceRoutes.hpp"
 #include "AsioIOServicePool.hpp"
 #include "logging/LogConfig.hpp"
 #include "logging/Logger.hpp"
 #include "logging/Telemetry.hpp"
 #include "logging/TelemetryConfig.hpp"
+#include "auth/AuthSecret.hpp"
+#include "runtime/ExplicitThread.hpp"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <cstdlib>
+#include <iostream>
 #include <string>
-#include <thread>
 
 // AIGatewayServer — the first microservice peeled off GateServer (Phase 3 of the
 // gateserver split). It reuses the shared GateAppCore but selects the AIGateway
@@ -46,14 +49,34 @@ int main(int argc, char* argv[])
     (void) argv;
 
     auto& cfgMgr = ConfigMgr::Inst();
-    memolog::Logger::Init("AIGatewayServer",
-                          memolog::LogConfig::FromGetter(
-                              [&cfgMgr](const std::string& section, const std::string& key)
-                              {
-                                  return cfgMgr.GetValue(section, key);
-                              }));
+    const auto log_config = memolog::LogConfig::FromGetter(
+        [&cfgMgr](const std::string& section, const std::string& key)
+        {
+            return cfgMgr.GetValue(section, key);
+        });
+    std::string logger_error;
+    if (!memolog::Logger::Init("AIGatewayServer", log_config, &logger_error))
+    {
+        std::cerr << "AIGatewayServer fatal: " << logger_error << std::endl;
+        return 1;
+    }
 
     memolog::LogInfo("aigateway.start", "AIGatewayServer starting...");
+
+    auto jwt_access_secret = cfgMgr.GetValue("AuthToken", "JwtSecret");
+    if (jwt_access_secret.empty())
+    {
+        jwt_access_secret = std::string(memochat::auth::kWellKnownDevJwtAccessSecret);
+    }
+    std::string startup_error;
+    if (!memochat::auth::RequireNonDefaultJwtAccessSecretInProduction("AIGatewayServer",
+                                                                      jwt_access_secret,
+                                                                      startup_error))
+    {
+        memolog::LogError("aigateway.config_invalid", "invalid JWT access configuration", {{"error", startup_error}});
+        memolog::Logger::Shutdown();
+        return 1;
+    }
 
     // Serve only health + /ai/* routes. MUST be set before LogicSystem::Instance().
     LogicSystem::ClearRouteProfileRegistrars();
@@ -62,13 +85,42 @@ int main(int argc, char* argv[])
     std::string port_str = cfgMgr["AIGateway"]["Port"];
     unsigned short gate_port = SelectAIGatewayListenPort(port_str, kDefaultAIGatewayPort);
 
-    unsigned int num_threads = NormalizeAIGatewayIoThreads(std::thread::hardware_concurrency());
+    unsigned int num_threads = NormalizeAIGatewayIoThreads(memochat::runtime::ExplicitThread::HardwareConcurrency());
     auto worker_threads_str = cfgMgr.GetValue("AIGateway", "WorkerThreads");
     unsigned int worker_threads = SelectAIGatewayWorkerThreads(worker_threads_str, num_threads);
 
     gateglobals::g_worker_threads = worker_threads;
     gateglobals::g_main_ioc = nullptr;
-    GateWorkerPool::GetInstance(worker_threads);
+    auto io_pool = AsioIOServicePool::GetInstance();
+    if (!io_pool->Ready())
+    {
+        memolog::LogError("service.thread_pool_start_failed",
+                          "AIGatewayServer I/O thread pool failed to start",
+                          {{"error", io_pool->startupError()}});
+        memolog::Logger::Shutdown();
+        return 1;
+    }
+    const auto redis = RedisMgr::GetInstance();
+    if (!redis->Ready())
+    {
+        memolog::LogError("service.dependency_unavailable",
+                          "AIGatewayServer Redis initialization failed",
+                          {{"error", redis->StartupError()}});
+        io_pool->Stop();
+        memolog::Logger::Shutdown();
+        return 1;
+    }
+    auto worker_pool = GateWorkerPool::GetInstance();
+    std::string worker_pool_error;
+    if (!worker_pool->Start(worker_threads, &worker_pool_error))
+    {
+        memolog::LogError("service.worker_pool_start_failed",
+                          "AIGatewayServer failed to start worker pool",
+                          {{"error", worker_pool_error}});
+        io_pool->Stop();
+        memolog::Logger::Shutdown();
+        return 1;
+    }
 
     memolog::LogInfo(
         "aigateway.thread_pool",
@@ -88,17 +140,42 @@ int main(int argc, char* argv[])
     AIHttpServiceRoutes::RegisterRoutes(*LogicSystem::GetInstance());
 
     net::io_context ioc{static_cast<int>(num_threads)};
-    // work_guard prevents ioc.run() from returning when the coroutine-based
-    // AcceptLoop hasn't yet posted its first async_accept to the io_context.
-    // GateDomainServer (used by all other split services) has this; its absence
-    // here caused CServer::AcceptLoop to never execute: port was LISTEN but
-    // every inbound connection silently hung with no HTTP response.
     auto work_guard = boost::asio::make_work_guard(ioc);
     gateglobals::g_main_ioc = &ioc;
-    std::make_shared<CServer>(ioc, gate_port)->Start();
+    auto server = std::make_shared<CServer>(ioc);
+    std::string listen_error;
+    if (!server->Open(gate_port, &listen_error))
+    {
+        memolog::LogError("service.start_failed",
+                          "AIGatewayServer failed to open listener",
+                          {{"port", std::to_string(gate_port)}, {"error", listen_error}});
+        gateglobals::g_main_ioc = nullptr;
+        worker_pool->Stop();
+        io_pool->Stop();
+        memolog::Logger::Shutdown();
+        return 1;
+    }
+    server->Start();
     memolog::LogInfo("service.start", "AIGatewayServer listening", {{"port", std::to_string(gate_port)}});
 
-    boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
+    boost::asio::signal_set signals(ioc);
+    boost::system::error_code signal_error;
+    signals.add(SIGINT, signal_error);
+    if (!signal_error)
+    {
+        signals.add(SIGTERM, signal_error);
+    }
+    if (signal_error)
+    {
+        memolog::LogError("service.signal_init_failed",
+                          "AIGatewayServer failed to install shutdown signals",
+                          {{"error", signal_error.message()}});
+        gateglobals::g_main_ioc = nullptr;
+        worker_pool->Stop();
+        io_pool->Stop();
+        memolog::Logger::Shutdown();
+        return 1;
+    }
     signals.async_wait(
         [&ioc](const boost::system::error_code& error, int signal_number)
         {
@@ -112,9 +189,11 @@ int main(int argc, char* argv[])
         });
 
     ioc.run();
+    gateglobals::g_main_ioc = nullptr;
 
     memolog::LogInfo("service.stop", "AIGatewayServer stopped");
-    GateWorkerPool::GetInstance()->Stop();
+    worker_pool->Stop();
+    io_pool->Stop();
     memolog::Logger::Shutdown();
     return 0;
 }

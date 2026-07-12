@@ -1961,117 +1961,46 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         self.assertIn("void R18Controller::getJson", network)
         self.assertIn("void R18Controller::handleResponse", responses)
         self.assertIn("void R18Controller::refreshOfficialSources", sources)
-        self.assertIn("void R18Controller::downloadAndImportSource", sources)
         self.assertIn("void R18Controller::setLoading", state)
         self.assertIn("void R18Controller::setSearchState", state)
         self.assertNotIn("void R18Controller::postJson", controller)
         self.assertNotIn("void R18Controller::downloadAndImportSource", controller)
+        self.assertNotIn("void R18Controller::downloadAndImportSource", sources)
         self.assertNotIn("void R18Controller::handleResponse", controller)
         self.assertLess(len(controller.splitlines()), 260)
 
-    def test_r18_imported_source_delete_removes_list_item_locally(self):
+    def test_r18_standard_client_source_controls_are_read_only(self):
         row = (QML_DIR / "features/r18/view/R18ImportedSourceRow.qml").read_text(encoding="utf-8")
         list_pane = (QML_DIR / "features/r18/view/R18SourceListPane.qml").read_text(encoding="utf-8")
         shell = (QML_DIR / "features/r18/view/R18ShellPane.qml").read_text(encoding="utf-8")
         controller = (QML_DIR / "features/r18/controller/R18Controller.cpp").read_text(encoding="utf-8")
+        controller_header = (QML_DIR / "features/r18/controller/R18Controller.h").read_text(encoding="utf-8")
+        sources = (QML_DIR / "features/r18/controller/R18ControllerSources.cpp").read_text(encoding="utf-8")
+        network = (QML_DIR / "features/r18/controller/R18ControllerNetwork.cpp").read_text(encoding="utf-8")
         responses = (QML_DIR / "features/r18/controller/R18ControllerResponses.cpp").read_text(encoding="utf-8")
-        model_header = (QML_DIR / "features/r18/model/R18ListModel.h").read_text(encoding="utf-8")
-        model = (QML_DIR / "features/r18/model/R18ListModel.cpp").read_text(encoding="utf-8")
+        manager = (QML_DIR / "features/r18/view/R18SourceManagerPane.qml").read_text(encoding="utf-8")
 
-        self.assertIn("signal deleteRequested(string sourceId)", row)
-        self.assertIn("property bool canDelete: false", row)
-        self.assertIn("property bool deleting: false", row)
         self.assertIn("property bool builtinSource: false", row)
         self.assertIn('text: "内置源"', row)
-        self.assertIn('root.statusText + " · 不可删除"', row)
-        self.assertIn('text: root.deleting ? "删除中" : "删除"', row)
-        self.assertIn("visible: root.canDelete || root.deleting", row)
-        self.assertIn("enabled: root.canDelete && !root.deleting", row)
-        self.assertIn("root.deleteRequested(root.sourceId)", row)
         self.assertIn('text: "进入"', row)
-        self.assertIn("signal importedSourceDeleteRequested(string sourceId)", list_pane)
-        self.assertIn('property string pendingDeleteSourceId: ""', list_pane)
-        self.assertIn("function sourceIsReserved(sourceId, data)", list_pane)
-        self.assertIn("function sourceIsImported(data, format, url)", list_pane)
-        self.assertIn("function sourceIdFromRow(sourceId, itemId, data)", list_pane)
-        self.assertIn('id = data.source_id || data.id || data.key || ""', list_pane)
-        self.assertIn("data && data.builtin === true", list_pane)
-        self.assertIn('id === "mock" || id === "jm.official" || id === "picacg.official"', list_pane)
-        self.assertIn('formatText === "source-js"', list_pane)
-        self.assertIn("data.path && String(data.path).length > 0", list_pane)
-        self.assertIn("if (data.source_id && data.source_id.length > 0)", list_pane)
-        self.assertIn("if (data.id && data.id.length > 0)", list_pane)
-        self.assertIn("required property bool builtin", list_pane)
-        self.assertIn(
-            "readonly property string resolvedSourceId: root.sourceIdFromRow(sourceId, itemId, data)", list_pane
-        )
-        self.assertIn(
-            "readonly property bool reservedSource: builtin || root.sourceIsReserved(resolvedSourceId, data)",
-            list_pane,
-        )
-        self.assertIn("readonly property bool importedSource: root.sourceIsImported(data, format, url)", list_pane)
-        self.assertIn("sourceId: resolvedSourceId", list_pane)
-        self.assertIn("deleting: root.pendingDeleteSourceId === resolvedSourceId", list_pane)
-        self.assertIn("builtinSource: reservedSource", list_pane)
-        self.assertIn(
-            "canDelete: resolvedSourceId.length > 0 && !root.loading && !reservedSource && importedSource",
-            list_pane,
-        )
-        self.assertIn("root.importedSourceDeleteRequested(sourceId)", list_pane)
-        manager = (QML_DIR / "features/r18/view/R18SourceManagerPane.qml").read_text(encoding="utf-8")
-        self.assertIn("import QtQuick.Controls 2.15", manager)
-        self.assertIn(
-            'pendingDeleteSourceId: root.r18Controller ? root.r18Controller.pendingDeleteSourceId : ""', manager
-        )
-        self.assertIn('property string pendingDeleteSourceId: ""', manager)
-        self.assertIn("function sourceTitleForId(sourceId)", manager)
-        self.assertIn('var rowId = row.source_id || row.sourceId || row.id || row.key || ""', manager)
-        self.assertIn("return row.title || row.name || sourceId", manager)
-        self.assertIn("Dialog {\n        id: pendingDeleteDialog", manager)
-        self.assertIn('title: "删除漫画源"', manager)
-        self.assertIn("pendingDeleteDialog.open()", manager)
-        self.assertIn("root.pendingDeleteSourceTitle = root.sourceTitleForId(root.pendingDeleteSourceId)", manager)
-        self.assertIn("确认后会从已导入源列表移除", manager)
-        self.assertIn("root.importedSourceDeleteRequested(root.pendingDeleteSourceId)", manager)
-        self.assertIn("root.r18Controller.deleteSource(sourceId)", shell)
+        self.assertIn("R18SourceListPane", manager)
 
-        controller_header = (QML_DIR / "features/r18/controller/R18Controller.h").read_text(encoding="utf-8")
-        network = (QML_DIR / "features/r18/controller/R18ControllerNetwork.cpp").read_text(encoding="utf-8")
-        self.assertIn("void R18Controller::deleteSource", controller)
-        self.assertIn(
-            "Q_PROPERTY(QString pendingDeleteSourceId READ pendingDeleteSourceId NOTIFY pendingDeleteSourceChanged)",
-            controller_header,
+        standard_client_surface = "\n".join(
+            (row, list_pane, shell, controller, controller_header, sources, network, responses, manager)
         )
-        self.assertIn("QString pendingDeleteSourceId() const", controller_header)
-        self.assertIn("void setPendingDeleteSourceId(const QString& sourceId);", controller_header)
-        self.assertIn("void pendingDeleteSourceChanged();", controller_header)
-        self.assertIn("const QString normalizedSourceId = sourceId.trimmed();", controller)
-        self.assertIn('setError(QStringLiteral("删除漫画源失败: 源 ID 为空"))', controller)
-        self.assertIn("bool isReservedR18SourceId(const QString& sourceId)", controller)
-        self.assertIn('sourceId == QStringLiteral("jm.official")', controller)
-        self.assertIn('sourceId == QStringLiteral("picacg.official")', controller)
-        self.assertIn("if (isReservedR18SourceId(normalizedSourceId))", controller)
-        self.assertIn("setPendingDeleteSourceId({});", controller)
-        self.assertIn('setError(QStringLiteral("内置漫画源不能删除，请删除已导入的 JS 漫画源"))', controller)
-        self.assertIn("setPendingDeleteSourceId(normalizedSourceId);", controller)
-        self.assertIn('setStatusText(QStringLiteral("正在删除漫画源: %1").arg(normalizedSourceId));', controller)
-        self.assertIn('QStringLiteral("/api/r18/source/delete")', controller)
-        self.assertIn('QStringLiteral("source_delete")', controller)
-        self.assertIn('setError(QStringLiteral("删除漫画源失败: %1").arg(networkErrorText));', network)
-        self.assertIn('setError(QStringLiteral("删除漫画源失败: HTTP %1").arg(httpStatus));', network)
-        self.assertIn("bool removeBySourceId(const QString& sourceId);", model_header)
-        self.assertIn("bool R18ListModel::removeBySourceId", model)
-        self.assertIn('item.value(QStringLiteral("source_id"),', model)
-        self.assertIn('item.value(QStringLiteral("id"), item.value(QStringLiteral("key")))', model)
-        self.assertIn("BuiltinRole", model_header)
-        self.assertIn('{BuiltinRole, "builtin"}', model)
-        self.assertIn('item.value(QStringLiteral("builtin"), false)', model)
-        self.assertIn('op == QStringLiteral("source_delete")', responses)
-        self.assertIn("setPendingDeleteSourceId({});", responses)
-        self.assertIn('setError(QStringLiteral("删除漫画源失败: %1").arg(message));', responses)
-        self.assertIn('data.value(QStringLiteral("source_id")).toString().trimmed()', responses)
-        self.assertIn("_sources.removeBySourceId(sourceId)", responses)
-        self.assertIn('QStringLiteral("漫画源已删除: %1").arg(sourceId)', responses)
+        for forbidden in (
+            "downloadAndImportSource",
+            "deleteRequested",
+            "importedSourceDeleteRequested",
+            "pendingDeleteSourceId",
+            "deleteSource",
+            "/api/r18/source/import",
+            "/api/r18/source/enable",
+            "/api/r18/source/disable",
+            "/api/r18/source/delete",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, standard_client_surface)
 
     def test_heavy_pet_controller_concerns_are_split(self):
         controller = (QML_DIR / "features/pet/controller/PetController.cpp").read_text(encoding="utf-8")

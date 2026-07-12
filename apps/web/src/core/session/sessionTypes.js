@@ -1,2 +1,0 @@
-/** Session-related types. */
-export {};

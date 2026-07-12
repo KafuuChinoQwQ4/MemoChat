@@ -15,13 +15,23 @@ endif()
 # Aggregate custom target so "build-all" can depend on all tests at once.
 add_custom_target(gtest_tests)
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(
+    NAME cpp_no_exceptions_contract
+    COMMAND ${Python3_EXECUTABLE} -m unittest
+            tests.python.apps.server.core.test_no_exceptions_contract
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 # --- Register test groups ---
 # Each subdirectory creates an executable and calls add_dependencies(gtest_tests ...).
 add_subdirectory(cpp/apps/server/core/common/proto                         ${CMAKE_CURRENT_BINARY_DIR}/proto)
 add_subdirectory(cpp/apps/server/core/common/logging                       ${CMAKE_CURRENT_BINARY_DIR}/logging)
 add_subdirectory(cpp/apps/server/core/common/json                          ${CMAKE_CURRENT_BINARY_DIR}/json)
 add_subdirectory(cpp/apps/server/core/common/auth                          ${CMAKE_CURRENT_BINARY_DIR}/auth)
+add_subdirectory(cpp/apps/server/core/common/db                            ${CMAKE_CURRENT_BINARY_DIR}/db)
 add_subdirectory(cpp/apps/server/core/common/reflection                    ${CMAKE_CURRENT_BINARY_DIR}/reflection)
+add_subdirectory(cpp/apps/server/core/common/random                        ${CMAKE_CURRENT_BINARY_DIR}/random)
 add_subdirectory(cpp/apps/server/core/common/runtime                       ${CMAKE_CURRENT_BINARY_DIR}/runtime)
 add_subdirectory(cpp/apps/server/core/AccountShared                        ${CMAKE_CURRENT_BINARY_DIR}/accountshared)
 add_subdirectory(cpp/apps/server/core/CallService                          ${CMAKE_CURRENT_BINARY_DIR}/callservice)

@@ -16,3 +16,13 @@ void AsioIOServicePool::Stop()
 {
     _pool->Stop();
 }
+
+bool AsioIOServicePool::Ready() const noexcept
+{
+    return _pool->Ready();
+}
+
+const std::string& AsioIOServicePool::startupError() const noexcept
+{
+    return _pool->startupError();
+}

@@ -414,7 +414,10 @@ class GateServerRouteInventoryTests(unittest.TestCase):
         )
         self.assertIn("UpdatePassword(email, pwd)", h1_auth_service)
         self.assertIn("PostgresMgr::GetInstance()->UpdatePwd(email, password)", account_persistence)
-        self.assertIn("PublishCacheInvalidate", h1_auth_service)
+        self.assertIn("InvalidateLoginCacheByEmail(email)", h1_auth_service)
+        self.assertIn("DeleteHttpToken(reset_uid)", h1_auth_service)
+        self.assertIn("InvalidateLoginCacheByUid(reset_uid)", h1_auth_service)
+        self.assertNotIn("PublishCacheInvalidate", h1_auth_service)
 
     def test_h3_auth_routes_dispatch_through_shared_registry(self):
         source = read(GATE_H3_LEGACY_ROUTES / "GateHttp3ServiceRoutes.cpp")

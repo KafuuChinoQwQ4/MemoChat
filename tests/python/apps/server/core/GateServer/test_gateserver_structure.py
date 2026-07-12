@@ -522,14 +522,14 @@ class GateServerStructureTests(unittest.TestCase):
         source = read(SERVER_CORE / "CMakeLists.txt")
 
         self.assertIn("add_subdirectory(GateShared/core)", source)
-        self.assertIn("add_subdirectory(GateShared/plugins/r18)", source)
+        self.assertNotIn("add_subdirectory(GateShared/plugins/r18)", source)
         self.assertIn("add_subdirectory(GateShared/transports/h3)", source)
         self.assertIn("add_subdirectory(GateShared)", source)
         self.assertTrue(GATE_CORE.exists(), "GateServerCore implementation should now live under GateServer/core")
         self.assertTrue(
             GATE_H3.exists(), "GateServerHttp3 implementation should now live under GateServer/transports/h3"
         )
-        self.assertTrue(GATE_R18_PLUGINS.exists(), "R18 helper targets should now live under GateServer/plugins/r18")
+        self.assertFalse(GATE_R18_PLUGINS.exists(), "orphan native R18 plugin host must be removed")
         self.assertFalse(
             (SERVER_CORE / "GateServerCore").exists(),
             "GateServerCore should not remain as a sibling physical module directory",
@@ -554,16 +554,13 @@ class GateServerStructureTests(unittest.TestCase):
         # GateServerCore (defined in GateShared and GateShared/core), and the
         # per-service domain libraries, so they are now processed AFTER GateShared
         # and after the microservice subdirectories.
-        self.assertLess(
-            source.index("add_subdirectory(GateShared)"), source.index("add_subdirectory(GateShared/plugins/r18)")
-        )
+        self.assertNotIn("R18PluginHost", source)
 
-    def test_r18_plugin_helper_targets_stay_outside_legacy_standalone_gate(self):
-        plugin_cmake = read(GATE_R18_PLUGINS / "CMakeLists.txt")
-        self.assertIn("add_executable(R18PluginHost", plugin_cmake)
-        self.assertIn("add_library(R18MockSourcePlugin SHARED", plugin_cmake)
-        self.assertIn("target_compile_features(R18PluginHost", plugin_cmake)
-        self.assertIn("target_compile_features(R18MockSourcePlugin", plugin_cmake)
+    def test_orphan_native_r18_plugin_host_is_not_built_or_deployed(self):
+        deploy = read(REPO_ROOT / "tools" / "scripts" / "status" / "deploy_services.sh")
+        self.assertFalse(GATE_R18_PLUGINS.exists())
+        self.assertNotIn("R18PluginHost", deploy)
+        self.assertNotIn("r18-plugins", deploy)
 
     def test_default_ops_surfaces_do_not_list_legacy_h1_standalone_service(self):
         source = read(REPO_ROOT / "infra" / "Memo_ops" / "server" / "ops_server" / "routes" / "system.py")

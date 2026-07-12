@@ -1,12 +1,12 @@
 # auth/ 目录树
 
-> 认证领域服务，封装登录校验、token/票据签发等认证业务逻辑。
+> 认证领域服务，封装登录校验、token/票据签发及按 uid 串行化的登录/改密/刷新凭据变更。
 
 ## 文件
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `AuthService.cpp` | 认证领域服务实现（import auth_service_algorithms module 消费响应元数据/uid 守卫/传输选择） |
+| `AuthService.cpp` | 认证领域服务实现，凭据锁内完成密码校验、改密撤销、refresh 活跃复查与 token 签发 |
 | `AuthService.hpp` | 认证领域服务声明 |
 | `modules/` | 认证领域服务的项目自有 C++ module interface 子目录 |
 

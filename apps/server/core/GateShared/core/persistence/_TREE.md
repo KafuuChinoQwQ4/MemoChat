@@ -20,7 +20,7 @@
 | `MongoMgr.h` | Mongo 连接管理接口声明。 |
 | `PostgresDao.cpp` | PostgreSQL 通用 DAO 实现，包含媒体资产/下载 grant、通话和朋友圈持久化。 |
 | `PostgresDao.hpp` | Postgres DAO 接口声明。 |
-| `PostgresDaoAccount.cpp` | Postgres 账户相关 DAO 实现，包含密码更新与 refresh token 轮换/吊销事务。 |
+| `PostgresDaoAccount.cpp` | Postgres 账户相关 DAO 实现，包含密码更新、R18 成人确认/撤销不变量及 refresh token 轮换、吊销与活跃复查。 |
 | `PostgresMgr.cpp` | PostgreSQL 连接管理实现。 |
 | `PostgresMgr.hpp` | Postgres 连接管理接口声明。 |
 

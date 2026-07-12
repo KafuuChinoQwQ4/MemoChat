@@ -8,11 +8,7 @@
 #include "Singleton.hpp"
 #include <assert.h>
 #include <queue>
-#include <pqxx/pqxx>
 #include <functional>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <string>
 
 namespace beast = boost::beast;
@@ -49,6 +45,7 @@ enum ErrorCodes
     RateLimited = 1020,
     InvalidEmail = 1021,
     EmailSendFailed = 1022,
+    R18AccessDenied = 1023,
 };
 
 class Defer

@@ -178,6 +178,17 @@ void WebSocketChatServer::doAccept()
                 },
                 self->_inbound_callback);
 
+            if (!session->Ready())
+            {
+                memolog::LogError("websocket.session.uuid_failed",
+                                  "WebSocket session UUID generation failed",
+                                  {{"error", session->startupError()}});
+                boost::system::error_code close_error;
+                socket.close(close_error);
+                self->doAccept();
+                return;
+            }
+
             {
                 std::lock_guard<std::mutex> lock(self->_session_mutex);
                 self->_sessions.emplace(session->sessionId(), session);

@@ -2,6 +2,53 @@ export module memochat.ai.client_algorithms;
 
 export namespace memochat::ai::client::modules
 {
+enum class PositiveIntParseStatus
+{
+    Configured,
+    Empty,
+    Invalid,
+};
+
+struct PositiveIntParseResult
+{
+    int value = 0;
+    PositiveIntParseStatus status = PositiveIntParseStatus::Invalid;
+};
+
+PositiveIntParseResult ParsePositiveIntOr(const char* raw, unsigned long raw_size, int fallback)
+{
+    if (raw_size == 0)
+    {
+        return {fallback, PositiveIntParseStatus::Empty};
+    }
+    if (raw == nullptr)
+    {
+        return {fallback, PositiveIntParseStatus::Invalid};
+    }
+
+    constexpr unsigned long long max_int = 2147483647ULL;
+    unsigned long long value = 0;
+    for (unsigned long index = 0; index < raw_size; ++index)
+    {
+        const char ch = raw[index];
+        if (ch < '0' || ch > '9')
+        {
+            return {fallback, PositiveIntParseStatus::Invalid};
+        }
+        const auto digit = static_cast<unsigned long long>(ch - '0');
+        if (value > (max_int - digit) / 10ULL)
+        {
+            return {fallback, PositiveIntParseStatus::Invalid};
+        }
+        value = value * 10ULL + digit;
+    }
+    if (value == 0)
+    {
+        return {fallback, PositiveIntParseStatus::Invalid};
+    }
+    return {static_cast<int>(value), PositiveIntParseStatus::Configured};
+}
+
 int DefaultTimeoutSec()
 {
     return 300;

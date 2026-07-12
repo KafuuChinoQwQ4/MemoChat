@@ -4,7 +4,6 @@
 #include "RelationServiceFactory.hpp"
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -49,5 +48,7 @@ TEST(RelationServiceFactoryTest, RemoteBackendRequiresEndpoint)
 {
     FakeRelationServiceConfig config("remote", "");
 
-    EXPECT_THROW((void) CreateRelationService(config, nullptr, nullptr, nullptr, nullptr, nullptr), std::runtime_error);
+    std::string error;
+    EXPECT_EQ(CreateRelationService(config, nullptr, nullptr, nullptr, nullptr, nullptr, &error), nullptr);
+    EXPECT_EQ(error, "Relation service remote endpoint is empty: remote");
 }

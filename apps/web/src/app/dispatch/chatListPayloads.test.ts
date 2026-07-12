@@ -14,7 +14,6 @@ describe("registerChatRoutes list bootstraps", () => {
       token: "token",
       loginTicket: "ticket",
       ticketExpireMs: Date.now() + 60_000,
-      refreshToken: "refresh",
       protocolVersion: 3,
       chatEndpoints: [],
       profile: { uid: 910001, name: "RuntimeSmokeA", email: "a@example.test", icon: "" },

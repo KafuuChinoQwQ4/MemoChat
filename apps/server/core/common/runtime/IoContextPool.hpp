@@ -3,8 +3,10 @@
 #include <boost/asio.hpp>
 #include <cstddef>
 #include <memory>
-#include <thread>
+#include <string>
 #include <vector>
+
+#include "runtime/ExplicitThread.hpp"
 
 namespace memochat::runtime
 {
@@ -24,13 +26,16 @@ public:
 
     boost::asio::io_context& GetIOService();
     void Stop();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
 
 private:
     std::vector<IOService> _ioServices;
     std::vector<WorkPtr> _works;
-    std::vector<std::thread> _threads;
+    std::vector<ExplicitThread> _threads;
     std::size_t _nextIOService = 0;
     bool _stopped = false;
+    std::string _startup_error;
 };
 
 } // namespace memochat::runtime

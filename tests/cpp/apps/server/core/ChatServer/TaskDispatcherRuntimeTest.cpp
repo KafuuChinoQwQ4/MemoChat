@@ -6,14 +6,12 @@
 
 #include <atomic>
 #include <memory>
-#include <stdexcept>
-
 namespace
 {
-class ThrowingTaskBus final : public IAsyncTaskBus
+class FailingTaskBus final : public IAsyncTaskBus
 {
 public:
-    explicit ThrowingTaskBus(std::atomic_bool& stop_requested)
+    explicit FailingTaskBus(std::atomic_bool& stop_requested)
         : stop_requested_(stop_requested)
     {
     }
@@ -23,11 +21,15 @@ public:
         return false;
     }
 
-    bool ConsumeOnce(const std::vector<std::string>&, ConsumedTask&, std::string*) override
+    bool ConsumeOnce(const std::vector<std::string>&, ConsumedTask&, std::string* error) override
     {
         ++consume_calls;
         stop_requested_.store(true, std::memory_order_release);
-        throw std::bad_alloc();
+        if (error != nullptr)
+        {
+            *error = "consume_failed";
+        }
+        return false;
     }
 
     void AckLastConsumed() override
@@ -49,10 +51,10 @@ private:
 };
 } // namespace
 
-TEST(TaskDispatcherRuntimeTest, ConsumeExceptionDoesNotEscapeWorkerLoop)
+TEST(TaskDispatcherRuntimeTest, ConsumeFailureStopsCleanlyWhenRequested)
 {
     std::atomic_bool stop_requested{false};
-    auto task_bus = std::make_shared<ThrowingTaskBus>(stop_requested);
+    auto task_bus = std::make_shared<FailingTaskBus>(stop_requested);
     auto* task_bus_raw = task_bus.get();
     TaskDispatcher dispatcher(
         std::move(task_bus),
@@ -63,7 +65,7 @@ TEST(TaskDispatcherRuntimeTest, ConsumeExceptionDoesNotEscapeWorkerLoop)
         nullptr,
         nullptr);
 
-    EXPECT_NO_THROW(dispatcher.DealTasks());
+    dispatcher.DealTasks();
     EXPECT_EQ(task_bus_raw->consume_calls, 1);
     EXPECT_EQ(task_bus_raw->ack_calls, 0);
     EXPECT_EQ(task_bus_raw->nack_calls, 0);

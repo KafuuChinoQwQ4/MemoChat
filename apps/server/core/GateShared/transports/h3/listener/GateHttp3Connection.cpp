@@ -3,6 +3,7 @@
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
 
+#include <charconv>
 #include <sstream>
 
 GateHttp3Connection::GateHttp3Connection() = default;
@@ -111,9 +112,19 @@ void GateHttp3Connection::ParseQueryParams()
             {
                 if (value[i] == '%' && i + 2 < value.size())
                 {
-                    int ch = std::stoi(value.substr(i + 1, 2), nullptr, 16);
-                    decoded.push_back(static_cast<char>(ch));
-                    i += 2;
+                    unsigned int ch = 0;
+                    const char* begin = value.data() + i + 1;
+                    const char* end = begin + 2;
+                    const auto [ptr, ec] = std::from_chars(begin, end, ch, 16);
+                    if (ec == std::errc{} && ptr == end)
+                    {
+                        decoded.push_back(static_cast<char>(ch));
+                        i += 2;
+                    }
+                    else
+                    {
+                        decoded.push_back(value[i]);
+                    }
                 }
                 else if (value[i] == '+')
                 {

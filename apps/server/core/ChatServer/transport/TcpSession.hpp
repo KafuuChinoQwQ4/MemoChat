@@ -5,7 +5,6 @@
 
 #include <boost/asio.hpp>
 #include <atomic>
-#include <exec/task.hpp>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -26,7 +25,9 @@ public:
     std::string transportName() const override;
 
 private:
-    exec::task<void> ReadLoop(std::shared_ptr<CSession> self);
+    void ReadHeader();
+    void ReadBody(short msg_id, short msg_len);
+    void HandleReadFailure(const boost::system::error_code& error);
     void HandleWrite(const boost::system::error_code& error, std::shared_ptr<CSession> shared_self);
 
     tcp::socket _socket;

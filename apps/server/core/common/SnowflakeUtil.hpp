@@ -12,12 +12,14 @@ public:
         return inst;
     }
 
-    void init(int64_t workerId, int64_t datacenterId)
+    bool init(int64_t workerId, int64_t datacenterId)
     {
         if (initialized_)
-            return;
-        sf_.init(workerId, datacenterId);
+            return true;
+        if (!sf_.init(workerId, datacenterId))
+            return false;
         initialized_ = true;
+        return true;
     }
 
     int64_t nextId()

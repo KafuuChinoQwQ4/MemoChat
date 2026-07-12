@@ -49,7 +49,12 @@ LOCAL_POSTGRES = {
     ),
     "LoginServer": (SERVER_CORE / "LoginService" / "login.ini", "Postgres", "memo_account", "memo_account_app"),
     "AccountServer": (SERVER_CORE / "AccountService" / "account.ini", "Postgres", "memo_account", "memo_account_app"),
-    "R18GatewayServer": (SERVER_CORE / "R18Service" / "r18gateway.ini", "Postgres", "memo_pg", "memochat"),
+    "R18GatewayServer": (
+        SERVER_CORE / "R18Service" / "r18gateway.ini",
+        "Postgres",
+        "memo_account",
+        "memo_account_app",
+    ),
     "AIServer": (SERVER_CORE / "AIServer" / "config.ini", "Postgres", "memo_pg", "memochat"),
 }
 
@@ -69,10 +74,7 @@ HELM_POSTGRES = {
     "register.ini": ("memo_account", "{{ .Values.externalServices.postgres.roles.account }}"),
     "login.ini": ("memo_account", "{{ .Values.externalServices.postgres.roles.account }}"),
     "account.ini": ("memo_account", "{{ .Values.externalServices.postgres.roles.account }}"),
-    "r18gateway.ini": (
-        "{{ .Values.externalServices.postgres.database }}",
-        "{{ .Values.externalServices.postgres.user }}",
-    ),
+    "r18gateway.ini": ("memo_account", "{{ .Values.externalServices.postgres.roles.account }}"),
     "chat.ini": ("{{ .Values.externalServices.postgres.database }}", "{{ .Values.externalServices.postgres.user }}"),
 }
 
@@ -120,7 +122,7 @@ class DatabaseOwnershipContractTests(unittest.TestCase):
             "| CallGatewayServer | `memo_call` | `memo_call_app` |",
             "| RegisterServer | `memo_account` | `memo_account_app` |",
             "| ChatServer ingress | `memo_pg` chat-owned legacy name | `memochat` |",
-            "| R18GatewayServer | `memo_pg` legacy shared | `memochat` legacy shared |",
+            "| R18GatewayServer | `memo_account` policy read/write | `memo_account_app` |",
             "| AIServer | `memo_pg` legacy shared | `memochat` |",
             "`memochat:ai:semantic_cache:`",
             "Qdrant collection prefix `user_`",

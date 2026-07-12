@@ -11,7 +11,6 @@
 #include "ports/ILogicSystemConfig.hpp"
 
 #include <algorithm>
-#include <exception>
 #include <string>
 
 // Worker count resolved by SetWorkerConfig() before the singleton is constructed.
@@ -147,17 +146,82 @@ LogicSystem::LogicSystem()
     : _b_stop(false)
 {
     _composition = std::make_unique<ChatRuntimeComposition>(*this);
+    if (!_composition->Ready())
+    {
+        _startup_error = _composition->startupError();
+        _num_workers = 0;
+        return;
+    }
     RegisterCallBacks();
     _num_workers = s_configured_worker_count;
     _worker_conds = std::make_unique<std::condition_variable[]>(_num_workers);
+    std::size_t started_workers = 0;
     for (size_t i = 0; i < _num_workers; ++i)
     {
-        _worker_threads[i] = std::thread(&LogicSystem::workerLoop, this, i);
+        std::string error;
+        if (!_worker_threads[i].Start(
+                [this, i]() noexcept
+                {
+                    workerLoop(i);
+                },
+                &error))
+        {
+            _startup_error = "logic worker thread start failed: " + error;
+            _b_stop = true;
+            for (std::size_t worker = 0; worker < started_workers; ++worker)
+            {
+                _worker_conds[worker].notify_one();
+            }
+            for (std::size_t worker = 0; worker < started_workers; ++worker)
+            {
+                std::string join_error;
+                if (!_worker_threads[worker].Join(&join_error))
+                {
+                    memolog::LogError("logic.thread_join_failed",
+                                      "logic worker failed to join after partial startup",
+                                      {{"error", join_error}});
+                }
+            }
+            _num_workers = 0;
+            return;
+        }
+        ++started_workers;
     }
     if (_composition)
     {
-        _composition->StartDeliveryRuntimeIfEnabled();
+        std::string error;
+        if (!_composition->StartDeliveryRuntimeIfEnabled(&error))
+        {
+            _startup_error = "chat delivery runtime start failed: " + error;
+            _b_stop = true;
+            for (std::size_t worker = 0; worker < _num_workers; ++worker)
+            {
+                _worker_conds[worker].notify_one();
+            }
+            for (std::size_t worker = 0; worker < _num_workers; ++worker)
+            {
+                std::string join_error;
+                if (!_worker_threads[worker].Join(&join_error))
+                {
+                    memolog::LogError("logic.thread_join_failed",
+                                      "logic worker failed to join after delivery startup failure",
+                                      {{"error", join_error}});
+                }
+            }
+            _num_workers = 0;
+            return;
+        }
     }
+}
+
+bool LogicSystem::Ready() const
+{
+    return _startup_error.empty() && _composition != nullptr && _composition->Ready();
+}
+
+const std::string& LogicSystem::startupError() const
+{
+    return _startup_error;
 }
 
 LogicSystem::~LogicSystem()
@@ -173,9 +237,13 @@ LogicSystem::~LogicSystem()
     }
     for (size_t i = 0; i < _num_workers; ++i)
     {
-        if (_worker_threads[i].joinable())
+        if (_worker_threads[i].Joinable())
         {
-            _worker_threads[i].join();
+            std::string error;
+            if (!_worker_threads[i].Join(&error))
+            {
+                memolog::LogError("logic.thread_join_failed", "logic worker failed to join", {{"error", error}});
+            }
         }
     }
 }
@@ -283,22 +351,7 @@ void LogicSystem::workerLoop(size_t worker_id)
             {
                 memolog::TraceContext::Clear();
             });
-        try
-        {
-            call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, msg_data);
-        }
-        catch (const std::exception& e)
-        {
-            memolog::LogError("logic.callback.exception",
-                              "LogicSystem callback threw exception",
-                              {{"msg_id", std::to_string(msg_node->_recvnode->_msg_id)}, {"error", e.what()}});
-        }
-        catch (...)
-        {
-            memolog::LogError("logic.callback.exception",
-                              "LogicSystem callback threw unknown exception",
-                              {{"msg_id", std::to_string(msg_node->_recvnode->_msg_id)}});
-        }
+        call_back_iter->second(msg_node->_session, msg_node->_recvnode->_msg_id, msg_data);
     }
 }
 

@@ -6,7 +6,9 @@
 import memochat.chat.relation_bootstrap_cache_algorithms;
 
 #include <memory>
+#include <charconv>
 #include <string>
+#include <system_error>
 
 namespace
 {
@@ -38,20 +40,13 @@ int RedisRelationBootstrapCache::TtlSec() const
                                            kDefaultRelationBootstrapCacheTtlSec,
                                            kMinimumRelationBootstrapCacheTtlSec);
     }
-    try
-    {
-        return cache_modules::SelectTtlSec(true,
-                                           std::stoi(raw),
-                                           kDefaultRelationBootstrapCacheTtlSec,
-                                           kMinimumRelationBootstrapCacheTtlSec);
-    }
-    catch (...)
-    {
-        return cache_modules::SelectTtlSec(false,
-                                           0,
-                                           kDefaultRelationBootstrapCacheTtlSec,
-                                           kMinimumRelationBootstrapCacheTtlSec);
-    }
+    int ttl_sec = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), ttl_sec);
+    const bool valid = parsed.ec == std::errc{} && parsed.ptr == raw.data() + raw.size();
+    return cache_modules::SelectTtlSec(valid,
+                                       ttl_sec,
+                                       kDefaultRelationBootstrapCacheTtlSec,
+                                       kMinimumRelationBootstrapCacheTtlSec);
 }
 
 bool RedisRelationBootstrapCache::TryAppend(int uid, memochat::json::JsonValue& out)

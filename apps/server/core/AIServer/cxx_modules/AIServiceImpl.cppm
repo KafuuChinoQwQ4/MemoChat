@@ -2,6 +2,29 @@ export module memochat.ai.impl_algorithms;
 
 export namespace memochat::ai::impl::modules
 {
+const char* DefaultInternalAuthHeader()
+{
+    return "X-MemoChat-AI-Internal-Key";
+}
+
+const char* DefaultInternalKeyEnv()
+{
+    return "MEMOCHAT_AI_INTERNAL_API_KEY";
+}
+
+bool ShouldRejectInternalAuth(bool key_configured,
+                              bool supplied_empty,
+                              bool token_matches,
+                              bool local_environment,
+                              bool loopback_bind)
+{
+    if (!key_configured)
+    {
+        return !(local_environment && loopback_bind);
+    }
+    return supplied_empty || !token_matches;
+}
+
 const char* RpcKind()
 {
     return "gRPC";

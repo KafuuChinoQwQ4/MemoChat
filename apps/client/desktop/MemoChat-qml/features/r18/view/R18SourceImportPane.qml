@@ -43,7 +43,7 @@ ColumnLayout {
 
             Text {
                 Layout.fillWidth: true
-                text: "添加漫画源"
+                text: "漫画源目录"
                 color: root.textPrimaryColor
                 font.pixelSize: 18
                 elide: Text.ElideRight

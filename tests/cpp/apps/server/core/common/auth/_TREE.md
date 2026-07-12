@@ -6,6 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `AuthSecretTest.cpp` | 验证生产密钥 fail-closed 与显式本地 dev-secret opt-in |
 | `CMakeLists.txt` | 注册公共认证算法 GTest 目标 |
 | `JwtAccessTokenTest.cpp` | 验证 JWT access token 签发、验签、过期与 claim 失败路径 |
 | `main.cpp` | 公共认证 GTest 入口 |

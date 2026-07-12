@@ -10,5 +10,8 @@ int main()
                                "CallGatewayServer",
                                "CallGateway",
                                /*default_port=*/8097,
-                               /*init_aws=*/false);
+                               /*init_aws=*/false,
+                               {},
+                               {},
+                               {.postgres = true, .redis = true});
 }

@@ -12,13 +12,12 @@
 #include "auth/RefreshToken.hpp"
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
+#include "random/Uuid.hpp"
 #include "services/account/AccountPersistence.hpp"
 #include "support/BearerAccessAuth.hpp"
 #include "support/UserTokenValidator.hpp"
 
 #include <algorithm>
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <cctype>
 #include <sstream>
 #include <string_view>
@@ -36,6 +35,44 @@ using memochat::gate::core::AuthCache;
 
 namespace
 {
+
+class CredentialMutationGuard
+{
+public:
+    CredentialMutationGuard() = default;
+
+    ~CredentialMutationGuard()
+    {
+        if (_uid > 0 && !_identifier.empty() && !AuthCache::Instance().ReleaseCredentialMutationLock(_uid, _identifier))
+        {
+            memolog::LogWarn("gate.auth.credential_lock_release_failed",
+                             "credential mutation lock release failed; TTL will recover it",
+                             {{"uid", std::to_string(_uid)}});
+        }
+    }
+
+    CredentialMutationGuard(const CredentialMutationGuard&) = delete;
+    CredentialMutationGuard& operator=(const CredentialMutationGuard&) = delete;
+
+    bool Acquire(int uid)
+    {
+        if (_uid > 0 || !AuthCache::Instance().TryAcquireCredentialMutationLock(uid, _identifier))
+        {
+            return false;
+        }
+        _uid = uid;
+        return true;
+    }
+
+    [[nodiscard]] bool Locked() const noexcept
+    {
+        return _uid > 0 && !_identifier.empty();
+    }
+
+private:
+    int _uid = 0;
+    std::string _identifier;
+};
 
 void WriteJson(memochat::gate::routing::GateResponse& response, const memochat::json::JsonValue& root)
 {
@@ -107,6 +144,14 @@ bool EnforceAuthRequestRateLimit(memochat::gate::routing::GateResponse& response
 {
     const auto rate_limit = gateauthsupport::CheckAuthRequestRateLimit(action, subject, request);
     return WriteRequestRateLimitFailure(response, root, route, rate_limit);
+}
+
+bool InvalidatePasswordResetRedisState(const std::string& email, int uid)
+{
+    const bool token_deleted = AuthCache::Instance().DeleteHttpToken(uid);
+    const bool email_profile_deleted = gateauthsupport::InvalidateLoginCacheByEmail(email);
+    const bool uid_profile_deleted = gateauthsupport::InvalidateLoginCacheByUid(uid);
+    return token_deleted && email_profile_deleted && uid_profile_deleted;
 }
 
 std::string Trim(std::string value)
@@ -231,6 +276,18 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     const auto ticket_start_ms = gateauthsupport::NowMs();
     const int access_token_ttl_sec = gateauthsupport::GetAccessTokenTtlSec();
     const int64_t access_token_now_sec = gateauthsupport::NowMs() / 1000;
+    std::string access_jti;
+    std::string ticket_jti;
+    std::string uuid_error;
+    if (!memochat::random::GenerateUuid(access_jti, &uuid_error) ||
+        !memochat::random::GenerateUuid(ticket_jti, &uuid_error))
+    {
+        memolog::LogError("gate.auth.session_issue_failed",
+                          "session identifier generation failed",
+                          {{"uid", std::to_string(userInfo.uid)}, {"error", uuid_error}});
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
     memochat::auth::JwtAccessTokenClaims access_claims;
     access_claims.typ = "access";
     access_claims.iss = gateauthsupport::GetJwtAccessIssuer();
@@ -240,7 +297,7 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     access_claims.iat = access_token_now_sec;
     access_claims.nbf = access_token_now_sec;
     access_claims.exp = access_token_now_sec + access_token_ttl_sec;
-    access_claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());
+    access_claims.jti = std::move(access_jti);
     access_claims.token_version = 0;
     access_token = memochat::auth::EncodeAccessToken(access_claims, gateauthsupport::GetJwtAccessSecret());
     if (access_token.empty() || !AuthCache::Instance().SetHttpToken(userInfo.uid, access_token, access_token_ttl_sec))
@@ -261,7 +318,7 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     claims.protocol_version = gateauthsupport::LoginProtocolVersion();
     claims.issued_at_ms = gateauthsupport::NowMs();
     claims.expire_at_ms = claims.issued_at_ms + static_cast<int64_t>(gateauthsupport::GetChatTicketTtlSec()) * 1000;
-    claims.jti = boost::uuids::to_string(boost::uuids::random_generator()());
+    claims.jti = std::move(ticket_jti);
     const std::string login_ticket = memochat::auth::EncodeTicket(claims, gateauthsupport::GetChatAuthSecret());
     const auto ticket_issue_ms = gateauthsupport::NowMs() - ticket_start_ms;
     if (login_ticket.empty())
@@ -497,6 +554,36 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
+    auto& account_persistence = account::AccountPersistence::Instance();
+    if (!account_persistence.EmailMatchesUser(name, email))
+    {
+        memolog::LogWarn("gate.reset_pwd.failed", "user email mismatch", {{"email", email}, {"name", name}});
+        root["error"] = ErrorCodes::EmailNotMatch;
+        WriteJson(response, root);
+        return true;
+    }
+
+    int reset_uid = 0;
+    std::string reset_name;
+    if (!account_persistence.FindUserByEmail(email, reset_uid, reset_name) || reset_uid <= 0)
+    {
+        memolog::LogWarn("gate.reset_pwd.failed", "user lookup failed", {{"email", email}});
+        root["error"] = ErrorCodes::EmailNotMatch;
+        WriteJson(response, root);
+        return true;
+    }
+
+    CredentialMutationGuard credential_guard;
+    if (!credential_guard.Acquire(reset_uid))
+    {
+        memolog::LogWarn("gate.reset_pwd.failed",
+                         "credential mutation is already in progress",
+                         {{"email", email}, {"uid", std::to_string(reset_uid)}});
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
+    }
+
     std::string varify_code;
     if (!AuthCache::Instance().GetVerificationCode(email, varify_code))
     {
@@ -505,20 +592,24 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         WriteJson(response, root);
         return true;
     }
-
-    if (varify_code != reset_pwd_request.varifycode)
+    if (varify_code != reset_pwd_request.varifycode ||
+        !AuthCache::Instance().ConsumeVerificationCode(email, reset_pwd_request.varifycode))
     {
-        memolog::LogWarn("gate.reset_pwd.failed", "verify code mismatch", {{"email", email}});
+        memolog::LogWarn("gate.reset_pwd.failed", "verify code mismatch or already consumed", {{"email", email}});
         root["error"] = ErrorCodes::VarifyCodeErr;
         WriteJson(response, root);
         return true;
     }
 
-    auto& account_persistence = account::AccountPersistence::Instance();
-    if (!account_persistence.EmailMatchesUser(name, email))
+    // Revoke the authoritative Redis token binding before committing the new
+    // password. If Redis is unavailable, the password remains unchanged and an
+    // old access token cannot reappear as valid when Redis recovers.
+    if (!InvalidatePasswordResetRedisState(email, reset_uid))
     {
-        memolog::LogWarn("gate.reset_pwd.failed", "user email mismatch", {{"email", email}, {"name", name}});
-        root["error"] = ErrorCodes::EmailNotMatch;
+        memolog::LogError("gate.reset_pwd.failed",
+                          "credential revocation failed before password update",
+                          {{"email", email}, {"uid", std::to_string(reset_uid)}});
+        root["error"] = ErrorCodes::RPCFailed;
         WriteJson(response, root);
         return true;
     }
@@ -531,17 +622,19 @@ bool AuthService::HandleResetPwd(const memochat::gate::routing::GateRequest& req
         return true;
     }
 
-    AuthCache::Instance().DeleteVerificationCode(email);
-    memolog::LogInfo("gate.reset_pwd", "password updated", {{"email", email}});
-    gateauthsupport::InvalidateLoginCacheByEmail(email);
-    int reset_uid = 0;
-    std::string reset_name;
-    if (account_persistence.FindUserByEmail(email, reset_uid, reset_name) && reset_uid > 0)
+    // Repeat after the Postgres transaction to cover a token issued just before
+    // the password change committed. UpdatePwd revokes every refresh token in
+    // that same transaction.
+    if (!InvalidatePasswordResetRedisState(email, reset_uid))
     {
-        AuthCache::Instance().DeleteHttpToken(reset_uid);
-        gateauthsupport::InvalidateLoginCacheByUid(reset_uid);
+        memolog::LogError("gate.reset_pwd.failed",
+                          "credential revocation failed after password update",
+                          {{"email", email}, {"uid", std::to_string(reset_uid)}});
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
     }
-    GateAsyncSideEffects::Instance().PublishCacheInvalidate(email, name, "reset_pwd");
+    memolog::LogInfo("gate.reset_pwd", "password updated and credentials revoked", {{"email", email}});
     gateauthsupport::AuthResetPasswordResponseDto reset_response;
     reset_response.error = 0;
     reset_response.email = email;
@@ -710,7 +803,29 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
     bool pwd_valid = false;
     int64_t mysql_check_pwd_ms = 0;
     account::AccountProfile dbUser;
+    CredentialMutationGuard credential_guard;
+    int credential_uid = 0;
+    std::string credential_name;
+    const bool credential_owner_found =
+        account::AccountPersistence::Instance().FindUserByEmail(email, credential_uid, credential_name) &&
+        credential_uid > 0;
+    if (credential_owner_found && !credential_guard.Acquire(credential_uid))
+    {
+        memolog::LogWarn("gate.user_login.failed",
+                         "credential mutation is already in progress",
+                         {{"email", email}, {"uid", std::to_string(credential_uid)}});
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
+    }
     pwd_valid = account::AccountPersistence::Instance().CheckPassword(email, pwd, dbUser);
+    if (pwd_valid && (!credential_guard.Locked() || dbUser.uid != credential_uid))
+    {
+        memolog::LogError("gate.user_login.failed", "credential owner changed during login", {{"email", email}});
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
+    }
     mysql_check_pwd_ms = gateauthsupport::NowMs() - mysql_start_ms;
     if (pwd_valid)
     {
@@ -770,7 +885,9 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         WriteJson(response, session_root);
         return true;
     }
-    if (!AttachIssuedRefreshToken(session_root, userInfo.uid, request))
+    const auto client_marker = HeaderValue(request, "x-memochat-client");
+    if (auth_algo::ShouldIssueRefreshToken(client_marker.data(), client_marker.size()) &&
+        !AttachIssuedRefreshToken(session_root, userInfo.uid, request))
     {
         memochat::json::JsonValue failure_root;
         failure_root["trace_id"] = request.trace_id;
@@ -826,11 +943,31 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
         return true;
     }
 
-    const auto rotated =
-        account::AccountPersistence::Instance().RotateRefreshToken(refresh_request.refresh_token,
-                                                                   gateauthsupport::GetRefreshTokenTtlSec(),
-                                                                   RefreshTokenUserAgent(request),
-                                                                   RefreshTokenIpHash(request));
+    auto& account_persistence = account::AccountPersistence::Instance();
+    int refresh_uid = 0;
+    if (!account_persistence.ResolveActiveRefreshTokenUserId(refresh_request.refresh_token, refresh_uid))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+        memolog::LogWarn("gate.auth_refresh.failed", "refresh token is not active", {});
+        WriteJson(response, root);
+        return true;
+    }
+
+    CredentialMutationGuard credential_guard;
+    if (!credential_guard.Acquire(refresh_uid))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        memolog::LogWarn("gate.auth_refresh.failed",
+                         "credential mutation is already in progress",
+                         {{"uid", std::to_string(refresh_uid)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    const auto rotated = account_persistence.RotateRefreshToken(refresh_request.refresh_token,
+                                                                gateauthsupport::GetRefreshTokenTtlSec(),
+                                                                RefreshTokenUserAgent(request),
+                                                                RefreshTokenIpHash(request));
 
     if (rotated.status != account::RefreshTokenStatus::Success)
     {
@@ -845,6 +982,16 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
                          {{"uid", std::to_string(rotated.uid)},
                           {"status", std::to_string(static_cast<int>(rotated.status))},
                           {"error_code", std::to_string(error_code)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    if (!account_persistence.IsRefreshTokenActiveForUid(rotated.refresh_token, rotated.uid))
+    {
+        root["error"] = ErrorCodes::TokenInvalid;
+        memolog::LogWarn("gate.auth_refresh.failed",
+                         "rotated refresh token was revoked before access-token issue",
+                         {{"uid", std::to_string(rotated.uid)}});
         WriteJson(response, root);
         return true;
     }
@@ -908,6 +1055,27 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         return true;
     }
 
+    CredentialMutationGuard credential_guard;
+    if (!credential_guard.Acquire(authenticated_uid))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        memolog::LogWarn("gate.auth_logout.failed",
+                         "credential mutation is already in progress",
+                         {{"uid", std::to_string(authenticated_uid)}});
+        WriteJson(response, root);
+        return true;
+    }
+
+    if (!AuthCache::Instance().DeleteHttpToken(authenticated_uid))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        memolog::LogError("gate.auth_logout.failed",
+                          "access token revocation failed closed",
+                          {{"uid", std::to_string(authenticated_uid)}});
+        WriteJson(response, root);
+        return true;
+    }
+
     bool revoked = false;
     if (logout_request.all_devices)
     {
@@ -934,8 +1102,12 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         return true;
     }
 
-    AuthCache::Instance().DeleteHttpToken(authenticated_uid);
-    gateauthsupport::InvalidateLoginCacheByUid(authenticated_uid);
+    if (!gateauthsupport::InvalidateLoginCacheByUid(authenticated_uid))
+    {
+        memolog::LogWarn("gate.auth_logout.cache_invalidate_failed",
+                         "access and refresh credentials were revoked but profile cache cleanup failed",
+                         {{"uid", std::to_string(authenticated_uid)}});
+    }
 
     gateauthsupport::AuthLogoutResponseDto logout_response;
     logout_response.error = ErrorCodes::Success;

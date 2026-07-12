@@ -153,23 +153,43 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
                                                            _message_repository.get(),
                                                            _relation_repository.get(),
                                                            _message_delivery_service.get(),
-                                                           _async_event_dispatcher.get());
+                                                           _async_event_dispatcher.get(),
+                                                           &_startup_error);
+    if (!_private_message_service)
+    {
+        return;
+    }
     _group_message_service = CreateGroupMessageService(*_message_service_config,
                                                        _message_repository.get(),
                                                        _relation_repository.get(),
                                                        _message_delivery_service.get(),
-                                                       _async_event_dispatcher.get());
+                                                       _async_event_dispatcher.get(),
+                                                       &_startup_error);
+    if (!_group_message_service)
+    {
+        return;
+    }
     _chat_relation_service = CreateRelationService(*_relation_service_config,
                                                    _relation_repository.get(),
                                                    _relation_bootstrap_cache.get(),
                                                    _message_delivery_service.get(),
                                                    _task_dispatcher.get(),
-                                                   _async_event_dispatcher.get());
+                                                   _async_event_dispatcher.get(),
+                                                   &_startup_error);
+    if (!_chat_relation_service)
+    {
+        return;
+    }
     _chat_relation_session_service = std::make_unique<ChatRelationSessionAdapter>(_chat_relation_service.get());
 
     auto* relation_query_service = SelectRelationQueryService(*_relation_query_service_config,
                                                               _chat_relation_service.get(),
-                                                              _relation_query_service_remote);
+                                                              _relation_query_service_remote,
+                                                              &_startup_error);
+    if (relation_query_service == nullptr)
+    {
+        return;
+    }
     _chat_session_service = std::make_unique<ChatSessionService>(_logic,
                                                                  UserMgr::GetInstance().get(),
                                                                  _online_route_store.get(),
@@ -186,11 +206,22 @@ ChatRuntimeComposition::ChatRuntimeComposition(LogicSystem& logic)
         {
             DealTasks();
         });
+    _ready = true;
 }
 
 ChatRuntimeComposition::~ChatRuntimeComposition()
 {
     StopDeliveryRuntime();
+}
+
+bool ChatRuntimeComposition::Ready() const
+{
+    return _ready;
+}
+
+const std::string& ChatRuntimeComposition::startupError() const
+{
+    return _startup_error;
 }
 
 ChatSessionService& ChatRuntimeComposition::SessionService()
@@ -267,12 +298,17 @@ void ChatRuntimeComposition::DealAsyncEvents()
     }
 }
 
-void ChatRuntimeComposition::StartDeliveryRuntimeIfEnabled()
+bool ChatRuntimeComposition::StartDeliveryRuntimeIfEnabled(std::string* error)
 {
     if (_delivery_runtime && memochat::chatruntime::IsWorkerEnabled())
     {
-        _delivery_runtime->Start();
+        return _delivery_runtime->Start(error);
     }
+    if (error != nullptr)
+    {
+        error->clear();
+    }
+    return true;
 }
 
 void ChatRuntimeComposition::StopDeliveryRuntime()

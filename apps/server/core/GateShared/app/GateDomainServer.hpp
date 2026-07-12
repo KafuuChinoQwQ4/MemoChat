@@ -5,7 +5,15 @@
 #include <string>
 
 using GateDomainRouteRegistrar = void (*)(memochat::gate::routing::RouteRegistry&);
+using GateDomainStartHook = std::function<bool(std::string*)>;
 using GateDomainLifecycleHook = std::function<void()>;
+
+struct GateDomainDependencies
+{
+    bool postgres = false;
+    bool redis = false;
+    bool mongo = false;
+};
 
 // Shared entrypoint body for the focused single-domain gateway processes peeled
 // off GateServer (gateserver microservice split, Phase 3/4). Each domain exe
@@ -21,5 +29,6 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
                         const std::string& config_section,
                         unsigned short default_port,
                         bool init_aws,
-                        GateDomainLifecycleHook on_start = {},
-                        GateDomainLifecycleHook on_stop = {});
+                        GateDomainStartHook on_start = {},
+                        GateDomainLifecycleHook on_stop = {},
+                        GateDomainDependencies dependencies = {});

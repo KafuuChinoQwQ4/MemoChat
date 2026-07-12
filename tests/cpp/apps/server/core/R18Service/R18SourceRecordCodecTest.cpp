@@ -129,6 +129,15 @@ TEST(R18SourceRecordCodecTest, BridgesRecordToAndFromJsonValue)
     EXPECT_TRUE(decoded.builtin);
 }
 
+TEST(R18SourceRecordCodecTest, PublicSourceRecordOmitsInternalFilesystemPath)
+{
+    const auto value = memochat::r18::R18SourceRecordToPublicJsonValue(MakeRecord());
+
+    EXPECT_FALSE(value.isMember("path"));
+    EXPECT_EQ(value["id"].asString(), "source-1");
+    EXPECT_EQ(value["format"].asString(), "source-js");
+}
+
 TEST(R18SourceRecordCodecTest, ReportsNullEncodeOutput)
 {
     std::string error;

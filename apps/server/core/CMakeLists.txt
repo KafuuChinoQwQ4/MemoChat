@@ -104,16 +104,15 @@ if(MSVC)
 endif()
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
+find_package(Threads REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(stdexec CONFIG REQUIRED)
-find_package(bsoncxx CONFIG REQUIRED)
-find_package(mongocxx CONFIG REQUIRED)
-find_package(libpqxx CONFIG REQUIRED)
-find_package(CppKafka CONFIG QUIET)
-find_package(cppkafka CONFIG QUIET)
+find_package(bson-1.0 CONFIG REQUIRED)
+find_package(mongoc-1.0 CONFIG REQUIRED)
+find_package(PostgreSQL REQUIRED)
+find_package(RdKafka CONFIG QUIET)
 find_package(unofficial-librabbitmq CONFIG QUIET)
 find_package(rabbitmq-c CONFIG QUIET)
 find_package(msquic CONFIG QUIET)
@@ -148,7 +147,9 @@ else()
     endif()
 endif()
 
-if(TARGET spdlog::spdlog)
+if(MEMOCHAT_NO_EXCEPTIONS AND TARGET spdlog::spdlog_header_only)
+    set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog_header_only)
+elseif(TARGET spdlog::spdlog)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog)
 elseif(TARGET spdlog::spdlog_header_only)
     set(MEMOCHAT_SPDLOG_TARGET spdlog::spdlog_header_only)
@@ -156,26 +157,22 @@ else()
     message(FATAL_ERROR "spdlog target not found")
 endif()
 
-if(TARGET mongo::mongocxx_shared)
-    set(MEMOCHAT_MONGOCXX_TARGET mongo::mongocxx_shared)
-elseif(TARGET mongo::mongocxx_static)
-    set(MEMOCHAT_MONGOCXX_TARGET mongo::mongocxx_static)
+if(TARGET mongo::mongoc_static)
+    set(MEMOCHAT_MONGOC_TARGET mongo::mongoc_static)
 else()
-    message(FATAL_ERROR "mongocxx target not found")
+    message(FATAL_ERROR "mongo::mongoc_static target not found")
 endif()
 
-if(TARGET mongo::bsoncxx_shared)
-    set(MEMOCHAT_BSONCXX_TARGET mongo::bsoncxx_shared)
-elseif(TARGET mongo::bsoncxx_static)
-    set(MEMOCHAT_BSONCXX_TARGET mongo::bsoncxx_static)
+if(TARGET mongo::bson_static)
+    set(MEMOCHAT_BSON_TARGET mongo::bson_static)
 else()
-    message(FATAL_ERROR "bsoncxx target not found")
+    message(FATAL_ERROR "mongo::bson_static target not found")
 endif()
 
-if(TARGET libpqxx::pqxx)
-    set(MEMOCHAT_PQXX_TARGET libpqxx::pqxx)
+if(TARGET PostgreSQL::PostgreSQL)
+    set(MEMOCHAT_POSTGRES_TARGET PostgreSQL::PostgreSQL)
 else()
-    message(FATAL_ERROR "libpqxx target not found")
+    message(FATAL_ERROR "PostgreSQL::PostgreSQL target not found")
 endif()
 
 set(MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER_COMPILED 0)
@@ -249,11 +246,8 @@ if(NOT MEMOCHAT_SODIUM_TARGET)
 endif()
 
 set(MEMOCHAT_ENABLE_KAFKA 0)
-if(TARGET CppKafka::cppkafka)
-    set(MEMOCHAT_CPPKAFKA_TARGET CppKafka::cppkafka)
-    set(MEMOCHAT_ENABLE_KAFKA 1)
-elseif(TARGET cppkafka)
-    set(MEMOCHAT_CPPKAFKA_TARGET cppkafka)
+if(TARGET RdKafka::rdkafka)
+    set(MEMOCHAT_RDKAFKA_TARGET RdKafka::rdkafka)
     set(MEMOCHAT_ENABLE_KAFKA 1)
 endif()
 
@@ -458,8 +452,6 @@ add_library(memochat_server_deps INTERFACE)
 target_compile_features(memochat_server_deps INTERFACE cxx_std_23)
 target_include_directories(memochat_server_deps INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/common
-    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/mongocxx/v_noabi"
-    "${MEMOCHAT_VCPKG_TRIPLET_DIR}/include/bsoncxx/v_noabi"
 )
 target_link_libraries(memochat_server_deps INTERFACE
     memochat_cpp26_reflection
@@ -474,7 +466,7 @@ target_link_libraries(memochat_server_deps INTERFACE
     gRPC::grpc++_reflection
     protobuf::libprotobuf
     hiredis::hiredis
-    STDEXEC::asioexec
+    Threads::Threads
     ${MEMOCHAT_SPDLOG_TARGET}
 )
 # nghttp2 支持已移除;显式置 0 防止 target_compile_definitions 传出空值。
@@ -495,10 +487,6 @@ if(MEMOCHAT_ENABLE_HTTP3)
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=1)
 else()
     target_compile_definitions(memochat_server_deps INTERFACE MEMOCHAT_ENABLE_HTTP3=0)
-endif()
-
-if(MEMOCHAT_ENABLE_KAFKA)
-    target_compile_definitions(memochat_server_deps INTERFACE CPPKAFKA_STATIC)
 endif()
 
 if(MEMOCHAT_ENABLE_RABBITMQ)
@@ -536,10 +524,6 @@ if(WIN32)
     target_compile_definitions(memochat_server_deps INTERFACE
         _WIN32_WINNT=0x0A00
         WINVER=0x0A00)
-    if(MSVC)
-        target_compile_options(memochat_server_deps INTERFACE /EHsc)
-    endif()
-
     # Use full path for bcrypt so the Windows SDK directory is always found,
     # regardless of how vcpkg or other deps configure LIBPATH.
     target_link_directories(memochat_server_deps INTERFACE
@@ -635,14 +619,15 @@ function(memochat_configure_gate_core_lib target_name)
     target_compile_features(${target_name} PUBLIC cxx_std_23)
     target_include_directories(${target_name} PUBLIC ${MEMOCHAT_GATE_CORE_INCLUDE_DIRS})
     target_link_libraries(${target_name} PUBLIC memochat_server_deps)
-    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_PQXX_TARGET})
-    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_MONGOCXX_TARGET} ${MEMOCHAT_BSONCXX_TARGET})
+    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_POSTGRES_TARGET})
+    target_link_libraries(${target_name} PUBLIC ${MEMOCHAT_MONGOC_TARGET})
+    target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_BSON_TARGET})
     target_link_libraries(${target_name} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     if(AWSSDK_FOUND)
         target_link_libraries(${target_name} PUBLIC aws-cpp-sdk-s3)
     endif()
     if(MEMOCHAT_ENABLE_KAFKA)
-        target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+        target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_RDKAFKA_TARGET})
     endif()
     if(MEMOCHAT_ENABLE_RABBITMQ)
         target_link_libraries(${target_name} PRIVATE ${MEMOCHAT_RABBITMQ_TARGET})
@@ -750,10 +735,8 @@ if(BUILD_SERVER_SERVICES)
 
     # --- Shared gate runtime framework + compat transports. These depend
     # on the domain-core/domain targets defined above (GateServerCore aggregate,
-    # GateAppCore compat). Default-buildable: GateRuntimeCore, GateServerHttp3,
-    # R18 plugin helpers.
+    # GateAppCore compat). Default-buildable: GateRuntimeCore and GateServerHttp3.
     add_subdirectory(GateShared)
-    add_subdirectory(GateShared/plugins/r18)
     add_subdirectory(GateShared/transports/h3)
 
     add_subdirectory(VarifyServer)

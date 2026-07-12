@@ -16,12 +16,22 @@ ChatGrpcClient::ChatGrpcClient()
 {
     auto& cfg = ConfigMgr::Inst();
     const std::string self_name = cfg.GetValue("SelfServer", "Name");
-    const auto cluster = memochat::cluster::LoadChatClusterConfig(
-        [&cfg](const std::string& section, const std::string& key)
-        {
-            return cfg.GetValue(section, key);
-        },
-        std::string());
+    memochat::cluster::ChatClusterConfig cluster;
+    std::string cluster_error;
+    if (!memochat::cluster::LoadChatClusterConfig(
+            [&cfg](const std::string& section, const std::string& key)
+            {
+                return cfg.GetValue(section, key);
+            },
+            std::string(),
+            cluster,
+            cluster_error))
+    {
+        memolog::LogError("chat.grpc_client.cluster_config_invalid",
+                          "ChatGrpcClient cluster config is invalid",
+                          {{"error", cluster_error}});
+        return;
+    }
 
     for (const auto& node : cluster.enabledNodes())
     {

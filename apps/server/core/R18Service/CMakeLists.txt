@@ -57,7 +57,7 @@ add_library(GateR18Domain STATIC
 )
 memochat_configure_gate_app_lib(GateR18Domain)
 target_include_directories(GateR18Domain PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain)
-target_link_libraries(GateR18Domain PUBLIC GateRuntimeCore GateR18Core)
+target_link_libraries(GateR18Domain PUBLIC GateRuntimeCore GateR18Core GateAccountCore)
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(GateR18Domain
         MODULES

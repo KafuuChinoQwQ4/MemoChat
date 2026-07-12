@@ -90,6 +90,16 @@ memochat::json::JsonValue R18SourceRecordToJsonValue(const R18SourceRecord& reco
     return value;
 }
 
+memochat::json::JsonValue R18SourceRecordToPublicJsonValue(const R18SourceRecord& record)
+{
+    auto value = R18SourceRecordToJsonValue(record);
+    if (value.isObject())
+    {
+        value.impl().get<memochat::json::object_t>().erase("path");
+    }
+    return value;
+}
+
 bool R18SourceRecordFromJsonValue(const memochat::json::JsonValue& value, R18SourceRecord* out, std::string* error_out)
 {
     return DecodeR18SourceRecord(memochat::json::glaze_stringify(value), out, error_out);

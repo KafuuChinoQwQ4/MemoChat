@@ -5,6 +5,8 @@
 #include "ConfigMgr.hpp"
 #include "logging/Logger.hpp"
 
+#include <charconv>
+
 import memochat.varify.email_task_bus_algorithms;
 
 #ifndef MEMOCHAT_ENABLE_RABBITMQ
@@ -23,6 +25,17 @@ import memochat.varify.email_task_bus_algorithms;
 
 namespace
 {
+
+int ParseIntOrDefault(const std::string& raw, int fallback)
+{
+    if (raw.empty())
+    {
+        return fallback;
+    }
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    return ec == std::errc{} && ptr == raw.data() + raw.size() ? value : fallback;
+}
 
 #if MEMOCHAT_ENABLE_RABBITMQ
 bool RpcReplyOk(amqp_rpc_reply_t reply)
@@ -51,7 +64,7 @@ EmailTaskBus::EmailTaskBus()
 {
     auto& cfg = ConfigMgr::Inst();
     config_host_ = cfg["RabbitMQ"]["Host"];
-    config_port_ = std::atoi(cfg["RabbitMQ"]["Port"].c_str());
+    config_port_ = ParseIntOrDefault(cfg["RabbitMQ"]["Port"], config_port_);
     config_username_ = cfg["RabbitMQ"]["Username"];
     config_password_ = cfg["RabbitMQ"]["Password"];
     config_vhost_ = cfg["RabbitMQ"]["VHost"];
@@ -81,9 +94,10 @@ EmailTaskBus::EmailTaskBus()
     config_dlq_routing_key_ = cfg["RabbitMQ"]["DlqRoutingKey"];
     if (config_dlq_routing_key_.empty())
         config_dlq_routing_key_ = email_task_bus_modules::DefaultDlqRoutingKey();
-    config_retry_delay_ms_ =
-        email_task_bus_modules::NormalizeRetryDelayMs(std::atoi(cfg["RabbitMQ"]["RetryDelayMs"].c_str()));
-    config_max_retries_ = email_task_bus_modules::NormalizeMaxRetries(std::atoi(cfg["RabbitMQ"]["MaxRetries"].c_str()));
+    config_retry_delay_ms_ = email_task_bus_modules::NormalizeRetryDelayMs(
+        ParseIntOrDefault(cfg["RabbitMQ"]["RetryDelayMs"], config_retry_delay_ms_));
+    config_max_retries_ = email_task_bus_modules::NormalizeMaxRetries(
+        ParseIntOrDefault(cfg["RabbitMQ"]["MaxRetries"], config_max_retries_));
 
 #if MEMOCHAT_ENABLE_RABBITMQ
     std::string err;
@@ -336,35 +350,52 @@ bool EmailTaskBus::PublishToQueue(const std::string& exchange, const std::string
 #endif
 }
 
-void EmailTaskBus::StartWorker(EmailSender* sender)
+bool EmailTaskBus::StartWorker(EmailSender* sender)
 {
     (void) sender;
     if (started_.load(std::memory_order_acquire))
-        return;
+        return true;
 #if MEMOCHAT_ENABLE_RABBITMQ
     if (!rabbitmq_healthy_.load(std::memory_order_acquire))
     {
         memolog::LogWarn("varify.emailtaskbus.worker_skip", "RabbitMQ not healthy, skipping worker");
-        return;
+        return true;
     }
     stop_.store(false, std::memory_order_release);
-    worker_thread_ = std::thread(
-        [this]()
-        {
-            WorkerLoop(nullptr);
-        });
+    std::string thread_error;
+    if (!worker_thread_.Start(
+            [this]()
+            {
+                WorkerLoop(nullptr);
+            },
+            &thread_error))
+    {
+        stop_.store(true, std::memory_order_release);
+        memolog::LogError("varify.emailtaskbus.worker_start_failed",
+                          "failed to start EmailTaskBus worker",
+                          {{"error", thread_error}});
+        return false;
+    }
+    started_.store(true, std::memory_order_release);
 #endif
+    return true;
 }
 
 void EmailTaskBus::StopWorker()
 {
-    if (!started_.load(std::memory_order_acquire))
+    if (!started_.load(std::memory_order_acquire) && !worker_thread_.Joinable())
         return;
     stop_.store(true, std::memory_order_release);
     queue_cv_.notify_all();
-    if (worker_thread_.joinable())
+    if (worker_thread_.Joinable())
     {
-        worker_thread_.join();
+        std::string thread_error;
+        if (!worker_thread_.Join(&thread_error))
+        {
+            memolog::LogError("varify.emailtaskbus.worker_join_failed",
+                              "failed to join EmailTaskBus worker",
+                              {{"error", thread_error}});
+        }
     }
     started_.store(false, std::memory_order_release);
     memolog::LogInfo("varify.emailtaskbus.worker_stopped", "EmailTaskBus worker stopped");

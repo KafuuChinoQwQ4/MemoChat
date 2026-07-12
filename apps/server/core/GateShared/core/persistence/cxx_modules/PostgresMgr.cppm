@@ -12,10 +12,11 @@ export namespace memochat::gate::postgres_mgr::modules
 constexpr unsigned AccountForwardCount()
 {
     // RegUser, CheckEmail, UpdatePwd, UpdateUserProfile, CheckPwd,
-    // IssueRefreshToken, RotateRefreshToken, RevokeRefreshToken,
+    // IssueRefreshToken, RotateRefreshToken, ResolveActiveRefreshTokenUserId, RevokeRefreshToken,
     // RevokeAllRefreshTokensForUid, GetUserPublicId, GetCallUserProfile,
-    // IsFriend, GetUserInfo, TestProcedure
-    return 14;
+    // IsFriend, GetUserInfo, GetR18AccessPolicy, AttestAdultForR18,
+    // TestProcedure
+    return 17;
 }
 
 constexpr unsigned CallForwardCount()

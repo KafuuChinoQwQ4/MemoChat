@@ -29,7 +29,6 @@ Item {
     signal sourceCatalogInputEdited(string text)
     signal officialCatalogRefreshRequested()
     signal sourceHelpToggled()
-    signal officialSourceImportRequested(int sourceIndex)
     signal presetSourceSelected(string sourceId)
 
     function modelCount(model) {
@@ -159,7 +158,7 @@ Item {
             }
         }
 
-        // 预置仓库 —— 直接拉 JS 导入，不经目录中转
+        // Built-in adapters are selectable here; catalog entries below are read-only.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 6
@@ -213,7 +212,7 @@ Item {
                         GlassButton {
                             Layout.preferredWidth: 96
                             Layout.preferredHeight: 40
-                            text: "添加"
+                            text: "进入"
                             textPixelSize: 15
                             textColor: "#ffffff"
                             cornerRadius: 20
@@ -252,23 +251,15 @@ Item {
             ScrollBar.vertical: GlassScrollBar {}
 
             delegate: R18OfficialSourceRow {
-                required property int index
                 required property string title
                 required property string itemId
                 required property var status
                 required property var message
                 required property var url
 
-                sourceIndex: index
                 statusText: status || message || url || ""
                 textPrimaryColor: root.textPrimaryColor
                 textSecondaryColor: root.textSecondaryColor
-                importButtonColor: root.importButtonColor
-                importButtonHoverColor: root.importButtonHoverColor
-                importButtonPressedColor: root.importButtonPressedColor
-                onImportRequested: function(sourceIndex) {
-                    root.officialSourceImportRequested(sourceIndex)
-                }
             }
         }
     }

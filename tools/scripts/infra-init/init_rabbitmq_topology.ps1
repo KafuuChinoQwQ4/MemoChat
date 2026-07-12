@@ -18,7 +18,6 @@ $queues = @(
     @{ Name = "chat.outbox.relay.retry.q"; RoutingKey = "chat.outbox.relay.retry" },
     @{ Name = "verify.email.delivery.q"; RoutingKey = "verify.email.delivery" },
     @{ Name = "status.presence.refresh.q"; RoutingKey = "status.presence.refresh" },
-    @{ Name = "gate.cache.invalidate.q"; RoutingKey = "gate.cache.invalidate" },
     @{ Name = "ai.agent.tasks.q"; RoutingKey = "ai.agent.task.run" }
 )
 

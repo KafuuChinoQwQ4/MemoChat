@@ -11,9 +11,32 @@
 #include "logging/TraceContext.hpp"
 
 #include <chrono>
+#include <charconv>
 #include <grpcpp/grpcpp.h>
+#include <string_view>
 
 import memochat.varify.service_algorithms;
+
+namespace
+{
+
+bool ParseInt(std::string_view raw, int* out)
+{
+    if (out == nullptr || raw.empty())
+    {
+        return false;
+    }
+    int value = 0;
+    const auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (ec != std::errc{} || ptr != raw.data() + raw.size())
+    {
+        return false;
+    }
+    *out = value;
+    return true;
+}
+
+} // namespace
 
 namespace varifyservice
 {
@@ -26,76 +49,22 @@ VarifyServiceImpl::VarifyServiceImpl()
     auto& cfg = ConfigMgr::Inst();
 
     auto code_len_str = cfg["VerifyCode"]["CodeLength"];
-    if (!code_len_str.empty())
-    {
-        try
-        {
-            config_.code_length = std::stoi(code_len_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(code_len_str, &config_.code_length);
 
     auto ttl_str = cfg["VerifyCode"]["TTLSeconds"];
-    if (!ttl_str.empty())
-    {
-        try
-        {
-            config_.code_ttl_sec = std::stoi(ttl_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(ttl_str, &config_.code_ttl_sec);
 
     auto email_count_str = cfg["RateLimit"]["EmailMaxRequests"];
-    if (!email_count_str.empty())
-    {
-        try
-        {
-            config_.email_rate_limit_count = std::stoi(email_count_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(email_count_str, &config_.email_rate_limit_count);
 
     auto email_window_str = cfg["RateLimit"]["EmailWindowSec"];
-    if (!email_window_str.empty())
-    {
-        try
-        {
-            config_.email_rate_limit_window_sec = std::stoi(email_window_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(email_window_str, &config_.email_rate_limit_window_sec);
 
     auto ip_count_str = cfg["RateLimit"]["IpMaxRequests"];
-    if (!ip_count_str.empty())
-    {
-        try
-        {
-            config_.ip_rate_limit_count = std::stoi(ip_count_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(ip_count_str, &config_.ip_rate_limit_count);
 
     auto ip_window_str = cfg["RateLimit"]["IpWindowSec"];
-    if (!ip_window_str.empty())
-    {
-        try
-        {
-            config_.ip_rate_limit_window_sec = std::stoi(ip_window_str);
-        }
-        catch (...)
-        {
-        }
-    }
+    ParseInt(ip_window_str, &config_.ip_rate_limit_window_sec);
 
     memolog::LogInfo("varifyservice.config",
                      "VarifyServiceImpl initialized",
@@ -251,6 +220,15 @@ grpc::Status VarifyServiceImpl::GetVarifyCode(grpc::ServerContext* context,
     if (!code_exists)
     {
         code = GenerateVerifyCode();
+        if (code.empty())
+        {
+            g_metrics.requests_failed.fetch_add(1, std::memory_order_relaxed);
+            memolog::LogError("varify.get_code.generator_failed",
+                              "failed to initialize secure verify code generator",
+                              {{"email", email}, {"trace_id", trace_id}});
+            reply->set_error(static_cast<int>(VarifyError::Exception));
+            return grpc::Status::OK;
+        }
         bool stored = StoreVerifyCode(email, code, config_.code_ttl_sec);
         if (!stored)
         {

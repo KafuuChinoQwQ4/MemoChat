@@ -4,13 +4,16 @@
 #include "logging/Logger.hpp"
 #include "logging/LogConfig.hpp"
 #include "logging/Redaction.hpp"
+#include "runtime/ExplicitThread.hpp"
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <filesystem>
 #include <map>
 #include <string>
-#include <thread>
-#include <future>
-#include <cstdlib>
+#include <vector>
 
 using namespace ::testing;
 using namespace memolog;
@@ -51,6 +54,44 @@ LogConfig make_test_config()
     return cfg;
 }
 
+std::filesystem::path make_temp_log_path(const std::string& label)
+{
+    std::error_code error;
+    const auto temp_dir = std::filesystem::temp_directory_path(error);
+    if (error)
+    {
+        return {};
+    }
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    return temp_dir / ("memochat-logger-" + label + "-" + std::to_string(nonce));
+}
+
+std::string read_file(const std::filesystem::path& path)
+{
+    std::FILE* input = std::fopen(path.string().c_str(), "rb");
+    if (input == nullptr)
+    {
+        return {};
+    }
+
+    std::string contents;
+    char buffer[4096]{};
+    for (;;)
+    {
+        const std::size_t count = std::fread(buffer, 1, sizeof(buffer), input);
+        if (count != 0)
+        {
+            contents.append(buffer, count);
+        }
+        if (count != sizeof(buffer))
+        {
+            break;
+        }
+    }
+    (void) std::fclose(input);
+    return contents;
+}
+
 // ---------------------------------------------------------------------------
 // ParseLevel — returns a valid spdlog level and doesn't crash
 // ---------------------------------------------------------------------------
@@ -79,7 +120,7 @@ TEST(JsonLoggerTest, ParseLevel_ReturnValueIsValid)
 
 TEST(JsonLoggerTest, ParseLevel_UnknownStringDoesNotCrash)
 {
-    // Unknown strings must not throw — they fall back to info
+    // Unknown strings use the info fallback.
     EXPECT_EQ(ParseLevel("DEBUG"), spdlog::level::info);
     EXPECT_EQ(ParseLevel("foobar"), spdlog::level::info);
     EXPECT_EQ(ParseLevel(""), spdlog::level::info);
@@ -110,23 +151,136 @@ TEST(JsonLoggerTest, LogConfig_HasSensibleDefaults)
 // ---------------------------------------------------------------------------
 TEST(JsonLoggerTest, InitShutdown_Cycle)
 {
-    Logger::Init("test-service", make_test_config());
+    ASSERT_TRUE(Logger::Init("test-service", make_test_config()));
     ASSERT_TRUE(Logger::Get() != nullptr);
     EXPECT_EQ(Logger::ServiceName(), "test-service");
-    EXPECT_NO_THROW(Logger::Shutdown());
-    EXPECT_NO_THROW(Logger::Shutdown());
+    Logger::Shutdown();
+    Logger::Shutdown();
+}
+
+TEST(JsonLoggerTest, InitReturnsFalseWhenLogDirIsARegularFile)
+{
+    const auto regular_file = make_temp_log_path("not-a-directory");
+    ASSERT_FALSE(regular_file.empty());
+    std::FILE* marker = std::fopen(regular_file.string().c_str(), "wb");
+    ASSERT_NE(marker, nullptr);
+    ASSERT_NE(std::fputs("not a directory", marker), EOF);
+    ASSERT_EQ(std::fclose(marker), 0);
+
+    auto cfg = make_test_config();
+    cfg.dir = regular_file.string();
+    std::string error;
+    EXPECT_FALSE(Logger::Init("invalid-dir", cfg, &error));
+    EXPECT_THAT(error, HasSubstr("log directory"));
+    ASSERT_NE(Logger::Get(), nullptr);
+    LogError("fallback_event", "file logger initialization failed");
+    Logger::Shutdown();
+
+    std::error_code path_error;
+    std::filesystem::remove(regular_file, path_error);
+    EXPECT_FALSE(path_error) << path_error.message();
+}
+
+TEST(JsonLoggerTest, FileSinkWritesOneJsonObjectPerPhysicalLine)
+{
+    const auto log_dir = make_temp_log_path("json-lines");
+    ASSERT_FALSE(log_dir.empty());
+
+    auto cfg = make_test_config();
+    cfg.dir = log_dir.string();
+    cfg.rotate_mode = "size";
+    ASSERT_TRUE(Logger::Init("json-lines", cfg));
+    LogInfo("first_line", "embedded\nnewline");
+    LogInfo("second_line", "plain message");
+    Logger::Shutdown();
+
+    const std::string contents = read_file(log_dir / "json-lines.log.json");
+    ASSERT_FALSE(contents.empty());
+    EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 2);
+    EXPECT_EQ(contents.front(), '{');
+    EXPECT_EQ(contents.back(), '\n');
+    EXPECT_THAT(contents, HasSubstr("\"event\":\"first_line\""));
+    EXPECT_THAT(contents, HasSubstr("\"event\":\"second_line\""));
+    EXPECT_THAT(contents, HasSubstr("embedded\\nnewline"));
+
+    std::error_code cleanup_error;
+    (void) std::filesystem::remove_all(log_dir, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
+TEST(JsonLoggerTest, DailyModeUsesDatedFileName)
+{
+    const auto log_dir = make_temp_log_path("daily");
+    ASSERT_FALSE(log_dir.empty());
+
+    auto cfg = make_test_config();
+    cfg.dir = log_dir.string();
+    cfg.rotate_mode = "daily";
+    ASSERT_TRUE(Logger::Init("daily", cfg));
+    LogInfo("daily_event", "daily message");
+    Logger::Shutdown();
+
+    bool found_daily_log = false;
+    std::error_code iteration_error;
+    std::filesystem::directory_iterator entry(log_dir, iteration_error);
+    const std::filesystem::directory_iterator end;
+    while (!iteration_error && entry != end)
+    {
+        const std::string filename = entry->path().filename().string();
+        found_daily_log = found_daily_log || (filename.starts_with("daily.log_") && filename.ends_with(".json"));
+        entry.increment(iteration_error);
+    }
+    EXPECT_FALSE(iteration_error) << iteration_error.message();
+    EXPECT_TRUE(found_daily_log);
+
+    std::error_code cleanup_error;
+    (void) std::filesystem::remove_all(log_dir, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
+TEST(JsonLoggerTest, SizeModeKeepsConfiguredArchiveCount)
+{
+    const auto log_dir = make_temp_log_path("size-rotation");
+    ASSERT_FALSE(log_dir.empty());
+
+    auto cfg = make_test_config();
+    cfg.dir = log_dir.string();
+    cfg.rotate_mode = "size";
+    cfg.max_files = 1;
+    cfg.max_size_mb = 1;
+    ASSERT_TRUE(Logger::Init("rotate", cfg));
+
+    const std::string payload(700U * 1024U, 'x');
+    LogInfo("first_segment", payload);
+    LogInfo("second_segment", payload);
+    LogInfo("third_segment", payload);
+    Logger::Shutdown();
+
+    std::error_code path_error;
+    EXPECT_TRUE(std::filesystem::exists(log_dir / "rotate.log.json", path_error));
+    EXPECT_FALSE(path_error) << path_error.message();
+    EXPECT_TRUE(std::filesystem::exists(log_dir / "rotate.log.1.json", path_error));
+    EXPECT_FALSE(path_error) << path_error.message();
+    EXPECT_FALSE(std::filesystem::exists(log_dir / "rotate.log.2.json", path_error));
+    EXPECT_FALSE(path_error) << path_error.message();
+    EXPECT_THAT(read_file(log_dir / "rotate.log.1.json"), HasSubstr("\"event\":\"second_segment\""));
+    EXPECT_THAT(read_file(log_dir / "rotate.log.json"), HasSubstr("\"event\":\"third_segment\""));
+
+    std::error_code cleanup_error;
+    (void) std::filesystem::remove_all(log_dir, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
 }
 
 TEST(JsonLoggerTest, ServiceName_AfterInit)
 {
-    Logger::Init("MyService", make_test_config());
+    ASSERT_TRUE(Logger::Init("MyService", make_test_config()));
     EXPECT_EQ(Logger::ServiceName(), "MyService");
     Logger::Shutdown();
 }
 
 TEST(JsonLoggerTest, Config_AfterInit)
 {
-    Logger::Init("CfgTest", make_test_config());
+    ASSERT_TRUE(Logger::Init("CfgTest", make_test_config()));
     const LogConfig& stored = Logger::Config();
     EXPECT_EQ(stored.level, "debug");
     EXPECT_EQ(stored.env, "test");
@@ -183,31 +337,31 @@ TEST(JsonLoggerTest, GrpcTraceAlgorithms_DefineMetadataPropagationGuards)
 // ---------------------------------------------------------------------------
 TEST(JsonLoggerTest, LogDebug_Reachable)
 {
-    Logger::Init("level-test", make_test_config());
+    ASSERT_TRUE(Logger::Init("level-test", make_test_config()));
     Logger::Get()->set_level(spdlog::level::debug);
-    ASSERT_NO_THROW(LogDebug("debug_event", "a debug message"));
-    EXPECT_NO_THROW(Logger::Shutdown());
+    LogDebug("debug_event", "a debug message");
+    Logger::Shutdown();
 }
 
 TEST(JsonLoggerTest, LogInfo_Reachable)
 {
-    Logger::Init("level-test", make_test_config());
-    ASSERT_NO_THROW(LogInfo("info_event", "an info message"));
-    EXPECT_NO_THROW(Logger::Shutdown());
+    ASSERT_TRUE(Logger::Init("level-test", make_test_config()));
+    LogInfo("info_event", "an info message");
+    Logger::Shutdown();
 }
 
 TEST(JsonLoggerTest, LogWarn_Reachable)
 {
-    Logger::Init("level-test", make_test_config());
-    ASSERT_NO_THROW(LogWarn("warn_event", "a warning message"));
-    EXPECT_NO_THROW(Logger::Shutdown());
+    ASSERT_TRUE(Logger::Init("level-test", make_test_config()));
+    LogWarn("warn_event", "a warning message");
+    Logger::Shutdown();
 }
 
 TEST(JsonLoggerTest, LogError_Reachable)
 {
-    Logger::Init("level-test", make_test_config());
-    ASSERT_NO_THROW(LogError("error_event", "an error message"));
-    EXPECT_NO_THROW(Logger::Shutdown());
+    ASSERT_TRUE(Logger::Init("level-test", make_test_config()));
+    LogError("error_event", "an error message");
+    Logger::Shutdown();
 }
 
 // ---------------------------------------------------------------------------
@@ -215,10 +369,10 @@ TEST(JsonLoggerTest, LogError_Reachable)
 // ---------------------------------------------------------------------------
 TEST(JsonLoggerTest, Log_AcceptsFieldsMap)
 {
-    Logger::Init("fields-test", make_test_config());
+    ASSERT_TRUE(Logger::Init("fields-test", make_test_config()));
     std::map<std::string, std::string> fields = {{"user_id", "123"}, {"action", "login"}, {"duration_ms", "42"}};
-    ASSERT_NO_THROW(Logger::Log(spdlog::level::info, "login_action", "user logged in", fields));
-    EXPECT_NO_THROW(Logger::Shutdown());
+    Logger::Log(spdlog::level::info, "login_action", "user logged in", fields);
+    Logger::Shutdown();
 }
 
 TEST(JsonLoggerTest, Redaction_UsesModuleBackedSensitiveKeyPolicy)
@@ -260,31 +414,36 @@ TEST(JsonLoggerTest, Redaction_UsesModuleBackedSensitiveKeyPolicy)
 // ---------------------------------------------------------------------------
 TEST(JsonLoggerTest, ConcurrentLog_NoCrash)
 {
-    Logger::Init("concurrent-test", make_test_config());
+    ASSERT_TRUE(Logger::Init("concurrent-test", make_test_config()));
     Logger::Get()->set_level(spdlog::level::info);
 
-    std::vector<std::future<void>> futures;
+    std::vector<memochat::runtime::ExplicitThread> threads(4);
     for (int i = 0; i < 4; ++i)
     {
-        futures.emplace_back(
-            std::async(std::launch::async,
-                       [i]()
-                       {
-                           for (int j = 0; j < 100; ++j)
-                           {
-                               std::map<std::string, std::string> f = {{"thread_id", std::to_string(i)},
-                                                                       {"iter", std::to_string(j)}};
-                               Logger::Log(spdlog::level::info,
-                                           "concurrent_event",
-                                           "thread " + std::to_string(i) + " iter " + std::to_string(j),
-                                           f);
-                           }
-                       }));
+        std::string error;
+        ASSERT_TRUE(threads[static_cast<std::size_t>(i)].Start(
+            [i]() noexcept
+            {
+                for (int j = 0; j < 100; ++j)
+                {
+                    std::map<std::string, std::string> f = {{"thread_id", std::to_string(i)},
+                                                            {"iter", std::to_string(j)}};
+                    Logger::Log(spdlog::level::info,
+                                "concurrent_event",
+                                "thread " + std::to_string(i) + " iter " + std::to_string(j),
+                                f);
+                }
+            },
+            &error))
+            << error;
     }
-    for (auto& f : futures)
-        f.get();
+    for (auto& thread : threads)
+    {
+        std::string error;
+        ASSERT_TRUE(thread.Join(&error)) << error;
+    }
 
-    EXPECT_NO_THROW(Logger::Shutdown());
+    Logger::Shutdown();
 }
 
 // ---------------------------------------------------------------------------
@@ -292,9 +451,9 @@ TEST(JsonLoggerTest, ConcurrentLog_NoCrash)
 // ---------------------------------------------------------------------------
 TEST(JsonLoggerTest, ReInit_OverwritesPreviousLogger)
 {
-    Logger::Init("first", make_test_config());
+    ASSERT_TRUE(Logger::Init("first", make_test_config()));
     EXPECT_EQ(Logger::ServiceName(), "first");
-    Logger::Init("second", make_test_config());
+    ASSERT_TRUE(Logger::Init("second", make_test_config()));
     EXPECT_EQ(Logger::ServiceName(), "second");
     Logger::Shutdown();
 }

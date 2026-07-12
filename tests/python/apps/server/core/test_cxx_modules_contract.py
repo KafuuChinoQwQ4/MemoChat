@@ -36,6 +36,7 @@ class CxxModulesContractTest(unittest.TestCase):
         self.assertEqual(cache["CMAKE_CXX_STANDARD"], "26")
         self.assertEqual(cache["CMAKE_CXX_SCAN_FOR_MODULES"], "OFF")
         self.assertEqual(cache["MEMOCHAT_ENABLE_GNU_MODULES"], "ON")
+        self.assertEqual(cache["MEMOCHAT_NO_EXCEPTIONS"], "ON")
 
     def test_cmake_helper_builds_named_cmis_with_gnu_mapper(self):
         helper = read(REPO_ROOT / "cmake" / "MemoChatModules.cmake")
@@ -52,6 +53,10 @@ class CxxModulesContractTest(unittest.TestCase):
         self.assertIn("MODULE_DEPENDS", helper)
         self.assertIn("CONSUMER_SOURCES", helper)
         self.assertIn("add_custom_target(${target_name}_cxx_modules", helper)
+        self.assertIn("function(memochat_gnu_module_dialect out_variant out_options)", helper)
+        self.assertIn('set(${out_variant} "no-exceptions" PARENT_SCOPE)', helper)
+        self.assertIn('set(${out_options} "-fno-exceptions" PARENT_SCOPE)', helper)
+        self.assertIn("/${_module_variant}", helper)
 
     def test_cmake_helper_uses_stamp_deps_and_depfile_filter_for_incremental_modules(self):
         helper = read(REPO_ROOT / "cmake" / "MemoChatModules.cmake")
@@ -3277,13 +3282,10 @@ DEPFILE
         for helper in (
             "ShouldUseFallbackSection",
             "HasPostgresHost",
-            "ShouldEnablePostgres",
             "DefaultSslMode",
             "DefaultSchema",
             "SelectSslMode",
             "SelectSchema",
-            "StartupPoolSize",
-            "ShouldUsePostgresWarmupPath",
         ):
             self.assertIn(helper, module_interface)
         self.assertIsNotNone(
@@ -3291,8 +3293,6 @@ DEPFILE
         )
         self.assertIn("postgres_dao_modules::ShouldUseFallbackSection", consumer)
         self.assertIn("postgres_dao_modules::SelectSslMode", consumer)
-        self.assertIn("postgres_dao_modules::StartupPoolSize", consumer)
-        self.assertIn("postgres_dao_modules::ShouldUsePostgresWarmupPath", consumer)
         for non_consumer in (
             postgres_mgr,
             postgres_users,
@@ -3752,53 +3752,6 @@ DEPFILE
         self.assertIn("chatserver_redis_mgr_algorithms_gtest", test_cmake)
         self.assertIn("RedisMgrAlgorithmsConsumer.cpp", test_cmake)
         self.assertIn("memochat.chat.redis_mgr_algorithms", test_cmake)
-
-    def test_chat_persistence_core_imports_postgres_pool_algorithms_module(self):
-        cmake = read(CHAT_SERVER / "CMakeLists.txt")
-        module_interface = read(CHAT_SERVER / "persistence" / "cxx_modules" / "PostgresPool.cppm")
-        consumer = read(CHAT_SERVER / "persistence" / "PostgresPool.cpp")
-        postgres_mgr = read(CHAT_SERVER / "persistence" / "PostgresMgr.cpp")
-        redis_mgr = read(CHAT_SERVER / "persistence" / "RedisMgr.cpp")
-        transport_session = read(CHAT_SERVER / "transport" / "CSession.cpp")
-        test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "ChatServer" / "CMakeLists.txt")
-
-        self.assertIn("memochat_enable_gnu_modules(ChatPersistenceCore", cmake)
-        self.assertIn(
-            "memochat.chat.postgres_pool_algorithms=persistence/cxx_modules/PostgresPool.cppm",
-            cmake,
-        )
-        self.assertIn("persistence/PostgresPool.cpp", cmake)
-        self.assertIsNotNone(
-            re.search(
-                r"^\s*export\s+module\s+memochat\.chat\.postgres_pool_algorithms\s*;",
-                module_interface,
-                flags=re.M,
-            )
-        )
-        self.assertIn("export namespace memochat::chat::persistence::postgres_pool::modules", module_interface)
-        for helper in (
-            "ShouldCreateInitialConnection",
-            "ConnectionWaitTimeoutSeconds",
-            "ShouldReconnect",
-            "ShouldWakeForConnection",
-            "ShouldReturnNullAfterWait",
-            "ShouldAcceptReturnedConnection",
-        ):
-            self.assertIn(helper, module_interface)
-        self.assertIsNotNone(
-            re.search(r"^\s*import\s+memochat\.chat\.postgres_pool_algorithms\s*;", consumer, flags=re.M)
-        )
-        self.assertIn("postgres_pool_modules::ShouldCreateInitialConnection", consumer)
-        self.assertIn("postgres_pool_modules::ConnectionWaitTimeoutSeconds", consumer)
-        self.assertIn("postgres_pool_modules::ShouldWakeForConnection", consumer)
-        self.assertIn("postgres_pool_modules::ShouldReturnNullAfterWait", consumer)
-        for non_consumer in (postgres_mgr, redis_mgr, transport_session):
-            self.assertIsNone(
-                re.search(r"^\s*import\s+memochat\.chat\.postgres_pool_algorithms\s*;", non_consumer, flags=re.M)
-            )
-        self.assertIn("chatserver_postgres_pool_algorithms_gtest", test_cmake)
-        self.assertIn("PostgresPoolAlgorithmsConsumer.cpp", test_cmake)
-        self.assertIn("memochat.chat.postgres_pool_algorithms", test_cmake)
 
     def test_chat_persistence_core_imports_outbox_algorithms_module(self):
         cmake = read(CHAT_SERVER / "CMakeLists.txt")
@@ -4393,8 +4346,11 @@ DEPFILE
         self.assertIn("HmacKey", module_interface)
         self.assertIn("NormalizeSearchPage", module_interface)
         self.assertIn("ShouldStripLeadingSlash", module_interface)
-        self.assertIn("ShouldRejectImageScheme", module_interface)
-        self.assertIn("DefaultImageContentType", module_interface)
+        self.assertIn("IsExactHostInPolicy", module_interface)
+        self.assertIn("IsCanonicalAllowedImageUrl", module_interface)
+        self.assertIn("IsPublicIpv4Address", module_interface)
+        self.assertIn("IsPublicIpv6Address", module_interface)
+        self.assertIn("MaxImageBytes", module_interface)
         self.assertIsNotNone(
             re.search(r"^\s*import\s+memochat\.r18\.picacg_adapter_algorithms\s*;", consumer, flags=re.M)
         )
@@ -4402,8 +4358,11 @@ DEPFILE
         self.assertIn("picacg_adapter::modules::HmacKey", consumer)
         self.assertIn("picacg_adapter::modules::NormalizeSearchPage", consumer)
         self.assertIn("picacg_adapter::modules::ShouldStripLeadingSlash", consumer)
-        self.assertIn("picacg_adapter::modules::ShouldRejectImageScheme", consumer)
-        self.assertIn("picacg_adapter::modules::DefaultImageContentType", consumer)
+        self.assertIn("picacg_adapter::modules::IsExactHostInPolicy", consumer)
+        self.assertIn("picacg_adapter::modules::IsCanonicalAllowedImageUrl", consumer)
+        self.assertIn("picacg_adapter::modules::IsPublicIpv4Address", consumer)
+        self.assertIn("picacg_adapter::modules::IsPublicIpv6Address", consumer)
+        self.assertIn("picacg_adapter::modules::MaxImageBytes", consumer)
         for non_consumer in (
             adapter_utils,
             jm_adapter,
@@ -4790,7 +4749,7 @@ DEPFILE
         self.assertIsNotNone(
             re.search(r"^\s*import\s+memochat\.call\.route_module_algorithms\s*;", consumer, flags=re.M)
         )
-        self.assertIn("route_modules::ParseUnsignedDecimalOrZero", consumer)
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, uid)", consumer)
         self.assertIn("route_modules::IsJsonObjectTailForTraceAppend", consumer)
         self.assertIn("modules::StartPath", consumer)
         self.assertIn("modules::TokenPath", consumer)
@@ -4894,15 +4853,16 @@ DEPFILE
         self.assertIn("export namespace memochat::call::service::modules", module_interface)
         self.assertIn("IsEnabledText", module_interface)
         self.assertIn("NormalizeRingTimeoutSec", module_interface)
-        self.assertIn("HasValidAuthRequest", module_interface)
+        self.assertIn("HasValidStartPeer", module_interface)
         self.assertIn("IsSupportedCallType", module_interface)
         self.assertIn("IsActiveCallState", module_interface)
         self.assertIn("CancelTerminalEvent", module_interface)
         self.assertIn("DefaultParticipantRole", module_interface)
         self.assertIsNotNone(re.search(r"^\s*import\s+memochat\.call\.service_algorithms\s*;", consumer, flags=re.M))
         self.assertIn("service_modules::IsEnabledText", consumer)
-        self.assertIn("service_modules::HasValidAuthRequest", consumer)
         self.assertIn("service_modules::HasValidStartPeer", consumer)
+        self.assertIn("session.callee_uid != uid", consumer)
+        self.assertIn("session.caller_uid != uid", consumer)
         self.assertIn("service_modules::IsSupportedCallType", consumer)
         self.assertIn("service_modules::IsActiveCallState", consumer)
         self.assertIn("service_modules::CancelTerminalEvent", consumer)
@@ -5049,44 +5009,21 @@ DEPFILE
         self.assertIn("accountshared_auth_login_cache_profile_gtest", test_cmake)
         self.assertIn("memochat_enable_gnu_modules(accountshared_auth_login_cache_profile_gtest", test_cmake)
 
-    def test_account_shared_imports_async_side_effect_dto_algorithms_module(self):
+    def test_account_shared_async_side_effects_are_kafka_only(self):
         cmake = read(ACCOUNT_SHARED / "CMakeLists.txt")
-        module_interface = read(ACCOUNT_SHARED / "core" / "async" / "cxx_modules" / "GateAsyncSideEffectDto.cppm")
-        consumer = read(ACCOUNT_SHARED / "core" / "async" / "GateAsyncSideEffectDtos.cpp")
+        header = read(ACCOUNT_SHARED / "core" / "async" / "GateAsyncSideEffects.hpp")
         worker_source = read(ACCOUNT_SHARED / "core" / "async" / "GateAsyncSideEffects.cpp")
-        test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "AccountShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateAccountCore", cmake)
-        self.assertIn(
-            "memochat.account.async_side_effect_dto_algorithms=core/async/cxx_modules/GateAsyncSideEffectDto.cppm",
-            cmake,
-        )
-        self.assertIn("core/async/GateAsyncSideEffectDtos.cpp", cmake)
-        self.assertIsNotNone(
-            re.search(
-                r"^\s*export\s+module\s+memochat\.account\.async_side_effect_dto_algorithms\s*;",
-                module_interface,
-                flags=re.M,
-            )
-        )
-        self.assertIn("IsValidCacheInvalidatePayloadShape", module_interface)
-        self.assertIsNotNone(
-            re.search(
-                r"^\s*import\s+memochat\.account\.async_side_effect_dto_algorithms\s*;",
-                consumer,
-                flags=re.M,
-            )
-        )
-        self.assertIn("async_side_effect::modules::IsValidCacheInvalidatePayloadShape", consumer)
-        self.assertIsNone(
-            re.search(
-                r"^\s*import\s+memochat\.account\.async_side_effect_dto_algorithms\s*;",
-                worker_source,
-                flags=re.M,
-            )
-        )
-        self.assertIn("accountshared_gate_async_side_effect_dtos_gtest", test_cmake)
-        self.assertIn("memochat_enable_gnu_modules(accountshared_gate_async_side_effect_dtos_gtest", test_cmake)
+        deleted_module = ACCOUNT_SHARED / "core" / "async" / "cxx_modules" / "GateAsyncSideEffectDto.cppm"
+        self.assertFalse(deleted_module.exists())
+        self.assertNotIn("async_side_effect_dto_algorithms", cmake)
+        self.assertIn("_kafka_producer", header)
+        self.assertIn("PublishKafka", worker_source)
+        for source in (header, worker_source):
+            self.assertNotIn("_rabbit_connection", source)
+            self.assertNotIn("amqp_", source)
+            self.assertNotIn("PublishCacheInvalidate", source)
+            self.assertNotIn("ConsumeCacheInvalidateLoop", source)
 
     def test_account_shared_imports_auth_public_dto_algorithms_module(self):
         cmake = read(ACCOUNT_SHARED / "CMakeLists.txt")
@@ -5531,13 +5468,14 @@ DEPFILE
         self.assertIn("export namespace memochat::moments::service::modules", module_interface)
         self.assertIn("DefaultRelationQueryEndpoint", module_interface)
         self.assertIn("IsFriendsOnlyForeignMoment", module_interface)
-        self.assertIn("HasRequiredAuthFields", module_interface)
+        self.assertIn("HasValidUid", module_interface)
         self.assertIn("HasValidNewComment", module_interface)
         self.assertIn("CommentLikeFetchLimit", module_interface)
         self.assertIsNotNone(re.search(r"^\s*import\s+memochat\.moments\.service_algorithms\s*;", consumer, flags=re.M))
         self.assertIn("service::modules::DefaultRelationQueryEndpoint", consumer)
         self.assertIn("service::modules::IsFriendsOnlyForeignMoment", consumer)
-        self.assertIn("service::modules::HasRequiredAuthFields", consumer)
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId(request, uid)", consumer)
+        self.assertIn("fn(src_root, root, request.trace_id, uid)", consumer)
         self.assertIn("service::modules::HasValidNewComment", consumer)
         self.assertIn("service::modules::CommentLikeFetchLimit", consumer)
         for non_consumer in (
@@ -5896,7 +5834,11 @@ DEPFILE
         self.assertIn("service_modules::TokenInvalidErrorCode", proxy_source)
         self.assertIn("service_modules::TokenInvalidMessage", proxy_source)
         self.assertIn("service_modules::UnauthorizedStatusCode", proxy_source)
-        self.assertIn("service_modules::ShouldRejectUserAuth", proxy_source)
+        self.assertIn("memochat::auth::ResolveBearerAccessUserId", consumer)
+        self.assertIn("memochat::auth::ExtractBearerAccessToken", proxy_source)
+        self.assertIn("memochat::auth::ResolveUserIdFromToken", proxy_source)
+        self.assertIn("PrefixProxyTargetWithTrustedUid", proxy_source)
+        self.assertIn("PrefixProxyBodyWithTrustedUid", proxy_source)
         for non_consumer in (public_dtos, route_module, route_schema, client, entrypoint):
             self.assertIsNone(
                 re.search(r"^\s*import\s+memochat\.ai\.gateway_service_algorithms\s*;", non_consumer, flags=re.M)
@@ -6034,49 +5976,23 @@ DEPFILE
         self.assertIn("AIServiceJsonMapperTest.cpp", test_cmake)
         self.assertIn("memochat.ai.json_dto_algorithms", test_cmake)
 
-    def test_ai_server_imports_conversation_context_algorithms_module(self):
+    def test_ai_server_deletes_unused_conversation_context_module(self):
         cmake = read(AI_SERVER / "CMakeLists.txt")
-        module_interface = read(AI_SERVER / "cxx_modules" / "ConversationContext.cppm")
-        consumer = read(AI_SERVER / "ConversationContext.cpp")
         json_dtos = read(AI_SERVER / "AIServiceJsonDtos.cpp")
         mapper = read(AI_SERVER / "AIServiceJsonMapper.cpp")
         client = read(AI_SERVER / "AIServiceClient.cpp")
         core = read(AI_SERVER / "AIServiceCore.cpp")
+        core_header = read(AI_SERVER / "AIServiceCore.hpp")
         entrypoint = read(AI_SERVER / "AIServer.cpp")
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "AIServer" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(AIServer", cmake)
-        self.assertIn(
-            "memochat.ai.conversation_context_algorithms=cxx_modules/ConversationContext.cppm",
-            cmake,
-        )
-        self.assertIn("ConversationContext.cpp", cmake)
-        self.assertIsNotNone(
-            re.search(
-                r"^\s*export\s+module\s+memochat\.ai\.conversation_context_algorithms\s*;",
-                module_interface,
-                flags=re.M,
-            )
-        )
-        self.assertIn("UserRole", module_interface)
-        self.assertIn("AssistantRole", module_interface)
-        self.assertIn("ShouldPruneMessages", module_interface)
-        self.assertIsNotNone(
-            re.search(r"^\s*import\s+memochat\.ai\.conversation_context_algorithms\s*;", consumer, flags=re.M)
-        )
-        self.assertIn("conversation_context::modules::UserRole", consumer)
-        self.assertIn("conversation_context::modules::AssistantRole", consumer)
-        self.assertIn("conversation_context::modules::ShouldPruneMessages", consumer)
-        for non_consumer in (json_dtos, mapper, client, core, entrypoint):
-            self.assertIsNone(
-                re.search(
-                    r"^\s*import\s+memochat\.ai\.conversation_context_algorithms\s*;",
-                    non_consumer,
-                    flags=re.M,
-                )
-            )
-        self.assertIn("AIServiceJsonMapperTest.cpp", test_cmake)
-        self.assertIn("memochat.ai.conversation_context_algorithms", test_cmake)
+        self.assertFalse((AI_SERVER / "ConversationContext.cpp").exists())
+        self.assertFalse((AI_SERVER / "ConversationContext.hpp").exists())
+        self.assertFalse((AI_SERVER / "cxx_modules" / "ConversationContext.cppm").exists())
+        for source in (cmake, json_dtos, mapper, client, core, core_header, entrypoint, test_cmake):
+            self.assertNotIn("ConversationContext", source)
+            self.assertNotIn("conversation_context_algorithms", source)
+            self.assertNotIn("_session_cache", source)
 
     def test_ai_server_imports_client_algorithms_module(self):
         cmake = read(AI_SERVER / "CMakeLists.txt")

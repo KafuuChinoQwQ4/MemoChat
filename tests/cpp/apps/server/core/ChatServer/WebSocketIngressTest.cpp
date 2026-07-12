@@ -3,6 +3,7 @@
 #include "ChatFrameCodec.hpp"
 #include "IChatSession.hpp"
 #include "WebSocketChatServer.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
@@ -34,8 +35,28 @@ using memochat::chatserver::transport::ChatFrameDecodeStatus;
 std::string ReserveLoopbackPort()
 {
     net::io_context io_context;
-    tcp::acceptor acceptor(io_context, tcp::endpoint(net::ip::make_address("127.0.0.1"), 0));
-    return std::to_string(acceptor.local_endpoint().port());
+    boost::system::error_code error;
+    const auto address = net::ip::make_address("127.0.0.1", error);
+    tcp::acceptor acceptor(io_context);
+    if (!error)
+    {
+        acceptor.open(tcp::v4(), error);
+    }
+    if (!error)
+    {
+        acceptor.bind(tcp::endpoint(address, 0), error);
+    }
+    if (!error)
+    {
+        acceptor.listen(boost::asio::socket_base::max_listen_connections, error);
+    }
+    const auto endpoint = error ? tcp::endpoint{} : acceptor.local_endpoint(error);
+    if (error)
+    {
+        ADD_FAILURE() << error.message();
+        return "0";
+    }
+    return std::to_string(endpoint.port());
 }
 
 bool WaitUntil(std::function<bool()> predicate, std::chrono::milliseconds timeout = std::chrono::seconds(2))
@@ -57,8 +78,20 @@ ConnectClient(net::io_context& client_context, const std::string& port, const st
 {
     tcp::resolver resolver(client_context);
     websocket::stream<tcp::socket> client(client_context);
-    net::connect(client.next_layer(), resolver.resolve("127.0.0.1", port));
-    client.handshake("127.0.0.1:" + port, path);
+    boost::system::error_code error;
+    const auto endpoints = resolver.resolve("127.0.0.1", port, error);
+    if (!error)
+    {
+        net::connect(client.next_layer(), endpoints, error);
+    }
+    if (!error)
+    {
+        client.handshake("127.0.0.1:" + port, path, error);
+    }
+    if (error)
+    {
+        ADD_FAILURE() << error.message();
+    }
     return client;
 }
 
@@ -71,11 +104,13 @@ public:
     {
         std::string error;
         EXPECT_TRUE(server->Start("127.0.0.1", port, "/ws", &error)) << error;
-        thread = std::thread(
-            [this]
+        EXPECT_TRUE(thread.Start(
+            [this]() noexcept
             {
                 server_context.run();
-            });
+            },
+            &error))
+            << error;
     }
 
     ~RunningWebSocketServer()
@@ -85,16 +120,17 @@ public:
             server->Stop();
         }
         server_context.stop();
-        if (thread.joinable())
+        if (thread.Joinable())
         {
-            thread.join();
+            std::string error;
+            EXPECT_TRUE(thread.Join(&error)) << error;
         }
     }
 
     net::io_context server_context;
     std::string port;
     std::shared_ptr<WebSocketChatServer> server;
-    std::thread thread;
+    memochat::runtime::ExplicitThread thread;
 };
 
 TEST(WebSocketIngressTest, BinaryFrameUsesSharedChatCodecAndCanWriteResponse)
@@ -125,7 +161,9 @@ TEST(WebSocketIngressTest, BinaryFrameUsesSharedChatCodecAndCanWriteResponse)
     const auto encoded = ChatFrameCodec::Encode(7001, R"({"hello":"websocket"})");
     ASSERT_TRUE(encoded.has_value());
     client.binary(true);
-    client.write(net::buffer(*encoded));
+    boost::system::error_code client_error;
+    client.write(net::buffer(*encoded), client_error);
+    ASSERT_FALSE(client_error) << client_error.message();
 
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -140,7 +178,8 @@ TEST(WebSocketIngressTest, BinaryFrameUsesSharedChatCodecAndCanWriteResponse)
     }
 
     beast::flat_buffer response_buffer;
-    client.read(response_buffer);
+    client.read(response_buffer, client_error);
+    ASSERT_FALSE(client_error) << client_error.message();
     const auto response = beast::buffers_to_string(response_buffer.data());
     std::vector<std::uint8_t> response_bytes(response.begin(), response.end());
 
@@ -150,7 +189,8 @@ TEST(WebSocketIngressTest, BinaryFrameUsesSharedChatCodecAndCanWriteResponse)
     EXPECT_EQ(decoded.msg_id, 7002);
     EXPECT_EQ(decoded.payload, R"({"ok":true})");
 
-    client.close(websocket::close_code::normal);
+    client.close(websocket::close_code::normal, client_error);
+    ASSERT_FALSE(client_error) << client_error.message();
     EXPECT_TRUE(WaitUntil(
         [&]
         {
@@ -166,7 +206,9 @@ TEST(WebSocketIngressTest, TextFramesAreRejected)
     auto client = ConnectClient(client_context, running.port);
 
     client.text(true);
-    client.write(net::buffer(std::string("not-a-chat-frame")));
+    boost::system::error_code write_error;
+    client.write(net::buffer(std::string("not-a-chat-frame")), write_error);
+    ASSERT_FALSE(write_error) << write_error.message();
 
     beast::flat_buffer buffer;
     beast::error_code ec;

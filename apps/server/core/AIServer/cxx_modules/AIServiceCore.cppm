@@ -72,6 +72,11 @@ const char* SessionNotFoundMessage()
     return "session not found";
 }
 
+const char* SessionCreateFailedMessage()
+{
+    return "session creation failed";
+}
+
 const char* DefaultApiProviderAdapter()
 {
     return "openai_compatible";

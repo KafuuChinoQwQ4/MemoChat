@@ -48,10 +48,9 @@ function isDefaultAvatarRef(ref: string): boolean {
 }
 
 function looksLikeMediaKey(ref: string): boolean {
-  return ref.length >= 16 &&
-    ref.length <= 96 &&
-    ref.includes("-") &&
-    /^[A-Za-z0-9_-]+$/.test(ref)
+  // MediaService generates RFC 4122 v4 UUIDs. Matching the version and variant
+  // prevents arbitrary dashed strings from becoming authenticated requests.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ref)
 }
 
 function mediaBaseUrl(): string {
@@ -65,23 +64,33 @@ function urlParseBase(): string {
   return mediaBaseUrl() || "http://memochat.local"
 }
 
-function shouldReturnAbsolute(originalUrl: string): boolean {
-  return isHttpUrl(originalUrl) || Boolean(mediaBaseUrl())
-}
-
 function serializeUrl(parsed: URL, absolute: boolean): string {
   if (absolute) return parsed.toString()
   return `${parsed.pathname}${parsed.search}${parsed.hash}`
 }
 
-function isMediaDownloadUrl(ref: string): boolean {
+function isTrustedMediaEndpoint(ref: string, pathname: string): boolean {
   const parsed = new URL(ref, urlParseBase())
-  return parsed.pathname === "/media/download"
+  if (parsed.pathname !== pathname) return false
+
+  const hasExplicitOrigin = /^[a-z][a-z\d+.-]*:/i.test(ref) || ref.startsWith("//")
+  if (!hasExplicitOrigin) return true
+
+  const base = mediaBaseUrl()
+  if (!base) return false
+  try {
+    return parsed.origin === new URL(base).origin
+  } catch {
+    return false
+  }
+}
+
+function isMediaDownloadUrl(ref: string): boolean {
+  return isTrustedMediaEndpoint(ref, "/media/download")
 }
 
 function isR18ImageUrl(ref: string): boolean {
-  const parsed = new URL(ref, urlParseBase())
-  return parsed.pathname === "/api/r18/image"
+  return isTrustedMediaEndpoint(ref, "/api/r18/image")
 }
 
 function currentMediaDownloadUrl(ref: string): string {
@@ -102,10 +111,6 @@ function mediaDownloadUrl(mediaKey: string): string {
 export function isAuthorizedMediaUrl(ref: string): boolean {
   if (!ref || isPassthroughUrl(ref)) return false
   return isMediaDownloadUrl(ref) || isR18ImageUrl(ref)
-}
-
-export function absoluteMediaUrl(ref: string): string {
-  return new URL(ref, urlParseBase()).toString()
 }
 
 export function resolveMediaUrl(ref: string): string {

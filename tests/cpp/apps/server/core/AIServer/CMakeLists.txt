@@ -7,7 +7,6 @@ add_executable(aiserver_gtest_json_mapper_test
     ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/AIServiceAlgorithms.cpp
     ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/AIServiceJsonDtos.cpp
     ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/AIServiceJsonMapper.cpp
-    ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/ConversationContext.cpp
 )
 target_link_libraries(aiserver_gtest_json_mapper_test PRIVATE
     GTest_TestLib
@@ -25,13 +24,11 @@ add_dependencies(gtest_tests aiserver_gtest_json_mapper_test)
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(aiserver_gtest_json_mapper_test
         MODULES
-            memochat.ai.conversation_context_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/cxx_modules/ConversationContext.cppm
             memochat.ai.json_dto_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/cxx_modules/AIServiceJsonDto.cppm
             memochat.ai.service_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/cxx_modules/AIService.cppm
         CONSUMER_SOURCES
             ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/AIServiceAlgorithms.cpp
             ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/AIServiceJsonDtos.cpp
-            ${CMAKE_SOURCE_DIR}/apps/server/core/AIServer/ConversationContext.cpp
     )
 endif()
 

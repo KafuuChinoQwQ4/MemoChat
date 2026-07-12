@@ -1,17 +1,52 @@
 #include "cluster/EtcdClusterDiscovery.hpp"
 
+#include "json/GlazeCompat.hpp"
+
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <iostream>
 #include <sstream>
 #include <thread>
 
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
-
 namespace memochat::cluster
 {
+namespace
+{
+bool ParsePort(std::string_view raw, uint16_t& port, bool allow_empty = false)
+{
+    if (raw.empty())
+    {
+        port = 0;
+        return allow_empty;
+    }
+    unsigned int value = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != raw.data() + raw.size() || value > 65535)
+    {
+        return false;
+    }
+    port = static_cast<uint16_t>(value);
+    return true;
+}
+
+uint16_t ParseHealthPort(std::string_view url)
+{
+    const auto scheme = url.find("://");
+    const auto host_begin = scheme == std::string_view::npos ? 0 : scheme + 3;
+    const auto colon = url.find(':', host_begin);
+    if (colon == std::string_view::npos)
+    {
+        return 0;
+    }
+    const auto slash = url.find('/', colon + 1);
+    const auto port_text =
+        url.substr(colon + 1, slash == std::string_view::npos ? std::string_view::npos : slash - colon - 1);
+    uint16_t port = 0;
+    return ParsePort(port_text, port) ? port : 0;
+}
+} // namespace
 
 std::string EtcdServiceRegistration::ToJson() const
 {
@@ -172,10 +207,16 @@ bool EtcdServiceRegistry::Register()
     reg.service_name = _service_name;
     reg.instance_id = _instance_id;
     reg.host = _endpoints.host;
-    reg.tcp_port = static_cast<uint16_t>(std::stoi(_endpoints.tcp_port));
-    reg.quic_port = static_cast<uint16_t>(std::stoi(_endpoints.quic_port));
-    reg.rpc_port = static_cast<uint16_t>(std::stoi(_endpoints.rpc_port));
-    reg.health_port = static_cast<uint16_t>(std::stoi(_endpoints.health_check_url));
+    if (!ParsePort(_endpoints.tcp_port, reg.tcp_port) || !ParsePort(_endpoints.quic_port, reg.quic_port, true) ||
+        !ParsePort(_endpoints.rpc_port, reg.rpc_port))
+    {
+        if (_register_callback)
+        {
+            _register_callback(false, "Invalid service endpoint port");
+        }
+        return false;
+    }
+    reg.health_port = ParseHealthPort(_endpoints.health_check_url);
     reg.health_check_url = _endpoints.health_check_url;
     reg.ttl_seconds = 30;
 
@@ -183,7 +224,7 @@ bool EtcdServiceRegistry::Register()
     const std::string value = reg.ToJson();
     const std::string encoded_value = EtcdServiceRegistration::EncodeBase64(value);
 
-    bool success = _etcd_config->Get("registry", key, const_cast<std::string&>(encoded_value));
+    const bool success = _etcd_config->Set("registry", key, encoded_value, reg.ttl_seconds);
     _registered.store(success);
 
     if (_register_callback)
@@ -202,7 +243,7 @@ bool EtcdServiceRegistry::Deregister()
     }
 
     const std::string key = BuildServiceKey();
-    bool success = _etcd_config->Get("registry", key, const_cast<std::string&>(""));
+    const bool success = _etcd_config->Delete("registry", key);
     _registered.store(false);
 
     return success;
@@ -213,23 +254,41 @@ bool EtcdServiceRegistry::RenewLease()
     return Register();
 }
 
-void EtcdServiceRegistry::StartHeartbeat()
+bool EtcdServiceRegistry::StartHeartbeat(std::string* error)
 {
     if (_running.load())
     {
-        return;
+        if (error != nullptr)
+        {
+            error->clear();
+        }
+        return true;
     }
 
     _running.store(true);
-    _heartbeat_thread = std::thread(&EtcdServiceRegistry::HeartbeatLoop, this);
+    if (!_heartbeat_thread.Start(
+            [this]() noexcept
+            {
+                HeartbeatLoop();
+            },
+            error))
+    {
+        _running.store(false);
+        return false;
+    }
+    return true;
 }
 
 void EtcdServiceRegistry::StopHeartbeat()
 {
     _running.store(false);
-    if (_heartbeat_thread.joinable())
+    if (_heartbeat_thread.Joinable())
     {
-        _heartbeat_thread.join();
+        std::string error;
+        if (!_heartbeat_thread.Join(&error))
+        {
+            std::cerr << "[EtcdServiceRegistry] Failed to join heartbeat thread: " << error << std::endl;
+        }
     }
 }
 
@@ -268,36 +327,31 @@ std::string EtcdClusterDiscovery::BuildNodeKey(const std::string& namespace_name
 ChatNodeDescriptor EtcdClusterDiscovery::ParseNodeValue(const std::string& json)
 {
     ChatNodeDescriptor node;
-
-    try
+    memochat::json::JsonValue root;
+    if (!memochat::json::reader_parse(json, root) || !root.isObject())
     {
-        std::istringstream iss(json);
-        boost::property_tree::ptree pt;
-        boost::property_tree::read_json(iss, pt);
+        std::cerr << "[EtcdClusterDiscovery] Failed to parse node value" << std::endl;
+        return node;
+    }
 
-        node.name = pt.get<std::string>("instanceId", "");
-        node.tcp_host = pt.get<std::string>("host", "");
-        node.tcp_port = std::to_string(pt.get<int>("tcpPort", 0));
-        node.quic_host = pt.get<std::string>("host", "");
-        node.quic_port = std::to_string(pt.get<int>("quicPort", 0));
-        node.ws_enabled = pt.get<bool>("wsEnabled", false);
-        node.ws_host = pt.get<std::string>("wsHost", node.tcp_host);
-        node.ws_port = pt.get<std::string>("wsPort", "");
-        node.ws_path = pt.get<std::string>("wsPath", "/ws");
-        node.ws_tls = pt.get<bool>("wsTls", false);
-        node.wt_enabled = pt.get<bool>("wtEnabled", false);
-        node.wt_host = pt.get<std::string>("wtHost", node.tcp_host);
-        node.wt_port = pt.get<std::string>("wtPort", "");
-        node.wt_path = pt.get<std::string>("wtPath", "/chat");
-        node.wt_tls = pt.get<bool>("wtTls", false);
-        node.rpc_host = pt.get<std::string>("host", "");
-        node.rpc_port = std::to_string(pt.get<int>("rpcPort", 0));
-        node.enabled = pt.get<bool>("healthy", true);
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "[EtcdClusterDiscovery] Failed to parse node value: " << e.what() << std::endl;
-    }
+    node.name = memochat::json::glaze_safe_get<std::string>(root, "instanceId", "");
+    node.tcp_host = memochat::json::glaze_safe_get<std::string>(root, "host", "");
+    node.tcp_port = std::to_string(memochat::json::glaze_safe_get<int>(root, "tcpPort", 0));
+    node.quic_host = node.tcp_host;
+    node.quic_port = std::to_string(memochat::json::glaze_safe_get<int>(root, "quicPort", 0));
+    node.ws_enabled = memochat::json::glaze_safe_get<bool>(root, "wsEnabled", false);
+    node.ws_host = memochat::json::glaze_safe_get<std::string>(root, "wsHost", node.tcp_host);
+    node.ws_port = memochat::json::glaze_safe_get<std::string>(root, "wsPort", "");
+    node.ws_path = memochat::json::glaze_safe_get<std::string>(root, "wsPath", "/ws");
+    node.ws_tls = memochat::json::glaze_safe_get<bool>(root, "wsTls", false);
+    node.wt_enabled = memochat::json::glaze_safe_get<bool>(root, "wtEnabled", false);
+    node.wt_host = memochat::json::glaze_safe_get<std::string>(root, "wtHost", node.tcp_host);
+    node.wt_port = memochat::json::glaze_safe_get<std::string>(root, "wtPort", "");
+    node.wt_path = memochat::json::glaze_safe_get<std::string>(root, "wtPath", "/chat");
+    node.wt_tls = memochat::json::glaze_safe_get<bool>(root, "wtTls", false);
+    node.rpc_host = node.tcp_host;
+    node.rpc_port = std::to_string(memochat::json::glaze_safe_get<int>(root, "rpcPort", 0));
+    node.enabled = memochat::json::glaze_safe_get<bool>(root, "healthy", true);
 
     return node;
 }
@@ -451,8 +505,7 @@ void EtcdClusterDiscovery::LoadNodesFromEtcd()
         return;
     }
 
-    std::vector<std::pair<std::string, std::string>> all_nodes;
-    _etcd_config->Get("discovery", _nodes_prefix, const_cast<std::string&>(""));
+    const auto all_nodes = _etcd_config->GetAll(_nodes_prefix);
 
     std::lock_guard<std::mutex> lock(_nodes_mutex);
     _nodes.clear();

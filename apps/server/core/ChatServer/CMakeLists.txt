@@ -72,7 +72,6 @@ set(CHATSERVER_PERSISTENCE_SOURCES
     persistence/PostgresDaoPrivateMessages.cpp
     persistence/PostgresDaoUsers.cpp
     persistence/PostgresMgr.cpp
-    persistence/PostgresPool.cpp
     persistence/OnlineRouteSessionSupport.cpp
     persistence/RedisRelationBootstrapCache.cpp
     persistence/RedisOnlineRouteStore.cpp
@@ -253,7 +252,6 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             memochat.chat.postgres_dao_groups_algorithms=persistence/cxx_modules/PostgresDaoGroups.cppm
             memochat.chat.dist_lock_algorithms=persistence/cxx_modules/DistLock.cppm
             memochat.chat.redis_mgr_algorithms=persistence/cxx_modules/RedisMgr.cppm
-            memochat.chat.postgres_pool_algorithms=persistence/cxx_modules/PostgresPool.cppm
             memochat.chat.outbox_algorithms=persistence/cxx_modules/Outbox.cppm
             memochat.chat.relation_bootstrap_cache_algorithms=persistence/cxx_modules/RelationBootstrapCache.cppm
             memochat.chat.online_route_store_algorithms=persistence/cxx_modules/OnlineRouteStore.cppm
@@ -273,17 +271,18 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             persistence/PostgresDaoGroups.cpp
             persistence/DistLock.cpp
             persistence/RedisMgr.cpp
-            persistence/PostgresPool.cpp
             persistence/ChatOutboxService.cpp
             persistence/RedisRelationBootstrapCache.cpp
             persistence/RedisOnlineRouteStore.cpp
     )
 endif()
-target_link_libraries(ChatPersistenceCore PRIVATE
+target_link_libraries(ChatPersistenceCore PUBLIC
     ChatConfigCore
-    ${MEMOCHAT_MONGOCXX_TARGET}
-    ${MEMOCHAT_BSONCXX_TARGET}
-    ${MEMOCHAT_PQXX_TARGET}
+    ${MEMOCHAT_MONGOC_TARGET}
+)
+target_link_libraries(ChatPersistenceCore PRIVATE
+    ${MEMOCHAT_BSON_TARGET}
+    ${MEMOCHAT_POSTGRES_TARGET}
     OpenSSL::Crypto
 )
 
@@ -318,8 +317,11 @@ target_link_libraries(ChatMessagingCore PUBLIC
     ChatConfigCore
     ChatPersistenceCore
 )
+target_link_libraries(ChatMessagingCore PRIVATE
+    ChatClientCore
+)
 if(MEMOCHAT_ENABLE_KAFKA)
-    target_link_libraries(ChatMessagingCore PRIVATE ${MEMOCHAT_CPPKAFKA_TARGET})
+    target_link_libraries(ChatMessagingCore PRIVATE ${MEMOCHAT_RDKAFKA_TARGET})
 endif()
 
 add_library(ChatTransportCore STATIC

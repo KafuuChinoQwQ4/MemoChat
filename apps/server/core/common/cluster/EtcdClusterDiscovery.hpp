@@ -5,10 +5,10 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "runtime/EtcdConfig.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 namespace memochat::cluster
 {
@@ -63,7 +63,7 @@ public:
     bool Deregister();
     bool RenewLease();
 
-    void StartHeartbeat();
+    bool StartHeartbeat(std::string* error = nullptr);
     void StopHeartbeat();
 
     void SetRegisterCallback(RegisterCallback callback);
@@ -84,7 +84,7 @@ private:
     std::atomic<bool> _registered{false};
     std::atomic<bool> _running{false};
     std::mutex _mutex;
-    std::thread _heartbeat_thread;
+    runtime::ExplicitThread _heartbeat_thread;
 };
 
 class EtcdClusterDiscovery

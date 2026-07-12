@@ -6,7 +6,6 @@
 #include <boost/beast/http.hpp>
 #include <boost/asio.hpp>
 #include <sstream>
-#include <thread>
 #include <future>
 #include <chrono>
 #include <limits>
@@ -112,6 +111,7 @@ bool IsProviderAdminPath(const std::string& path)
 {
     return path == client_modules::RegisterApiProviderPath() || path == client_modules::DeleteApiProviderPath();
 }
+
 } // namespace
 
 class AIServiceClient::Impl
@@ -122,9 +122,18 @@ public:
         auto& cfg = ConfigMgr::Inst();
         _host = cfg["AIOrchestrator"]["Host"];
         _port = cfg["AIOrchestrator"]["Port"];
-        _timeout_sec =
-            std::stoi(cfg["AIOrchestrator"]["TimeoutSec"].empty() ? std::to_string(client_modules::DefaultTimeoutSec())
-                                                                  : cfg["AIOrchestrator"]["TimeoutSec"]);
+        const std::string raw_timeout = cfg["AIOrchestrator"]["TimeoutSec"];
+        const auto parsed_timeout = client_modules::ParsePositiveIntOr(raw_timeout.data(),
+                                                                       static_cast<unsigned long>(raw_timeout.size()),
+                                                                       client_modules::DefaultTimeoutSec());
+        _timeout_sec = parsed_timeout.value;
+        if (parsed_timeout.status == client_modules::PositiveIntParseStatus::Invalid)
+        {
+            memolog::LogWarn("ai.client.timeout_invalid",
+                             "invalid AIOrchestrator TimeoutSec; using fallback",
+                             {{"configured_value", raw_timeout},
+                              {"fallback_sec", std::to_string(client_modules::DefaultTimeoutSec())}});
+        }
         if (ResolveAiOrchestratorInternalKey().empty())
         {
             memolog::LogWarn(
@@ -167,62 +176,71 @@ public:
                              bool has_body,
                              json::JsonValue* out_result)
     {
-        try
+        net::io_context ioc;
+        tcp::resolver resolver(ioc);
+        beast::tcp_stream stream(ioc);
+        stream.expires_after(std::chrono::seconds(_timeout_sec));
+        beast::error_code ec;
+
+        const auto results = resolver.resolve(_host, _port, ec);
+        if (ec)
         {
-            net::io_context ioc;
-            tcp::resolver resolver(ioc);
-            beast::tcp_stream stream(ioc);
-            stream.expires_after(std::chrono::seconds(_timeout_sec));
-
-            auto const results = resolver.resolve(_host, _port);
-            stream.connect(results);
-
-            http::request<http::string_body> req{verb, path, client_modules::HttpVersion()};
-            req.set(http::field::host, _host);
-            if (const std::string internal_key = ResolveAiOrchestratorInternalKey(); !internal_key.empty())
-            {
-                req.set(AiOrchestratorInternalHeader(), internal_key);
-            }
-            if (IsProviderAdminPath(path))
-            {
-                if (const std::string provider_admin_key = ResolveProviderAdminKey(); !provider_admin_key.empty())
-                {
-                    req.set(ProviderAdminAuthHeader(), provider_admin_key);
-                }
-            }
-            if (client_modules::ShouldSetJsonBody(has_body))
-            {
-                req.set(http::field::content_type, client_modules::JsonContentType());
-                req.body() = body_str;
-            }
-            req.prepare_payload();
-
-            http::write(stream, req);
-
-            beast::flat_buffer buffer;
-            http::response<http::string_body> res;
-            stream.expires_after(std::chrono::seconds(_timeout_sec));
-            http::read(stream, buffer, res);
-
-            if (res.result() != http::status::ok)
-            {
-                return grpc::Status(grpc::StatusCode::UNAVAILABLE,
-                                    "AIOrchestrator returned " + std::to_string(res.result_int()));
-            }
-
-            bool ok = memochat::json::reader_parse(res.body(), *out_result);
-            if (!ok)
-            {
-                return grpc::Status(grpc::StatusCode::INTERNAL, "JSON parse error");
-            }
-
-            stream.socket().close();
-            return grpc::Status::OK;
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
         }
-        catch (const std::exception& e)
+        stream.connect(results, ec);
+        if (ec)
         {
-            return grpc::Status(grpc::StatusCode::UNAVAILABLE, e.what());
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
         }
+
+        http::request<http::string_body> req{verb, path, client_modules::HttpVersion()};
+        req.set(http::field::host, _host);
+        if (const std::string internal_key = ResolveAiOrchestratorInternalKey(); !internal_key.empty())
+        {
+            req.set(AiOrchestratorInternalHeader(), internal_key);
+        }
+        if (IsProviderAdminPath(path))
+        {
+            if (const std::string provider_admin_key = ResolveProviderAdminKey(); !provider_admin_key.empty())
+            {
+                req.set(ProviderAdminAuthHeader(), provider_admin_key);
+            }
+        }
+        if (client_modules::ShouldSetJsonBody(has_body))
+        {
+            req.set(http::field::content_type, client_modules::JsonContentType());
+            req.body() = body_str;
+        }
+        req.prepare_payload();
+
+        http::write(stream, req, ec);
+        if (ec)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+        }
+
+        beast::flat_buffer buffer;
+        http::response<http::string_body> res;
+        stream.expires_after(std::chrono::seconds(_timeout_sec));
+        http::read(stream, buffer, res, ec);
+        if (ec)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+        }
+
+        if (res.result() != http::status::ok)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                                "AIOrchestrator returned " + std::to_string(res.result_int()));
+        }
+
+        if (!memochat::json::reader_parse(res.body(), *out_result))
+        {
+            return grpc::Status(grpc::StatusCode::INTERNAL, "JSON parse error");
+        }
+
+        stream.socket().close(ec);
+        return grpc::Status::OK;
     }
 
     grpc::Status PostJson(const std::string& path, const json::JsonValue& body, json::JsonValue* out_result)
@@ -260,192 +278,205 @@ public:
                              ChunkCallback on_chunk,
                              json::JsonValue* out_result)
     {
-        try
+        net::io_context ioc;
+        tcp::resolver resolver(ioc);
+        beast::tcp_stream stream(ioc);
+        stream.expires_after(std::chrono::seconds(_timeout_sec));
+        beast::error_code ec;
+
+        const auto results = resolver.resolve(_host, _port, ec);
+        if (ec)
         {
-            net::io_context ioc;
-            tcp::resolver resolver(ioc);
-            beast::tcp_stream stream(ioc);
-            stream.expires_after(std::chrono::seconds(_timeout_sec));
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+        }
+        stream.connect(results, ec);
+        if (ec)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+        }
 
-            auto const results = resolver.resolve(_host, _port);
-            stream.connect(results);
+        std::string body_str = memochat::json::glaze_stringify(body);
 
-            std::string body_str = memochat::json::glaze_stringify(body);
+        http::request<http::string_body> req{http::verb::post, path, client_modules::HttpVersion()};
+        req.set(http::field::host, _host);
+        if (const std::string internal_key = ResolveAiOrchestratorInternalKey(); !internal_key.empty())
+        {
+            req.set(AiOrchestratorInternalHeader(), internal_key);
+        }
+        req.set(http::field::content_type, client_modules::JsonContentType());
+        req.body() = body_str;
+        req.prepare_payload();
 
-            http::request<http::string_body> req{http::verb::post, path, client_modules::HttpVersion()};
-            req.set(http::field::host, _host);
-            if (const std::string internal_key = ResolveAiOrchestratorInternalKey(); !internal_key.empty())
+        http::write(stream, req, ec);
+        if (ec)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+        }
+
+        beast::flat_buffer buffer;
+        http::response_parser<http::dynamic_body> parser;
+        parser.body_limit((std::numeric_limits<std::uint64_t>::max)());
+        stream.expires_after(std::chrono::seconds(_timeout_sec));
+
+        std::string accumulated;
+        std::string current_msg_id;
+        int64_t total_tokens = 0;
+        bool saw_final = false;
+
+        auto parse_and_emit = [&](const std::string& line) -> bool
+        {
+            if (!client_modules::IsSseDataLine(line.data(), static_cast<unsigned long>(line.size())))
+                return false;
+            std::string json_str = line.substr(client_modules::SseDataPrefixSize());
+            if (client_modules::IsSseDoneSentinel(json_str.data(), static_cast<unsigned long>(json_str.size())))
             {
-                req.set(AiOrchestratorInternalHeader(), internal_key);
-            }
-            req.set(http::field::content_type, client_modules::JsonContentType());
-            req.body() = body_str;
-            req.prepare_payload();
-
-            http::write(stream, req);
-
-            beast::flat_buffer buffer;
-            http::response_parser<http::dynamic_body> parser;
-            parser.body_limit((std::numeric_limits<std::uint64_t>::max)());
-            stream.expires_after(std::chrono::seconds(_timeout_sec));
-
-            std::string accumulated;
-            std::string current_msg_id;
-            int64_t total_tokens = 0;
-            bool saw_final = false;
-
-            auto parse_and_emit = [&](const std::string& line) -> bool
-            {
-                if (!client_modules::IsSseDataLine(line.data(), static_cast<unsigned long>(line.size())))
-                    return false;
-                std::string json_str = line.substr(client_modules::SseDataPrefixSize());
-                if (client_modules::IsSseDoneSentinel(json_str.data(), static_cast<unsigned long>(json_str.size())))
-                {
-                    saw_final = true;
-                    return true;
-                }
-
-                json::JsonValue chunk_obj = json::JsonValue{};
-                bool ok = memochat::json::reader_parse(json_str, chunk_obj);
-                if (!ok)
-                    return false;
-
-                std::string chunk_text = json::glaze_safe_get<std::string>(chunk_obj["chunk"], "");
-                bool final_flag = json::glaze_safe_get<bool>(chunk_obj["is_final"], false);
-                std::string msg_id = json::glaze_safe_get<std::string>(chunk_obj["msg_id"], "");
-                std::string trace_id = json::glaze_safe_get<std::string>(chunk_obj["trace_id"], "");
-                std::string skill = json::glaze_safe_get<std::string>(chunk_obj["skill"], "");
-                std::string feedback_summary = json::glaze_safe_get<std::string>(chunk_obj["feedback_summary"], "");
-                std::string observations_json = client_modules::EmptyJsonArray();
-                std::string events_json = client_modules::EmptyJsonArray();
-                if (memochat::json::glaze_has_key(chunk_obj, "observations"))
-                {
-                    observations_json =
-                        memochat::json::glaze_stringify(chunk_obj["observations"].get<json::JsonValue>());
-                }
-                if (memochat::json::glaze_has_key(chunk_obj, "events"))
-                {
-                    events_json = memochat::json::glaze_stringify(chunk_obj["events"].get<json::JsonValue>());
-                }
-                if (client_modules::ShouldUpdateCurrentMessageId(msg_id.empty()))
-                {
-                    current_msg_id = msg_id;
-                }
-                int64_t tokens = json::glaze_safe_get<int64_t>(chunk_obj, "total_tokens", 0);
-                if (client_modules::ShouldUpdateTotalTokens(tokens))
-                    total_tokens = tokens;
-
-                accumulated += chunk_text;
-                if (client_modules::ShouldEmitChunk(static_cast<bool>(on_chunk)))
-                {
-                    on_chunk(chunk_text,
-                             final_flag,
-                             current_msg_id,
-                             total_tokens,
-                             trace_id,
-                             skill,
-                             feedback_summary,
-                             observations_json,
-                             events_json);
-                }
-
-                if (client_modules::ShouldStoreFinalChunkResult(final_flag, out_result != nullptr))
-                {
-                    (*out_result)["code"] = client_modules::SuccessCode();
-                    (*out_result)["content"] = accumulated;
-                    (*out_result)["tokens"] = total_tokens;
-                    (*out_result)["trace_id"] = trace_id;
-                    (*out_result)["skill"] = skill;
-                    (*out_result)["feedback_summary"] = feedback_summary;
-                }
-                if (final_flag)
-                {
-                    saw_final = true;
-                }
-                return final_flag;
-            };
-
-            auto trim_line = [](std::string& line)
-            {
-                std::size_t end = line.size();
-                while (end > 0 && client_modules::IsLineTrimChar(line[end - 1]))
-                {
-                    --end;
-                }
-                if (end == 0)
-                {
-                    line.clear();
-                }
-                else
-                {
-                    line.erase(end);
-                }
-            };
-
-            std::string pending;
-            auto consume_body = [&]() -> bool
-            {
-                auto& body = parser.get().body();
-                if (body.size() > 0)
-                {
-                    pending += beast::buffers_to_string(body.data());
-                    body.consume(body.size());
-                }
-
-                for (;;)
-                {
-                    const auto eol = pending.find('\n');
-                    if (eol == std::string::npos)
-                    {
-                        return false;
-                    }
-                    std::string line = pending.substr(0, eol);
-                    pending.erase(0, eol + 1);
-                    trim_line(line);
-                    if (!line.empty() && parse_and_emit(line))
-                    {
-                        return true;
-                    }
-                }
-            };
-
-            http::read_header(stream, buffer, parser);
-            if (parser.get().result() != http::status::ok)
-            {
-                return grpc::Status(grpc::StatusCode::UNAVAILABLE,
-                                    "AIOrchestrator returned " + std::to_string(parser.get().result_int()));
+                saw_final = true;
+                return true;
             }
 
-            bool done = consume_body();
-            while (!done && !parser.is_done())
+            json::JsonValue chunk_obj = json::JsonValue{};
+            bool ok = memochat::json::reader_parse(json_str, chunk_obj);
+            if (!ok)
+                return false;
+
+            std::string chunk_text = json::glaze_safe_get<std::string>(chunk_obj["chunk"], "");
+            bool final_flag = json::glaze_safe_get<bool>(chunk_obj["is_final"], false);
+            std::string msg_id = json::glaze_safe_get<std::string>(chunk_obj["msg_id"], "");
+            std::string trace_id = json::glaze_safe_get<std::string>(chunk_obj["trace_id"], "");
+            std::string skill = json::glaze_safe_get<std::string>(chunk_obj["skill"], "");
+            std::string feedback_summary = json::glaze_safe_get<std::string>(chunk_obj["feedback_summary"], "");
+            std::string observations_json = client_modules::EmptyJsonArray();
+            std::string events_json = client_modules::EmptyJsonArray();
+            if (memochat::json::glaze_has_key(chunk_obj, "observations"))
             {
-                stream.expires_after(std::chrono::seconds(_timeout_sec));
-                http::read_some(stream, buffer, parser);
-                done = consume_body();
+                observations_json = memochat::json::glaze_stringify(chunk_obj["observations"].get<json::JsonValue>());
             }
-            if (!done && !pending.empty())
+            if (memochat::json::glaze_has_key(chunk_obj, "events"))
             {
-                trim_line(pending);
-                if (!pending.empty())
-                {
-                    done = parse_and_emit(pending);
-                }
-                pending.clear();
+                events_json = memochat::json::glaze_stringify(chunk_obj["events"].get<json::JsonValue>());
             }
-            if (client_modules::ShouldFallbackStreamResult(saw_final, out_result != nullptr))
+            if (client_modules::ShouldUpdateCurrentMessageId(msg_id.empty()))
+            {
+                current_msg_id = msg_id;
+            }
+            int64_t tokens = json::glaze_safe_get<int64_t>(chunk_obj, "total_tokens", 0);
+            if (client_modules::ShouldUpdateTotalTokens(tokens))
+                total_tokens = tokens;
+
+            accumulated += chunk_text;
+            if (client_modules::ShouldEmitChunk(static_cast<bool>(on_chunk)))
+            {
+                on_chunk(chunk_text,
+                         final_flag,
+                         current_msg_id,
+                         total_tokens,
+                         trace_id,
+                         skill,
+                         feedback_summary,
+                         observations_json,
+                         events_json);
+            }
+
+            if (client_modules::ShouldStoreFinalChunkResult(final_flag, out_result != nullptr))
             {
                 (*out_result)["code"] = client_modules::SuccessCode();
                 (*out_result)["content"] = accumulated;
                 (*out_result)["tokens"] = total_tokens;
+                (*out_result)["trace_id"] = trace_id;
+                (*out_result)["skill"] = skill;
+                (*out_result)["feedback_summary"] = feedback_summary;
+            }
+            if (final_flag)
+            {
+                saw_final = true;
+            }
+            return final_flag;
+        };
+
+        auto trim_line = [](std::string& line)
+        {
+            std::size_t end = line.size();
+            while (end > 0 && client_modules::IsLineTrimChar(line[end - 1]))
+            {
+                --end;
+            }
+            if (end == 0)
+            {
+                line.clear();
+            }
+            else
+            {
+                line.erase(end);
+            }
+        };
+
+        std::string pending;
+        auto consume_body = [&]() -> bool
+        {
+            auto& body = parser.get().body();
+            if (body.size() > 0)
+            {
+                pending += beast::buffers_to_string(body.data());
+                body.consume(body.size());
             }
 
-            stream.socket().close();
-            return grpc::Status::OK;
-        }
-        catch (const std::exception& e)
+            for (;;)
+            {
+                const auto eol = pending.find('\n');
+                if (eol == std::string::npos)
+                {
+                    return false;
+                }
+                std::string line = pending.substr(0, eol);
+                pending.erase(0, eol + 1);
+                trim_line(line);
+                if (!line.empty() && parse_and_emit(line))
+                {
+                    return true;
+                }
+            }
+        };
+
+        http::read_header(stream, buffer, parser, ec);
+        if (ec)
         {
-            return grpc::Status(grpc::StatusCode::UNAVAILABLE, e.what());
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
         }
+        if (parser.get().result() != http::status::ok)
+        {
+            return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                                "AIOrchestrator returned " + std::to_string(parser.get().result_int()));
+        }
+
+        bool done = consume_body();
+        while (!done && !parser.is_done())
+        {
+            stream.expires_after(std::chrono::seconds(_timeout_sec));
+            http::read_some(stream, buffer, parser, ec);
+            if (ec)
+            {
+                return grpc::Status(grpc::StatusCode::UNAVAILABLE, ec.message());
+            }
+            done = consume_body();
+        }
+        if (!done && !pending.empty())
+        {
+            trim_line(pending);
+            if (!pending.empty())
+            {
+                done = parse_and_emit(pending);
+            }
+            pending.clear();
+        }
+        if (client_modules::ShouldFallbackStreamResult(saw_final, out_result != nullptr))
+        {
+            (*out_result)["code"] = client_modules::SuccessCode();
+            (*out_result)["content"] = accumulated;
+            (*out_result)["tokens"] = total_tokens;
+        }
+
+        stream.socket().close(ec);
+        return grpc::Status::OK;
     }
 
     std::string _host;

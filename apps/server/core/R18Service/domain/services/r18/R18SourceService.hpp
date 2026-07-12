@@ -2,6 +2,7 @@
 
 #include "json/GlazeCompat.hpp"
 
+#include <cstddef>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -10,6 +11,8 @@
 
 namespace memochat::r18
 {
+
+std::size_t SourceImportLimitBytes();
 
 struct R18SourceRecord
 {
@@ -30,6 +33,8 @@ struct R18ImagePayload
 {
     std::string content_type = "application/octet-stream";
     std::string body;
+    bool ok = true;
+    std::string error;
 };
 
 class R18SourceService
@@ -53,6 +58,7 @@ public:
 private:
     R18SourceService();
 
+    bool CanDispatchSource(const std::string& source_id, std::string* error);
     std::optional<R18SourceRecord> SourceSnapshot(const std::string& source_id);
     void LoadLocked();
     void LoadManifestLocked(const std::filesystem::path& manifest_path);
@@ -66,5 +72,6 @@ private:
 };
 
 bool DecodeBase64(const std::string& input, std::string& out);
+bool DecodeBase64Bounded(const std::string& input, std::string& out, std::size_t max_output_bytes);
 
 } // namespace memochat::r18

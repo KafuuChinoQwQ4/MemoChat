@@ -10,12 +10,14 @@
 | [`AIOrchestrator/`](AIOrchestrator/_TREE.md) | AI 编排（Python harness）服务测试 |
 | [`ChatServer/`](ChatServer/_TREE.md) | ChatServer 服务结构/契约测试 |
 | [`GateServer/`](GateServer/_TREE.md) | GateServer 网关结构/拆分契约测试 |
+| [`R18Service/`](R18Service/_TREE.md) | R18 focused service 的持久授权与路由安全契约测试 |
 | [`VarifyServer/`](VarifyServer/_TREE.md) | VarifyServer 验证码服务契约测试 |
 
 ## 文件
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `test_no_exceptions_contract.py` | 扫描一方 C++ token、构建开关和依赖，阻止异常处理重新进入项目。 |
 | `test_architecture_review_slice_d.py` | 锁定后端微服务架构评审整改项的正向不变量 |
 | `test_database_ownership_contract.py` | 校验各服务数据库与应用角色归属矩阵一致 |
 | `test_cxx_modules_contract.py` | 校验服务端 GNU C++ modules 自定义 CMI 构建契约 |

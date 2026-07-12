@@ -16,13 +16,14 @@ def read(path: Path) -> str:
 class R18SourcePaginationContractTests(unittest.TestCase):
     def test_jm_search_keeps_full_pages_pageable(self):
         source = read(R18_SERVICE_DIR / "R18JmAdapter.cpp")
-        search_body = source.split("json::JsonValue JmSearch", 1)[1].split("json::JsonValue JmDetail", 1)[0]
+        search_body = source.split("bool JmSearch", 1)[1].split("bool JmDetail", 1)[0]
 
-        self.assertIn("constexpr int kR18SearchPageSize = 40;", source)
+        self.assertIn("jm_adapter::modules::SearchPageSize()", search_body)
         self.assertIn("returned_count", search_body)
-        self.assertIn("if (returned_count >= kR18SearchPageSize)", search_body)
-        self.assertIn('data["max_page"] = static_cast<int64_t>(normalized_page + 1);', search_body)
-        self.assertIn('data["max_page"] = static_cast<int64_t>(normalized_page);', search_body)
+        self.assertIn("if (returned_count >= jm_adapter::modules::SearchPageSize())", search_body)
+        self.assertIn("jm_adapter::modules::ShouldUseNextSearchPage", search_body)
+        self.assertIn("? normalized_page + 1", search_body)
+        self.assertIn(": normalized_page", search_body)
         self.assertIsNone(
             re.search(r'FieldInt\s*\(\s*result\s*,\s*"total"', search_body),
             "JM max_page must not depend on the upstream total field; it can describe the current page only.",
@@ -51,7 +52,7 @@ class R18SourcePaginationContractTests(unittest.TestCase):
         self.assertIn("std::condition_variable& JmImageFetchCv()", source)
         self.assertIn("JmImageFetchCv().wait", source)
         self.assertIn("JmImageFetchCv().notify_one()", source)
-        self.assertIn("constexpr int kMaxConcurrentJmImageFetches = 8;", source)
+        self.assertIn("jm_adapter::modules::MaxConcurrentImageFetches()", source)
         self.assertNotIn("JMComic cover queued", fetch_body)
         self.assertNotIn("slot.acquired()", fetch_body)
         self.assertGreaterEqual(

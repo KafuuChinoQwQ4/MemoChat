@@ -1,6 +1,6 @@
 #include "services/moments/MomentsPublicDtos.hpp"
 
-#include <cstdlib>
+#include <charconv>
 
 import memochat.moments.public_algorithms;
 
@@ -24,35 +24,18 @@ namespace memochat::gate::services::moments
 int64_t MomentsReadInt64(const memochat::json::JsonValue& obj, const char* key, int64_t fallback)
 {
     const memochat::json::JsonValue value = ReadMember(obj, key);
-    try
+    if (value.isNumber())
     {
         return value.asInt64();
-    }
-    catch (...)
-    {
-    }
-    try
-    {
-        return static_cast<int64_t>(value.asInt());
-    }
-    catch (...)
-    {
-    }
-    try
-    {
-        return static_cast<int64_t>(value.asDouble());
-    }
-    catch (...)
-    {
     }
     const std::string text = value.asString();
     if (!text.empty())
     {
-        char* end = nullptr;
-        const long long parsed = std::strtoll(text.c_str(), &end, 10);
-        if (end && *end == '\0')
+        int64_t parsed = 0;
+        const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+        if (ec == std::errc{} && ptr == text.data() + text.size())
         {
-            return static_cast<int64_t>(parsed);
+            return parsed;
         }
     }
     return fallback;
@@ -66,12 +49,9 @@ int MomentsReadInt(const memochat::json::JsonValue& obj, const char* key, int fa
 bool MomentsReadBool(const memochat::json::JsonValue& obj, const char* key, bool fallback)
 {
     const memochat::json::JsonValue value = ReadMember(obj, key);
-    try
+    if (value.isBool())
     {
         return value.asBool();
-    }
-    catch (...)
-    {
     }
     const std::string text = value.asString();
     bool parsed_text = false;
@@ -79,19 +59,9 @@ bool MomentsReadBool(const memochat::json::JsonValue& obj, const char* key, bool
     {
         return parsed_text;
     }
-    try
-    {
-        return value.asInt() != 0;
-    }
-    catch (...)
-    {
-    }
-    try
+    if (value.isNumber())
     {
         return value.asDouble() != 0.0;
-    }
-    catch (...)
-    {
     }
     return fallback;
 }

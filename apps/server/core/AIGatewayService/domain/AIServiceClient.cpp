@@ -2,13 +2,11 @@
 #include "services/ai/AIPublicDtos.hpp"
 #include "ConfigMgr.hpp"
 #include "logging/Logger.hpp"
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <boost/uuid/random_generator.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <string_view>
+#include <utility>
 
 using namespace memochat::json;
 
@@ -109,6 +107,53 @@ std::string EnvValue(const std::string& name)
     return value == nullptr ? "" : TrimAscii(value);
 }
 
+std::string AIServerHost()
+{
+    std::string host = ConfigValue("AIServer", "Host");
+    return host.empty() ? "127.0.0.1" : host;
+}
+
+bool IsLoopbackHost(std::string host)
+{
+    host = LowerAscii(TrimAscii(std::move(host)));
+    return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "[::1]";
+}
+
+bool IsLocalEnvironment()
+{
+    std::string environment = EnvValue("MEMOCHAT_ENV");
+    if (environment.empty())
+    {
+        environment = ConfigValue("Log", "Env");
+    }
+    environment = LowerAscii(std::move(environment));
+    return environment == "local" || environment == "dev" || environment == "development" || environment == "test";
+}
+
+std::string AIServerInternalMetadataKey()
+{
+    std::string header = ConfigValue("AIServer", "InternalAuthHeader");
+    if (header.empty())
+    {
+        header = "X-MemoChat-AI-Internal-Key";
+    }
+    return LowerAscii(header);
+}
+
+std::string ResolveAIServerInternalKey()
+{
+    std::string env_name = ConfigValue("AIServer", "InternalApiKeyEnv");
+    if (env_name.empty())
+    {
+        env_name = "MEMOCHAT_AI_INTERNAL_API_KEY";
+    }
+    if (const std::string env_value = EnvValue(env_name); !env_value.empty())
+    {
+        return env_value;
+    }
+    return ConfigValue("AIServer", "InternalApiKey");
+}
+
 std::string ProviderAdminMetadataKey()
 {
     std::string header = ConfigValue("AIProviderAdmin", "AuthHeader");
@@ -152,6 +197,25 @@ void ApplyDeadline(grpc::ClientContext& ctx, bool fast_path = true)
     ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(timeout_sec));
 }
 
+grpc::Status PrepareAIServerContext(grpc::ClientContext& ctx, bool fast_path = true)
+{
+    ApplyDeadline(ctx, fast_path);
+    const std::string key = ResolveAIServerInternalKey();
+    if (key.empty())
+    {
+        if (IsLocalEnvironment() && IsLoopbackHost(AIServerHost()))
+        {
+            return grpc::Status::OK;
+        }
+        memolog::LogError("gate.ai.internal_auth_missing",
+                          "AIServer internal API key is required outside local loopback development",
+                          {{"target_host", AIServerHost()}});
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "AIServer internal auth is not configured");
+    }
+    ctx.AddMetadata(AIServerInternalMetadataKey(), key);
+    return grpc::Status::OK;
+}
+
 } // namespace
 
 class AIServiceClient::Impl
@@ -165,13 +229,8 @@ public:
 
     static std::string AIServerAddress()
     {
-        auto& cfg = ConfigMgr::Inst();
-        std::string host = cfg["AIServer"]["Host"];
-        std::string port = cfg["AIServer"]["Port"];
-        if (host.empty())
-        {
-            host = "127.0.0.1";
-        }
+        std::string host = AIServerHost();
+        std::string port = ConfigValue("AIServer", "Port");
         if (port.empty())
         {
             port = "8095";
@@ -188,7 +247,10 @@ public:
                               ai::AIChatRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx, /*fast_path=*/false);
+        if (const auto auth_status = PrepareAIServerContext(ctx, /*fast_path=*/false); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIChatReq req;
         req.set_from_uid(uid);
         req.set_session_id(session_id);
@@ -210,7 +272,10 @@ public:
                                ai::AISmartRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx, /*fast_path=*/false);
+        if (const auto auth_status = PrepareAIServerContext(ctx, /*fast_path=*/false); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AISmartReq req;
         req.set_from_uid(uid);
         req.set_feature_type(feature_type);
@@ -227,7 +292,10 @@ public:
     makeGetHistoryCall(int32_t uid, const std::string& session_id, int limit, int offset, ai::AIHistoryRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIHistoryReq req;
         req.set_from_uid(uid);
         req.set_session_id(session_id);
@@ -242,7 +310,10 @@ public:
                                        ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AICreateSessionReq req;
         req.set_uid(uid);
         req.set_model_type(model_type);
@@ -256,7 +327,10 @@ public:
                                       ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AICreateSessionReq req;
         req.set_uid(uid);
         req.set_model_type(model_type);
@@ -267,7 +341,10 @@ public:
     grpc::Status makeDeleteSessionCall(int32_t uid, const std::string& session_id, ai::AIDeleteSessionRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIDeleteSessionReq req;
         req.set_uid(uid);
         req.set_session_id(session_id);
@@ -278,7 +355,10 @@ public:
     makeUpdateSessionCall(int32_t uid, const std::string& session_id, const std::string& title, ai::AISessionRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIUpdateSessionReq req;
         req.set_uid(uid);
         req.set_session_id(session_id);
@@ -289,7 +369,10 @@ public:
     grpc::Status makeListModelsCall(ai::AIListModelsRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIListModelsReq req;
         return _stub->ListModels(&ctx, req, reply);
     }
@@ -301,7 +384,10 @@ public:
                                              ai::AIRegisterApiProviderRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         AttachProviderAdminMetadata(ctx);
         ai::AIRegisterApiProviderReq req;
         req.set_provider_name(provider_name);
@@ -314,7 +400,10 @@ public:
     grpc::Status makeDeleteApiProviderCall(const std::string& provider_id, ai::AIDeleteApiProviderRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         AttachProviderAdminMetadata(ctx);
         ai::AIDeleteApiProviderReq req;
         req.set_provider_id(provider_id);
@@ -328,7 +417,10 @@ public:
                                   ai::AIKbUploadRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIKbUploadReq req;
         req.set_uid(uid);
         req.set_file_name(file_name);
@@ -340,7 +432,10 @@ public:
     grpc::Status makeKbSearchCall(int32_t uid, const std::string& query, int top_k, ai::AIKbSearchRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIKbSearchReq req;
         req.set_uid(uid);
         req.set_query(query);
@@ -351,7 +446,10 @@ public:
     grpc::Status makeListKbCall(int32_t uid, ai::AIKbListRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIKbListReq req;
         req.set_uid(uid);
         return _stub->KbList(&ctx, req, reply);
@@ -360,7 +458,10 @@ public:
     grpc::Status makeDeleteKbCall(int32_t uid, const std::string& kb_id, ai::AIKbDeleteRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIKbDeleteReq req;
         req.set_uid(uid);
         req.set_kb_id(kb_id);
@@ -370,7 +471,10 @@ public:
     grpc::Status makeMemoryListCall(int32_t uid, ai::AIMemoryListRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIMemoryReq req;
         req.set_uid(uid);
         return _stub->MemoryList(&ctx, req, reply);
@@ -379,7 +483,10 @@ public:
     grpc::Status makeMemoryCreateCall(int32_t uid, const std::string& content, ai::AIMemoryRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIMemoryReq req;
         req.set_uid(uid);
         req.set_content(content);
@@ -389,7 +496,10 @@ public:
     grpc::Status makeMemoryDeleteCall(int32_t uid, const std::string& memory_id, ai::AIMemoryRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIMemoryReq req;
         req.set_uid(uid);
         req.set_memory_id(memory_id);
@@ -407,7 +517,10 @@ public:
                                          ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_title(title);
@@ -423,7 +536,10 @@ public:
     grpc::Status makeAgentTaskListCall(int32_t uid, int limit, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_limit(limit);
@@ -433,7 +549,10 @@ public:
     grpc::Status makeAgentTaskGetCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_task_id(task_id);
@@ -443,7 +562,10 @@ public:
     grpc::Status makeAgentTaskCancelCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_task_id(task_id);
@@ -453,7 +575,10 @@ public:
     grpc::Status makeAgentTaskResumeCall(int32_t uid, const std::string& task_id, ai::AIAgentTaskRsp* reply)
     {
         grpc::ClientContext ctx;
-        ApplyDeadline(ctx);
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
         ai::AIAgentTaskReq req;
         req.set_uid(uid);
         req.set_task_id(task_id);
@@ -516,7 +641,22 @@ void AIServiceClient::ChatStream(int32_t uid,
                                  memochat::json::JsonValue* out_result)
 {
     grpc::ClientContext ctx;
-    ApplyDeadline(ctx);
+    if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+    {
+        memolog::LogError("gate.ai.chat_stream.internal_auth_unavailable",
+                          "AIServer stream call blocked by internal auth configuration",
+                          {{"uid", std::to_string(uid)}, {"error", auth_status.error_message()}});
+        if (on_chunk)
+        {
+            on_chunk("AIServer unavailable: " + auth_status.error_message(), true, "", 0, "", "", "", "[]", "[]");
+        }
+        if (out_result)
+        {
+            (*out_result)["code"] = 500;
+            (*out_result)["message"] = "AIServer unavailable";
+        }
+        return;
+    }
     ai::AIChatStreamReq req;
     req.mutable_req()->set_from_uid(uid);
     req.mutable_req()->set_session_id(session_id);

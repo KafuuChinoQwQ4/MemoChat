@@ -3,6 +3,7 @@
 #include "ConfigMgr.hpp"
 
 #include <algorithm>
+#include <charconv>
 
 import memochat.chat.runtime_algorithms;
 
@@ -23,6 +24,17 @@ std::string NormalizeLower(std::string value)
 bool ParseBoolFlag(const std::string& raw, bool default_value = false)
 {
     return memochat::chat::runtime::modules::ParseBoolFlagOr(raw.data(), raw.size(), default_value);
+}
+
+int ParsePositiveIntOr(const std::string& raw, int fallback, int minimum)
+{
+    int value = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != raw.data() + raw.size())
+    {
+        return fallback;
+    }
+    return memochat::chat::runtime::modules::AtLeast(value, minimum);
 }
 } // namespace
 
@@ -161,14 +173,7 @@ int TaskRetryDelayMs()
     {
         return 5000;
     }
-    try
-    {
-        return memochat::chat::runtime::modules::AtLeast(std::stoi(raw), 100);
-    }
-    catch (...)
-    {
-        return 5000;
-    }
+    return ParsePositiveIntOr(raw, 5000, 100);
 }
 
 int TaskMaxRetries()
@@ -178,14 +183,7 @@ int TaskMaxRetries()
     {
         return 5;
     }
-    try
-    {
-        return memochat::chat::runtime::modules::AtLeast(std::stoi(raw), 1);
-    }
-    catch (...)
-    {
-        return 5;
-    }
+    return ParsePositiveIntOr(raw, 5, 1);
 }
 
 } // namespace memochat::chatruntime

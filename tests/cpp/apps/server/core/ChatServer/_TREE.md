@@ -7,8 +7,8 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `CMakeLists.txt` | 注册该测试目标的 CMake 配置 |
-| `CSessionLifetimeTest.cpp` | 验证 CSession 读循环协程化后对端断连即析构、协程帧不泄漏 session |
-| `CServerLifetimeTest.cpp` | 验证 CServer accept/timer 循环协程化后 StopTimer 取消 TimerLoop、CServer 析构不泄漏 |
+| `CSessionLifetimeTest.cpp` | 验证 CSession 异步读回调在对端断连后释放会话、不会泄漏 session |
+| `CServerLifetimeTest.cpp` | 验证 CServer accept/timer 回调在 StopTimer 后取消并释放服务器 |
 | `AsyncEventDispatcherAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 异步事件分发器算法 module 的桥接 consumer |
 | `AsyncEventDispatcherAlgorithmsTest.cpp` | 验证异步事件分发器发布、轮询、payload guard、刷新和日志字面量算法 |
 | `ChatEnvelopeCodecTest.cpp` | 验证 Chat 内部任务/事件 envelope 的 typed JSON 编解码、分区键和重试边界 |
@@ -95,8 +95,6 @@
 | `PostgresDaoUsersAlgorithmsTest.cpp` | 验证用户公开 ID 和 uid guard 决策 |
 | `PostgresMgrAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresMgr 初始化算法 module 的桥接 consumer |
 | `PostgresMgrAlgorithmsTest.cpp` | 验证 PostgresMgr DAO 初始化、析构 reset 和初始化失败日志字面量决策 |
-| `PostgresPoolAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresPool 算法 module 的桥接 consumer |
-| `PostgresPoolAlgorithmsTest.cpp` | 验证 PostgresPool 初始建连、等待和关闭 guard 决策 |
 | `RabbitMqTaskBusAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer RabbitMQ 任务总线算法 module 的桥接 consumer |
 | `RabbitMqTaskBusAlgorithmsTest.cpp` | 验证 RabbitMQ 任务总线连接、ack/nack、DLQ、队列后缀和错误字面量算法 |
 | `RelationBootstrapCacheAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 关系引导缓存算法 module 的桥接 consumer |
@@ -121,7 +119,7 @@
 | `SendPathGoldenTest.cpp` | 锁定私聊/群聊发送路径响应根 JSON 的 golden 输出 |
 | `TaskDispatcherAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 任务分发器算法 module 的桥接 consumer |
 | `TaskDispatcherAlgorithmsTest.cpp` | 验证任务分发器 task 类型、错误字面量、ack 和 outbox guard 算法 |
-| `TaskDispatcherRuntimeTest.cpp` | 验证任务分发器消费异常不会逃逸并打崩运行时 worker 线程 |
+| `TaskDispatcherRuntimeTest.cpp` | 验证任务总线显式消费失败时分发循环按停止请求安全退出 |
 | `WebSocketIngressTest.cpp` | 验证 WebSocket 接入的真实握手、二进制帧解码、文本帧拒绝和停机关闭 |
 | `WebTransportProviderTest.cpp` | 验证 WebTransport provider 接入层的启动、会话注册、发送回调和关闭清理 |
 | `WebTransportSessionTest.cpp` | 验证 WebTransport 聊天帧会话的 provider 发送、半包/合包接收和异常关闭 |

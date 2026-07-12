@@ -8,3 +8,8 @@ dist-ssr/
 # Local env files
 .env.local
 .env.*.local
+
+# Emitted JS alongside TS/TSX sources — .ts/.tsx are the single source of truth.
+# Vite compiles them at build time; committing the transpiled copies causes
+# silent divergence when bundlers resolve .js before .ts.
+src/**/*.js

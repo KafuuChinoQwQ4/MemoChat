@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_executable(common_auth_jwt_access_token_gtest
     main.cpp
+    AuthSecretTest.cpp
     JwtAccessTokenTest.cpp
 )
 

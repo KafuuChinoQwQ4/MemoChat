@@ -1,7 +1,5 @@
 #pragma once
 #include <boost/asio.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <boost/uuid/uuid_generators.hpp>
 #include <mutex>
 #include <memory>
 #include <atomic>
@@ -25,6 +23,8 @@ public:
     virtual ~CSession();
 
     std::string& GetSessionId();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
     void SetUserId(int uid);
     int GetUserId();
     virtual void Start();
@@ -35,7 +35,7 @@ public:
     void NotifyOffline(int uid);
     void DetachServer();
 
-    bool IsHeartbeatExpired(std::time_t& now);
+    bool IsHeartbeatExpired(std::time_t now);
 
     void UpdateHeartbeat();
     bool TryMarkOnlineRouteRefreshDue(std::time_t now, int interval_seconds);
@@ -59,6 +59,7 @@ protected:
 
 private:
     std::string _session_id;
+    std::string _startup_error;
     std::atomic<IChatSessionHost*> _server; // DetachServer release-store; ReadLoop acquire-load → 无数据竞争
     int _user_uid;
 

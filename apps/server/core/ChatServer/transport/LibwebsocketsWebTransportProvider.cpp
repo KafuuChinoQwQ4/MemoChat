@@ -11,6 +11,7 @@ extern "C"
 }
 
 #include <algorithm>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -47,16 +48,11 @@ int ParsePort(const std::string& value)
     {
         return 8445;
     }
-    try
+    int parsed = 0;
+    const auto converted = std::from_chars(value.data(), value.data() + value.size(), parsed);
+    if (converted.ec == std::errc{} && converted.ptr == value.data() + value.size() && parsed > 0 && parsed <= 65535)
     {
-        const auto parsed = std::stoi(value);
-        if (parsed > 0 && parsed <= 65535)
-        {
-            return parsed;
-        }
-    }
-    catch (...)
-    {
+        return parsed;
     }
     return -1;
 }
@@ -215,7 +211,19 @@ bool LibwebsocketsWebTransportProvider::Start(const WebTransportListenOptions& o
     }
 
     _running.store(true, std::memory_order_release);
-    _service_thread = std::thread(&LibwebsocketsWebTransportProvider::serviceLoop, this);
+    if (!_service_thread.Start(
+            [this]() noexcept
+            {
+                serviceLoop();
+            },
+            error))
+    {
+        _running.store(false, std::memory_order_release);
+        _stopping.store(true, std::memory_order_release);
+        lws_context_destroy(_context);
+        _context = nullptr;
+        return false;
+    }
     memolog::LogInfo("webtransport.provider.lws.start",
                      "libwebsockets WebTransport provider started",
                      {{"host", _options.host}, {"port", std::to_string(port)}, {"path", _options.path}});
@@ -229,9 +237,15 @@ void LibwebsocketsWebTransportProvider::Stop()
     {
         lws_cancel_service(_context);
     }
-    if (_service_thread.joinable())
+    if (_service_thread.Joinable())
     {
-        _service_thread.join();
+        std::string error;
+        if (!_service_thread.Join(&error))
+        {
+            memolog::LogError("webtransport.provider.lws.thread_join_failed",
+                              "libwebsockets service thread failed to join",
+                              {{"error", error}});
+        }
     }
 
     {

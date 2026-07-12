@@ -10,13 +10,14 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <vector>
 
 import memochat.r18.adapter_utils_algorithms;
@@ -32,35 +33,94 @@ namespace memochat::r18::detail
 namespace
 {
 
-void ConfigureTlsPeerVerification(ssl::context& ctx,
-                                  beast::ssl_stream<beast::tcp_stream>& stream,
-                                  const std::string& host)
+void SetError(std::string* error, std::string message)
 {
-    ctx.set_default_verify_paths();
-    ctx.set_verify_mode(ssl::verify_peer);
-    stream.set_verify_mode(ssl::verify_peer);
-    stream.set_verify_callback(ssl::host_name_verification(host));
+    if (error != nullptr)
+    {
+        *error = std::move(message);
+    }
+}
+
+bool ConfigureTlsPeerVerification(ssl::context& ctx,
+                                  beast::ssl_stream<beast::tcp_stream>& stream,
+                                  const std::string& host,
+                                  std::string* error)
+{
+    beast::error_code ec;
+    ctx.set_default_verify_paths(ec);
+    if (!ec)
+    {
+        ctx.set_verify_mode(ssl::verify_peer, ec);
+    }
+    if (!ec)
+    {
+        stream.set_verify_mode(ssl::verify_peer, ec);
+    }
+    if (!ec)
+    {
+        stream.set_verify_callback(ssl::host_name_verification(host), ec);
+    }
+    if (ec)
+    {
+        SetError(error, ec.message());
+        return false;
+    }
+    return true;
 }
 
 } // namespace
 
-ParsedUrl ParseUrl(const std::string& url)
+bool ParseUrl(const std::string& url, ParsedUrl* out, std::string* error)
 {
+    if (out == nullptr)
+    {
+        SetError(error, "URL output pointer is null");
+        return false;
+    }
     const auto scheme_end = url.find("://");
     if (scheme_end == std::string::npos)
-        throw std::runtime_error(adapter_utils::modules::MissingSchemeMessage());
+    {
+        SetError(error, adapter_utils::modules::MissingSchemeMessage());
+        return false;
+    }
     ParsedUrl parsed;
     parsed.scheme = url.substr(0, scheme_end);
     const auto authority_begin = scheme_end + 3;
-    const auto path_begin = url.find('/', authority_begin);
-    std::string authority = path_begin == std::string::npos ? url.substr(authority_begin)
-                                                            : url.substr(authority_begin, path_begin - authority_begin);
-    if (adapter_utils::modules::ShouldUseDefaultTarget(path_begin == std::string::npos))
+    const auto authority_end = url.find_first_of("/?#", authority_begin);
+    std::string authority = authority_end == std::string::npos
+                                ? url.substr(authority_begin)
+                                : url.substr(authority_begin, authority_end - authority_begin);
+    parsed.has_fragment = url.find('#', authority_begin) != std::string::npos;
+    const auto userinfo_end = authority.rfind('@');
+    parsed.has_userinfo = userinfo_end != std::string::npos;
+    if (parsed.has_userinfo)
+        authority.erase(0, userinfo_end + 1);
+
+    if (adapter_utils::modules::ShouldUseDefaultTarget(authority_end == std::string::npos))
         parsed.target = adapter_utils::modules::DefaultTarget();
     else
-        parsed.target = url.substr(path_begin);
-    const auto port_pos = authority.rfind(':');
-    if (port_pos != std::string::npos && authority.find(']') == std::string::npos)
+    {
+        const auto fragment_begin = url.find('#', authority_end);
+        parsed.target = url.substr(authority_end, fragment_begin - authority_end);
+        if (!parsed.target.empty() && parsed.target.front() == '?')
+            parsed.target.insert(parsed.target.begin(), '/');
+    }
+
+    if (!authority.empty() && authority.front() == '[')
+    {
+        const auto bracket_end = authority.find(']');
+        if (bracket_end == std::string::npos)
+        {
+            SetError(error, adapter_utils::modules::MissingHostMessage());
+            return false;
+        }
+        parsed.host = authority.substr(1, bracket_end - 1);
+        if (bracket_end + 1 < authority.size() && authority[bracket_end + 1] == ':')
+            parsed.port = authority.substr(bracket_end + 2);
+        else
+            parsed.port = adapter_utils::modules::SelectDefaultPort(parsed.scheme == "https");
+    }
+    else if (const auto port_pos = authority.rfind(':'); port_pos != std::string::npos)
     {
         parsed.host = authority.substr(0, port_pos);
         parsed.port = authority.substr(port_pos + 1);
@@ -70,15 +130,38 @@ ParsedUrl ParseUrl(const std::string& url)
         parsed.host = authority;
         parsed.port = adapter_utils::modules::SelectDefaultPort(parsed.scheme == "https");
     }
-    if (adapter_utils::modules::ShouldThrowMissingHost(parsed.host.empty()))
-        throw std::runtime_error(adapter_utils::modules::MissingHostMessage());
-    return parsed;
+    if (adapter_utils::modules::ShouldThrowMissingHost(parsed.host.empty()) || parsed.port.empty())
+    {
+        SetError(error, adapter_utils::modules::MissingHostMessage());
+        return false;
+    }
+    *out = std::move(parsed);
+    return true;
 }
 
-HttpResult
-HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::string>>& headers, int timeout_seconds)
+bool HttpGet(const std::string& url,
+             const std::vector<std::pair<std::string, std::string>>& headers,
+             HttpResult* out,
+             std::string* error,
+             int timeout_seconds)
 {
-    const ParsedUrl parsed = ParseUrl(url);
+    if (out == nullptr)
+    {
+        SetError(error, "HTTP output pointer is null");
+        return false;
+    }
+    ParsedUrl parsed;
+    if (!ParseUrl(url, &parsed, error))
+    {
+        return false;
+    }
+    const bool is_https = adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https");
+    const bool is_http = adapter_utils::modules::IsHttpScheme(parsed.scheme == "http");
+    if (!is_https && !is_http)
+    {
+        SetError(error, adapter_utils::modules::UnsupportedSchemeMessage());
+        return false;
+    }
     net::io_context ioc;
     tcp::resolver resolver(ioc);
 
@@ -91,68 +174,120 @@ HttpGet(const std::string& url, const std::vector<std::pair<std::string, std::st
 
     beast::flat_buffer buffer;
     http::response<http::string_body> res;
-    if (adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https"))
+    beast::error_code ec;
+    const auto endpoints = resolver.resolve(parsed.host, parsed.port, ec);
+    if (ec)
     {
-        ssl::context ctx(ssl::context::tls_client);
-        beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
-        ConfigureTlsPeerVerification(ctx, stream, parsed.host);
-        if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
-            throw std::runtime_error("failed to set TLS SNI host");
-        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
-        beast::get_lowest_layer(stream).connect(resolver.resolve(parsed.host, parsed.port));
-        stream.handshake(ssl::stream_base::client);
-        http::write(stream, req);
-        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
-        http::read(stream, buffer, res);
-        beast::error_code ec;
-        stream.shutdown(ec);
+        SetError(error, ec.message());
+        return false;
     }
-    else if (adapter_utils::modules::IsHttpScheme(parsed.scheme == "http"))
+    if (is_https)
     {
-        beast::tcp_stream stream(ioc);
-        stream.expires_after(std::chrono::seconds(timeout_seconds));
-        stream.connect(resolver.resolve(parsed.host, parsed.port));
-        http::write(stream, req);
-        stream.expires_after(std::chrono::seconds(timeout_seconds));
-        http::read(stream, buffer, res);
-        beast::error_code ec;
-        stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+        SSL_CTX* native_context = SSL_CTX_new(TLS_client_method());
+        if (native_context == nullptr)
+        {
+            SetError(error, "failed to create TLS context");
+            return false;
+        }
+        ssl::context ctx(native_context);
+        beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
+        if (!ConfigureTlsPeerVerification(ctx, stream, parsed.host, error))
+        {
+            return false;
+        }
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
+        {
+            SetError(error, "failed to set TLS SNI host");
+            return false;
+        }
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
+        beast::get_lowest_layer(stream).connect(endpoints, ec);
+        if (!ec)
+        {
+            stream.handshake(ssl::stream_base::client, ec);
+        }
+        if (!ec)
+        {
+            http::write(stream, req, ec);
+        }
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
+        if (!ec)
+        {
+            http::read(stream, buffer, res, ec);
+        }
+        if (ec)
+        {
+            SetError(error, ec.message());
+            return false;
+        }
+        beast::error_code shutdown_error;
+        stream.shutdown(shutdown_error);
     }
     else
     {
-        throw std::runtime_error(adapter_utils::modules::UnsupportedSchemeMessage());
+        beast::tcp_stream stream(ioc);
+        stream.expires_after(std::chrono::seconds(timeout_seconds));
+        stream.connect(endpoints, ec);
+        if (!ec)
+        {
+            http::write(stream, req, ec);
+        }
+        stream.expires_after(std::chrono::seconds(timeout_seconds));
+        if (!ec)
+        {
+            http::read(stream, buffer, res, ec);
+        }
+        if (ec)
+        {
+            SetError(error, ec.message());
+            return false;
+        }
+        beast::error_code shutdown_error;
+        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_error);
     }
-
     HttpResult result;
     result.status = res.result_int();
     result.body = std::move(res.body());
     auto ct = res.find(http::field::content_type);
     if (ct != res.end())
         result.content_type.assign(ct->value().data(), ct->value().size());
-    return result;
+    *out = std::move(result);
+    return true;
 }
 
-std::string Md5Hex(const std::string& input)
+bool Md5Hex(const std::string& input, std::string* out, std::string* error)
 {
+    if (out == nullptr)
+    {
+        SetError(error, "MD5 output pointer is null");
+        return false;
+    }
     std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
     unsigned int digest_len = 0;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx)
-        throw std::runtime_error("EVP_MD_CTX_new failed");
+    {
+        SetError(error, "EVP_MD_CTX_new failed");
+        return false;
+    }
     const bool ok = EVP_DigestInit_ex(ctx, EVP_md5(), nullptr) == 1 &&
                     EVP_DigestUpdate(ctx, input.data(), input.size()) == 1 &&
                     EVP_DigestFinal_ex(ctx, digest.data(), &digest_len) == 1;
     EVP_MD_CTX_free(ctx);
     if (!ok)
-        throw std::runtime_error("MD5 failed");
-    std::ostringstream out;
-    out << std::hex << std::setfill('0');
+    {
+        SetError(error, "MD5 failed");
+        return false;
+    }
+    std::ostringstream formatted;
+    formatted << std::hex << std::setfill('0');
     for (unsigned int i = 0; i < digest_len; ++i)
-        out << std::setw(2) << static_cast<int>(digest[i]);
-    return out.str();
+        formatted << std::setw(2) << static_cast<int>(digest[i]);
+    *out = formatted.str();
+    return true;
 }
 
-std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& key)
+bool Aes256EcbDecrypt(const std::string& cipher_text, const std::string& key, std::string* out, std::string* error)
 {
     // NOTE: AES-256-ECB is used here ONLY because the upstream JM/Picacg API mandates
     // this mode as part of its wire protocol. ECB is cryptographically weak (no IV,
@@ -160,11 +295,22 @@ std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& 
     // Third-party protocol constraint — do not copy this pattern.
     // AUDIT: CWE-327 accepted as third-party constraint (2026-07-05).
     if (key.size() != 32)
-        throw std::runtime_error("JM AES-256-ECB key must be exactly 32 bytes");
+    {
+        SetError(error, "JM AES-256-ECB key must be exactly 32 bytes");
+        return false;
+    }
+    if (out == nullptr)
+    {
+        SetError(error, "AES output pointer is null");
+        return false;
+    }
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
-        throw std::runtime_error("EVP_CIPHER_CTX_new failed");
-    std::vector<unsigned char> out(cipher_text.size() + EVP_MAX_BLOCK_LENGTH);
+    {
+        SetError(error, "EVP_CIPHER_CTX_new failed");
+        return false;
+    }
+    std::vector<unsigned char> plaintext(cipher_text.size() + EVP_MAX_BLOCK_LENGTH);
     int out_len_1 = 0;
     int out_len_2 = 0;
     const bool ok = EVP_DecryptInit_ex(ctx,
@@ -174,15 +320,19 @@ std::string Aes256EcbDecrypt(const std::string& cipher_text, const std::string& 
                                        nullptr) == 1 &&
                     EVP_CIPHER_CTX_set_padding(ctx, 1) == 1 &&
                     EVP_DecryptUpdate(ctx,
-                                      out.data(),
+                                      plaintext.data(),
                                       &out_len_1,
                                       reinterpret_cast<const unsigned char*>(cipher_text.data()),
                                       static_cast<int>(cipher_text.size())) == 1 &&
-                    EVP_DecryptFinal_ex(ctx, out.data() + out_len_1, &out_len_2) == 1;
+                    EVP_DecryptFinal_ex(ctx, plaintext.data() + out_len_1, &out_len_2) == 1;
     EVP_CIPHER_CTX_free(ctx);
     if (!ok)
-        throw std::runtime_error("AES decrypt failed");
-    return std::string(reinterpret_cast<char*>(out.data()), static_cast<std::size_t>(out_len_1 + out_len_2));
+    {
+        SetError(error, "AES decrypt failed");
+        return false;
+    }
+    *out = std::string(reinterpret_cast<char*>(plaintext.data()), static_cast<std::size_t>(out_len_1 + out_len_2));
+    return true;
 }
 
 std::string UrlEncode(const std::string& input)
@@ -241,13 +391,12 @@ int64_t FieldInt(const json::JsonValue& object, const std::string& key, int64_t 
         return value.asInt64();
     if (value.isString())
     {
-        try
+        const std::string text = value.asString();
+        int64_t parsed = 0;
+        const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+        if (ec == std::errc{} && ptr == text.data() + text.size())
         {
-            return std::stoll(value.asString());
-        }
-        catch (...)
-        {
-            return fallback;
+            return parsed;
         }
     }
     return fallback;
@@ -288,6 +437,14 @@ R18ImagePayload PlaceholderImage(const std::string& line1, const std::string& li
     R18ImagePayload payload;
     payload.content_type = adapter_utils::modules::PlaceholderContentType();
     payload.body = svg.str();
+    return payload;
+}
+
+R18ImagePayload FailedImage(std::string error)
+{
+    R18ImagePayload payload;
+    payload.ok = false;
+    payload.error = std::move(error);
     return payload;
 }
 
@@ -332,7 +489,7 @@ void WriteCachedImage(const std::filesystem::path& cache_root,
 namespace memochat::r18
 {
 
-bool DecodeBase64(const std::string& input, std::string& out)
+bool DecodeBase64Bounded(const std::string& input, std::string& out, std::size_t max_output_bytes)
 {
     const unsigned char invalid = memochat::r18::adapter_utils::modules::Base64InvalidMarker();
     unsigned char table[256];
@@ -363,10 +520,20 @@ bool DecodeBase64(const std::string& input, std::string& out)
         if (bits >= 0)
         {
             out.push_back(static_cast<char>((val >> bits) & 0xFF));
+            if (out.size() > max_output_bytes)
+            {
+                out.clear();
+                return false;
+            }
             bits -= 8;
         }
     }
     return true;
+}
+
+bool DecodeBase64(const std::string& input, std::string& out)
+{
+    return DecodeBase64Bounded(input, out, std::numeric_limits<std::size_t>::max());
 }
 
 } // namespace memochat::r18

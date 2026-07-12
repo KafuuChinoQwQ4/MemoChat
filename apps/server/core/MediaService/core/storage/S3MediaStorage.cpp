@@ -8,9 +8,10 @@
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/utils/HashingUtils.h>
 #include <aws/s3/S3Client.h>
-#include <aws/s3/model/PutObjectRequest.h>
-#include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadBucketRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/s3/model/PutObjectRequest.h>
 
 #include <algorithm>
 #include <cctype>
@@ -20,6 +21,7 @@
 #include <initializer_list>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 import memochat.media.s3_storage_algorithms;
 
@@ -165,13 +167,29 @@ S3MediaStorage::S3MediaStorage()
     }
 
     const std::string enabled_str = minio["Enabled"];
-    _enabled = s3_modules::IsEnabledConfigValue(enabled_str == "true", enabled_str == "1");
+    const bool configured_enabled = s3_modules::IsEnabledConfigValue(enabled_str == "true", enabled_str == "1");
     const std::string allow_redirect = minio["AllowPublicRedirect"];
     _allow_public_redirect = s3_modules::IsPublicRedirectAllowed(allow_redirect == "true", allow_redirect == "1");
 
-    if (!_enabled)
+    if (!configured_enabled)
     {
-        memolog::LogWarn("s3.init", "S3MediaStorage disabled (Enabled != true)");
+        _startup_error = "MinIO.Enabled must be true when Media.StorageProvider is s3";
+        memolog::LogWarn("s3.init", _startup_error);
+        return;
+    }
+
+    const std::string endpoint = TrimAscii(minio["Endpoint"]);
+    if (endpoint.empty())
+    {
+        _startup_error = "MinIO.Endpoint is required when Media.StorageProvider is s3";
+        memolog::LogWarn("s3.init", _startup_error);
+        return;
+    }
+    if (_bucket_avatar.empty() || _bucket_file.empty() || _bucket_image.empty() || _bucket_video.empty() ||
+        _bucket_moments.empty())
+    {
+        _startup_error = "all MinIO bucket names are required when Media.StorageProvider is s3";
+        memolog::LogWarn("s3.init", _startup_error);
         return;
     }
 
@@ -194,13 +212,13 @@ S3MediaStorage::S3MediaStorage()
 
     if (access_key.empty() || secret_key.empty())
     {
-        memolog::LogWarn("s3.init", "S3MediaStorage credentials empty, minio disabled");
-        _enabled = false;
+        _startup_error = "MinIO credentials are required when Media.StorageProvider is s3";
+        memolog::LogWarn("s3.init", _startup_error);
         return;
     }
 
     Aws::Client::ClientConfiguration config;
-    config.endpointOverride = minio["Endpoint"];
+    config.endpointOverride = endpoint;
     config.region = _region;
     const std::string scheme = LowerAscii(TrimAscii(minio["Scheme"]));
     const bool use_https = scheme != "http";
@@ -213,6 +231,34 @@ S3MediaStorage::S3MediaStorage()
                                                      config,
                                                      Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
                                                      false);
+    if (!_s3_client)
+    {
+        _startup_error = "failed to create S3 client";
+        memolog::LogWarn("s3.init", _startup_error);
+        return;
+    }
+
+    std::vector<std::string> checked_buckets;
+    for (const auto& bucket : {_bucket_avatar, _bucket_file, _bucket_image, _bucket_video, _bucket_moments})
+    {
+        if (std::find(checked_buckets.begin(), checked_buckets.end(), bucket) != checked_buckets.end())
+        {
+            continue;
+        }
+        checked_buckets.push_back(bucket);
+        Aws::S3::Model::HeadBucketRequest request;
+        request.SetBucket(Aws::String(bucket));
+        const auto outcome = _s3_client->HeadBucket(request);
+        if (!outcome.IsSuccess())
+        {
+            _startup_error = "MinIO bucket readiness check failed for " + bucket + ": " +
+                             std::string(outcome.GetError().GetMessage().c_str());
+            memolog::LogWarn("s3.init", _startup_error);
+            _s3_client.reset();
+            return;
+        }
+    }
+    _enabled = true;
 
     memolog::LogInfo("s3.init.ok",
                      "S3MediaStorage initialized, endpoint=" + minio["Endpoint"] + " bucket_avatar=" + _bucket_avatar +
@@ -221,6 +267,16 @@ S3MediaStorage::S3MediaStorage()
 }
 
 S3MediaStorage::~S3MediaStorage() = default;
+
+bool S3MediaStorage::Ready() const noexcept
+{
+    return _enabled && _s3_client != nullptr && _startup_error.empty();
+}
+
+const std::string& S3MediaStorage::StartupError() const noexcept
+{
+    return _startup_error;
+}
 
 bool S3MediaStorage::SelectBucket(const std::string& media_type,
                                   const std::string& media_key,
@@ -276,7 +332,8 @@ bool S3MediaStorage::StoreMergedFile(const std::string& media_type,
         return false;
     }
 
-    if (!std::filesystem::exists(merged_file))
+    std::error_code filesystem_error;
+    if (!std::filesystem::exists(merged_file, filesystem_error) || filesystem_error)
     {
         error_text = "merged temp file not found";
         return false;

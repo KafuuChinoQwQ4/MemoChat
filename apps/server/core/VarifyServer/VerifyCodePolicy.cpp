@@ -1,9 +1,7 @@
 #include "VerifyCodePolicy.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <random>
-#include <regex>
+#include <sodium.h>
 #include <string_view>
 
 import memochat.varify.verify_code_algorithms;
@@ -27,8 +25,54 @@ bool IsSyntheticLoadtestEmail(const std::string& email)
 
 bool IsValidVerifyEmail(const std::string& email)
 {
-    static const std::regex kEmailRegex(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63})");
-    return std::regex_match(email, kEmailRegex);
+    const auto at = email.find('@');
+    if (at == std::string::npos || at == 0 || email.find('@', at + 1) != std::string::npos)
+    {
+        return false;
+    }
+    const auto is_ascii_alpha = [](unsigned char c)
+    {
+        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    };
+    const auto is_ascii_alnum = [&](unsigned char c)
+    {
+        return is_ascii_alpha(c) || (c >= '0' && c <= '9');
+    };
+    const auto is_local_char = [&](unsigned char c)
+    {
+        return is_ascii_alnum(c) || c == '.' || c == '_' || c == '%' || c == '+' || c == '-';
+    };
+    if (!std::all_of(email.begin(), email.begin() + static_cast<std::string::difference_type>(at), is_local_char))
+    {
+        return false;
+    }
+
+    const std::string_view domain(email.data() + at + 1, email.size() - at - 1);
+    const auto dot = domain.rfind('.');
+    if (dot == std::string_view::npos || dot == 0)
+    {
+        return false;
+    }
+    const std::string_view suffix = domain.substr(dot + 1);
+    if (suffix.size() < 2 || suffix.size() > 63)
+    {
+        return false;
+    }
+    if (!std::all_of(domain.begin(),
+                     domain.begin() + static_cast<std::string_view::difference_type>(dot),
+                     [&](unsigned char c)
+                     {
+                         return is_ascii_alnum(c) || c == '.' || c == '-';
+                     }))
+    {
+        return false;
+    }
+    return std::all_of(suffix.begin(),
+                       suffix.end(),
+                       [&](unsigned char c)
+                       {
+                           return is_ascii_alpha(c);
+                       });
 }
 
 std::string GenerateNumericVerifyCode(int length)
@@ -36,14 +80,17 @@ std::string GenerateNumericVerifyCode(int length)
     length =
         memochat::varify::modules::NormalizeVerifyCodeLength(length, kDefaultVerifyCodeLength, kMaxVerifyCodeLength);
 
-    static thread_local std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<int> digit_dist(0, 9);
+    static const bool sodium_ready = sodium_init() >= 0;
+    if (!sodium_ready)
+    {
+        return {};
+    }
 
     std::string code;
     code.reserve(static_cast<std::size_t>(length));
     for (int i = 0; i < length; ++i)
     {
-        code.push_back(static_cast<char>('0' + digit_dist(rng)));
+        code.push_back(static_cast<char>('0' + randombytes_uniform(10)));
     }
     return code;
 }

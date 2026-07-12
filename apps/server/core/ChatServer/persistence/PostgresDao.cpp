@@ -1,17 +1,15 @@
 #include "PostgresDao.hpp"
 #include "ConfigMgr.hpp"
 #include "db/PqxxCompat.hpp"
-#include "PostgresPool.hpp"
 #include "SnowflakeUtil.hpp"
-#include <pqxx/pqxx>
 #include <set>
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <iostream>
 #include <unordered_set>
 #include <unordered_map>
 #include <random>
-#include <stdexcept>
 #include <limits>
 #include <sstream>
 
@@ -60,117 +58,135 @@ PostgresDao::PostgresDao()
     // only the user/user_id queries follow this string; chat tables stay on
     // [Postgres]. This is the DB-per-service seam for the account aggregate.
     account_connection_string_ = BuildPostgresConnectionStringFor("AccountPostgres", "Postgres");
-    use_postgres_ = postgres_dao_modules::ShouldEnablePostgres(postgres_connection_string_.empty());
-    if (!use_postgres_)
+    if (postgres_connection_string_.empty() || account_connection_string_.empty())
     {
-        throw std::runtime_error("missing [Postgres] configuration for ChatServer");
-    }
-    auto* raw_pool = new PostgresPool(postgres_connection_string_, "", "", "", postgres_dao_modules::StartupPoolSize());
-    pool_.reset(raw_pool);
-    EnsureChatMessageIdempotencySchema();
-    EnsureChatEventOutboxSchema();
-    WarmupRelationBootstrapQueries();
-}
-
-PostgresDao::~PostgresDao()
-{
-    if (pool_)
-    {
-        pool_->Close();
-    }
-}
-
-void PostgresDao::WarmupRelationBootstrapQueries()
-{
-    if (postgres_dao_modules::ShouldUsePostgresWarmupPath(use_postgres_))
-    {
-        try
-        {
-            pqxx::connection conn(postgres_connection_string_);
-            pqxx::read_transaction txn(conn);
-            // Warm only relation tables; user base-info is resolved separately
-            // via GetUsersByUids (account-data seam), so no JOIN "user" here —
-            // keeps the warmup valid after the user table moves to memo_account.
-            txn.exec_params("SELECT a.from_uid, a.status "
-                            "FROM friend_apply AS a "
-                            "WHERE a.to_uid = $1 AND a.id > $2 ORDER BY a.id ASC LIMIT $3",
-                            -1,
-                            0,
-                            1);
-            txn.exec_params("SELECT tag FROM friend_apply_tag WHERE to_uid = $1 AND from_uid = $2 ORDER BY id ASC",
-                            -1,
-                            -1);
-            txn.exec_params("SELECT f.friend_id, f.back "
-                            "FROM friend AS f "
-                            "WHERE f.self_id = $1 LIMIT 1",
-                            -1);
-            txn.exec_params("SELECT tag FROM friend_tag WHERE self_id = $1 AND friend_id = $2 ORDER BY id ASC", -1, -1);
-            return;
-        }
-        catch (const std::exception& e)
-        {
-            std::cerr << "warmup relation bootstrap queries failed: " << e.what() << std::endl;
-            return;
-        }
-    }
-
-    auto con = pool_->getConnection();
-    if (con == nullptr)
-    {
+        startup_error_ = "missing PostgreSQL configuration for ChatServer";
+        std::cerr << startup_error_ << std::endl;
         return;
     }
 
-    Defer defer(
-        [this, &con]()
-        {
-            pool_->returnConnection(std::move(con));
-        });
-
-    try
+    pqxx::connection chat_connection(postgres_connection_string_);
+    if (!chat_connection.is_open())
     {
+        startup_error_ = "ChatServer PostgreSQL connection failed: " + chat_connection.error_message();
+        std::cerr << startup_error_ << std::endl;
+        return;
+    }
+    pqxx::connection account_connection(account_connection_string_);
+    if (!account_connection.is_open())
+    {
+        startup_error_ = "ChatServer account PostgreSQL connection failed: " + account_connection.error_message();
+        std::cerr << startup_error_ << std::endl;
+        return;
+    }
+    {
+        pqxx::read_transaction account_schema_transaction(account_connection);
+        const auto account_schema = account_schema_transaction.exec(
+            "SELECT uid, name, email, pwd, password_hash, user_id, nick, icon, \"desc\", sex "
+            "FROM \"user\" WHERE FALSE");
+        if (!account_schema.ok())
         {
-            std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
-                "select apply.from_uid, apply.status, user.name, user.nick, user.sex, user.user_id, user.icon "
-                "from friend_apply as apply join user on apply.from_uid = user.uid where apply.to_uid = ? "
-                "and apply.id > ? order by apply.id ASC LIMIT ? "));
-            pstmt->setInt(1, -1);
-            pstmt->setInt(2, 0);
-            pstmt->setInt(3, 1);
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-            (void) res;
+            startup_error_ =
+                "ChatServer account PostgreSQL schema validation failed: " + account_schema.error_message();
+            std::cerr << startup_error_ << std::endl;
+            return;
         }
-
+        const auto user_id_schema = account_schema_transaction.exec("SELECT id FROM user_id WHERE FALSE");
+        if (!user_id_schema.ok())
         {
-            std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
-                "SELECT from_uid, tag FROM friend_apply_tag WHERE to_uid = ? AND from_uid IN (?) ORDER BY id ASC"));
-            pstmt->setInt(1, -1);
-            pstmt->setInt(2, -1);
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-            (void) res;
-        }
-
-        {
-            std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
-                "SELECT f.friend_id, f.back, u.name, u.nick, u.sex, u.user_id, u.`desc`, u.icon "
-                "FROM friend AS f "
-                "JOIN user AS u ON f.friend_id = u.uid "
-                "WHERE f.self_id = ? LIMIT 1"));
-            pstmt->setInt(1, -1);
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-            (void) res;
-        }
-
-        {
-            std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement(
-                "SELECT friend_id, tag FROM friend_tag WHERE self_id = ? AND friend_id IN (?) ORDER BY id ASC"));
-            pstmt->setInt(1, -1);
-            pstmt->setInt(2, -1);
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-            (void) res;
+            startup_error_ =
+                "ChatServer account PostgreSQL user_id schema validation failed: " + user_id_schema.error_message();
+            std::cerr << startup_error_ << std::endl;
+            return;
         }
     }
-    catch (sql::SQLException& e)
+
+    if (!EnsureChatMessageIdempotencySchema())
     {
-        std::cerr << "warmup relation bootstrap queries failed: " << e.what() << std::endl;
+        startup_error_ = "ChatServer PostgreSQL idempotency schema initialization failed";
+        return;
     }
+    if (!EnsureChatEventOutboxSchema())
+    {
+        startup_error_ = "ChatServer PostgreSQL outbox schema initialization failed";
+        return;
+    }
+    if (!WarmupRelationBootstrapQueries())
+    {
+        if (startup_error_.empty())
+        {
+            startup_error_ = "ChatServer PostgreSQL relation query warmup failed";
+        }
+        return;
+    }
+    ready_ = true;
+}
+
+PostgresDao::~PostgresDao() = default;
+
+bool PostgresDao::Ready() const noexcept
+{
+    return ready_;
+}
+
+const std::string& PostgresDao::startupError() const noexcept
+{
+    return startup_error_;
+}
+
+bool PostgresDao::WarmupRelationBootstrapQueries()
+{
+    pqxx::connection conn(postgres_connection_string_);
+    pqxx::read_transaction txn(conn);
+    if (!conn.is_open() || !txn.ok())
+    {
+        const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
+        startup_error_ = "warmup relation bootstrap queries failed: " + postgres_error;
+        std::cerr << "warmup relation bootstrap queries failed: " << postgres_error << std::endl;
+        return false;
+    }
+    // Warm only relation tables; user base-info is resolved separately
+    // via GetUsersByUids (account-data seam), so no JOIN "user" here —
+    // keeps the warmup valid after the user table moves to memo_account.
+    txn.exec_params("SELECT a.from_uid, a.status "
+                    "FROM friend_apply AS a "
+                    "WHERE a.to_uid = $1 AND a.id > $2 ORDER BY a.id ASC LIMIT $3",
+                    -1,
+                    0,
+                    1);
+    if (!txn.ok())
+    {
+        const auto& postgres_error = txn.error_message();
+        startup_error_ = "warmup relation bootstrap queries failed: " + postgres_error;
+        std::cerr << "warmup relation bootstrap queries failed: " << postgres_error << std::endl;
+        return false;
+    }
+    txn.exec_params("SELECT tag FROM friend_apply_tag WHERE to_uid = $1 AND from_uid = $2 ORDER BY id ASC", -1, -1);
+    if (!txn.ok())
+    {
+        const auto& postgres_error = txn.error_message();
+        startup_error_ = "warmup relation bootstrap queries failed: " + postgres_error;
+        std::cerr << "warmup relation bootstrap queries failed: " << postgres_error << std::endl;
+        return false;
+    }
+    txn.exec_params("SELECT f.friend_id, f.back "
+                    "FROM friend AS f "
+                    "WHERE f.self_id = $1 LIMIT 1",
+                    -1);
+    if (!txn.ok())
+    {
+        const auto& postgres_error = txn.error_message();
+        startup_error_ = "warmup relation bootstrap queries failed: " + postgres_error;
+        std::cerr << "warmup relation bootstrap queries failed: " << postgres_error << std::endl;
+        return false;
+    }
+    txn.exec_params("SELECT tag FROM friend_tag WHERE self_id = $1 AND friend_id = $2 ORDER BY id ASC", -1, -1);
+    if (!txn.ok())
+    {
+        const auto& postgres_error = txn.error_message();
+        startup_error_ = "warmup relation bootstrap queries failed: " + postgres_error;
+        std::cerr << "warmup relation bootstrap queries failed: " << postgres_error << std::endl;
+        return false;
+    }
+    return true;
 }

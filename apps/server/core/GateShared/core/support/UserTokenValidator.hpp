@@ -8,5 +8,5 @@ namespace memochat::auth
 bool ValidateUserToken(int uid, const std::string& token);
 bool ResolveUserIdFromToken(const std::string& token, int& uid);
 bool StoreUserToken(int uid, const std::string& token, int ttl_seconds);
-void DeleteUserToken(int uid);
+bool DeleteUserToken(int uid);
 } // namespace memochat::auth

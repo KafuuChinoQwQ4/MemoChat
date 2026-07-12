@@ -4,9 +4,8 @@
 #include "ChatRuntime.hpp"
 #include "PostgresMgr.hpp"
 #include "logging/Logger.hpp"
+#include "random/Uuid.hpp"
 
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <chrono>
 #include <memory>
 
@@ -14,23 +13,6 @@
 #define MEMOCHAT_ENABLE_KAFKA 0
 #endif
 
-#if MEMOCHAT_ENABLE_KAFKA
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <cppkafka/cppkafka.h>
-#ifdef byte
-#undef byte
-#endif
-#endif
-
-// Must come after cppkafka to avoid _HAS_STD_BYTE conflict with glaze's std::byte usage
-#ifdef byte
-#undef byte
-#endif
 #include "json/GlazeCompat.hpp"
 
 import memochat.chat.kafka_async_event_bus_algorithms;
@@ -45,6 +27,49 @@ int64_t NowMsKafkaBus()
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
             .count());
 }
+
+#if MEMOCHAT_ENABLE_KAFKA
+bool SetKafkaConfig(rd_kafka_conf_t* config, const char* key, const std::string& value, std::string& error)
+{
+    char error_buffer[512]{};
+    if (rd_kafka_conf_set(config, key, value.c_str(), error_buffer, sizeof(error_buffer)) != RD_KAFKA_CONF_OK)
+    {
+        error = error_buffer;
+        return false;
+    }
+    return true;
+}
+
+rd_kafka_t* CreateKafkaHandle(rd_kafka_type_t type,
+                              const std::vector<std::pair<const char*, std::string>>& values,
+                              std::string& error)
+{
+    rd_kafka_conf_t* config = rd_kafka_conf_new();
+    if (config == nullptr)
+    {
+        error = "rd_kafka_conf_new_failed";
+        return nullptr;
+    }
+    for (const auto& [key, value] : values)
+    {
+        if (!SetKafkaConfig(config, key, value, error))
+        {
+            rd_kafka_conf_destroy(config);
+            return nullptr;
+        }
+    }
+
+    char error_buffer[512]{};
+    rd_kafka_t* handle = rd_kafka_new(type, config, error_buffer, sizeof(error_buffer));
+    if (handle == nullptr)
+    {
+        error = error_buffer;
+        rd_kafka_conf_destroy(config);
+        return nullptr;
+    }
+    return handle;
+}
+#endif
 } // namespace
 
 bool KafkaAsyncEventBus::BuildAvailable()
@@ -63,21 +88,77 @@ KafkaAsyncEventBus::KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_
 #if MEMOCHAT_ENABLE_KAFKA
     if (kafka_event_modules::ShouldStartFromValidConfig(_config.valid()))
     {
-        cppkafka::Configuration producer_config = {
-            {"metadata.broker.list", _config.brokers},
-            {"client.id", _config.client_id},
-            {"enable.idempotence", _config.enable_idempotence ? "true" : "false"},
-            {"batch.num.messages", std::to_string(_config.batch_num_messages)},
-            {"queue.buffering.max.ms", std::to_string(_config.queue_buffering_max_ms)}};
-        cppkafka::Configuration consumer_config = {{"metadata.broker.list", _config.brokers},
-                                                   {"group.id", _config.consumer_group},
-                                                   {"client.id", _config.client_id + ".consumer"},
-                                                   {"enable.auto.commit", false},
-                                                   {"auto.offset.reset", "earliest"},
-                                                   {"session.timeout.ms", std::to_string(_config.session_timeout_ms)}};
-        _producer = std::make_unique<cppkafka::Producer>(producer_config);
-        _consumer = std::make_unique<cppkafka::Consumer>(consumer_config);
-        _consumer->subscribe({_config.topic_private, _config.topic_group});
+        std::string startup_error;
+        _producer = CreateKafkaHandle(RD_KAFKA_PRODUCER,
+                                      {{"bootstrap.servers", _config.brokers},
+                                       {"client.id", _config.client_id},
+                                       {"enable.idempotence", _config.enable_idempotence ? "true" : "false"},
+                                       {"batch.num.messages", std::to_string(_config.batch_num_messages)},
+                                       {"linger.ms", std::to_string(_config.queue_buffering_max_ms)}},
+                                      startup_error);
+        _consumer = CreateKafkaHandle(RD_KAFKA_CONSUMER,
+                                      {{"bootstrap.servers", _config.brokers},
+                                       {"group.id", _config.consumer_group},
+                                       {"client.id", _config.client_id + ".consumer"},
+                                       {"enable.auto.commit", "false"},
+                                       {"auto.offset.reset", "earliest"},
+                                       {"session.timeout.ms", std::to_string(_config.session_timeout_ms)}},
+                                      startup_error);
+        if (_producer == nullptr || _consumer == nullptr)
+        {
+            if (_producer != nullptr)
+            {
+                rd_kafka_destroy(_producer);
+                _producer = nullptr;
+            }
+            if (_consumer != nullptr)
+            {
+                rd_kafka_destroy(_consumer);
+                _consumer = nullptr;
+            }
+            memolog::LogError("chat.kafka.start_failed",
+                              "chat kafka event bus failed to initialize",
+                              {{"error", startup_error}});
+            return;
+        }
+
+        const rd_kafka_resp_err_t poll_error = rd_kafka_poll_set_consumer(_consumer);
+        if (poll_error != RD_KAFKA_RESP_ERR_NO_ERROR)
+        {
+            memolog::LogError("chat.kafka.start_failed",
+                              "chat kafka consumer poll setup failed",
+                              {{"error", rd_kafka_err2str(poll_error)}});
+            rd_kafka_destroy(_producer);
+            rd_kafka_destroy(_consumer);
+            _producer = nullptr;
+            _consumer = nullptr;
+            return;
+        }
+        rd_kafka_topic_partition_list_t* topics = rd_kafka_topic_partition_list_new(2);
+        if (topics == nullptr)
+        {
+            memolog::LogError("chat.kafka.start_failed", "chat kafka topic list allocation failed");
+            rd_kafka_destroy(_producer);
+            rd_kafka_destroy(_consumer);
+            _producer = nullptr;
+            _consumer = nullptr;
+            return;
+        }
+        rd_kafka_topic_partition_list_add(topics, _config.topic_private.c_str(), RD_KAFKA_PARTITION_UA);
+        rd_kafka_topic_partition_list_add(topics, _config.topic_group.c_str(), RD_KAFKA_PARTITION_UA);
+        const rd_kafka_resp_err_t subscribe_error = rd_kafka_subscribe(_consumer, topics);
+        rd_kafka_topic_partition_list_destroy(topics);
+        if (subscribe_error != RD_KAFKA_RESP_ERR_NO_ERROR)
+        {
+            memolog::LogError("chat.kafka.start_failed",
+                              "chat kafka consumer subscribe failed",
+                              {{"error", rd_kafka_err2str(subscribe_error)}});
+            rd_kafka_destroy(_producer);
+            rd_kafka_destroy(_consumer);
+            _producer = nullptr;
+            _consumer = nullptr;
+            return;
+        }
         _outbox_service = std::make_unique<ChatOutboxService>(
             _config,
             [this](const std::string& topic,
@@ -96,7 +177,19 @@ KafkaAsyncEventBus::KafkaAsyncEventBus(PublishOutboxRepairTaskFn publish_outbox_
                 std::string error;
                 _publish_outbox_repair_task(outbox_id, delay_ms, max_retries, &error);
             });
-        _outbox_service->Start();
+        std::string outbox_error;
+        if (!_outbox_service->Start(&outbox_error))
+        {
+            memolog::LogError("chat.kafka.outbox_start_failed",
+                              "chat kafka outbox thread failed to start",
+                              {{"error", outbox_error}});
+            _outbox_service.reset();
+            rd_kafka_destroy(_producer);
+            rd_kafka_destroy(_consumer);
+            _producer = nullptr;
+            _consumer = nullptr;
+            return;
+        }
         memolog::LogInfo("chat.kafka.started",
                          "chat kafka event bus started",
                          {{"brokers", _config.brokers},
@@ -122,6 +215,21 @@ KafkaAsyncEventBus::~KafkaAsyncEventBus()
     {
         _outbox_service->Stop();
     }
+#if MEMOCHAT_ENABLE_KAFKA
+    ClearLastConsumed();
+    if (_consumer != nullptr)
+    {
+        rd_kafka_consumer_close(_consumer);
+        rd_kafka_destroy(_consumer);
+        _consumer = nullptr;
+    }
+    if (_producer != nullptr)
+    {
+        rd_kafka_flush(_producer, 5000);
+        rd_kafka_destroy(_producer);
+        _producer = nullptr;
+    }
+#endif
 }
 
 bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json::JsonValue& payload, std::string* error)
@@ -139,7 +247,10 @@ bool KafkaAsyncEventBus::Publish(const std::string& topic, const memochat::json:
     auto envelope = BuildAsyncEventEnvelope(topic, payload);
     if (kafka_event_modules::ShouldAssignGeneratedEventId(envelope.event_id.empty()))
     {
-        envelope.event_id = boost::uuids::to_string(boost::uuids::random_generator()());
+        if (!memochat::random::GenerateUuid(envelope.event_id, error))
+        {
+            return false;
+        }
         auto payload_copy = envelope.payload;
         payload_copy["event_id"] = envelope.event_id;
         envelope.payload = payload_copy;
@@ -192,28 +303,33 @@ bool KafkaAsyncEventBus::ConsumeOnce(const std::vector<std::string>&, AsyncConsu
     }
 
     std::lock_guard<std::mutex> guard(_consumer_mutex);
-    auto message = _consumer->poll(std::chrono::milliseconds(50));
-    if (!message)
+    rd_kafka_message_t* message = rd_kafka_consumer_poll(_consumer, 50);
+    if (message == nullptr)
     {
         return false;
     }
-    if (message.get_error())
+    if (message->err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
-        if (!message.is_eof() && error)
+        if (message->err != RD_KAFKA_RESP_ERR__PARTITION_EOF && error != nullptr)
         {
-            *error = message.get_error().to_string();
+            *error = rd_kafka_message_errstr(message);
         }
+        rd_kafka_message_destroy(message);
         return false;
     }
 
     event = AsyncConsumedEvent();
-    event.serialized = message.get_payload();
+    if (message->payload != nullptr && message->len > 0)
+    {
+        event.serialized.assign(static_cast<const char*>(message->payload), message->len);
+    }
     event.parsed = ParseAsyncEventEnvelope(event.serialized, event.envelope);
     if (kafka_event_modules::ShouldSetParseError(event.parsed, error != nullptr))
     {
         *error = kafka_event_modules::ParseFailedError();
     }
-    _last_message = std::make_shared<cppkafka::Message>(std::move(message));
+    ClearLastConsumed();
+    _last_message = message;
     _last_consumed = event;
     return true;
 #else
@@ -232,7 +348,13 @@ void KafkaAsyncEventBus::AckLastConsumed()
     std::lock_guard<std::mutex> guard(_consumer_mutex);
     if (kafka_event_modules::ShouldCommitLastConsumed(_consumer != nullptr, _last_message != nullptr))
     {
-        _consumer->commit(*_last_message);
+        const rd_kafka_resp_err_t commit_error = rd_kafka_commit_message(_consumer, _last_message, 0);
+        if (commit_error != RD_KAFKA_RESP_ERR_NO_ERROR)
+        {
+            memolog::LogWarn("chat.kafka.commit_failed",
+                             "chat kafka offset commit failed",
+                             {{"error", rd_kafka_err2str(commit_error)}});
+        }
     }
     ClearLastConsumed();
 #endif
@@ -260,7 +382,7 @@ void KafkaAsyncEventBus::NackLastConsumed(const std::string& error)
         ProduceSerialized(envelope.topic, envelope.partition_key, serialized, &publish_error);
     }
 
-    _consumer->commit(*_last_message);
+    const rd_kafka_resp_err_t commit_error = rd_kafka_commit_message(_consumer, _last_message, 0);
     memolog::LogWarn("chat.kafka.consume_failed",
                      "chat kafka consume failed",
                      {{"event_id", envelope.event_id},
@@ -268,7 +390,9 @@ void KafkaAsyncEventBus::NackLastConsumed(const std::string& error)
                       {"partition_key", envelope.partition_key},
                       {"retry_count", std::to_string(envelope.retry_count)},
                       {"error", error},
-                      {"publish_error", publish_error}});
+                      {"publish_error", publish_error},
+                      {"commit_error",
+                       commit_error == RD_KAFKA_RESP_ERR_NO_ERROR ? std::string() : rd_kafka_err2str(commit_error)}});
     ClearLastConsumed();
 #else
     (void) error;
@@ -289,24 +413,32 @@ bool KafkaAsyncEventBus::ProduceSerialized(const std::string& topic,
         }
         return false;
     }
-    try
+    std::lock_guard<std::mutex> guard(_producer_mutex);
+    const rd_kafka_resp_err_t produce_error =
+        rd_kafka_producev(_producer,
+                          RD_KAFKA_V_TOPIC(topic.c_str()),
+                          RD_KAFKA_V_KEY(const_cast<char*>(partition_key.data()), partition_key.size()),
+                          RD_KAFKA_V_VALUE(const_cast<char*>(payload_json.data()), payload_json.size()),
+                          RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
+                          RD_KAFKA_V_END);
+    if (produce_error != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
-        std::lock_guard<std::mutex> guard(_producer_mutex);
-        cppkafka::MessageBuilder builder(topic);
-        builder.key(partition_key);
-        builder.payload(payload_json);
-        _producer->produce(builder);
-        _producer->flush();
-        return true;
-    }
-    catch (const std::exception& ex)
-    {
-        if (error)
+        if (error != nullptr)
         {
-            *error = ex.what();
+            *error = rd_kafka_err2str(produce_error);
         }
         return false;
     }
+    const rd_kafka_resp_err_t flush_error = rd_kafka_flush(_producer, 5000);
+    if (flush_error != RD_KAFKA_RESP_ERR_NO_ERROR)
+    {
+        if (error != nullptr)
+        {
+            *error = rd_kafka_err2str(flush_error);
+        }
+        return false;
+    }
+    return true;
 #else
     (void) topic;
     (void) partition_key;
@@ -326,6 +458,10 @@ std::string KafkaAsyncEventBus::DlqTopicForLastConsumed() const
 
 void KafkaAsyncEventBus::ClearLastConsumed()
 {
-    _last_message.reset();
+    if (_last_message != nullptr)
+    {
+        rd_kafka_message_destroy(_last_message);
+        _last_message = nullptr;
+    }
     _last_consumed = AsyncConsumedEvent();
 }

@@ -3,6 +3,7 @@
 #include "ConfigMgr.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <string>
 
 std::size_t
@@ -13,13 +14,11 @@ LogicSystemConfig::WorkerCount(std::size_t default_value, std::size_t min_value,
     {
         return default_value;
     }
-    try
-    {
-        const auto value = static_cast<std::size_t>(std::stoul(raw));
-        return std::clamp(value, min_value, max_value);
-    }
-    catch (...)
+    std::size_t value = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != raw.data() + raw.size())
     {
         return default_value;
     }
+    return std::clamp(value, min_value, max_value);
 }

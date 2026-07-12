@@ -12,6 +12,4 @@
 | `AIServiceImpl.cppm` | AIServer gRPC service implementation 使用的 trace span 名称与 RPC 类型字面量 module。 |
 | `AIServiceJsonDto.cppm` | AIServer JSON DTO 映射使用的对象/数组字段读取与默认模型选择算法 module。 |
 | `AIServerRepository.cppm` | AIServer Postgres repository 使用的 schema 默认值、空结果与更新行数判断算法 module。 |
-| `ConversationContext.cppm` | AIServer 对话上下文使用的角色字面量和消息窗口裁剪判定算法 module。 |
-
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

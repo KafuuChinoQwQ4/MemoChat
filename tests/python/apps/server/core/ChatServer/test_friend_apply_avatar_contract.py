@@ -49,7 +49,7 @@ class FriendApplyAvatarContractTests(unittest.TestCase):
 
     def test_apply_list_warmup_query_matches_icon_projection(self):
         source = POSTGRES_DAO.read_text(encoding="utf-8")
-        warmup = extract_function(source, "void PostgresDao::WarmupRelationBootstrapQueries")
+        warmup = extract_function(source, "bool PostgresDao::WarmupRelationBootstrapQueries")
 
         # After the account split the warmup warms only relation tables; user
         # base-info is resolved separately via GetUsersByUids, so the warmup must

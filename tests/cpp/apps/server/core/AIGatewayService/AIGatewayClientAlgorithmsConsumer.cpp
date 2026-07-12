@@ -12,6 +12,23 @@ const char* DefaultAIServerPort()
     return memochat::gate::services::ai::client_modules::DefaultAIServerPort();
 }
 
+const char* DefaultAIServerInternalAuthHeader()
+{
+    return memochat::gate::services::ai::client_modules::DefaultAIServerInternalAuthHeader();
+}
+
+const char* DefaultAIServerInternalKeyEnv()
+{
+    return memochat::gate::services::ai::client_modules::DefaultAIServerInternalKeyEnv();
+}
+
+bool ShouldRejectAIServerAuthConfiguration(bool key_configured, bool local_environment, bool loopback_target)
+{
+    return memochat::gate::services::ai::client_modules::ShouldRejectAIServerAuthConfiguration(key_configured,
+                                                                                               local_environment,
+                                                                                               loopback_target);
+}
+
 bool ShouldUseDefaultHost(bool host_empty)
 {
     return memochat::gate::services::ai::client_modules::ShouldUseDefaultHost(host_empty);

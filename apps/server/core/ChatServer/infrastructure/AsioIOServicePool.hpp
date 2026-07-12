@@ -1,9 +1,10 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
-#include <thread>
+#include <string>
 #include "Singleton.hpp"
 #include "runtime/IoContextPool.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 class AsioIOServicePool : public Singleton<AsioIOServicePool>
 {
@@ -20,8 +21,10 @@ public:
 
     boost::asio::io_context& GetIOService();
     void Stop();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
 
 private:
-    AsioIOServicePool(std::size_t size = std::thread::hardware_concurrency());
+    AsioIOServicePool(std::size_t size = memochat::runtime::ExplicitThread::HardwareConcurrency());
     std::unique_ptr<memochat::runtime::IoContextPool> _pool;
 };

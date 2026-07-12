@@ -2,11 +2,11 @@
 #include "CallSessionTypes.hpp"
 #include "MomentTypes.hpp"
 #include "const.hpp"
+#include "db/PqxxCompat.hpp"
+#include "runtime/ExplicitThread.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
-#include <pqxx/pqxx>
-#include <thread>
 #include <cstdint>
 
 class PooledSqlConnection
@@ -39,24 +39,44 @@ public:
             }
         }
 
-        try
+        if (pool_.empty())
         {
-            _check_thread = std::thread(
+            startup_error_ = "postgres pool has no usable connections";
+            return;
+        }
+
+        std::string thread_error;
+        if (!_check_thread.Start(
                 [this]()
                 {
-                    while (!b_stop_)
+                    while (!b_stop_.load(std::memory_order_acquire))
                     {
                         checkConnection();
-                        std::this_thread::sleep_for(std::chrono::seconds(60));
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        cond_.wait_for(lock,
+                                       std::chrono::seconds(60),
+                                       [this]
+                                       {
+                                           return b_stop_.load(std::memory_order_acquire);
+                                       });
                     }
-                });
-
-            _check_thread.detach();
-        }
-        catch (const std::exception& e)
+                },
+                &thread_error))
         {
-            std::cout << "postgres pool checker init failed, error is " << e.what() << std::endl;
+            startup_error_ = "postgres pool checker init failed: " + thread_error;
+            return;
         }
+        ready_ = true;
+    }
+
+    [[nodiscard]] bool Ready() const noexcept
+    {
+        return ready_;
+    }
+
+    [[nodiscard]] const std::string& StartupError() const noexcept
+    {
+        return startup_error_;
     }
 
     void checkConnection()
@@ -82,21 +102,22 @@ public:
                 continue;
             }
 
-            try
             {
                 pqxx::read_transaction txn(*con->_con);
-                txn.exec("SELECT 1");
-                txn.commit();
-                con->_last_oper_time = timestamp;
-            }
-            catch (const std::exception& e)
-            {
-                std::cout << "Error keeping connection alive: " << e.what() << std::endl;
-                auto replacement = CreateConnection();
-                if (replacement)
+                const auto ping = txn.exec("SELECT 1");
+                if (txn.ok() && ping.ok() && txn.commit())
                 {
-                    con = std::move(replacement);
+                    con->_last_oper_time = timestamp;
+                    continue;
                 }
+
+                std::cout << "Error keeping connection alive: " << txn.error_message() << std::endl;
+                txn.abort();
+            }
+            auto replacement = CreateConnection();
+            if (replacement)
+            {
+                con = std::move(replacement);
             }
         }
     }
@@ -156,6 +177,12 @@ public:
 
     ~PostgresPool()
     {
+        Close();
+        std::string thread_error;
+        if (_check_thread.Joinable() && !_check_thread.Join(&thread_error))
+        {
+            std::cout << "postgres pool checker join failed, error is " << thread_error << std::endl;
+        }
         std::unique_lock<std::mutex> lock(mutex_);
         while (!pool_.empty())
         {
@@ -172,25 +199,29 @@ private:
     std::condition_variable cond_;
     std::atomic<bool> b_stop_;
     std::atomic<bool> closed_{false};
-    std::thread _check_thread;
+    memochat::runtime::ExplicitThread _check_thread;
+    bool ready_ = false;
+    std::string startup_error_;
 
     std::unique_ptr<PooledSqlConnection> CreateConnection()
     {
-        try
+        auto currentTime = std::chrono::system_clock::now().time_since_epoch();
+        long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
+        auto connection = std::make_unique<pqxx::connection>(connection_string_);
+        if (!connection->is_open())
         {
-            auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-            long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-            auto connection = std::make_unique<pqxx::connection>(connection_string_);
-            pqxx::work txn(*connection);
-            txn.exec("SET search_path TO " + schema_ + ",public").no_rows();
-            txn.commit();
-            return std::make_unique<PooledSqlConnection>(std::move(connection), timestamp);
-        }
-        catch (const std::exception& e)
-        {
-            std::cout << "postgres connection init failed, error is " << e.what() << std::endl;
+            std::cout << "postgres connection init failed, error is " << connection->error_message() << std::endl;
             return nullptr;
         }
+        pqxx::work txn(*connection);
+        const std::string quoted_schema = txn.quote_name(schema_);
+        const auto configured = txn.exec("SET search_path TO " + quoted_schema + ",public").no_rows();
+        if (!txn.ok() || !configured.ok() || !txn.commit())
+        {
+            std::cout << "postgres connection init failed, error is " << txn.error_message() << std::endl;
+            return nullptr;
+        }
+        return std::make_unique<PooledSqlConnection>(std::move(connection), timestamp);
     }
 };
 
@@ -205,6 +236,12 @@ struct UserInfo
     std::string icon;
     std::string desc;
     int sex = 0;
+};
+
+struct R18AccessPolicyInfo
+{
+    int64_t adult_attested_at_ms = 0;
+    int state = 0;
 };
 
 enum class RefreshTokenRotationStatus
@@ -237,6 +274,8 @@ class PostgresDao
 public:
     PostgresDao();
     ~PostgresDao();
+    [[nodiscard]] bool Ready() const noexcept;
+    [[nodiscard]] const std::string& StartupError() const noexcept;
     int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
     int RegUserTransaction(const std::string& name,
                            const std::string& email,
@@ -258,6 +297,7 @@ public:
                                                   const std::string& user_agent,
                                                   const std::string& ip_hash,
                                                   int& uid);
+    bool ResolveActiveRefreshTokenUserId(const std::string& selector, const std::string& verifier, int& uid);
     bool RevokeRefreshToken(const std::string& selector, const std::string& verifier, int& uid);
     bool RevokeAllRefreshTokensForUid(int uid);
     bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
@@ -277,6 +317,8 @@ public:
                                int64_t created_at_ms);
     bool HasMediaAccess(int64_t media_id, int uid);
     bool GetUserInfo(int uid, UserInfo& user_info);
+    bool GetR18AccessPolicy(int uid, R18AccessPolicyInfo& policy);
+    bool AttestAdultForR18(int uid, int64_t attested_at_ms, R18AccessPolicyInfo& policy);
     bool TestProcedure(const std::string& email, int& uid, std::string& name);
 
     // Moments operations
@@ -314,7 +356,6 @@ public:
     bool GetMomentCommentLikes(int64_t comment_id, int limit, std::vector<MomentLikeInfo>& likes, bool& has_more);
 
 private:
-    void EnsureMomentsCommentLikeTable();
     void WarmupAuthQueries();
     std::string GenerateUserPublicId();
     std::unique_ptr<PostgresPool> pool_;
@@ -323,4 +364,6 @@ private:
     // empty means "use the pooled connection" (monolith / account-owning
     // services where the user table lives in the primary DB).
     std::string account_connection_string_;
+    bool ready_ = false;
+    std::string startup_error_;
 };

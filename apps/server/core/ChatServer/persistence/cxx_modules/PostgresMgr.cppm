@@ -21,4 +21,5 @@ const char* InitFailureMessage()
 {
     return "PostgresMgr failed to initialize PostgresDao - service cannot start";
 }
+
 } // namespace memochat::chat::persistence::postgres_mgr::modules

@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <memory>
+#include "runtime/ExplicitThread.hpp"
 
 namespace varifyservice
 {
@@ -20,19 +21,23 @@ public:
     redisContext* GetConnection();
     void ReturnConnection(redisContext* context);
     void Close();
+    [[nodiscard]] bool Ready() const noexcept;
+    [[nodiscard]] const std::string& StartupError() const noexcept;
 
 private:
     void CheckThreadProc();
 
     std::atomic<bool> b_stop_{false};
     size_t poolSize_;
-    const char* host_;
-    const char* pwd_;
+    std::string host_;
+    std::string pwd_;
     int port_;
     std::queue<redisContext*> connections_;
     std::mutex mutex_;
     std::condition_variable cond_;
-    std::thread check_thread_;
+    memochat::runtime::ExplicitThread check_thread_;
+    bool ready_ = false;
+    std::string startup_error_;
 };
 
 class VarifyRedisMgr
@@ -48,6 +53,8 @@ public:
     void Close();
 
     bool Ping();
+    [[nodiscard]] bool Ready() const noexcept;
+    [[nodiscard]] const std::string& StartupError() const noexcept;
 
 private:
     VarifyRedisMgr();

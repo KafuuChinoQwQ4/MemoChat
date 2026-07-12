@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -54,41 +53,47 @@ inline bool IsProductionSecretEnforcementEnabled()
     return !IsDevSecretsAllowed();
 }
 
-inline void RequireNonDefaultChatAuthSecretInProduction(std::string_view service_name, std::string_view secret)
+inline bool
+RequireNonDefaultChatAuthSecretInProduction(std::string_view service_name, std::string_view secret, std::string& error)
 {
+    error.clear();
     if (!IsProductionSecretEnforcementEnabled())
     {
-        return;
+        return true;
     }
     if (secret.empty() || IsWellKnownDevHmacSecret(secret))
     {
-        throw std::runtime_error(std::string(service_name) +
-                                 " refuses to start: ChatAuth.HmacSecret must be non-default; set "
-                                 "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development");
+        error = std::string(service_name) + " refuses to start: ChatAuth.HmacSecret must be non-default; set "
+                                            "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development";
+        return false;
     }
     if (secret.size() < 32)
     {
-        throw std::runtime_error(std::string(service_name) +
-                                 " refuses to start: ChatAuth.HmacSecret must be at least 32 bytes");
+        error = std::string(service_name) + " refuses to start: ChatAuth.HmacSecret must be at least 32 bytes";
+        return false;
     }
+    return true;
 }
 
-inline void RequireNonDefaultJwtAccessSecretInProduction(std::string_view service_name, std::string_view secret)
+inline bool
+RequireNonDefaultJwtAccessSecretInProduction(std::string_view service_name, std::string_view secret, std::string& error)
 {
+    error.clear();
     if (!IsProductionSecretEnforcementEnabled())
     {
-        return;
+        return true;
     }
     if (secret.empty() || IsWellKnownDevJwtAccessSecret(secret))
     {
-        throw std::runtime_error(std::string(service_name) +
-                                 " refuses to start: AuthToken.JwtSecret must be non-default; set "
-                                 "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development");
+        error = std::string(service_name) + " refuses to start: AuthToken.JwtSecret must be non-default; set "
+                                            "MEMOCHAT_ALLOW_DEV_SECRETS=1 only for local development";
+        return false;
     }
     if (secret.size() < 32)
     {
-        throw std::runtime_error(std::string(service_name) +
-                                 " refuses to start: AuthToken.JwtSecret must be at least 32 bytes");
+        error = std::string(service_name) + " refuses to start: AuthToken.JwtSecret must be at least 32 bytes";
+        return false;
     }
+    return true;
 }
 } // namespace memochat::auth

@@ -110,15 +110,6 @@ target_include_directories(accountshared_gate_async_side_effect_dtos_gtest PRIVA
     ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/async
 )
 
-if(MEMOCHAT_ENABLE_GNU_MODULES)
-    memochat_enable_gnu_modules(accountshared_gate_async_side_effect_dtos_gtest
-        MODULES
-            memochat.account.async_side_effect_dto_algorithms=${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/async/cxx_modules/GateAsyncSideEffectDto.cppm
-        CONSUMER_SOURCES
-            ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/async/GateAsyncSideEffectDtos.cpp
-    )
-endif()
-
 add_dependencies(gtest_tests accountshared_gate_async_side_effect_dtos_gtest)
 
 gtest_discover_tests(accountshared_gate_async_side_effect_dtos_gtest TEST_DISCOVERY_MODE POST_BUILD)
@@ -136,6 +127,26 @@ target_link_libraries(accountshared_auth_login_support_gtest PRIVATE
 add_dependencies(gtest_tests accountshared_auth_login_support_gtest)
 
 gtest_discover_tests(accountshared_auth_login_support_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
+add_executable(accountshared_auth_local_fallback_counter_store_gtest
+    ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/support/AuthLocalFallbackCounterStore.cpp
+    main.cpp
+    AuthLocalFallbackCounterStoreTest.cpp
+)
+
+target_link_libraries(accountshared_auth_local_fallback_counter_store_gtest PRIVATE
+    GTest_TestLib
+    memochat_server_deps
+)
+
+target_include_directories(accountshared_auth_local_fallback_counter_store_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/core/support
+    ${CMAKE_SOURCE_DIR}/apps/server/core/common
+)
+
+add_dependencies(gtest_tests accountshared_auth_local_fallback_counter_store_gtest)
+
+gtest_discover_tests(accountshared_auth_local_fallback_counter_store_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
 add_executable(accountshared_profile_route_schema_gtest
     ${CMAKE_SOURCE_DIR}/apps/server/core/AccountShared/domain/modules/profile/ProfileRouteSchemas.cpp

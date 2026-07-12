@@ -15,8 +15,6 @@ Item {
     property bool readerChromeVisible: true
     property bool sourceHelpVisible: false
     property string sourceCatalogInput: ""
-    property string sourcePackagePathText: ""
-    property string sourcePackageManifestText: ""
     property string sourceFeedKeyword: ""
     property bool comicBottomLoadArmed: false
     property var sourceTagBuckets: []
@@ -57,27 +55,6 @@ Item {
 
     function absoluteUrl(url) {
         return R18ShellRuntime.absoluteUrl(url, root.gatewayBaseUrl)
-    }
-
-    function chooseLocalSourcePackage() {
-        if (!root.r18Controller) {
-            return ""
-        }
-        var path = root.r18Controller.pickSourcePackage()
-        if (path && path.length > 0) {
-            root.sourcePackagePathText = path
-        }
-        return path
-    }
-
-    function importChosenSourcePackage() {
-        if (!root.r18Controller) {
-            return
-        }
-        var path = root.chooseLocalSourcePackage()
-        if (path && path.length > 0) {
-            root.r18Controller.importSourcePackage(path, root.sourcePackageManifestText)
-        }
     }
 
     function openOfficialSourceCatalog() {
@@ -273,11 +250,7 @@ Item {
 
     Component.onCompleted: {
         if (root.r18Controller) {
-            root.r18Controller.refreshSources()
-            root.r18Controller.refreshHistory()
-            if (root.r18Controller.currentSourceId.length > 0) {
-                root.r18Controller.search("", 1)
-            }
+            root.r18Controller.refreshAccess()
         }
     }
 
@@ -316,7 +289,6 @@ Item {
                     R18HomePane {
                         keyword: root.keyword
                         historyCount: root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null)
-                        localCount: 0
                         followCount: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null)
                         sourceCount: root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null)
                         favoriteCount: root.r18Controller && root.r18Controller.currentFavorite ? 1 : 0
@@ -327,9 +299,6 @@ Item {
                         homeBadgeFillColor: root.homeBadgeFillColor
                         homeBadgeTextColor: root.homeBadgeTextColor
                         homeArrowColor: root.homeArrowColor
-                        homeImportButtonColor: root.homeImportButtonColor
-                        homeImportButtonHoverColor: root.homeImportButtonHoverColor
-                        homeImportButtonPressedColor: root.homeImportButtonPressedColor
                         textPrimaryColor: root.textPrimaryColor
                         textMutedColor: root.textMutedColor
                         placeholderColor: root.placeholderColor
@@ -339,9 +308,7 @@ Item {
                             root.searchNow()
                         }
                         onEntryActivated: function(action, modeValue) {
-                            if (action === "import") {
-                                root.importChosenSourcePackage()
-                            } else if (action === "favorite") {
+                            if (action === "favorite") {
                                 if (root.currentComicId().length > 0) {
                                     root.viewMode = 2
                                 } else {
@@ -351,7 +318,6 @@ Item {
                                 root.activateMode(modeValue)
                             }
                         }
-                        onImportRequested: root.importChosenSourcePackage()
                     }
 
                     R18SearchPane {
@@ -491,20 +457,7 @@ Item {
                                 }
                             }
                         }
-                        onOfficialSourceImportRequested: function(sourceIndex) {
-                            if (root.r18Controller) {
-                                root.r18Controller.importOfficialSource(sourceIndex)
-                            }
-                        }
                         onImportedSourceOpenRequested: function(sourceId) { root.openImportedSource(sourceId) }
-                        onImportedSourceDeleteRequested: function(sourceId) {
-                            if (root.r18Controller) root.r18Controller.deleteSource(sourceId)
-                        }
-                        onSourceEnabledChanged: function(sourceId, enabled) {
-                            if (root.r18Controller) {
-                                root.r18Controller.enableSource(sourceId, enabled)
-                            }
-                        }
                         onSourceFeedKeywordEdited: function(keyword) { root.sourceFeedKeyword = keyword }
                         onSourceFeedRequested: function(keyword) { root.loadSourceFeed(keyword) }
                         onSourceTagsRequested: root.openSourceTags()
@@ -555,6 +508,58 @@ Item {
                     textColor: root.textSecondaryColor
                     z: 20
                 }
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        visible: !root.r18Controller || !root.r18Controller.accessAllowed
+        color: root.pageBackgroundColor
+        z: 100
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 48, 420)
+            spacing: 14
+
+            Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                text: {
+                    if (!root.r18Controller) {
+                        return "登录状态无效"
+                    }
+                    if (!root.r18Controller.accessResolved) {
+                        return root.r18Controller.error.length > 0
+                                ? "访问策略暂时不可用" : "正在验证访问权限"
+                    }
+                    return root.r18Controller.accessRevoked
+                            ? "访问权限已被撤销" : "成人内容访问确认"
+                }
+                color: root.textPrimaryColor
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                visible: root.r18Controller
+                         && root.r18Controller.accessResolved
+                         && !root.r18Controller.accessRevoked
+                enabled: root.r18Controller && !root.r18Controller.loading
+                text: "我已年满 18 岁"
+                onClicked: root.r18Controller.attestAdult()
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                visible: root.r18Controller
+                         && !root.r18Controller.accessResolved
+                         && root.r18Controller.error.length > 0
+                text: "重试"
+                onClicked: root.r18Controller.refreshAccess()
             }
         }
     }

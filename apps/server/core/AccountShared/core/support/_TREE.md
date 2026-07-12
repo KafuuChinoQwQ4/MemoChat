@@ -14,6 +14,8 @@
 | --- | --- |
 | `AuthLoginCacheProfileDto.cpp` | 登录资料缓存 DTO 编解码实现 |
 | `AuthLoginCacheProfileDto.hpp` | 登录资料缓存 DTO 声明 |
+| `AuthLocalFallbackCounterStore.cpp` | Redis 故障时有界本地限流计数器实现，按过期时间清理且容量耗尽时失败关闭 |
+| `AuthLocalFallbackCounterStore.hpp` | 有界本地限流计数器接口与结果类型 |
 | `AuthLoginRateLimiter.cpp` | 登录失败 Redis 限流实现 |
 | `AuthLoginRateLimiter.hpp` | 登录失败 Redis 限流声明 |
 | `AuthLoginSupport.cpp` | 登录流程支撑逻辑实现 |

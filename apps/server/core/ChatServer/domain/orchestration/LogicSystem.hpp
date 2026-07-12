@@ -2,13 +2,13 @@
 #include "Singleton.hpp"
 #include "json/GlazeCompat.hpp"
 #include "ports/ILogicSystemConfig.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <array>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <queue>
-#include <thread>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -30,6 +30,8 @@ class LogicSystem : public Singleton<LogicSystem>
 
 public:
     ~LogicSystem();
+    bool Ready() const;
+    const std::string& startupError() const;
     void PostMsgToQue(std::shared_ptr<LogicNode> msg);
     void SetServer(IChatSessionHost* host);
     MessageDeliveryService& MessageDelivery();
@@ -65,7 +67,7 @@ private:
 
     // Multi-worker thread pool for message processing
     static constexpr size_t kMaxWorkers = 16;
-    std::array<std::thread, kMaxWorkers> _worker_threads;
+    std::array<memochat::runtime::ExplicitThread, kMaxWorkers> _worker_threads;
     std::array<std::queue<std::shared_ptr<LogicNode>>, kMaxWorkers> _worker_queues;
     std::array<std::mutex, kMaxWorkers> _worker_mutexes;
     std::unique_ptr<std::condition_variable[]> _worker_conds;
@@ -76,6 +78,7 @@ private:
     std::map<short, FunCallBack> _fun_callbacks;
     IChatSessionHost* _p_server{nullptr};
     std::unique_ptr<ChatRuntimeComposition> _composition;
+    std::string _startup_error;
 
     // Bounded queue metrics
     std::atomic<uint64_t> _msg_que_size{0};

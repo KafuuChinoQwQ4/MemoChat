@@ -14,6 +14,16 @@ QuicSession::QuicSession(boost::asio::io_context& io_context, SendCallback send_
 
 QuicSession::~QuicSession() = default;
 
+bool QuicSession::Ready() const noexcept
+{
+    return _state.Ready();
+}
+
+const std::string& QuicSession::startupError() const noexcept
+{
+    return _state.startupError();
+}
+
 void QuicSession::Start()
 {
 }

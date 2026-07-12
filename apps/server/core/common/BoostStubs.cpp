@@ -7,12 +7,14 @@ namespace boost
 
 BOOST_NORETURN void throw_exception(std::exception const& e)
 {
-    throw e;
+    (void) e;
+    std::terminate();
 }
 
 BOOST_NORETURN void throw_exception(std::exception const& e, boost::source_location const&)
 {
-    throw e;
+    (void) e;
+    std::terminate();
 }
 
 } // namespace boost

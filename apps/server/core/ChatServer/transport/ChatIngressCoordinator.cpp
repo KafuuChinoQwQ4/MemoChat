@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 
 namespace memochat::chatserver
 {
@@ -101,9 +102,30 @@ ChatIngressCoordinator::~ChatIngressCoordinator()
     Stop();
 }
 
-void ChatIngressCoordinator::Start(const memochat::cluster::ChatNodeDescriptor& self_node)
+bool ChatIngressCoordinator::Start(const memochat::cluster::ChatNodeDescriptor& self_node, std::string* error)
 {
-    _tcp_server = std::make_shared<CServer>(_io_context, static_cast<short>(std::atoi(self_node.tcp_port.c_str())));
+    unsigned int tcp_port = 0;
+    const auto parsed =
+        std::from_chars(self_node.tcp_port.data(), self_node.tcp_port.data() + self_node.tcp_port.size(), tcp_port);
+    if (parsed.ec != std::errc{} || parsed.ptr != self_node.tcp_port.data() + self_node.tcp_port.size() ||
+        tcp_port == 0 || tcp_port > 65535)
+    {
+        if (error != nullptr)
+        {
+            *error = "invalid TCP ingress port: " + self_node.tcp_port;
+        }
+        return false;
+    }
+    _tcp_server = std::make_shared<CServer>(_io_context, static_cast<unsigned short>(tcp_port));
+    if (!_tcp_server->Ready())
+    {
+        if (error != nullptr)
+        {
+            *error = _tcp_server->startupError();
+        }
+        _tcp_server.reset();
+        return false;
+    }
     _tcp_server->Start();
     _tcp_server->StartTimer();
 
@@ -165,7 +187,7 @@ void ChatIngressCoordinator::Start(const memochat::cluster::ChatNodeDescriptor& 
         memolog::LogInfo("quic.ingress.disabled",
                          "ChatServer QUIC ingress disabled by env",
                          {{"name", self_node.name}});
-        return;
+        return true;
     }
 
     if (self_node.quic_host.empty() || self_node.quic_port.empty())
@@ -173,19 +195,22 @@ void ChatIngressCoordinator::Start(const memochat::cluster::ChatNodeDescriptor& 
         memolog::LogInfo("quic.ingress.missing_endpoint",
                          "ChatServer QUIC endpoint not configured",
                          {{"name", self_node.name}});
-        return;
+        return true;
     }
 
     _quic_server = std::make_shared<QuicChatServer>(_io_context);
-    std::string error;
-    if (!_quic_server->Start(self_node.quic_host, self_node.quic_port, &error))
+    std::string quic_error;
+    if (!_quic_server->Start(self_node.quic_host, self_node.quic_port, &quic_error))
     {
-        memolog::LogWarn(
-            "quic.ingress.start_failed",
-            "ChatServer QUIC ingress start failed",
-            {{"name", self_node.name}, {"error", error}, {"host", self_node.quic_host}, {"port", self_node.quic_port}});
+        memolog::LogWarn("quic.ingress.start_failed",
+                         "ChatServer QUIC ingress start failed",
+                         {{"name", self_node.name},
+                          {"error", quic_error},
+                          {"host", self_node.quic_host},
+                          {"port", self_node.quic_port}});
         _quic_server.reset();
     }
+    return true;
 }
 
 void ChatIngressCoordinator::Stop()

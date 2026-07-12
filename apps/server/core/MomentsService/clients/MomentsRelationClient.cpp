@@ -41,47 +41,40 @@ std::vector<int> MomentsRelationClient::FilterFriendUids(int viewer_uid, const s
     grpc_request.set_payload_json(Json::writeString(writer, payload));
     grpc_request.mutable_session()->set_uid(viewer_uid);
 
-    try
+    auto channel = grpc::CreateChannel(_endpoint, grpc::InsecureChannelCredentials());
+    auto stub = chatinternal::ChatRelationInternalService::NewStub(channel);
+
+    grpc::ClientContext context;
+    context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));
+    chatinternal::JsonPayloadResponse response;
+    const grpc::Status status = stub->FilterFriendUids(&context, grpc_request, &response);
+    if (!status.ok())
     {
-        auto channel = grpc::CreateChannel(_endpoint, grpc::InsecureChannelCredentials());
-        auto stub = chatinternal::ChatRelationInternalService::NewStub(channel);
+        memolog::LogWarn("gate.moments.relation.rpc_failed",
+                         "FilterFriendUids RPC failed",
+                         {{"endpoint", _endpoint}, {"error", status.error_message()}});
+        return result;
+    }
 
-        grpc::ClientContext context;
-        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));
-        chatinternal::JsonPayloadResponse response;
-        const grpc::Status status = stub->FilterFriendUids(&context, grpc_request, &response);
-        if (!status.ok())
+    Json::CharReaderBuilder reader_builder;
+    Json::Value root;
+    std::string errors;
+    const std::string& body = response.payload_json();
+    std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
+    if (!reader || !reader->parse(body.data(), body.data() + body.size(), &root, &errors))
+    {
+        memolog::LogWarn("gate.moments.relation.parse_failed", "FilterFriendUids parse failed", {{"error", errors}});
+        return result;
+    }
+    if (root.isMember("friend_uids") && root["friend_uids"].isArray())
+    {
+        for (const auto& item : root["friend_uids"])
         {
-            memolog::LogWarn("gate.moments.relation.rpc_failed",
-                             "FilterFriendUids RPC failed",
-                             {{"endpoint", _endpoint}, {"error", status.error_message()}});
-            return result;
-        }
-
-        Json::CharReaderBuilder reader_builder;
-        Json::Value root;
-        std::string errors;
-        const std::string& body = response.payload_json();
-        std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
-        if (!reader->parse(body.data(), body.data() + body.size(), &root, &errors))
-        {
-            memolog::LogWarn("gate.moments.relation.parse_failed",
-                             "FilterFriendUids parse failed",
-                             {{"error", errors}});
-            return result;
-        }
-        if (root.isMember("friend_uids") && root["friend_uids"].isArray())
-        {
-            for (const auto& item : root["friend_uids"])
+            if (item.isNumber())
             {
                 result.push_back(item.asInt());
             }
         }
-    }
-    catch (const std::exception& e)
-    {
-        memolog::LogWarn("gate.moments.relation.exception", "FilterFriendUids exception", {{"error", e.what()}});
-        result.clear();
     }
     return result;
 }

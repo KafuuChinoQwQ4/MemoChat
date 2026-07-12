@@ -71,6 +71,14 @@ def read_ini(path: Path) -> configparser.ConfigParser:
 
 
 class Phase2DbSplitContractTests(unittest.TestCase):
+    def test_shared_postgres_dao_does_not_bootstrap_moments_schema(self):
+        shared_dao = read(GATE_SERVER / "core" / "persistence" / "PostgresDao.cpp")
+        moments_schema = read(MIG_DIR / SCHEMA_FILE["moments"])
+
+        self.assertNotIn("EnsureMomentsCommentLikeTable", shared_dao)
+        self.assertNotIn("CREATE TABLE IF NOT EXISTS moments_comment_like", shared_dao)
+        self.assertIn("CREATE TABLE IF NOT EXISTS memo.moments_comment_like", moments_schema)
+
     def test_migration_and_rollback_scripts_are_paired(self):
         self.assertTrue((MIG_DIR / "008_db_split_media_moments_call.sql").exists())
         self.assertTrue((MIG_DIR / "008_db_split_media_moments_call_rollback.sql").exists())

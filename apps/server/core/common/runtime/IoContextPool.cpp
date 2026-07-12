@@ -18,11 +18,17 @@ IoContextPool::IoContextPool(std::size_t size)
 
     for (std::size_t i = 0; i < _ioServices.size(); ++i)
     {
-        _threads.emplace_back(
-            [this, i]()
-            {
-                _ioServices[i].run();
-            });
+        _threads.emplace_back();
+        if (!_threads.back().Start(
+                [this, i]() noexcept
+                {
+                    _ioServices[i].run();
+                },
+                &_startup_error))
+        {
+            Stop();
+            return;
+        }
     }
 }
 
@@ -62,11 +68,25 @@ void IoContextPool::Stop()
 
     for (auto& thread : _threads)
     {
-        if (modules::ShouldJoinIoContextThread(thread.joinable()))
+        if (modules::ShouldJoinIoContextThread(thread.Joinable()))
         {
-            thread.join();
+            std::string error;
+            if (!thread.Join(&error))
+            {
+                std::cerr << "IoContextPool thread join failed: " << error << std::endl;
+            }
         }
     }
+}
+
+bool IoContextPool::Ready() const noexcept
+{
+    return _startup_error.empty() && !_stopped;
+}
+
+const std::string& IoContextPool::startupError() const noexcept
+{
+    return _startup_error;
 }
 
 } // namespace memochat::runtime

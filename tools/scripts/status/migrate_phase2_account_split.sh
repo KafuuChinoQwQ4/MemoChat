@@ -88,7 +88,9 @@ do_migrate() {
         -c "GRANT CONNECT ON DATABASE $SRC_DB TO $PG_USER" >/dev/null 2>&1 || true
 
     echo "[STEP] schema"
+    psql_db "$SRC_DB" < "${MIG_DIR}/013_r18_access_policy.sql" >/dev/null
     psql_db "$DST_DB" < "${MIG_DIR}/009_memo_account_schema.sql" >/dev/null
+    psql_db "$DST_DB" < "${MIG_DIR}/013_r18_access_policy.sql" >/dev/null
     echo "[STEP] copy data"
     for t in "${TABLES[@]}"; do
         local n; n="$(src_count "$t")"
@@ -127,6 +129,13 @@ do_verify() {
         echo "  [OK] $ROLE can read its own memo.user"
     else
         echo "  [FAIL] $ROLE cannot read memo.user in $DST_DB"; fail=1
+    fi
+    if psql_db "$DST_DB" -tAc \
+        "SELECT 1 FROM memo.\"user\" WHERE r18_access_state NOT IN (0, 1, 2) OR adult_attested_at_ms < 0 LIMIT 1" \
+        | grep -q 1; then
+        echo "  [FAIL] $DST_DB has invalid R18 access policy rows"; fail=1
+    else
+        echo "  [OK] $DST_DB R18 access policy columns and values are valid"
     fi
     [[ "$fail" -eq 0 ]] && echo "[SUCCESS] account split verification passed" || { echo "[FAIL]"; return 1; }
 }

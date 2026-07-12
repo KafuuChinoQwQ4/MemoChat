@@ -4,8 +4,6 @@
 
 import memochat.ai.public_dto_algorithms;
 
-#include <exception>
-
 namespace
 {
 
@@ -32,18 +30,7 @@ bool ParseJsonForAIPublic(std::string_view body, memochat::json::JsonValue* out,
 
 template <typename T> bool WriteTypedJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::WriteTypedJson(value, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::WriteTypedJson(value, out, error_out);
 }
 
 template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& value)

@@ -2,6 +2,29 @@ import memochat.ai.client_algorithms;
 
 namespace memochat::tests::ai::client
 {
+int ParsePositiveIntValue(const char* raw, unsigned long raw_size, int fallback)
+{
+    return memochat::ai::client::modules::ParsePositiveIntOr(raw, raw_size, fallback).value;
+}
+
+bool PositiveIntWasConfigured(const char* raw, unsigned long raw_size, int fallback)
+{
+    return memochat::ai::client::modules::ParsePositiveIntOr(raw, raw_size, fallback).status ==
+           memochat::ai::client::modules::PositiveIntParseStatus::Configured;
+}
+
+bool PositiveIntWasEmpty(const char* raw, unsigned long raw_size, int fallback)
+{
+    return memochat::ai::client::modules::ParsePositiveIntOr(raw, raw_size, fallback).status ==
+           memochat::ai::client::modules::PositiveIntParseStatus::Empty;
+}
+
+bool PositiveIntWasInvalid(const char* raw, unsigned long raw_size, int fallback)
+{
+    return memochat::ai::client::modules::ParsePositiveIntOr(raw, raw_size, fallback).status ==
+           memochat::ai::client::modules::PositiveIntParseStatus::Invalid;
+}
+
 int DefaultTimeoutSec()
 {
     return memochat::ai::client::modules::DefaultTimeoutSec();

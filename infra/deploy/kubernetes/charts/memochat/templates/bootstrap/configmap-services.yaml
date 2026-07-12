@@ -102,6 +102,9 @@ data:
     [AIServer]
     Host={{ .Values.aiServer.serviceName }}
     Port={{ .Values.aiServer.service.grpcPort }}
+    InternalAuthHeader=X-MemoChat-AI-Internal-Key
+    InternalApiKeyEnv=MEMOCHAT_AI_INTERNAL_API_KEY
+    InternalApiKey=
     [AIOrchestrator]
     Host={{ .Values.aiOrchestrator.serviceName }}
     Port={{ .Values.aiOrchestrator.service.port }}
@@ -135,6 +138,9 @@ data:
     [AIServer]
     Host=0.0.0.0
     Port={{ .Values.aiServer.service.grpcPort }}
+    InternalAuthHeader=X-MemoChat-AI-Internal-Key
+    InternalApiKeyEnv=MEMOCHAT_AI_INTERNAL_API_KEY
+    InternalApiKey=
     [AIOrchestrator]
     Host={{ .Values.aiOrchestrator.serviceName }}
     Port={{ .Values.aiOrchestrator.service.port }}
@@ -544,9 +550,9 @@ data:
     [Postgres]
     Host={{ .Values.externalServices.postgres.host }}
     Port={{ .Values.externalServices.postgres.port }}
-    User={{ .Values.externalServices.postgres.user }}
+    User={{ .Values.externalServices.postgres.roles.account }}
     Passwd=
-    Database={{ .Values.externalServices.postgres.database }}
+    Database=memo_account
     Schema={{ .Values.externalServices.postgres.schema }}
     SslMode={{ .Values.externalServices.postgres.sslMode }}
     PoolSize=12
@@ -562,6 +568,11 @@ data:
     JwtIssuer=memochat
     JwtAudience=memochat-http
     AccessTokenTtlSec=900
+    [R18SourceAdmin]
+    AuthHeader=X-MemoChat-R18-Source-Admin-Key
+    AdminKey=
+    [R18Picacg]
+    AllowedImageHosts={{ .Values.focusedGateways.services.r18gateway.allowedImageHosts }}
     [Log]
     Level=info
     Dir=/var/log/memochat/r18gateway
@@ -619,15 +630,6 @@ data:
     Brokers={{ .Values.externalServices.kafka.brokers }}
     ClientId=memochat-register
     ConsumerGroup=memochat-register-sideeffects
-    [RabbitMQ]
-    Host={{ .Values.externalServices.rabbitmq.host }}
-    Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
-    Password=
-    VHost={{ .Values.externalServices.rabbitmq.vhost }}
-    ExchangeDirect=memochat.direct
-    ExchangeDlx=memochat.dlx
-    PrefetchCount=10
     [Log]
     Level=info
     Dir=/var/log/memochat/register
@@ -690,15 +692,6 @@ data:
     Brokers={{ .Values.externalServices.kafka.brokers }}
     ClientId=memochat-login
     ConsumerGroup=memochat-login-sideeffects
-    [RabbitMQ]
-    Host={{ .Values.externalServices.rabbitmq.host }}
-    Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
-    Password=
-    VHost={{ .Values.externalServices.rabbitmq.vhost }}
-    ExchangeDirect=memochat.direct
-    ExchangeDlx=memochat.dlx
-    PrefetchCount=10
     [Log]
     Level=info
     Dir=/var/log/memochat/login
@@ -753,15 +746,6 @@ data:
     Brokers={{ .Values.externalServices.kafka.brokers }}
     ClientId=memochat-account
     ConsumerGroup=memochat-account-sideeffects
-    [RabbitMQ]
-    Host={{ .Values.externalServices.rabbitmq.host }}
-    Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
-    Password=
-    VHost={{ .Values.externalServices.rabbitmq.vhost }}
-    ExchangeDirect=memochat.direct
-    ExchangeDlx=memochat.dlx
-    PrefetchCount=10
     [Log]
     Level=info
     Dir=/var/log/memochat/account

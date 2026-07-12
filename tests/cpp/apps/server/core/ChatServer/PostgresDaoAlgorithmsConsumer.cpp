@@ -12,11 +12,6 @@ bool MemoChatTestPostgresDaoHasPostgresHost(bool host_empty)
     return postgres_dao_modules::HasPostgresHost(host_empty);
 }
 
-bool MemoChatTestPostgresDaoShouldEnablePostgres(bool connection_string_empty)
-{
-    return postgres_dao_modules::ShouldEnablePostgres(connection_string_empty);
-}
-
 const char* MemoChatTestPostgresDaoDefaultSslMode()
 {
     return postgres_dao_modules::DefaultSslMode();
@@ -35,14 +30,4 @@ const char* MemoChatTestPostgresDaoSelectSslMode(bool sslmode_empty, const char*
 const char* MemoChatTestPostgresDaoSelectSchema(bool schema_empty, const char* schema)
 {
     return postgres_dao_modules::SelectSchema(schema_empty, schema);
-}
-
-int MemoChatTestPostgresDaoStartupPoolSize()
-{
-    return postgres_dao_modules::StartupPoolSize();
-}
-
-bool MemoChatTestPostgresDaoUsePostgresWarmupPath(bool postgres_enabled)
-{
-    return postgres_dao_modules::ShouldUsePostgresWarmupPath(postgres_enabled);
 }

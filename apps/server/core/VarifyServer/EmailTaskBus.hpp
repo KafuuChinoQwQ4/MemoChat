@@ -3,10 +3,10 @@
 #include <atomic>
 #include <memory>
 #include <string>
-#include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include "runtime/ExplicitThread.hpp"
 
 namespace varifyservice
 {
@@ -37,7 +37,7 @@ public:
         return started_.load(std::memory_order_acquire);
     }
 
-    void StartWorker(EmailSender* sender);
+    bool StartWorker(EmailSender* sender);
     void StopWorker();
 
 private:
@@ -73,7 +73,7 @@ private:
     std::atomic<bool> started_{false};
     std::atomic<bool> rabbitmq_healthy_{false};
     std::atomic<bool> stop_{false};
-    std::thread worker_thread_;
+    memochat::runtime::ExplicitThread worker_thread_;
 
     void* connection_ = nullptr;
     void* last_envelope_ = nullptr;

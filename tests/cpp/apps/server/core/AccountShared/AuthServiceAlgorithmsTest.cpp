@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <string_view>
 
 namespace memochat::tests::account::auth_service
 {
@@ -14,6 +15,7 @@ const char* WebSocketTransport();
 const char* WebTransportTransport();
 const char* TcpTransport();
 const char* PreferredTransport(bool has_quic_host, bool has_quic_port);
+bool ShouldIssueRefreshToken(std::string_view client_marker);
 } // namespace memochat::tests::account::auth_service
 
 TEST(AuthServiceAlgorithmsTest, ResponseMetadataMatchesCurrentValues)
@@ -53,4 +55,18 @@ TEST(AuthServiceAlgorithmsTest, TransportLiteralsAndSelection)
     EXPECT_STREQ(PreferredTransport(true, false), "tcp");
     EXPECT_STREQ(PreferredTransport(false, true), "tcp");
     EXPECT_STREQ(PreferredTransport(false, false), "tcp");
+}
+
+TEST(AuthServiceAlgorithmsTest, BrowserMarkerSuppressesRefreshTokenIssuanceOnlyForExactWebValue)
+{
+    using memochat::tests::account::auth_service::ShouldIssueRefreshToken;
+
+    EXPECT_FALSE(ShouldIssueRefreshToken("web"));
+    EXPECT_FALSE(ShouldIssueRefreshToken("WEB"));
+    EXPECT_FALSE(ShouldIssueRefreshToken("WeB"));
+
+    EXPECT_TRUE(ShouldIssueRefreshToken(""));
+    EXPECT_TRUE(ShouldIssueRefreshToken("qml"));
+    EXPECT_TRUE(ShouldIssueRefreshToken("browser"));
+    EXPECT_TRUE(ShouldIssueRefreshToken("web "));
 }

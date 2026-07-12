@@ -9,8 +9,10 @@
 
 TEST(MediaStorageTest, LocalReadObjectLowercasesExtensionThroughImportedModule)
 {
-    const auto root = std::filesystem::temp_directory_path() / "memochat_media_storage_module_test";
     std::error_code ec;
+    const auto temp_directory = std::filesystem::temp_directory_path(ec);
+    ASSERT_FALSE(ec);
+    const auto root = temp_directory / "memochat_media_storage_module_test";
     std::filesystem::remove_all(root, ec);
     std::filesystem::create_directories(root, ec);
     ASSERT_FALSE(ec);
@@ -22,6 +24,7 @@ TEST(MediaStorageTest, LocalReadObjectLowercasesExtensionThroughImportedModule)
     }
 
     LocalMediaStorage storage(root);
+    ASSERT_TRUE(storage.Ready()) << storage.StartupError();
     std::vector<char> data;
     std::string content_type;
     std::string error;
@@ -35,13 +38,16 @@ TEST(MediaStorageTest, LocalReadObjectLowercasesExtensionThroughImportedModule)
 
 TEST(MediaStorageTest, LocalResolveReadPathRejectsAbsoluteAndParentTraversal)
 {
-    const auto root = std::filesystem::temp_directory_path() / "memochat_media_storage_path_guard_test";
     std::error_code ec;
+    const auto temp_directory = std::filesystem::temp_directory_path(ec);
+    ASSERT_FALSE(ec);
+    const auto root = temp_directory / "memochat_media_storage_path_guard_test";
     std::filesystem::remove_all(root, ec);
     std::filesystem::create_directories(root / "assets", ec);
     ASSERT_FALSE(ec);
 
     LocalMediaStorage storage(root);
+    ASSERT_TRUE(storage.Ready()) << storage.StartupError();
     std::filesystem::path resolved;
 
     EXPECT_FALSE(storage.ResolveReadPath((root / "assets" / "photo.png").string(), resolved));
@@ -64,9 +70,11 @@ TEST(MediaStorageTest, LocalResolveReadPathRejectsAbsoluteAndParentTraversal)
 
 TEST(MediaStorageTest, LocalResolveReadPathRejectsCanonicalEscape)
 {
-    const auto root = std::filesystem::temp_directory_path() / "memochat_media_storage_symlink_guard_test";
-    const auto outside = std::filesystem::temp_directory_path() / "memochat_media_storage_symlink_outside.txt";
     std::error_code ec;
+    const auto temp_directory = std::filesystem::temp_directory_path(ec);
+    ASSERT_FALSE(ec);
+    const auto root = temp_directory / "memochat_media_storage_symlink_guard_test";
+    const auto outside = temp_directory / "memochat_media_storage_symlink_outside.txt";
     std::filesystem::remove_all(root, ec);
     std::filesystem::remove(outside, ec);
     std::filesystem::create_directories(root, ec);
@@ -84,6 +92,7 @@ TEST(MediaStorageTest, LocalResolveReadPathRejectsCanonicalEscape)
     }
 
     LocalMediaStorage storage(root);
+    ASSERT_TRUE(storage.Ready()) << storage.StartupError();
     std::filesystem::path resolved;
     EXPECT_FALSE(storage.ResolveReadPath("escape.txt", resolved));
 
@@ -93,9 +102,37 @@ TEST(MediaStorageTest, LocalResolveReadPathRejectsCanonicalEscape)
 
 TEST(MediaStorageTest, LocalPublicUrlRequiresExplicitRedirectConfig)
 {
-    LocalMediaStorage storage(std::filesystem::temp_directory_path() / "memochat_media_storage_redirect_guard_test");
+    std::error_code ec;
+    const auto temp_directory = std::filesystem::temp_directory_path(ec);
+    ASSERT_FALSE(ec);
+    LocalMediaStorage storage(temp_directory / "memochat_media_storage_redirect_guard_test");
+    ASSERT_TRUE(storage.Ready()) << storage.StartupError();
     std::string public_url;
 
     EXPECT_FALSE(storage.ResolvePublicUrl("https://example.test/object", "image", public_url));
     EXPECT_TRUE(public_url.empty());
+}
+
+TEST(MediaStorageTest, LocalStorageReportsUnwritableRootWithoutThrowing)
+{
+    std::error_code ec;
+    const auto temp_directory = std::filesystem::temp_directory_path(ec);
+    ASSERT_FALSE(ec);
+    const auto blocker = temp_directory / "memochat_media_storage_root_blocker";
+    std::filesystem::remove_all(blocker, ec);
+    {
+        std::ofstream out(blocker, std::ios::binary);
+        out << "not-a-directory";
+    }
+
+    LocalMediaStorage storage(blocker);
+    EXPECT_FALSE(storage.Ready());
+    EXPECT_FALSE(storage.StartupError().empty());
+
+    std::string storage_path;
+    std::string error;
+    EXPECT_FALSE(storage.StoreMergedFile("image", "key", "photo.png", blocker, storage_path, error));
+    EXPECT_EQ(error, storage.StartupError());
+
+    std::filesystem::remove(blocker, ec);
 }

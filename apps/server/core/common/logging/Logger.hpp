@@ -19,7 +19,7 @@ namespace memolog
 class Logger
 {
 public:
-    static void Init(const std::string& service_name, const LogConfig& cfg);
+    static bool Init(const std::string& service_name, const LogConfig& cfg, std::string* error = nullptr);
     static void Shutdown();
     static void Log(spdlog::level::level_enum level,
                     const std::string& event,

@@ -7,6 +7,8 @@ class PostgresMgr : public Singleton<PostgresMgr>
 
 public:
     ~PostgresMgr();
+    [[nodiscard]] bool Ready() const noexcept;
+    [[nodiscard]] const std::string& StartupError() const noexcept;
 
     int RegUser(const std::string& name, const std::string& email, const std::string& pwd, const std::string& icon);
     bool CheckEmail(const std::string& name, const std::string& email);
@@ -25,6 +27,7 @@ public:
                                                   const std::string& user_agent,
                                                   const std::string& ip_hash,
                                                   int& uid);
+    bool ResolveActiveRefreshTokenUserId(const std::string& selector, const std::string& verifier, int& uid);
     bool RevokeRefreshToken(const std::string& selector, const std::string& verifier, int& uid);
     bool RevokeAllRefreshTokensForUid(int uid);
     bool UpdateUserProfile(int uid, const std::string& nick, const std::string& desc, const std::string& icon);
@@ -44,6 +47,8 @@ public:
                                int64_t created_at_ms);
     bool HasMediaAccess(int64_t media_id, int uid);
     bool GetUserInfo(int uid, UserInfo& user_info);
+    bool GetR18AccessPolicy(int uid, R18AccessPolicyInfo& policy);
+    bool AttestAdultForR18(int uid, int64_t attested_at_ms, R18AccessPolicyInfo& policy);
     bool TestProcedure(const std::string& email, int& uid, std::string& name);
 
     // Moments operations

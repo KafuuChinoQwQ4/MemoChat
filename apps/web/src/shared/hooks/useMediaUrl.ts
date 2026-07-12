@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { absoluteMediaUrl, isAuthorizedMediaUrl, resolveMediaUrl } from "@/shared/media/mediaUrl"
+import { isAuthorizedMediaUrl, resolveMediaUrl } from "@/shared/media/mediaUrl"
 import { useSessionStore } from "@/core/session/sessionStore"
 
 /** Resolves media URLs and fetches protected media with Authorization headers. */
@@ -28,8 +28,7 @@ export function useMediaUrl(ref: string | undefined | null): string {
     setUrl("")
     // Use `resolved` directly (relative or absolute) so the Vite dev proxy
     // can intercept relative paths like /media/download — avoids the
-    // http://memochat.local fallback base that absoluteMediaUrl would add
-    // when VITE_MEDIA_BASE_URL is unset.
+    // the synthetic URL parsing base used when VITE_MEDIA_BASE_URL is unset.
     fetch(resolved, {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,

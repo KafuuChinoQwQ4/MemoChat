@@ -24,6 +24,8 @@ add_library(GateAccountCore STATIC
     core/cache/AuthCache.hpp
     core/support/AuthLoginCacheProfileDto.cpp
     core/support/AuthLoginCacheProfileDto.hpp
+    core/support/AuthLocalFallbackCounterStore.cpp
+    core/support/AuthLocalFallbackCounterStore.hpp
     core/support/AuthLoginRateLimiter.cpp
     core/support/AuthLoginRateLimiter.hpp
     core/support/AuthLoginSupport.cpp
@@ -53,7 +55,6 @@ target_link_libraries(GateAccountCore PUBLIC GateInfraCore)
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(GateAccountCore
         MODULES
-            memochat.account.async_side_effect_dto_algorithms=core/async/cxx_modules/GateAsyncSideEffectDto.cppm
             memochat.account.async_side_effect_algorithms=core/async/cxx_modules/GateAsyncSideEffect.cppm
             memochat.account.auth_cache_algorithms=core/cache/cxx_modules/AuthCache.cppm
             memochat.account.auth_login_cache_profile_algorithms=core/support/cxx_modules/AuthLoginCacheProfile.cppm
@@ -61,7 +62,6 @@ if(MEMOCHAT_ENABLE_GNU_MODULES)
             memochat.account.auth_public_dto_algorithms=core/support/cxx_modules/AuthPublicDto.cppm
             memochat.account.profile_support_algorithms=core/support/cxx_modules/ProfileSupport.cppm
         CONSUMER_SOURCES
-            core/async/GateAsyncSideEffectDtos.cpp
             core/async/GateAsyncSideEffects.cpp
             core/cache/AuthCache.cpp
             core/support/AuthLoginCacheProfileDto.cpp

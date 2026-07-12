@@ -1,6 +1,7 @@
 ﻿#include "logging/Telemetry.hpp"
 
 #include "logging/TraceContext.hpp"
+#include "runtime/ExplicitThread.hpp"
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -17,7 +18,6 @@
 #include <deque>
 #include <mutex>
 #include <string>
-#include <thread>
 
 import memochat.logging.telemetry_algorithms;
 
@@ -52,7 +52,7 @@ struct ParsedHttpEndpoint
 std::mutex g_export_mutex;
 std::condition_variable g_export_cv;
 std::deque<std::pair<std::string, std::string>> g_export_queue;
-std::thread g_export_thread;
+memochat::runtime::ExplicitThread g_export_thread;
 bool g_export_stop = false;
 bool g_export_started = false;
 constexpr std::size_t kMaxQueuedExports = 1024;
@@ -134,34 +134,44 @@ void PostJsonBestEffort(const std::string& endpoint, const std::string& body)
         return;
     }
 
-    try
+    net::io_context ioc;
+    tcp::resolver resolver(ioc);
+    beast::tcp_stream stream(ioc);
+    stream.expires_after(std::chrono::seconds(1));
+    beast::error_code ec;
+    auto results = resolver.resolve(parsed.host, parsed.port, ec);
+    if (ec)
     {
-        net::io_context ioc;
-        tcp::resolver resolver(ioc);
-        beast::tcp_stream stream(ioc);
-        stream.expires_after(std::chrono::seconds(1));
-        auto results = resolver.resolve(parsed.host, parsed.port);
-        stream.connect(results);
-
-        http::request<http::string_body> req{http::verb::post, parsed.target, 11};
-        req.set(http::field::host, parsed.host);
-        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        req.set(http::field::content_type, "application/json");
-        req.body() = body;
-        req.prepare_payload();
-
-        http::write(stream, req);
-
-        beast::flat_buffer buffer;
-        http::response<http::string_body> res;
-        http::read(stream, buffer, res);
-
-        beast::error_code ec;
-        stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+        return;
     }
-    catch (...)
+    stream.connect(results, ec);
+    if (ec)
     {
+        return;
     }
+
+    http::request<http::string_body> req{http::verb::post, parsed.target, 11};
+    req.set(http::field::host, parsed.host);
+    req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+    req.set(http::field::content_type, "application/json");
+    req.body() = body;
+    req.prepare_payload();
+
+    http::write(stream, req, ec);
+    if (ec)
+    {
+        return;
+    }
+
+    beast::flat_buffer buffer;
+    http::response<http::string_body> res;
+    http::read(stream, buffer, res, ec);
+    if (ec)
+    {
+        return;
+    }
+
+    stream.socket().shutdown(tcp::socket::shutdown_both, ec);
 }
 
 std::string ToJsonPayload(const memochat::json::JsonValue& value)
@@ -192,16 +202,27 @@ void ExportWorkerLoop()
     }
 }
 
-void StartExportWorkerIfNeeded()
+bool StartExportWorkerIfNeeded()
 {
     std::lock_guard<std::mutex> lock(g_export_mutex);
     if (g_export_started)
     {
-        return;
+        return true;
     }
     g_export_stop = false;
+    std::string error;
+    if (!g_export_thread.Start(
+            []() noexcept
+            {
+                ExportWorkerLoop();
+            },
+            &error))
+    {
+        std::fprintf(stderr, "[Telemetry] Failed to start exporter thread: %s\n", error.c_str());
+        return false;
+    }
     g_export_started = true;
-    g_export_thread = std::thread(&ExportWorkerLoop);
+    return true;
 }
 
 void StopExportWorker()
@@ -215,9 +236,13 @@ void StopExportWorker()
         g_export_stop = true;
     }
     g_export_cv.notify_all();
-    if (g_export_thread.joinable())
+    if (g_export_thread.Joinable())
     {
-        g_export_thread.join();
+        std::string error;
+        if (!g_export_thread.Join(&error))
+        {
+            std::fprintf(stderr, "[Telemetry] Failed to join exporter thread: %s\n", error.c_str());
+        }
     }
     std::lock_guard<std::mutex> lock(g_export_mutex);
     g_export_queue.clear();
@@ -225,13 +250,26 @@ void StopExportWorker()
     g_export_stop = false;
 }
 
+struct ExportWorkerShutdown
+{
+    ~ExportWorkerShutdown()
+    {
+        StopExportWorker();
+    }
+};
+
+ExportWorkerShutdown g_export_worker_shutdown;
+
 void EnqueueJsonBestEffort(const std::string& endpoint, const std::string& body)
 {
     if (memochat::logging::telemetry_modules::ShouldDropExportJob(endpoint.empty(), body.empty()))
     {
         return;
     }
-    StartExportWorkerIfNeeded();
+    if (!StartExportWorkerIfNeeded())
+    {
+        return;
+    }
     {
         std::lock_guard<std::mutex> lock(g_export_mutex);
         if (g_export_queue.size() >= kMaxQueuedExports)

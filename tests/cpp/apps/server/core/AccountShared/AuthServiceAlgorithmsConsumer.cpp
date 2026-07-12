@@ -1,3 +1,5 @@
+#include <string_view>
+
 import memochat.account.auth_service_algorithms;
 
 namespace memochat::tests::account::auth_service
@@ -50,5 +52,11 @@ const char* TcpTransport()
 const char* PreferredTransport(bool has_quic_host, bool has_quic_port)
 {
     return memochat::account::auth_service::modules::PreferredTransport(has_quic_host, has_quic_port);
+}
+
+bool ShouldIssueRefreshToken(std::string_view client_marker)
+{
+    return memochat::account::auth_service::modules::ShouldIssueRefreshToken(client_marker.data(),
+                                                                             client_marker.size());
 }
 } // namespace memochat::tests::account::auth_service

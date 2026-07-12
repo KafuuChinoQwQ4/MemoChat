@@ -10,5 +10,8 @@ int main()
                                "MomentsGatewayServer",
                                "MomentsGateway",
                                /*default_port=*/8099,
-                               /*init_aws=*/false);
+                               /*init_aws=*/false,
+                               {},
+                               {},
+                               {.postgres = true, .redis = true, .mongo = true});
 }

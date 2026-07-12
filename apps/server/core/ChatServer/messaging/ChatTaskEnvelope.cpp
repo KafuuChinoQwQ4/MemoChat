@@ -2,13 +2,11 @@
 
 #include "json/TypedJsonCodec.hpp"
 #include "logging/TraceContext.hpp"
+#include "random/Uuid.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <memory>
-
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 
 #include <glaze/glaze.hpp>
 
@@ -23,9 +21,9 @@ int64_t NowMsTaskEnvelope()
             .count());
 }
 
-std::string NewTaskId()
+bool NewTaskId(std::string& value, std::string* error)
 {
-    return boost::uuids::to_string(boost::uuids::random_generator()());
+    return memochat::random::GenerateUuid(value, error);
 }
 
 struct TaskEnvelopeWireDto
@@ -113,17 +111,27 @@ TaskEnvelope& TaskEnvelope::operator=(const TaskEnvelope& other)
 
 TaskEnvelope::~TaskEnvelope() = default;
 
-TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
-                               const std::string& routing_key,
-                               const memochat::json::JsonValue& incoming_payload,
-                               int delay_ms,
-                               int max_retries)
+bool BuildTaskEnvelope(const std::string& task_type,
+                       const std::string& routing_key,
+                       const memochat::json::JsonValue& incoming_payload,
+                       int delay_ms,
+                       int max_retries,
+                       TaskEnvelope* output,
+                       std::string* error)
 {
+    if (output == nullptr)
+    {
+        if (error != nullptr)
+        {
+            *error = "task envelope output is null";
+        }
+        return false;
+    }
     TaskEnvelope envelope;
     envelope.task_id = memochat::json::glaze_safe_get<std::string>(incoming_payload, "task_id", "");
-    if (envelope.task_id.empty())
+    if (envelope.task_id.empty() && !NewTaskId(envelope.task_id, error))
     {
-        envelope.task_id = NewTaskId();
+        return false;
     }
     envelope.task_type = task_type;
     envelope.trace_id = memolog::TraceContext::GetTraceId();
@@ -142,7 +150,12 @@ TaskEnvelope BuildTaskEnvelope(const std::string& task_type,
     envelope.max_retries = memochat::chat::messaging::envelope_modules::NonNegative(max_retries);
     envelope.routing_key = routing_key;
     envelope.payload = incoming_payload;
-    return envelope;
+    *output = std::move(envelope);
+    if (error != nullptr)
+    {
+        error->clear();
+    }
+    return true;
 }
 
 bool ParseTaskEnvelope(const std::string& serialized, TaskEnvelope& envelope)

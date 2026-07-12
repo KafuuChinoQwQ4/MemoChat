@@ -4,17 +4,14 @@
 #include "IAsyncEventBus.hpp"
 #include "KafkaConfig.hpp"
 
+#include <librdkafka/rdkafka.h>
+
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <functional>
-
-namespace cppkafka
-{
-class Consumer;
-class Producer;
-class Message;
-} // namespace cppkafka
+#include <vector>
 
 class KafkaAsyncEventBus : public IAsyncEventBus
 {
@@ -43,12 +40,12 @@ private:
     void ClearLastConsumed();
 
     KafkaConfig _config;
-    std::unique_ptr<cppkafka::Producer> _producer;
-    std::unique_ptr<cppkafka::Consumer> _consumer;
+    rd_kafka_t* _producer = nullptr;
+    rd_kafka_t* _consumer = nullptr;
     std::unique_ptr<ChatOutboxService> _outbox_service;
     PublishOutboxRepairTaskFn _publish_outbox_repair_task;
     std::mutex _producer_mutex;
     std::mutex _consumer_mutex;
-    std::shared_ptr<cppkafka::Message> _last_message;
+    rd_kafka_message_t* _last_message = nullptr;
     AsyncConsumedEvent _last_consumed;
 };

@@ -1,8 +1,12 @@
 /** R18ShellContent — source switcher + search + chapter reader */
-import { useEffect, useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { ENDPOINTS } from "@/core/config/endpoints"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useSessionStore } from "@/core/session/sessionStore"
+import {
+  createR18Api,
+  type R18ComicItem,
+  type R18Source,
+} from "@/features/r18/api/r18Api"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { useMediaUrl } from "@/shared/hooks/useMediaUrl"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
@@ -10,70 +14,83 @@ import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
+import styles from "./R18ShellContent.module.css"
 
 // ─── Types ────────────────────────────────────────────────────────────────
-
-interface R18Source {
-  id: string
-  name?: string
-  title?: string
-  version?: string
-  enabled?: boolean
-  builtin?: boolean
-  status?: string
-  message?: string
-}
-
-interface R18ComicItem {
-  source_id?: string
-  comic_id?: string
-  title?: string
-  subtitle?: string
-  description?: string
-  cover?: string
-  author?: string
-  tags?: string[]
-}
-
-interface R18Chapter {
-  chapter_id: string
-  title?: string
-  index?: number
-}
-
-interface R18SourcesResponse {
-  error: number
-  message?: string
-  data?: { sources?: R18Source[] }
-}
-
-interface R18SearchResponse {
-  error: number
-  message?: string
-  data?: {
-    source_id?: string
-    items?: R18ComicItem[]
-    max_page?: number
-    error_message?: string
-  }
-}
-
-interface R18ChaptersResponse {
-  error: number
-  message?: string
-  data?: { chapters?: R18Chapter[] }
-}
-
-interface R18ChapterImagesResponse {
-  error: number
-  message?: string
-  data?: { images?: string[] }
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function sourceTitle(source: R18Source): string {
   return source.title?.trim() || source.name?.trim() || source.id
+}
+
+const DIALOG_FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "a[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",")
+
+function useDialogAccessibility(onClose: () => void) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const focusableElements = () => Array.from(
+      dialog.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR),
+    ).filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true")
+
+    const initialFocus = focusableElements()[0] ?? dialog
+    initialFocus.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== "Tab") return
+
+      const focusable = focusableElements()
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog?.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (!first || !last) return
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialog?.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+      if (previousFocus?.isConnected) previousFocus.focus()
+    }
+  }, [])
+
+  return dialogRef
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────
@@ -103,7 +120,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
       style={{
         width: 34, height: 34, flexShrink: 0,
         borderRadius: 10, border: "1px solid var(--divider)",
-        background: "rgba(255,255,255,0.08)", color: "var(--text-secondary)",
+        background: "var(--glass-btn-bg)", color: "var(--text-secondary)",
         cursor: "pointer", fontSize: 18, lineHeight: 1,
         display: "grid", placeItems: "center",
       }}
@@ -126,28 +143,28 @@ function ChapterListOverlay({
   onClose: () => void
   onSelectChapter: (chapterId: string, title: string) => void
 }) {
+  const dialogRef = useDialogAccessibility(onClose)
+  const api = useMemo(() => createR18Api(getGateway().http), [])
   const chaptersQuery = useQuery({
     queryKey: ["r18", "chapters", sourceId, comic.comic_id],
     enabled: Boolean(sourceId && comic.comic_id),
     queryFn: async () => {
-      const res = await getGateway().http.post<R18ChaptersResponse>(ENDPOINTS.r18ComicChapters, {
-        source_id: sourceId,
-        comic_id: comic.comic_id,
-      })
-      if (res.error !== 0) throw new Error(res.message || `获取章节失败: ${res.error}`)
-      return res.data?.chapters ?? []
+      return api.listChapters(sourceId, comic.comic_id ?? "")
     },
   })
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="r18-chapter-dialog-title"
+      tabIndex={-1}
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 90,
         display: "grid", placeItems: "center", padding: 24,
-        background: "rgba(2, 6, 12, 0.62)",
+        background: "var(--r18-dialog-backdrop)",
         backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
       }}
     >
@@ -167,7 +184,7 @@ function ChapterListOverlay({
           gap: 12, borderBottom: "1px solid var(--divider)", flexShrink: 0,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div id="r18-chapter-dialog-title" style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {comic.title || "未命名"}
             </div>
             {comic.author && (
@@ -226,7 +243,7 @@ function ChapterListOverlay({
 function ReaderPage({ url }: { url: string }) {
   const loaded = useMediaUrl(url)
   if (!loaded) return (
-    <div style={{ width: "100%", minHeight: 200, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+    <div style={{ width: "100%", minHeight: 200, display: "grid", placeItems: "center", background: "var(--tint-hover)", borderRadius: 8 }}>
       <Spinner size={22} />
     </div>
   )
@@ -253,36 +270,35 @@ function ReaderOverlay({
   chapterTitle: string
   onClose: () => void
 }) {
+  const dialogRef = useDialogAccessibility(onClose)
+  const api = useMemo(() => createR18Api(getGateway().http), [])
   const imagesQuery = useQuery({
     queryKey: ["r18", "images", sourceId, comic.comic_id, chapterId],
     enabled: Boolean(sourceId && comic.comic_id && chapterId),
     queryFn: async () => {
-      const res = await getGateway().http.post<R18ChapterImagesResponse>(ENDPOINTS.r18ChapterImages, {
-        source_id: sourceId,
-        comic_id: comic.comic_id,
-        chapter_id: chapterId,
-      })
-      if (res.error !== 0) throw new Error(res.message || `获取图片失败: ${res.error}`)
-      return res.data?.images ?? []
+      return api.listPageUrls(sourceId, chapterId)
     },
   })
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="r18-reader-dialog-title"
+      tabIndex={-1}
       style={{
         position: "fixed", inset: 0, zIndex: 95,
         display: "flex", flexDirection: "column",
-        background: "rgba(2, 6, 12, 0.88)",
+        background: "var(--r18-reader-backdrop)",
         backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
       }}
     >
       {/* Reader topbar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 12,
-        padding: "10px 18px", borderBottom: "1px solid rgba(255,255,255,0.10)",
-        background: "rgba(6,10,16,0.60)", flexShrink: 0,
+        padding: "10px 18px", borderBottom: "1px solid var(--divider)",
+        background: "var(--r18-reader-toolbar-bg)", flexShrink: 0,
       }}>
         <button
           type="button"
@@ -291,15 +307,15 @@ function ReaderOverlay({
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "6px 12px", borderRadius: 9,
-            border: "1px solid rgba(255,255,255,0.14)",
-            background: "rgba(255,255,255,0.08)", color: "#dde4e2",
+            border: "1px solid var(--divider)",
+            background: "var(--glass-btn-bg)", color: "var(--text-primary)",
             cursor: "pointer", fontSize: 13, flexShrink: 0,
           }}
         >
           ← 返回
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f3f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div id="r18-reader-dialog-title" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {comic.title || "未命名"} · {chapterTitle}
           </div>
         </div>
@@ -322,7 +338,7 @@ function ReaderOverlay({
             <ReaderPage key={`${chapterId}-${idx}`} url={url} />
           ))}
           {!imagesQuery.isLoading && !imagesQuery.error && (imagesQuery.data ?? []).length === 0 && (
-            <div style={{ padding: 60, textAlign: "center", color: "#aeb5bd", fontSize: 14 }}>
+            <div style={{ padding: 60, textAlign: "center", color: "var(--text-secondary)", fontSize: 14 }}>
               本章暂无图片
             </div>
           )}
@@ -341,7 +357,6 @@ export function R18ShellContent() {
   const [keyword, setKeyword] = useState("")
   const [submittedKeyword, setSubmittedKeyword] = useState("")
   const [page, setPage] = useState(1)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   /** Comic whose chapter list is open */
   const [comicForChapters, setComicForChapters] = useState<R18ComicItem | null>(null)
@@ -353,21 +368,34 @@ export function R18ShellContent() {
   } | null>(null)
 
   const authReady = uid !== null && token !== null
+  const api = useMemo(() => createR18Api(getGateway().http), [])
+
+  const accessQuery = useQuery({
+    queryKey: ["r18", "access", uid],
+    enabled: authReady,
+    retry: false,
+    queryFn: async () => {
+      if (!authReady) throw new Error("Missing R18 auth")
+      return api.getAccess()
+    },
+  })
+
+  const attestMutation = useMutation({
+    mutationFn: () => api.attestAdult(),
+  })
 
   const sourcesQuery = useQuery({
     queryKey: ["r18", "sources", uid],
-    enabled: authReady,
+    enabled: authReady && accessQuery.data?.allowed === true,
     queryFn: async () => {
-      if (uid === null || token === null) throw new Error("Missing R18 auth")
-      const res = await getGateway().http.get<R18SourcesResponse>(ENDPOINTS.r18Sources)
-      if (res.error !== 0) throw new Error(res.message || `R18 sources failed: ${res.error}`)
-      return res.data?.sources ?? []
+      if (!authReady || accessQuery.data?.allowed !== true) throw new Error("R18 access denied")
+      return api.listSources()
     },
   })
 
   const sources = useMemo(() => sourcesQuery.data ?? [], [sourcesQuery.data])
   const selectedSource = useMemo(
-    () => sources.find((s) => s.id === selectedSourceId) ?? sources.find((s) => s.enabled) ?? sources[0],
+    () => sources.find((s) => s.id === selectedSourceId && s.enabled) ?? sources.find((s) => s.enabled),
     [sources, selectedSourceId],
   )
 
@@ -377,37 +405,80 @@ export function R18ShellContent() {
 
   const searchQuery = useQuery({
     queryKey: ["r18", "search", uid, selectedSource?.id, submittedKeyword, page],
-    enabled: authReady && Boolean(selectedSource?.id),
+    enabled: authReady && accessQuery.data?.allowed === true && Boolean(selectedSource?.id),
     queryFn: async () => {
-      if (uid === null || token === null || !selectedSource?.id) throw new Error("Missing R18 search input")
-      const res = await getGateway().http.post<R18SearchResponse>(ENDPOINTS.r18Search, {
-        source_id: selectedSource.id,
-        keyword: submittedKeyword,
-        page,
-      })
-      if (res.error !== 0) throw new Error(res.message || `R18 search failed: ${res.error}`)
-      return res.data ?? { items: [] }
+      if (!authReady || accessQuery.data?.allowed !== true || !selectedSource?.id) {
+        throw new Error("Missing R18 search input")
+      }
+      return api.search(selectedSource.id, submittedKeyword, page)
     },
   })
 
-  async function toggleSource(source: R18Source) {
-    if (uid === null || token === null) return
-    setActionError(null)
+  async function attestR18Access() {
     try {
-      const res = await getGateway().http.post<{ error: number; message?: string }>(
-        source.enabled ? ENDPOINTS.r18SourceDisable : ENDPOINTS.r18SourceEnable,
-        { source_id: source.id },
-      )
-      if (res.error !== 0) throw new Error(res.message || "源切换失败")
-      await sourcesQuery.refetch()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "源切换失败")
+      await attestMutation.mutateAsync()
+    } finally {
+      await accessQuery.refetch()
     }
   }
 
   function submitSearch() {
     setSubmittedKeyword(keyword.trim())
     setPage(1)
+  }
+
+  if (!authReady) {
+    return (
+      <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center", color: "var(--text-disabled)" }}>
+        登录状态无效
+      </div>
+    )
+  }
+
+  if (accessQuery.isLoading) {
+    return (
+      <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center" }}>
+        <Spinner size={28} />
+      </div>
+    )
+  }
+
+  if (accessQuery.error) {
+    return (
+      <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center", padding: 24 }}>
+        <div style={{ display: "grid", justifyItems: "center", gap: 14, color: "var(--text-secondary)", textAlign: "center" }}>
+          <div>访问策略暂时不可用</div>
+          <GlassButton onClick={() => void accessQuery.refetch()}>重试</GlassButton>
+        </div>
+      </div>
+    )
+  }
+
+  if (accessQuery.data?.allowed !== true) {
+    const revoked = accessQuery.data?.state === "revoked"
+    return (
+      <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center", padding: 24 }}>
+        <div style={{ display: "grid", justifyItems: "center", gap: 14, maxWidth: 420, textAlign: "center" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)" }}>
+            {revoked ? "访问权限已被撤销" : "成人内容访问确认"}
+          </div>
+          {!revoked && (
+            <GlassButton
+              variant="primary"
+              disabled={attestMutation.isPending}
+              onClick={() => void attestR18Access()}
+            >
+              我已年满 18 岁
+            </GlassButton>
+          )}
+          {attestMutation.error && (
+            <div style={{ color: "var(--color-badge)", fontSize: 13 }}>
+              {attestMutation.error instanceof Error ? attestMutation.error.message : "确认失败"}
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   // ── Reader overlay (full-screen) ────────────────────────────────
@@ -423,24 +494,16 @@ export function R18ShellContent() {
     )
   }
 
-  if (!authReady) {
-    return (
-      <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center", color: "var(--text-disabled)" }}>
-        登录状态无效
-      </div>
-    )
-  }
-
   return (
-    <div style={{ height: "100%", width: "100%", minWidth: 0, display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", overflow: "hidden" }}>
+    <div className={styles.shell}>
 
       {/* ── Source list sidebar ─────────────────────────────────── */}
-      <aside style={{ borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ padding: "14px 14px 10px", flexShrink: 0 }}>
+      <aside className={styles.sourceSidebar}>
+        <div className={styles.sourceHeader}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>R18</div>
           <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>内容源</div>
         </div>
-        <GlassScrollArea style={{ flex: 1, minHeight: 0, padding: "0 8px 12px" }}>
+        <GlassScrollArea className={styles.sourceList ?? ""}>
           {sourcesQuery.isLoading ? (
             <div style={{ display: "grid", placeItems: "center", padding: 28 }}>
               <Spinner size={24} />
@@ -450,13 +513,15 @@ export function R18ShellContent() {
             return (
               <button
                 key={source.id}
+                className={styles.sourceButton}
+                disabled={!source.enabled}
                 onClick={() => { setSelectedSourceId(source.id); setPage(1) }}
                 style={{
-                  width: "100%", border: "none", borderRadius: 10,
-                  padding: "10px 12px", marginBottom: 4, textAlign: "left",
-                  cursor: "pointer", transition: "background 120ms ease",
+                  border: "none", borderRadius: 10,
+                  padding: "10px 12px", textAlign: "left",
+                  cursor: source.enabled ? "pointer" : "not-allowed", transition: "background 120ms ease",
                   background: active ? "var(--tint-selected)" : "transparent",
-                  color: "var(--text-primary)",
+                  color: source.enabled ? "var(--text-primary)" : "var(--text-disabled)",
                 }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--tint-hover)" }}
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent" }}
@@ -482,8 +547,8 @@ export function R18ShellContent() {
       {/* ── Main content area ───────────────────────────────────── */}
       <section style={{ minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Search bar */}
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--divider)", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.searchBar}>
+          <div className={styles.searchInput}>
             <GlassTextField
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -492,11 +557,6 @@ export function R18ShellContent() {
             />
           </div>
           <GlassButton onClick={submitSearch} variant="primary" style={{ flexShrink: 0 }}>搜索</GlassButton>
-          {selectedSource && (
-            <GlassButton onClick={() => void toggleSource(selectedSource)} style={{ flexShrink: 0 }}>
-              {selectedSource.enabled ? "停用源" : "启用源"}
-            </GlassButton>
-          )}
         </div>
 
         {/* Pagination row */}
@@ -518,11 +578,16 @@ export function R18ShellContent() {
           </GlassButton>
         </div>
 
-        {(actionError || sourcesQuery.error || searchQuery.error) && (
+        {(sourcesQuery.error || searchQuery.error) && (
           <div style={{ margin: "10px 16px 0", color: "var(--color-badge)", fontSize: 13 }}>
-            {actionError ||
-              (sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
+            {(sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
               (searchQuery.error instanceof Error ? searchQuery.error.message : "加载失败")}
+          </div>
+        )}
+
+        {!sourcesQuery.isLoading && !sourcesQuery.error && !selectedSource && (
+          <div style={{ margin: "10px 16px 0", color: "var(--text-secondary)", fontSize: 13 }}>
+            暂无可用内容源
           </div>
         )}
 

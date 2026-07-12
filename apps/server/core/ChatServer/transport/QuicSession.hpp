@@ -23,6 +23,8 @@ public:
     void Send(std::string msg, short msgid);
     void Send(char* msg, short max_length, short msgid);
     void Close();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
     std::string transportName() const override;
 
     void HandleInboundMessage(short msgid, const std::string& payload);

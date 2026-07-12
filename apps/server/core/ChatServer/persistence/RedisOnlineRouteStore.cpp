@@ -10,6 +10,8 @@
 import memochat.chat.online_route_store_algorithms;
 
 #include <algorithm>
+#include <iostream>
+#include <string>
 #include <vector>
 
 namespace
@@ -31,12 +33,20 @@ std::vector<std::string> KnownChatServerNamesRouteStore()
 {
     std::vector<std::string> servers;
     auto& cfg = ConfigMgr::Inst();
-    const auto cluster = memochat::cluster::LoadChatClusterConfig(
-        [&cfg](const std::string& section, const std::string& key)
-        {
-            return cfg.GetValue(section, key);
-        },
-        std::string());
+    memochat::cluster::ChatClusterConfig cluster;
+    std::string error;
+    if (!memochat::cluster::LoadChatClusterConfig(
+            [&cfg](const std::string& section, const std::string& key)
+            {
+                return cfg.GetValue(section, key);
+            },
+            std::string(),
+            cluster,
+            error))
+    {
+        std::cerr << "load chat cluster config for online route repair failed: " << error << std::endl;
+        return servers;
+    }
     for (const auto& node : cluster.enabledNodes())
     {
         servers.push_back(node.name);

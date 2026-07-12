@@ -23,6 +23,14 @@ AccountProfile ToAccountProfile(const ::UserInfo& userInfo)
     return profile;
 }
 
+R18AccessPolicy ToR18AccessPolicy(const ::R18AccessPolicyInfo& stored)
+{
+    R18AccessPolicy policy;
+    policy.adult_attested_at_ms = stored.adult_attested_at_ms;
+    policy.r18_access_state = static_cast<R18AccessState>(stored.state);
+    return policy;
+}
+
 } // namespace
 
 AccountPersistence& AccountPersistence::Instance()
@@ -91,6 +99,28 @@ bool AccountPersistence::UpdateUserProfile(int uid,
                                            const std::string& icon)
 {
     return PostgresMgr::GetInstance()->UpdateUserProfile(uid, nick, desc, icon);
+}
+
+bool AccountPersistence::GetR18AccessPolicy(int uid, R18AccessPolicy& policy)
+{
+    ::R18AccessPolicyInfo stored;
+    if (!PostgresMgr::GetInstance()->GetR18AccessPolicy(uid, stored))
+    {
+        return false;
+    }
+    policy = ToR18AccessPolicy(stored);
+    return true;
+}
+
+bool AccountPersistence::AttestAdultForR18(int uid, int64_t attested_at_ms, R18AccessPolicy& policy)
+{
+    ::R18AccessPolicyInfo stored;
+    if (!PostgresMgr::GetInstance()->AttestAdultForR18(uid, attested_at_ms, stored))
+    {
+        return false;
+    }
+    policy = ToR18AccessPolicy(stored);
+    return true;
 }
 
 RefreshTokenIssueResult AccountPersistence::IssueRefreshToken(int uid,
@@ -180,6 +210,20 @@ RefreshTokenRotateResult AccountPersistence::RotateRefreshToken(const std::strin
 
     result.refresh_token = replacement.token;
     return result;
+}
+
+bool AccountPersistence::ResolveActiveRefreshTokenUserId(const std::string& refresh_token, int& uid)
+{
+    uid = 0;
+    memochat::auth::RefreshTokenParts parts;
+    return memochat::auth::SplitRefreshToken(refresh_token, parts) &&
+           PostgresMgr::GetInstance()->ResolveActiveRefreshTokenUserId(parts.selector, parts.verifier, uid);
+}
+
+bool AccountPersistence::IsRefreshTokenActiveForUid(const std::string& refresh_token, int uid)
+{
+    int resolved_uid = 0;
+    return uid > 0 && ResolveActiveRefreshTokenUserId(refresh_token, resolved_uid) && resolved_uid == uid;
 }
 
 bool AccountPersistence::RevokeRefreshToken(const std::string& refresh_token, int& uid)

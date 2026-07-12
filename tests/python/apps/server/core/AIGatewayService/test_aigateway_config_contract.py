@@ -28,9 +28,9 @@ class AIGatewayConfigContractTests(unittest.TestCase):
     def test_user_auth_token_validation_has_redis_config(self):
         source = read(AI_SERVICE)
         self.assertIn(
-            "memochat::auth::ValidateUserToken",
+            "memochat::auth::ResolveBearerAccessUserId",
             source,
-            "AIGateway AI routes validate uid+token through the shared Redis-backed token validator",
+            "AIGateway AI routes validate Bearer access tokens through the shared Redis-backed validator",
         )
 
         config = load_config(AIGATEWAY_CONFIG)
@@ -44,10 +44,14 @@ class AIGatewayConfigContractTests(unittest.TestCase):
         for key in ("Host", "Port", "Passwd", "PoolSize"):
             with self.subTest(key=key):
                 self.assertIn(key, redis)
+
+        for key in ("Host", "Port", "PoolSize"):
+            with self.subTest(key=key):
                 self.assertTrue(redis[key].strip(), f"Redis.{key} must not be empty")
 
         self.assertEqual(redis["Host"], "127.0.0.1")
         self.assertEqual(redis["Port"], "6379")
+        self.assertEqual(redis["Passwd"], "", "Redis credentials must not be committed in service config")
 
     def test_ai_orchestrator_and_provider_admin_auth_config_is_preserved(self):
         config = load_config(AIGATEWAY_CONFIG)
@@ -57,6 +61,11 @@ class AIGatewayConfigContractTests(unittest.TestCase):
         self.assertEqual(orchestrator["Port"], "8096")
         self.assertEqual(orchestrator["InternalAuthHeader"], "X-MemoChat-AI-Internal-Key")
         self.assertEqual(orchestrator["InternalApiKeyEnv"], "MEMOCHAT_AI_INTERNAL_API_KEY")
+
+        ai_server = config["AIServer"]
+        self.assertEqual(ai_server["Host"], "127.0.0.1")
+        self.assertEqual(ai_server["InternalAuthHeader"], "X-MemoChat-AI-Internal-Key")
+        self.assertEqual(ai_server["InternalApiKeyEnv"], "MEMOCHAT_AI_INTERNAL_API_KEY")
 
         provider_admin = config["AIProviderAdmin"]
         self.assertEqual(provider_admin["AuthHeader"], "X-MemoChat-AI-Provider-Admin-Key")

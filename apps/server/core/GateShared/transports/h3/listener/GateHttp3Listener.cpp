@@ -4,6 +4,7 @@
 #include "logging/Logger.hpp"
 #include "logging/TraceContext.hpp"
 
+#include <charconv>
 #include <cctype>
 #include <fstream>
 #include <filesystem>
@@ -290,11 +291,14 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
                                 val.pop_back();
                             if (key == "content-length" || key == "Content-Length")
                             {
-                                try
+                                int64_t content_length = -1;
+                                const auto [ptr, ec] =
+                                    std::from_chars(val.data(), val.data() + val.size(), content_length);
+                                if (ec == std::errc{} && ptr == val.data() + val.size() && content_length >= 0)
                                 {
-                                    stream_ctx->ContentLength = std::stoll(val);
+                                    stream_ctx->ContentLength = content_length;
                                 }
-                                catch (...)
+                                else
                                 {
                                     stream_ctx->ContentLength = -1;
                                 }
@@ -626,7 +630,8 @@ static QUIC_STATUS StreamCallback(HQUIC Stream, void* Context, QUIC_STREAM_EVENT
 
 static bool ValidatePfxReadable(const std::string& pfx_path)
 {
-    if (pfx_path.empty() || !std::filesystem::exists(pfx_path))
+    std::error_code filesystem_error;
+    if (pfx_path.empty() || !std::filesystem::exists(pfx_path, filesystem_error) || filesystem_error)
     {
         return false;
     }
@@ -650,13 +655,22 @@ static bool ValidatePfxReadable(const std::string& pfx_path)
 
 static bool EnsureSelfSignedCert(std::string& crt_path, std::string& key_path, std::string& pfx_path)
 {
-    std::filesystem::path exe_dir = std::filesystem::current_path();
+    std::error_code filesystem_error;
+    std::filesystem::path exe_dir = std::filesystem::current_path(filesystem_error);
+    if (filesystem_error)
+    {
+        return false;
+    }
     crt_path = (exe_dir / "server.crt").string();
     key_path = (exe_dir / "server.key").string();
     pfx_path = (exe_dir / "server.pfx").string();
 
-    if (std::filesystem::exists(pfx_path) && std::filesystem::exists(crt_path) && std::filesystem::exists(key_path) &&
-        ValidatePfxReadable(pfx_path))
+    const auto exists = [](const std::string& path)
+    {
+        std::error_code ec;
+        return std::filesystem::exists(path, ec) && !ec;
+    };
+    if (exists(pfx_path) && exists(crt_path) && exists(key_path) && ValidatePfxReadable(pfx_path))
     {
         return true;
     }
@@ -666,7 +680,8 @@ static bool EnsureSelfSignedCert(std::string& crt_path, std::string& key_path, s
 
 static bool LoadSelfSignedCertFromPfx(HQUIC Configuration, const std::string& pfx_path, std::string& error_out)
 {
-    if (!std::filesystem::exists(pfx_path))
+    std::error_code filesystem_error;
+    if (!std::filesystem::exists(pfx_path, filesystem_error) || filesystem_error)
     {
         error_out = "PFX file not found: " + pfx_path;
         return false;
@@ -784,7 +799,13 @@ bool GateHttp3Listener::Start(std::string& error)
     }
 
     // Build certificate paths relative to the running executable's directory
-    std::filesystem::path exe_dir = std::filesystem::current_path();
+    std::error_code filesystem_error;
+    std::filesystem::path exe_dir = std::filesystem::current_path(filesystem_error);
+    if (filesystem_error)
+    {
+        error = "Failed to resolve certificate directory: " + filesystem_error.message();
+        return false;
+    }
     std::string crt_path = (exe_dir / "server.crt").string();
     std::string key_path = (exe_dir / "server.key").string();
     std::string pfx_path = (exe_dir / "server.pfx").string();
@@ -816,7 +837,7 @@ bool GateHttp3Listener::Start(std::string& error)
         ef["crt"] = crt_path;
         ef["key"] = key_path;
         memolog::LogError("http3.cred.fail.file_protected", "ConfigurationLoadCredential (FILE_PROTECTED) failed", ef);
-        // Fallback: try PFX blob loading
+        // Fallback: attempt PFX blob loading.
         std::string pfx_err;
         if (!LoadSelfSignedCertFromPfx(pImpl_->Configuration, pfx_path, pfx_err))
         {

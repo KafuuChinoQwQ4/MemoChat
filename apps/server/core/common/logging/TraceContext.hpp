@@ -1,9 +1,12 @@
 #pragma once
 
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include "random/Uuid.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
 #include <string>
 
 namespace memolog
@@ -73,9 +76,21 @@ public:
 
     static std::string NewId()
     {
-        std::string raw = boost::uuids::to_string(boost::uuids::random_generator()());
-        raw.erase(std::remove(raw.begin(), raw.end(), '-'), raw.end());
-        return raw;
+        std::string value;
+        if (memochat::random::GenerateUuid(value))
+        {
+            value.erase(std::remove(value.begin(), value.end(), '-'), value.end());
+            return value;
+        }
+
+        static std::atomic<std::uint64_t> sequence{0};
+        const auto now = static_cast<unsigned long long>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
+                .count());
+        const auto next = static_cast<unsigned long long>(sequence.fetch_add(1, std::memory_order_relaxed));
+        char fallback[33]{};
+        std::snprintf(fallback, sizeof(fallback), "%016llx%016llx", now, next);
+        return fallback;
     }
 
     static std::string NewSpanId()

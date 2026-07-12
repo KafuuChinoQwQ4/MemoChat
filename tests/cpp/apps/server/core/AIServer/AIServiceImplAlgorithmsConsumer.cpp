@@ -7,6 +7,29 @@ const char* RpcKind()
     return memochat::ai::impl::modules::RpcKind();
 }
 
+const char* DefaultInternalAuthHeader()
+{
+    return memochat::ai::impl::modules::DefaultInternalAuthHeader();
+}
+
+const char* DefaultInternalKeyEnv()
+{
+    return memochat::ai::impl::modules::DefaultInternalKeyEnv();
+}
+
+bool ShouldRejectInternalAuth(bool key_configured,
+                              bool supplied_empty,
+                              bool token_matches,
+                              bool local_environment,
+                              bool loopback_bind)
+{
+    return memochat::ai::impl::modules::ShouldRejectInternalAuth(key_configured,
+                                                                 supplied_empty,
+                                                                 token_matches,
+                                                                 local_environment,
+                                                                 loopback_bind);
+}
+
 const char* ChatSpan()
 {
     return memochat::ai::impl::modules::ChatSpan();

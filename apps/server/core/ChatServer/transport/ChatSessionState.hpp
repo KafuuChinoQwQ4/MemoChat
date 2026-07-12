@@ -4,8 +4,7 @@
 #include <ctime>
 #include <string>
 
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include "random/Uuid.hpp"
 
 namespace memochat::chatserver
 {
@@ -15,10 +14,19 @@ class ChatSessionState
 public:
     ChatSessionState()
     {
-        const boost::uuids::uuid uuid = boost::uuids::random_generator()();
-        _session_id = boost::uuids::to_string(uuid);
+        memochat::random::GenerateUuid(_session_id, &_startup_error);
         _last_heartbeat.store(std::time(nullptr), std::memory_order_relaxed);
         _last_online_route_refresh.store(0, std::memory_order_relaxed);
+    }
+
+    bool Ready() const noexcept
+    {
+        return _startup_error.empty();
+    }
+
+    const std::string& startupError() const noexcept
+    {
+        return _startup_error;
     }
 
     const std::string& sessionIdRef() const
@@ -81,6 +89,7 @@ public:
 
 private:
     std::string _session_id;
+    std::string _startup_error;
     std::atomic<int> _user_uid{0};
     std::atomic<std::time_t> _last_heartbeat{0};
     std::atomic<std::time_t> _last_online_route_refresh{0};

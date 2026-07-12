@@ -4,6 +4,7 @@
 #include "auth/AuthSecret.hpp"
 #include "logging/Logger.hpp"
 
+#include <charconv>
 #include <string>
 
 import memochat.chat.config_algorithms;
@@ -61,12 +62,11 @@ int ChatSessionConfig::ConfigInt(const std::string& section,
     {
         return default_value;
     }
-    try
-    {
-        return memochat::chat::config::modules::ClampInt(std::stoi(raw), min_value, max_value);
-    }
-    catch (...)
+    int value = 0;
+    const auto parsed = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+    if (parsed.ec != std::errc{} || parsed.ptr != raw.data() + raw.size())
     {
         return default_value;
     }
+    return memochat::chat::config::modules::ClampInt(value, min_value, max_value);
 }

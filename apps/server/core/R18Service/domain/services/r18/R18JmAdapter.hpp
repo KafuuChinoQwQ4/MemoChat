@@ -11,9 +11,9 @@ namespace memochat::r18
 
 extern const char* const kJmSourceId;
 
-json::JsonValue JmSearch(const std::string& keyword, int page);
-json::JsonValue JmDetail(const std::string& comic_id);
-json::JsonValue JmPages(const std::string& chapter_id);
+bool JmSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error);
+bool JmDetail(const std::string& comic_id, json::JsonValue* out, std::string* error);
+bool JmPages(const std::string& chapter_id, json::JsonValue* out, std::string* error);
 R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std::string& image_url);
 bool IsAllowedJmImageUrl(const std::string& url);
 

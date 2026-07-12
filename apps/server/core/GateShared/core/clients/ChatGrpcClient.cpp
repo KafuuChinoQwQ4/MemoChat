@@ -1,6 +1,7 @@
 #include "ChatGrpcClient.hpp"
 
 #include "logging/GrpcTrace.hpp"
+#include "logging/Logger.hpp"
 #include "logging/Telemetry.hpp"
 #include "cluster/ChatClusterDiscovery.hpp"
 
@@ -57,11 +58,22 @@ void ChatConPool::Close()
 ChatGrpcClient::ChatGrpcClient()
 {
     auto& cfg = ConfigMgr::Inst();
-    const auto cluster = memochat::cluster::LoadChatClusterConfig(
-        [&cfg](const std::string& section, const std::string& key)
-        {
-            return cfg.GetValue(section, key);
-        });
+    memochat::cluster::ChatClusterConfig cluster;
+    std::string cluster_error;
+    if (!memochat::cluster::LoadChatClusterConfig(
+            [&cfg](const std::string& section, const std::string& key)
+            {
+                return cfg.GetValue(section, key);
+            },
+            std::string(),
+            cluster,
+            cluster_error))
+    {
+        memolog::LogError("gate.chat_grpc.cluster_config_invalid",
+                          "ChatGrpcClient cluster config is invalid",
+                          {{"error", cluster_error}});
+        return;
+    }
     for (const auto& node : cluster.enabledNodes())
     {
         _pools[node.name] =

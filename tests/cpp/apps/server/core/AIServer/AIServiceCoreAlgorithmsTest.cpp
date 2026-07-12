@@ -16,6 +16,7 @@ const char* EmptyJsonObject();
 const char* EmptyJsonArray();
 const char* RequiredSessionUpdateMessage();
 const char* SessionNotFoundMessage();
+const char* SessionCreateFailedMessage();
 const char* DefaultApiProviderAdapter();
 bool IsAsciiTrimChar(char ch);
 bool ShouldCreateSessionFromRequest(bool model_type_empty, bool model_name_empty);
@@ -39,6 +40,7 @@ TEST(AIServiceCoreAlgorithmsTest, ExposesCoreResponseCodesAndLiterals)
     EXPECT_STREQ(EmptyJsonArray(), "[]");
     EXPECT_STREQ(RequiredSessionUpdateMessage(), "uid, session_id and title are required");
     EXPECT_STREQ(SessionNotFoundMessage(), "session not found");
+    EXPECT_STREQ(SessionCreateFailedMessage(), "session creation failed");
     EXPECT_STREQ(DefaultApiProviderAdapter(), "openai_compatible");
 }
 

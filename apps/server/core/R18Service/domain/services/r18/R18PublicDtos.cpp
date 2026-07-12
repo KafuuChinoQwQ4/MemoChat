@@ -2,8 +2,6 @@
 
 #include "json/TypedJsonCodec.hpp"
 
-#include <exception>
-
 import memochat.r18.public_dto_algorithms;
 
 namespace
@@ -61,18 +59,7 @@ bool DecodeR18PublicRequest(std::string_view body,
 
 template <typename T> bool WriteTypedJsonNoThrow(const T& value, std::string* out, std::string* error_out)
 {
-    try
-    {
-        return memochat::json::WriteTypedJson(value, out, error_out);
-    }
-    catch (const std::exception& e)
-    {
-        if (error_out != nullptr)
-        {
-            *error_out = e.what();
-        }
-        return false;
-    }
+    return memochat::json::WriteTypedJson(value, out, error_out);
 }
 
 template <typename T> memochat::json::JsonValue TypedJsonToJsonValue(const T& value)

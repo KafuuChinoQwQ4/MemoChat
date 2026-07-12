@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <charconv>
+
 #include "ChatRelationInternalGrpcService.hpp"
 #include "RelationGrpcClient.hpp"
 #include "const.hpp"
@@ -140,7 +142,9 @@ int EnvIntOrDefault(const char* name, int fallback)
     {
         return fallback;
     }
-    return std::stoi(value);
+    int parsed_value = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), parsed_value);
+    return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size() ? parsed_value : fallback;
 }
 
 bool HasPrivateDialog(const memochat::json::JsonValue& dialogs, int peer_uid)

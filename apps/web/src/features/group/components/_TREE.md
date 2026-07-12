@@ -6,7 +6,6 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `GroupShellContent.js` | `GroupShellContent.tsx` 的生成 JS companion。 |
 | `GroupShellContent.test.tsx` | 覆盖群组列表自动选中和详情面板渲染。 |
 | `GroupShellContent.tsx` | 展示群组列表、选中态和群组详情。 |
 

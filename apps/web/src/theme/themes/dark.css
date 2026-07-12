@@ -67,6 +67,11 @@
   /* Dialog list */
   --dialog-item-hover: rgba(92, 190, 164, 0.08);
 
+  /* R18 overlays */
+  --r18-dialog-backdrop: rgba(2, 6, 12, 0.62);
+  --r18-reader-backdrop: rgba(2, 6, 12, 0.92);
+  --r18-reader-toolbar-bg: rgba(6, 10, 16, 0.72);
+
   /* Avatar */
   --avatar-ring: rgba(255, 255, 255, 0.18);
   --avatar-bg: rgba(40, 70, 60, 0.40);

@@ -219,67 +219,57 @@ void HttpConnection::Start()
     auto self = shared_from_this();
     auto parser = std::make_shared<http::request_parser<http::dynamic_body>>();
     parser->body_limit(kMediaRequestBodyLimitBytes);
-    http::async_read(
-        _socket,
-        _buffer,
-        *parser,
-        [self, parser](beast::error_code ec, std::size_t bytes_transferred)
-        {
-            try
-            {
-                if (ec)
-                {
-                    memolog::LogWarn("http.read.failed", "http read failed", {{"error", ec.what()}});
-                    return;
-                }
+    http::async_read(_socket,
+                     _buffer,
+                     *parser,
+                     [self, parser](beast::error_code ec, std::size_t bytes_transferred)
+                     {
+                         if (ec)
+                         {
+                             memolog::LogWarn("http.read.failed", "http read failed", {{"error", ec.message()}});
+                             return;
+                         }
 
-                boost::ignore_unused(bytes_transferred);
-                self->_request = parser->release();
-                auto trace_it = self->_request.find("X-Trace-Id");
-                if (trace_it != self->_request.end())
-                {
-                    self->_trace_id = SanitizeHttpHeaderValueLocal(
-                        std::string_view(trace_it->value().data(), trace_it->value().size()));
-                }
-                if (self->_trace_id.empty())
-                {
-                    self->_trace_id = memolog::TraceContext::NewId();
-                }
-                auto request_it = self->_request.find("X-Request-Id");
-                if (request_it != self->_request.end())
-                {
-                    self->_request_id = SanitizeHttpHeaderValueLocal(
-                        std::string_view(request_it->value().data(), request_it->value().size()));
-                }
-                if (self->_request_id.empty())
-                {
-                    self->_request_id = memolog::TraceContext::NewId();
-                }
-                memolog::TraceContext::SetTraceId(self->_trace_id);
-                memolog::TraceContext::SetRequestId(self->_request_id);
-                self->_request_span.reset(
-                    new memolog::SpanScope("GateServer.HttpRequest",
-                                           "SERVER",
-                                           {{"http.method", std::string(self->_request.method_string())}}));
+                         boost::ignore_unused(bytes_transferred);
+                         self->_request = parser->release();
+                         auto trace_it = self->_request.find("X-Trace-Id");
+                         if (trace_it != self->_request.end())
+                         {
+                             self->_trace_id = SanitizeHttpHeaderValueLocal(
+                                 std::string_view(trace_it->value().data(), trace_it->value().size()));
+                         }
+                         if (self->_trace_id.empty())
+                         {
+                             self->_trace_id = memolog::TraceContext::NewId();
+                         }
+                         auto request_it = self->_request.find("X-Request-Id");
+                         if (request_it != self->_request.end())
+                         {
+                             self->_request_id = SanitizeHttpHeaderValueLocal(
+                                 std::string_view(request_it->value().data(), request_it->value().size()));
+                         }
+                         if (self->_request_id.empty())
+                         {
+                             self->_request_id = memolog::TraceContext::NewId();
+                         }
+                         memolog::TraceContext::SetTraceId(self->_trace_id);
+                         memolog::TraceContext::SetRequestId(self->_request_id);
+                         self->_request_span.reset(
+                             new memolog::SpanScope("GateServer.HttpRequest",
+                                                    "SERVER",
+                                                    {{"http.method", std::string(self->_request.method_string())}}));
 
-                const auto target_sv = self->_request.target();
-                const auto method_sv = self->_request.method_string();
-                std::map<std::string, std::string> fields;
-                fields["route"] = RequestPathForLog(target_sv);
-                fields["method"] = std::string(method_sv.data(), method_sv.size());
-                fields["module"] = "http";
-                memolog::LogInfo("http.request.received", "incoming http request", fields);
+                         const auto target_sv = self->_request.target();
+                         const auto method_sv = self->_request.method_string();
+                         std::map<std::string, std::string> fields;
+                         fields["route"] = RequestPathForLog(target_sv);
+                         fields["method"] = std::string(method_sv.data(), method_sv.size());
+                         fields["module"] = "http";
+                         memolog::LogInfo("http.request.received", "incoming http request", fields);
 
-                self->HandleReq();
-                self->CheckDeadline();
-            }
-            catch (std::exception& exp)
-            {
-                memolog::LogError("http.request.exception", "http request exception", {{"error", exp.what()}});
-                self->_request_span.reset();
-                memolog::TraceContext::Clear();
-            }
-        });
+                         self->HandleReq();
+                         self->CheckDeadline();
+                     });
 }
 
 unsigned char ToHex(unsigned char x)
@@ -411,55 +401,28 @@ void HttpConnection::HandleReq()
         GateWorkerPool::GetInstance()->post(
             [self]()
             {
-                try
-                {
-                    self->PreParseGetParam();
-                    bool success = LogicSystem::GetInstance()->HandleGet(self->_get_url, self);
-                    boost::asio::post(self->_socket.get_executor(),
-                                      [self, success]()
+                self->PreParseGetParam();
+                bool success = LogicSystem::GetInstance()->HandleGet(self->_get_url, self);
+                boost::asio::post(self->_socket.get_executor(),
+                                  [self, success]()
+                                  {
+                                      if (self->HasStreamingResponse())
                                       {
-                                          try
-                                          {
-                                              if (self->HasStreamingResponse())
-                                              {
-                                                  return;
-                                              }
-                                              if (!success)
-                                              {
-                                                  self->_response.result(http::status::not_found);
-                                                  self->_response.set(http::field::content_type, "text/plain");
-                                                  beast::ostream(self->_response.body()) << "url not found\r\n";
-                                              }
-                                              else
-                                              {
-                                                  if (self->_response.result() == http::status::unknown)
-                                                  {
-                                                      self->_response.result(http::status::ok);
-                                                  }
-                                              }
-                                              self->_response.set(http::field::server, "GateServer");
-                                              self->WriteResponse();
-                                          }
-                                          catch (const std::exception& e)
-                                          {
-                                              memolog::LogError("http.response.exception",
-                                                                "http response exception",
-                                                                {{"error", e.what()}});
-                                              self->WriteErrorResponse(http::status::internal_server_error,
-                                                                       "internal error\r\n");
-                                          }
-                                      });
-                }
-                catch (const std::exception& e)
-                {
-                    memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
-                    boost::asio::post(self->_socket.get_executor(),
-                                      [self]()
+                                          return;
+                                      }
+                                      if (!success)
                                       {
-                                          self->WriteErrorResponse(http::status::internal_server_error,
-                                                                   "internal error\r\n");
-                                      });
-                }
+                                          self->_response.result(http::status::not_found);
+                                          self->_response.set(http::field::content_type, "text/plain");
+                                          beast::ostream(self->_response.body()) << "url not found\r\n";
+                                      }
+                                      else if (self->_response.result() == http::status::unknown)
+                                      {
+                                          self->_response.result(http::status::ok);
+                                      }
+                                      self->_response.set(http::field::server, "GateServer");
+                                      self->WriteResponse();
+                                  });
             });
         return;
     }
@@ -470,56 +433,29 @@ void HttpConnection::HandleReq()
         GateWorkerPool::GetInstance()->post(
             [self]()
             {
-                try
-                {
-                    bool handled = self->_request.method() == http::verb::delete_
-                                       ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
-                                       : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
-                    boost::asio::post(self->_socket.get_executor(),
-                                      [self, handled]()
+                bool handled = self->_request.method() == http::verb::delete_
+                                   ? LogicSystem::GetInstance()->HandleDelete(self->_request.target(), self)
+                                   : LogicSystem::GetInstance()->HandlePost(self->_request.target(), self);
+                boost::asio::post(self->_socket.get_executor(),
+                                  [self, handled]()
+                                  {
+                                      if (self->HasStreamingResponse())
                                       {
-                                          try
-                                          {
-                                              if (self->HasStreamingResponse())
-                                              {
-                                                  return;
-                                              }
-                                              if (!handled)
-                                              {
-                                                  self->_response.result(http::status::not_found);
-                                                  self->_response.set(http::field::content_type, "text/plain");
-                                                  beast::ostream(self->_response.body()) << "url not found\r\n";
-                                              }
-                                              else
-                                              {
-                                                  if (self->_response.result() == http::status::unknown)
-                                                  {
-                                                      self->_response.result(http::status::ok);
-                                                  }
-                                              }
-                                              self->_response.set(http::field::server, "GateServer");
-                                              self->WriteResponse();
-                                          }
-                                          catch (const std::exception& e)
-                                          {
-                                              memolog::LogError("http.response.exception",
-                                                                "http response exception",
-                                                                {{"error", e.what()}});
-                                              self->WriteErrorResponse(http::status::internal_server_error,
-                                                                       "internal error\r\n");
-                                          }
-                                      });
-                }
-                catch (const std::exception& e)
-                {
-                    memolog::LogError("gate.worker.exception", "worker pool exception", {{"error", e.what()}});
-                    boost::asio::post(self->_socket.get_executor(),
-                                      [self]()
+                                          return;
+                                      }
+                                      if (!handled)
                                       {
-                                          self->WriteErrorResponse(http::status::internal_server_error,
-                                                                   "internal error\r\n");
-                                      });
-                }
+                                          self->_response.result(http::status::not_found);
+                                          self->_response.set(http::field::content_type, "text/plain");
+                                          beast::ostream(self->_response.body()) << "url not found\r\n";
+                                      }
+                                      else if (self->_response.result() == http::status::unknown)
+                                      {
+                                          self->_response.result(http::status::ok);
+                                      }
+                                      self->_response.set(http::field::server, "GateServer");
+                                      self->WriteResponse();
+                                  });
             });
         return;
     }

@@ -6,13 +6,13 @@
 #include <unordered_map>
 #include <vector>
 
-class PostgresPool;
-
 class PostgresDao
 {
 public:
     PostgresDao();
     ~PostgresDao();
+    bool Ready() const noexcept;
+    const std::string& startupError() const noexcept;
     int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
     bool CheckEmail(const std::string& name, const std::string& email);
     bool UpdatePwd(const std::string& email, const std::string& newpwd);
@@ -151,23 +151,17 @@ public:
                                        std::vector<std::shared_ptr<PrivateMessageInfo>>& messages);
 
 private:
-    void WarmupRelationBootstrapQueries();
-    bool EnsureGroupCodeSchemaAndBackfill();
-    bool EnsureDialogMetaSchema();
-    bool EnsurePrivateReadStateSchema();
-    bool EnsureGroupReadStateSchema();
-    bool EnsureGroupMessageOrderSchema();
-    bool EnsureGroupPermissionSchemaAndBackfill();
+    bool WarmupRelationBootstrapQueries();
     bool EnsureChatEventOutboxSchema();
     bool EnsureChatMessageIdempotencySchema();
     bool GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits);
     bool HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits);
     std::string GenerateGroupCode();
-    std::unique_ptr<PostgresPool> pool_;
-    bool use_postgres_ = false;
     std::string postgres_connection_string_;
     // Account-aggregate (user/user_id) connection string. Equals
     // postgres_connection_string_ unless [AccountPostgres] config selects a
     // separate database (memo_account) — gateserver split Phase 2b.
     std::string account_connection_string_;
+    bool ready_ = false;
+    std::string startup_error_;
 };

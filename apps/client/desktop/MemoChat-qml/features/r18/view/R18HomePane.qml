@@ -10,7 +10,6 @@ Item {
 
     property string keyword: ""
     property int historyCount: 0
-    property int localCount: 0
     property int followCount: 0
     property int sourceCount: 0
     property int favoriteCount: 0
@@ -31,7 +30,6 @@ Item {
     signal keywordEdited(string keyword)
     signal searchRequested(string keyword)
     signal entryActivated(string entryAction, int modeValue)
-    signal importRequested()
 
     ColumnLayout {
         anchors.fill: parent
@@ -76,7 +74,6 @@ Item {
             spacing: 12
             model: ListModel {
                 ListElement { title: "历史"; modeValue: 5; entryAction: "mode"; countKey: "history" }
-                ListElement { title: "本地"; modeValue: 4; entryAction: "import"; countKey: "local" }
                 ListElement { title: "追更"; modeValue: 1; entryAction: "mode"; countKey: "follow" }
                 ListElement { title: "漫画源"; modeValue: 4; entryAction: "mode"; countKey: "source" }
                 ListElement { title: "图片收藏"; modeValue: 1; entryAction: "favorite"; countKey: "favorite" }
@@ -97,13 +94,9 @@ Item {
                 badgeFillColor: root.homeBadgeFillColor
                 badgeTextColor: root.homeBadgeTextColor
                 arrowColor: root.homeArrowColor
-                importButtonColor: root.homeImportButtonColor
-                importButtonHoverColor: root.homeImportButtonHoverColor
-                importButtonPressedColor: root.homeImportButtonPressedColor
                 onActivated: function(action, modeValue) {
                     root.entryActivated(action, modeValue)
                 }
-                onImportRequested: root.importRequested()
             }
         }
     }
@@ -111,9 +104,6 @@ Item {
     function countForKey(countKey) {
         if (countKey === "history") {
             return root.historyCount
-        }
-        if (countKey === "local") {
-            return root.localCount
         }
         if (countKey === "follow") {
             return root.followCount

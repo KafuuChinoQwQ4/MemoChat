@@ -72,6 +72,11 @@ const char* SessionNotFoundMessage()
     return memochat::ai::core::modules::SessionNotFoundMessage();
 }
 
+const char* SessionCreateFailedMessage()
+{
+    return memochat::ai::core::modules::SessionCreateFailedMessage();
+}
+
 const char* DefaultApiProviderAdapter()
 {
     return memochat::ai::core::modules::DefaultApiProviderAdapter();

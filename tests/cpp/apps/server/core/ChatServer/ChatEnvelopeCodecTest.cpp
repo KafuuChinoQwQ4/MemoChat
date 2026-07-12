@@ -161,7 +161,8 @@ TEST(ChatEnvelopeCodecTest, BuildTaskEnvelopeClampsNegativeRetryTiming)
     memochat::json::JsonValue payload(memochat::json::object_t{});
     payload["task_id"] = "task-stable";
 
-    const TaskEnvelope envelope = BuildTaskEnvelope("delivery.retry", "delivery", payload, -250, -3);
+    TaskEnvelope envelope;
+    ASSERT_TRUE(BuildTaskEnvelope("delivery.retry", "delivery", payload, -250, -3, &envelope));
 
     EXPECT_EQ(envelope.task_id, "task-stable");
     EXPECT_EQ(envelope.available_at_ms, envelope.created_at_ms);
