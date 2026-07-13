@@ -1061,7 +1061,7 @@ class StatusDeployContractTests(unittest.TestCase):
             "MEMOCHAT_PET_SOVITS_BASE_URL",
             "http://host.docker.internal:9880",
             "MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO",
-            "refs/kafuu-chino-ref.wav",
+            "refs/reference.wav",
             "MEMOCHAT_PET_SOVITS_PROMPT_TEXT",
             "MEMOCHAT_PET_SOVITS_PROMPT_LANGUAGE",
             "MEMOCHAT_PET_SOVITS_TEXT_LANGUAGE",
@@ -1095,6 +1095,27 @@ class StatusDeployContractTests(unittest.TestCase):
 
         self.assertNotIn('setsid -f "$START_SCRIPT"', source)
         self.assertIn('"$START_SCRIPT"', source)
+
+    def test_gpt_sovits_defaults_do_not_bind_developer_voice_assets(self):
+        sources = "\n".join(
+            read(REPO_ROOT / path)
+            for path in (
+                "apps/server/core/AIOrchestrator/api/pet_router.py",
+                "apps/server/core/AIOrchestrator/harness/pet/voice_training.py",
+                "apps/server/core/AIOrchestrator/docker-compose.yml",
+                "tools/scripts/pet/apply_gpt_sovits_voice_wsl.sh",
+                "tools/scripts/pet/smoke_gpt_sovits_tts_wsl.sh",
+                "tools/scripts/pet/transcribe_gpt_sovits_ref_wsl.sh",
+                "tools/scripts/status/deploy_services.sh",
+            )
+        )
+
+        for developer_token in ("Kafuu", "kafuu", "香风智乃", "src/KafuuChino"):
+            self.assertNotIn(developer_token, sources)
+        self.assertIn('VOICE_DIR="${GPT_SOVITS_VOICE_DIR:-}"', sources)
+        self.assertIn("refs/reference.wav", sources)
+        self.assertIn('export GPT_SOVITS_REF_AUDIO="$REF_AUDIO"', sources)
+        self.assertIn('voice_name: str = "user-voice"', sources)
 
 
 if __name__ == "__main__":

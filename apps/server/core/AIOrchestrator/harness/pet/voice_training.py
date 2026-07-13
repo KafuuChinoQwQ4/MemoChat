@@ -20,7 +20,7 @@ ALLOWED_REFERENCE_AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".m4a", ".ogg", ".a
 class VoiceTrainingRequest:
     uid: int = 0
     profile_id: str = "default"
-    voice_name: str = "Kafuuchino-voice"
+    voice_name: str = "user-voice"
     language: str = "zh-CN"
     reference_audio_path: str = ""
     reference_audio_directory: str = ""
@@ -36,7 +36,7 @@ class VoiceTrainingRequest:
         return cls(
             uid=_non_negative_int(data.get("uid")),
             profile_id=_text(data.get("profile_id"), "default"),
-            voice_name=_text(data.get("voice_name"), "Kafuuchino-voice"),
+            voice_name=_text(data.get("voice_name"), "user-voice"),
             language=_text(data.get("language"), "zh-CN"),
             reference_audio_path=_text(data.get("reference_audio_path"), ""),
             reference_audio_directory=_text(data.get("reference_audio_directory"), ""),
@@ -565,7 +565,7 @@ def _job_from_dict(data: dict[str, Any]) -> VoiceTrainingJob:
         job_id=_text(data.get("job_id"), f"voice-train-{uuid.uuid4().hex}"),
         uid=_non_negative_int(data.get("uid")),
         profile_id=_text(data.get("profile_id"), "default"),
-        voice_name=_text(data.get("voice_name"), "Kafuuchino-voice"),
+        voice_name=_text(data.get("voice_name"), "user-voice"),
         language=_language_code(_text(data.get("language"), "zh-CN")),
         reference_audio_path=_text(data.get("reference_audio_path"), ""),
         reference_audio_directory=_text(data.get("reference_audio_directory"), ""),

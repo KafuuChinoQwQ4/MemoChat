@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 ENV_DIR="${GPT_SOVITS_ENV:-/data/micromamba/envs/gpt-sovits}"
-REF_AUDIO="${GPT_SOVITS_REF_AUDIO:-/data/gpt-sovits/refs/kafuu-chino-ref.wav}"
-OUT_TEXT="${GPT_SOVITS_REF_TEXT_OUT:-/data/gpt-sovits/refs/kafuu-chino-ref.ja.txt}"
+REF_AUDIO="${GPT_SOVITS_REF_AUDIO:-/data/gpt-sovits/refs/reference.wav}"
+OUT_TEXT="${GPT_SOVITS_REF_TEXT_OUT:-/data/gpt-sovits/refs/reference.txt}"
 MODEL="${WHISPER_MODEL:-base}"
 CACHE_DIR="${WHISPER_CACHE_DIR:-/data/whisper-cache}"
 

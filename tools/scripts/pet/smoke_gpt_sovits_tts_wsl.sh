@@ -3,14 +3,27 @@ set -Eeuo pipefail
 
 API_URL="${GPT_SOVITS_API_URL:-http://127.0.0.1:9880}"
 START_SCRIPT="${GPT_SOVITS_START_SCRIPT:-/root/code/MemoChat/tools/scripts/pet/start_gpt_sovits_api_wsl.sh}"
-VOICE_DIR="${GPT_SOVITS_VOICE_DIR:-/root/code/MemoChat/apps/client/desktop/MemoChat-qml/src/KafuuChino/香风智乃voice}"
+VOICE_DIR="${GPT_SOVITS_VOICE_DIR:-}"
 REF_AUDIO="${GPT_SOVITS_REF_AUDIO:-}"
 PROMPT_TEXT="${GPT_SOVITS_PROMPT_TEXT:-}"
-PROMPT_TEXT_FILE="${GPT_SOVITS_PROMPT_TEXT_FILE:-/data/gpt-sovits/refs/kafuu-chino-ref.ja.txt}"
+PROMPT_TEXT_FILE="${GPT_SOVITS_PROMPT_TEXT_FILE:-/data/gpt-sovits/refs/reference.txt}"
 PROMPT_LANG="${GPT_SOVITS_PROMPT_LANG:-ja}"
 TEXT="${GPT_SOVITS_TEXT:-欢迎回来，今天也一起努力吧。}"
 TEXT_LANG="${GPT_SOVITS_TEXT_LANG:-zh}"
 OUT_DIR="${GPT_SOVITS_OUT_DIR:-/data/gpt-sovits}"
+
+if [ -z "$REF_AUDIO" ] && [ -z "$VOICE_DIR" ]; then
+  echo "Set GPT_SOVITS_REF_AUDIO or GPT_SOVITS_VOICE_DIR to user-provided reference audio." >&2
+  exit 1
+fi
+if [ -n "$REF_AUDIO" ] && [ ! -f "$REF_AUDIO" ]; then
+  echo "User-provided reference audio does not exist: $REF_AUDIO" >&2
+  exit 1
+fi
+if [ -z "$REF_AUDIO" ] && [ ! -d "$VOICE_DIR" ]; then
+  echo "User-provided voice directory does not exist: $VOICE_DIR" >&2
+  exit 1
+fi
 
 mkdir -p "$OUT_DIR/refs" "$OUT_DIR/out" /data/logs/gpt-sovits
 
@@ -57,8 +70,8 @@ if [ -z "$REF_AUDIO" ] || [ ! -f "$REF_AUDIO" ]; then
   exit 1
 fi
 
-REF_WAV="$OUT_DIR/refs/kafuu-chino-ref.wav"
-OUT_WAV="$OUT_DIR/out/kafuu-chino-smoke.wav"
+REF_WAV="$OUT_DIR/refs/smoke-reference.wav"
+OUT_WAV="$OUT_DIR/out/tts-smoke.wav"
 REQ_JSON="$OUT_DIR/tts-smoke.json"
 
 echo "Reference source: $REF_AUDIO"
