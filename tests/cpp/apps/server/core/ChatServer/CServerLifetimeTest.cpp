@@ -1,9 +1,8 @@
 // CServer accept/timer 异步回调 —— 停机/不泄漏验收
 //
-// 验证 StopTimer() 取消 accept/timer、关闭会话后，异步回调不会继续调度，
-// weak_ptr 捕获也不会阻止 CServer 析构。
+// 验证 Start() 能安全挂起 accept，且 StopTimer() 取消 accept/timer、关闭会话后，
+// 异步回调不会继续调度，weak_ptr 捕获也不会阻止 CServer 析构。
 //
-// 本测试只走定时器路径，不调 Start()，避免启动 AsioIOServicePool。
 // Redis/Config 调用只在 60s 定时器触发时发生；测试在触发前 StopTimer，
 // 因此无需 Docker 依赖。
 
@@ -21,6 +20,21 @@
 namespace
 {
 namespace net = boost::asio;
+
+TEST(CServerLifetime, StartArmsAcceptLoopWithoutInvalidatingPendingSession)
+{
+    net::io_context server_ctx;
+    auto server = std::make_shared<CServer>(server_ctx, /*port=*/0);
+    ASSERT_TRUE(server->Ready()) << server->startupError();
+
+    std::weak_ptr<CServer> weak = server;
+    server->Start();
+    server->StopTimer();
+    server.reset();
+
+    server_ctx.run();
+    EXPECT_TRUE(weak.expired()) << "canceled accept callback still owns CServer";
+}
 
 TEST(CServerLifetime, StopTimerCancelsTimerLoopAndReleasesServer)
 {
