@@ -8,6 +8,4 @@
 
 目前该项目有正常 IM 服务，音视频功能采用 GitHub 现成方案。（未来会以 WebRTC 重构）
 
-Live2D AI 化操纵，通过 OpenCV 与 GPT-SoVIST 进行视觉识别和语音模拟，接入 Agent 进行智能操作，未来可能接入直播平台进行无人直播。
-
-项目内有 R18 分区，通过接入各个网站爬取媒体源转接（已删除三次元类）。
+Live2D AI 化操纵，通过 OpenCV 与 GPT-SoVIST 进行视觉识别和语音模拟，接入 Agent。
