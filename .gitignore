@@ -102,6 +102,8 @@ tools/scripts/__pycache__/
 /apps/server/core/*/logs/
 /artifacts/
 /apps/server/artifacts/
+/apps/client/desktop/MemoChat-qml/resources/live2d/
+/apps/client/desktop/MemoChat-qml/src/KafuuChino/
 /Memo_ops/artifacts/logs/
 /Memo_ops/artifacts/loadtest/
 /Memo_ops/artifacts/reports/

@@ -10,7 +10,7 @@
 class Live2DOfficialOpenGLRenderer final
 {
 public:
-    explicit Live2DOfficialOpenGLRenderer(const QString& modelPath = QString(),
+    explicit Live2DOfficialOpenGLRenderer(const QString& modelPath,
                                           const QString& motionDirectory = QString(),
                                           const QString& expressionDirectory = QString());
     ~Live2DOfficialOpenGLRenderer();
@@ -21,8 +21,6 @@ public:
     bool isNative() const;
 
     bool render(const QSize& viewportSize, const Live2DVisualState& state);
-
-    static QString defaultModelPath();
 
 private:
     struct Impl;

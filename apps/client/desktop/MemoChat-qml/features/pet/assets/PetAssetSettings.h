@@ -314,7 +314,6 @@ private:
     bool assignBool(bool& target, bool value);
     void applyDefaults(bool dirty);
     void applyObject(const QVariantMap& values, bool dirty);
-    bool migrateLegacyBundledLive2DPaths();
     void normalizeVoiceTrainingState();
     void markDirty();
     QString defaultStoragePath() const;

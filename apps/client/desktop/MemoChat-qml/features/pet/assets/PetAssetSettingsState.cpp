@@ -7,32 +7,6 @@
 
 using namespace memochat::pet_asset_settings;
 
-namespace
-{
-bool migrateLegacyBundledLive2DPath(QString& path)
-{
-    const QString trimmed = path.trimmed();
-    if (trimmed.isEmpty())
-    {
-        return false;
-    }
-
-    const QString legacyRoot =
-        QDir::cleanPath(clientSourcePath(QStringLiteral("src") + QLatin1Char('/') + QStringLiteral("KafuuChino")));
-    const QString resourceRoot = QDir::cleanPath(clientSourcePath(QStringLiteral("resources/live2d/KafuuChino")));
-    const QString cleanPath = QDir::cleanPath(trimmed);
-
-    if (cleanPath != legacyRoot && !cleanPath.startsWith(legacyRoot + QLatin1Char('/')))
-    {
-        return false;
-    }
-
-    const QString suffix = cleanPath.mid(legacyRoot.size());
-    path = QDir::cleanPath(resourceRoot + suffix);
-    return path != trimmed;
-}
-} // namespace
-
 void PetAssetSettings::setCharacterName(const QString& value)
 {
     if (assignString(_character_name, value))
@@ -347,17 +321,6 @@ void PetAssetSettings::applyObject(const QVariantMap& values, bool dirty)
         stringValue(values, QStringLiteral("voiceTrainingArtifactPath"), _voice_training_artifact_path);
     _voice_training_message = stringValue(values, QStringLiteral("voiceTrainingMessage"), _voice_training_message);
     _dirty = dirty;
-}
-
-bool PetAssetSettings::migrateLegacyBundledLive2DPaths()
-{
-    bool migrated = false;
-    migrated = migrateLegacyBundledLive2DPath(_model_root) || migrated;
-    migrated = migrateLegacyBundledLive2DPath(_model_json) || migrated;
-    migrated = migrateLegacyBundledLive2DPath(_motion_directory) || migrated;
-    migrated = migrateLegacyBundledLive2DPath(_expression_directory) || migrated;
-    migrated = migrateLegacyBundledLive2DPath(_voice_directory) || migrated;
-    return migrated;
 }
 
 void PetAssetSettings::markDirty()

@@ -431,9 +431,7 @@ qreal Live2DRenderItem::boundedUnit(qreal value, qreal fallback)
 
 QString Live2DRenderItem::resolvedModelPath() const
 {
-    return Live2DRenderPathResolver::resolveModelPath(_model_root,
-                                                      _model_json,
-                                                      Live2DOfficialOpenGLRenderer::defaultModelPath());
+    return Live2DRenderPathResolver::resolveModelPath(_model_root, _model_json);
 }
 
 Live2DVisualState Live2DRenderItem::visualState() const
