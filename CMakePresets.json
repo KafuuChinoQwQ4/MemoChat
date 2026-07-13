@@ -7,48 +7,6 @@
   },
   "configurePresets": [
     {
-      "name": "msvc2022-full",
-      "displayName": "Full: Client + Server + Ops + Tests",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build",
-      "environment": {
-        "PATH": "D:/VS2026stable/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin;D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64;C:/Program Files (x86)/Windows Kits/10/bin/10.0.28000.0/x64;$penv{PATH}",
-        "LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/ucrt/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64",
-        "INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/shared;C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/winrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/cppwinrt",
-        "VC_TOOLS_LIB": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/lib/x64",
-        "VC_TOOLS_INCLUDE": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include",
-        "WINSDK_LIB_UM": "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/um/x64",
-        "WINSDK_LIB_UCRT": "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.28000.0/ucrt/x64",
-        "WINSDK_INCLUDE": "C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0",
-        "VCPKG_ROOT": "D:/vcpkg",
-        "VCPKG_DOWNLOADS": "D:/vcpkg/downloads",
-        "VCPKG_DEFAULT_BINARY_CACHE": "D:/vcpkg/bincache",
-        "VCPKG_BINARY_SOURCES": "clear;files,D:/vcpkg/bincache,readwrite",
-        "HTTP_PROXY": "",
-        "HTTPS_PROXY": "",
-        "NO_PROXY": ""
-      },
-      "cacheVariables": {
-        "BUILD_CLIENT": "ON",
-        "BUILD_SERVER": "ON",
-        "BUILD_OPS": "ON",
-        "BUILD_TESTS": "ON",
-        "MEMOCHAT_NO_EXCEPTIONS": "ON",
-        "MEMOCHAT_AUTO_FORMAT": "ON",
-        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_MAKE_PROGRAM": "D:/ninja-win/ninja.exe",
-        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
-        "VCPKG_MANIFEST_FEATURES": "server",
-        "VCPKG_BUILD_TYPE": "release",
-        "CMAKE_CXX_COMPILER": "D:/VS2026stable/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
-        "CMAKE_CXX_FLAGS": "/I\"D:/VS2026stable/VC/Tools/MSVC/14.50.35717/include\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/ucrt\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/um\" /I\"C:/Program Files (x86)/Windows Kits/10/Include/10.0.28000.0/shared\""
-      }
-    },
-    {
       "name": "linux-full-gcc16",
       "displayName": "Linux GCC16: Full",
       "generator": "Ninja",
@@ -109,13 +67,6 @@
   ],
   "buildPresets": [
     {
-      "name": "msvc2022-full",
-      "displayName": "Build Release: Client + Server + Ops + Tests",
-      "configurePreset": "msvc2022-full",
-      "configuration": "Release",
-      "jobs": 12
-    },
-    {
       "name": "linux-full-gcc16",
       "displayName": "Build Linux Full",
       "configurePreset": "linux-full-gcc16",
@@ -129,18 +80,6 @@
     }
   ],
   "testPresets": [
-    {
-      "name": "msvc2022-full",
-      "displayName": "Run Full Build Tests (Release)",
-      "configurePreset": "msvc2022-full",
-      "configuration": "Release",
-      "output": {
-        "outputOnFailure": true
-      },
-      "execution": {
-        "noTestsAction": "error"
-      }
-    },
     {
       "name": "linux-full-gcc16",
       "displayName": "Run Linux Full Tests",
