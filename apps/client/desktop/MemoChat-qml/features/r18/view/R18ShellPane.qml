@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "qrc:/qml/components"
 import "../runtime/R18ShellRuntime.js" as R18ShellRuntime

@@ -70,6 +70,13 @@ class R18QmlPhysicalLayoutContractTests(unittest.TestCase):
     def test_r18_qrc_is_registered_by_feature_manifest(self):
         self.assertIn("features/r18/resources/r18.qrc", read(SOURCES))
 
+    def test_r18_shell_imports_controls_for_access_gate(self):
+        shell = read(FEATURE_VIEW / "R18ShellPane.qml")
+
+        self.assertIn("Label {", shell)
+        self.assertIn("Button {", shell)
+        self.assertIn("import QtQuick.Controls 2.15", shell)
+
 
 if __name__ == "__main__":
     unittest.main()
