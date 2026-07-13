@@ -101,6 +101,7 @@ tools/scripts/__pycache__/
 /server/*/logs/
 /apps/server/core/*/logs/
 /artifacts/
+/apps/server/artifacts/
 /Memo_ops/artifacts/logs/
 /Memo_ops/artifacts/loadtest/
 /Memo_ops/artifacts/reports/

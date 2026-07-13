@@ -213,7 +213,6 @@ ROOT_ALLOWLIST = {
     "ChatServer.sln",
     "ChatServer.vcxproj",
     "ChatServer.vcxproj.filters",
-    "ChatServer.vcxproj.user",
     "PropertySheet.props",
     "config.ini",
     "chatserver1.ini",
@@ -226,8 +225,6 @@ ROOT_ALLOWLIST = {
     "message.pb.h",
     "message.grpc.pb.cc",
     "message.grpc.pb.h",
-    "mysqlcppconn-9-vs14.dll",
-    "mysqlcppconn8-2-vs14.dll",
     "start.bat",
 }
 
