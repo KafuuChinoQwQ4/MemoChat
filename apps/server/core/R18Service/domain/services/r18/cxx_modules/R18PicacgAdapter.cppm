@@ -16,22 +16,16 @@ const char* ApiHost()
     return "picaapi.picacomic.com";
 }
 
-// Official Android client app-key / app-secret are public client signing material.
-// Prefer env overrides; fall back so users only need account/password login.
 const char* ApiKey()
 {
     const char* value = std::getenv("MEMOCHAT_R18_PICACG_API_KEY");
-    if (value != nullptr && value[0] != '\0')
-        return value;
-    return "C69BAF41DA5ABD1FFEDC6D2FEA56B";
+    return value == nullptr ? "" : value;
 }
 
 const char* HmacKey()
 {
     const char* value = std::getenv("MEMOCHAT_R18_PICACG_HMAC_KEY");
-    if (value != nullptr && value[0] != '\0')
-        return value;
-    return "~d}$Q7$eIni=V)9\\RK/P.RM4;9H0c#L";
+    return value == nullptr ? "" : value;
 }
 
 bool HasCredentials(bool api_key_empty, bool hmac_key_empty)
@@ -39,9 +33,14 @@ bool HasCredentials(bool api_key_empty, bool hmac_key_empty)
     return !api_key_empty && !hmac_key_empty;
 }
 
+bool HasValidSigningMaterial(unsigned long long api_key_size, unsigned long long hmac_key_size)
+{
+    return api_key_size == 29 && hmac_key_size == 63;
+}
+
 const char* MissingCredentialsMessage()
 {
-    return "Picacg account login required";
+    return "Picacg signing configuration is missing or invalid";
 }
 
 const char* AccountLoginRequiredMessage()
@@ -134,6 +133,11 @@ const char* ImageTargetPrefix()
     return "/static/";
 }
 
+const char* RedirectImageHost()
+{
+    return "img.picacomic.com";
+}
+
 namespace detail
 {
 bool IsAsciiSpace(char value)
@@ -165,6 +169,26 @@ bool IsIpv4Prefix(unsigned int address, unsigned int prefix, unsigned int bits)
     return (address & mask) == (prefix & mask);
 }
 } // namespace detail
+
+bool IsRedirectImageTarget(const char* target, unsigned long long target_size)
+{
+    if (target == nullptr || target_size < 5 || target[0] != '/')
+        return false;
+    for (unsigned long long index = 0; index < target_size; ++index)
+    {
+        const unsigned char value = static_cast<unsigned char>(target[index]);
+        if (value < 0x20U || target[index] == '?' || target[index] == '#' || target[index] == '\\')
+            return false;
+    }
+    const auto has_extension = [&](const char* extension, unsigned long long extension_size)
+    {
+        return target_size > extension_size &&
+               detail::EqualsAsciiCaseInsensitive(
+                   target + target_size - extension_size, extension_size, extension, extension_size);
+    };
+    return has_extension(".jpg", 4) || has_extension(".jpeg", 5) || has_extension(".png", 4) ||
+           has_extension(".webp", 5) || has_extension(".gif", 4) || has_extension(".avif", 5);
+}
 
 bool IsExactHostInPolicy(const char* host,
                          unsigned long long host_size,
@@ -249,6 +273,16 @@ unsigned long long MaxImageBytes()
 bool IsAllowedImageContentType(bool jpeg, bool png, bool webp, bool gif, bool avif)
 {
     return jpeg || png || webp || gif || avif;
+}
+
+bool IsImageRedirectStatus(int status)
+{
+    return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+}
+
+unsigned long long MaxImageRedirects()
+{
+    return 2;
 }
 
 const char* ImageUnavailableTitle()

@@ -165,4 +165,75 @@ const char* DefaultImageContentType()
 {
     return "image/jpeg";
 }
+
+// --- Login / auth ---
+
+const char* LoginTarget()
+{
+    return "/login";
+}
+
+const char* LoginUsernameField()
+{
+    return "username";
+}
+
+const char* LoginPasswordField()
+{
+    return "password";
+}
+
+const char* LoginUidField()
+{
+    return "uid";
+}
+
+// Authorization header prefix; append uid after the space for authenticated calls.
+const char* AuthorizationBearer()
+{
+    return "Bearer";
+}
+
+const char* LoginFailedMessage()
+{
+    return "JM login failed";
+}
+
+const char* LoginRequiredMessage()
+{
+    return "JM username/password required";
+}
+
+// --- Daily check-in ---
+
+const char* CheckinTarget()
+{
+    return "/member/punch_clock";
+}
+
+const char* CheckinSuccessStatus()
+{
+    return "ok";
+}
+
+const char* CheckinAlreadyDoneStatus()
+{
+    return "already";
+}
+
+bool IsCheckinSuccess(bool success_code)
+{
+    return success_code;
+}
+
+const char* CheckinFailedMessage()
+{
+    return "JM check-in failed";
+}
+
+int LoginTimeoutSeconds()
+{
+    return 8;
+}
+
 } // namespace memochat::r18::jm_adapter::modules

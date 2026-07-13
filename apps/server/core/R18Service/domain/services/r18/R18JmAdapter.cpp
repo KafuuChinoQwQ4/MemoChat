@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -99,7 +100,11 @@ JsonValue JmComicToJson(const JsonValue& comic)
     return item;
 }
 
-bool JmApiHeaders(std::int64_t unix_time, std::vector<std::pair<std::string, std::string>>* out, std::string* error)
+// uid is empty for unauthenticated requests; non-empty sets "Bearer <uid>".
+bool JmApiHeaders(std::int64_t unix_time,
+                  const std::string& uid,
+                  std::vector<std::pair<std::string, std::string>>* out,
+                  std::string* error)
 {
     if (out == nullptr)
     {
@@ -112,10 +117,12 @@ bool JmApiHeaders(std::int64_t unix_time, std::vector<std::pair<std::string, std
     {
         return false;
     }
+    const std::string auth = uid.empty() ? std::string(jm_adapter::modules::AuthorizationBearer())
+                                         : std::string(jm_adapter::modules::AuthorizationBearer()) + " " + uid;
     *out = {
         {"Accept", "*/*"},
         {"Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
-        {"Authorization", "Bearer"},
+        {"Authorization", auth},
         {"Connection", "keep-alive"},
         {"Origin", "https://localhost"},
         {"Referer", "https://localhost/"},
@@ -131,6 +138,95 @@ bool JmApiHeaders(std::int64_t unix_time, std::vector<std::pair<std::string, std
     return true;
 }
 
+bool TrimJsonPayload(const std::string& value, std::string* out, std::string* error);
+bool JmApiGet(const std::string& target, const std::string& uid, JsonValue* out, std::string* error);
+
+bool JmApiPost(const std::string& target,
+               const std::string& uid,
+               const std::string& body,
+               JsonValue* out,
+               std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "JM API output pointer is null");
+        return false;
+    }
+    const auto now = std::chrono::system_clock::now();
+    const auto unix_time = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (!JmApiHeaders(unix_time, uid, &headers, error))
+    {
+        return false;
+    }
+
+    std::string last_error;
+    for (int index = 0; index < jm_adapter::modules::ApiHostCount(); ++index)
+    {
+        const std::string host = jm_adapter::modules::ApiHostAt(index);
+        const std::string url = "https://" + host + target;
+        HttpResult response;
+        std::string request_error;
+        if (!HttpPost(url, headers, body, &response, &request_error, jm_adapter::modules::LoginTimeoutSeconds()))
+        {
+            last_error = host + ": " + request_error;
+            continue;
+        }
+        if (response.status != 200)
+        {
+            last_error = host + " HTTP " + std::to_string(response.status);
+            continue;
+        }
+        JsonValue encrypted_root;
+        if (!json::glaze_parse(encrypted_root, response.body))
+        {
+            last_error = host + " returned invalid JSON";
+            continue;
+        }
+        const std::string encrypted_data = json::glaze_safe_get<std::string>(encrypted_root, "data", "");
+        if (encrypted_data.empty())
+        {
+            last_error = host + " returned empty encrypted payload";
+            continue;
+        }
+        std::string cipher_text;
+        if (!DecodeBase64(encrypted_data, cipher_text))
+        {
+            last_error = host + " returned invalid base64 payload";
+            continue;
+        }
+        std::string key;
+        if (!Md5Hex(std::to_string(unix_time) + "185Hcomic3PAPP7R", &key, &request_error))
+        {
+            last_error = host + ": " + request_error;
+            continue;
+        }
+        std::string decrypted;
+        if (!Aes256EcbDecrypt(cipher_text, key, &decrypted, &request_error))
+        {
+            last_error = host + ": " + request_error;
+            continue;
+        }
+        std::string clear;
+        if (!TrimJsonPayload(decrypted, &clear, &request_error))
+        {
+            last_error = host + ": " + request_error;
+            continue;
+        }
+        JsonValue result;
+        if (!json::glaze_parse(result, clear))
+        {
+            last_error = host + " decrypted payload parse failed";
+            continue;
+        }
+        *out = std::move(result);
+        return true;
+    }
+
+    SetError(error, last_error.empty() ? jm_adapter::modules::OfficialApiFailureMessage() : last_error);
+    return false;
+}
+
 bool TrimJsonPayload(const std::string& value, std::string* out, std::string* error)
 {
     const auto start = value.find_first_of("[{");
@@ -144,7 +240,7 @@ bool TrimJsonPayload(const std::string& value, std::string* out, std::string* er
     return true;
 }
 
-bool JmApiGet(const std::string& target, JsonValue* out, std::string* error)
+bool JmApiGet(const std::string& target, const std::string& uid, JsonValue* out, std::string* error)
 {
     if (out == nullptr)
     {
@@ -154,7 +250,7 @@ bool JmApiGet(const std::string& target, JsonValue* out, std::string* error)
     const auto now = std::chrono::system_clock::now();
     const auto unix_time = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
     std::vector<std::pair<std::string, std::string>> headers;
-    if (!JmApiHeaders(unix_time, &headers, error))
+    if (!JmApiHeaders(unix_time, uid, &headers, error))
     {
         return false;
     }
@@ -257,6 +353,15 @@ bool IsAllowedJmImageUrl(const std::string& image_url)
 
 bool JmSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error)
 {
+    return JmSearchWithToken(keyword, page, "", out, error);
+}
+
+bool JmSearchWithToken(const std::string& keyword,
+                       int page,
+                       const std::string& uid,
+                       json::JsonValue* out,
+                       std::string* error)
+{
     if (out == nullptr)
     {
         SetError(error, "JM search output pointer is null");
@@ -268,7 +373,7 @@ bool JmSearch(const std::string& keyword, int page, json::JsonValue* out, std::s
     if (jm_adapter::modules::ShouldAppendSearchPage(normalized_page))
         target += "&page=" + std::to_string(normalized_page);
     json::JsonValue result;
-    if (!JmApiGet(target, &result, error))
+    if (!JmApiGet(target, uid, &result, error))
     {
         return false;
     }
@@ -301,6 +406,11 @@ bool JmSearch(const std::string& keyword, int page, json::JsonValue* out, std::s
 
 bool JmDetail(const std::string& comic_id, json::JsonValue* out, std::string* error)
 {
+    return JmDetailWithToken(comic_id, "", out, error);
+}
+
+bool JmDetailWithToken(const std::string& comic_id, const std::string& uid, json::JsonValue* out, std::string* error)
+{
     if (out == nullptr)
     {
         SetError(error, "JM detail output pointer is null");
@@ -310,7 +420,7 @@ bool JmDetail(const std::string& comic_id, json::JsonValue* out, std::string* er
     if (jm_adapter::modules::ShouldStripJmPrefix(id.rfind("jm", 0) == 0))
         id = id.substr(2);
     json::JsonValue result;
-    if (!JmApiGet("/album?id=" + detail::UrlEncode(id), &result, error))
+    if (!JmApiGet("/album?id=" + detail::UrlEncode(id), uid, &result, error))
     {
         return false;
     }
@@ -373,13 +483,18 @@ bool JmDetail(const std::string& comic_id, json::JsonValue* out, std::string* er
 
 bool JmPages(const std::string& chapter_id, json::JsonValue* out, std::string* error)
 {
+    return JmPagesWithToken(chapter_id, "", out, error);
+}
+
+bool JmPagesWithToken(const std::string& chapter_id, const std::string& uid, json::JsonValue* out, std::string* error)
+{
     if (out == nullptr)
     {
         SetError(error, "JM pages output pointer is null");
         return false;
     }
     json::JsonValue result;
-    if (!JmApiGet("/chapter?id=" + detail::UrlEncode(chapter_id), &result, error))
+    if (!JmApiGet("/chapter?id=" + detail::UrlEncode(chapter_id), uid, &result, error))
     {
         return false;
     }
@@ -455,6 +570,127 @@ R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std:
     payload.body = std::move(result.body);
     detail::WriteCachedImage(cache_root, cache_key, payload);
     return payload;
+}
+
+bool JmLogin(const std::string& username, const std::string& password, std::string* uid_out, std::string* error)
+{
+    if (uid_out == nullptr)
+    {
+        SetError(error, "JM login uid output is null");
+        return false;
+    }
+    if (username.empty() || password.empty())
+    {
+        SetError(error, jm_adapter::modules::LoginRequiredMessage());
+        return false;
+    }
+    // Build JSON body (escape the two characters that break JSON string literals).
+    auto json_escape = [](const std::string& in)
+    {
+        std::string out;
+        out.reserve(in.size() + 4);
+        for (unsigned char c : in)
+        {
+            if (c == '\\' || c == '"')
+            {
+                out.push_back('\\');
+                out.push_back(static_cast<char>(c));
+            }
+            else if (c == '\n')
+                out += "\\n";
+            else if (c == '\r')
+                out += "\\r";
+            else if (c == '\t')
+                out += "\\t";
+            else if (c < 0x20)
+            {
+                char buf[8];
+                std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(c));
+                out += buf;
+            }
+            else
+                out.push_back(static_cast<char>(c));
+        }
+        return out;
+    };
+    const std::string body = std::string("{\"") + jm_adapter::modules::LoginUsernameField() + "\":\"" +
+                             json_escape(username) + "\",\"" + jm_adapter::modules::LoginPasswordField() + "\":\"" +
+                             json_escape(password) + "\"}";
+
+    json::JsonValue result;
+    if (!JmApiPost(jm_adapter::modules::LoginTarget(), "", body, &result, error))
+        return false;
+
+    // Response: {"code":200,"data":{"uid":"...","username":"...","level":...},...}
+    const int64_t code = detail::FieldInt(result, "code", 200);
+    if (code != 0 && code != 200)
+    {
+        const std::string msg = detail::FieldString(result, "message", detail::FieldString(result, "error", ""));
+        SetError(error,
+                 msg.empty()
+                     ? (jm_adapter::modules::LoginFailedMessage() + std::string(" (code ") + std::to_string(code) + ")")
+                     : (jm_adapter::modules::LoginFailedMessage() + std::string(": ") + msg));
+        return false;
+    }
+    const json::JsonValue data = json::glaze_get(result, "data");
+    std::string uid = detail::FieldString(data, jm_adapter::modules::LoginUidField());
+    if (uid.empty())
+    {
+        // Some response shapes embed uid directly on the root.
+        uid = detail::FieldString(result, jm_adapter::modules::LoginUidField());
+    }
+    if (uid.empty())
+    {
+        const std::string msg = detail::FieldString(result, "message", "");
+        SetError(error, msg.empty() ? "JM login succeeded but returned no uid" : "JM login: " + msg);
+        return false;
+    }
+    *uid_out = std::move(uid);
+    return true;
+}
+
+bool JmCheckin(const std::string& uid, json::JsonValue* out, std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "JM check-in output pointer is null");
+        return false;
+    }
+    if (uid.empty())
+    {
+        SetError(error, "JM check-in requires a logged-in uid");
+        return false;
+    }
+    json::JsonValue result;
+    if (!JmApiPost(jm_adapter::modules::CheckinTarget(), uid, "{}", &result, error))
+        return false;
+
+    const int64_t code = detail::FieldInt(result, "code", 200);
+    const std::string msg = detail::FieldString(result, "message", "");
+    json::JsonValue data;
+    data["source_id"] = jm_adapter::modules::SourceId();
+    data["uid"] = uid;
+    data["message"] = msg;
+    if (code == 200 || code == 0)
+    {
+        data["status"] = jm_adapter::modules::CheckinSuccessStatus();
+        *out = std::move(data);
+        return true;
+    }
+    // Code 401 or specific messages indicate already checked in or not logged in.
+    const bool already = msg.find("已") != std::string::npos || msg.find("already") != std::string::npos ||
+                         msg.find("签") != std::string::npos;
+    if (already)
+    {
+        data["status"] = jm_adapter::modules::CheckinAlreadyDoneStatus();
+        *out = std::move(data);
+        return true;
+    }
+    SetError(error,
+             msg.empty()
+                 ? (jm_adapter::modules::CheckinFailedMessage() + std::string(" (code ") + std::to_string(code) + ")")
+                 : (jm_adapter::modules::CheckinFailedMessage() + std::string(": ") + msg));
+    return false;
 }
 
 } // namespace memochat::r18

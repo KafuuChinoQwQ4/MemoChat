@@ -6,6 +6,17 @@
 #include <cstdlib>
 #include <string>
 
+namespace
+{
+void ConfigureTestPicacgSigning()
+{
+    const std::string api_key(29, 'a');
+    const std::string hmac_key(63, 'b');
+    setenv("MEMOCHAT_R18_PICACG_API_KEY", api_key.c_str(), 1);
+    setenv("MEMOCHAT_R18_PICACG_HMAC_KEY", hmac_key.c_str(), 1);
+}
+} // namespace
+
 TEST(R18SourceServiceTest, ImportZipNormalizesIdAndVersionThroughImportedModule)
 {
     std::error_code ec;
@@ -60,6 +71,7 @@ TEST(R18SourceServiceTest, DisabledImportedSourceCannotDispatch)
 
 TEST(R18SourceServiceTest, PicacgWithoutAccountIsAuthRequiredInListSources)
 {
+    ConfigureTestPicacgSigning();
     auto& service = memochat::r18::R18SourceService::Instance();
     const auto sources = service.ListSourcesForUser(4242);
     ASSERT_TRUE(sources.is_array());
@@ -103,8 +115,33 @@ TEST(R18SourceServiceTest, PicacgWithoutAccountIsAuthRequiredInListSources)
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(items[0], "title", ""), "官方源请求失败");
 }
 
+TEST(R18SourceServiceTest, ListsOnlyActionableProductionSources)
+{
+    ConfigureTestPicacgSigning();
+    auto& service = memochat::r18::R18SourceService::Instance();
+    std::string error;
+    const std::string manifest = R"({"id":"staged-hidden","name":"Staged Hidden","version":"1.0.0"})";
+    const auto staged =
+        service.ImportZip("staged-hidden.js", manifest, "class ComicSource { async search() { return []; } }", &error);
+    ASSERT_FALSE(staged.id.empty()) << error;
+
+    const auto sources = service.ListSourcesForUser(4243);
+    ASSERT_TRUE(sources.is_array());
+    for (std::size_t index = 0; index < sources.size(); ++index)
+    {
+        const auto source = sources[static_cast<int>(index)];
+        const auto id = memochat::json::glaze_safe_get<std::string>(source, "id", "");
+        const auto status = memochat::json::glaze_safe_get<std::string>(source, "status", "");
+        EXPECT_NE(id, "mock");
+        EXPECT_NE(id, "staged-hidden");
+        EXPECT_NE(id, "wnacg.official");
+        EXPECT_NE(status, "staged-js");
+    }
+}
+
 TEST(R18SourceServiceTest, AccountManagerSavesAndListsWithoutExposingSecrets)
 {
+    ConfigureTestPicacgSigning();
     auto& service = memochat::r18::R18SourceService::Instance();
     std::string error;
     ASSERT_TRUE(
@@ -113,11 +150,14 @@ TEST(R18SourceServiceTest, AccountManagerSavesAndListsWithoutExposingSecrets)
     const auto accounts = service.ListAccounts(777);
     const auto managed = accounts["managed"];
     ASSERT_TRUE(managed.is_array());
+    EXPECT_EQ(managed.size(), 3U);
     bool found = false;
     for (std::size_t i = 0; i < managed.size(); ++i)
     {
         const auto item = managed[static_cast<int>(i)];
-        if (memochat::json::glaze_safe_get<std::string>(item, "source_id", "") != "ehentai.official")
+        const auto source_id = memochat::json::glaze_safe_get<std::string>(item, "source_id", "");
+        EXPECT_TRUE(source_id == "jm.official" || source_id == "picacg.official" || source_id == "ehentai.official");
+        if (source_id != "ehentai.official")
             continue;
         found = true;
         EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(item, "username", ""), "cookie-user");

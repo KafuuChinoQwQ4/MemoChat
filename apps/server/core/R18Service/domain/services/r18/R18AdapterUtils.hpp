@@ -26,15 +26,23 @@ struct HttpResult
 {
     int status = 0;
     std::string content_type;
+    std::string location;
     std::string body;
 };
 
 bool ParseUrl(const std::string& url, ParsedUrl* out, std::string* error);
+bool OutboundProxyEnabled(const std::string& url, bool* enabled, std::string* error);
 bool HttpGet(const std::string& url,
              const std::vector<std::pair<std::string, std::string>>& headers,
              HttpResult* out,
              std::string* error,
              int timeout_seconds = 20);
+bool HttpGetBounded(const std::string& url,
+                    const std::vector<std::pair<std::string, std::string>>& headers,
+                    std::uint64_t max_body_bytes,
+                    HttpResult* out,
+                    std::string* error,
+                    int timeout_seconds = 20);
 bool HttpPost(const std::string& url,
               const std::vector<std::pair<std::string, std::string>>& headers,
               const std::string& body,

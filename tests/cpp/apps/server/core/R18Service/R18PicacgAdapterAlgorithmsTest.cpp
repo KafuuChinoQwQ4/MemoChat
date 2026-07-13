@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstdlib>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -12,6 +13,7 @@ const char* ApiHost();
 const char* ApiKey();
 const char* HmacKey();
 bool HasCredentials(bool api_key_empty, bool hmac_key_empty);
+bool HasValidSigningMaterial(unsigned long long api_key_size, unsigned long long hmac_key_size);
 const char* MissingCredentialsMessage();
 const char* GetMethod();
 const char* PostMethod();
@@ -30,6 +32,8 @@ const char* ImageReferer();
 const char* AllowedImageHostsConfigSection();
 const char* AllowedImageHostsConfigKey();
 const char* ImageTargetPrefix();
+const char* RedirectImageHost();
+bool IsRedirectImageTarget(const char* target, unsigned long long target_size);
 bool IsExactHostInPolicy(const char* host,
                          unsigned long long host_size,
                          const char* policy,
@@ -44,6 +48,8 @@ bool IsPublicIpv4Address(unsigned int address);
 bool IsPublicIpv6Address(const unsigned char* bytes, unsigned long long size);
 unsigned long long MaxImageBytes();
 bool IsAllowedImageContentType(bool jpeg, bool png, bool webp, bool gif, bool avif);
+bool IsImageRedirectStatus(int status);
+unsigned long long MaxImageRedirects();
 const char* ImageUnavailableTitle();
 const char* ImageErrorTitle();
 bool ShouldUseImagePlaceholder(int status, bool body_empty);
@@ -53,15 +59,23 @@ TEST(R18PicacgAdapterAlgorithmsTest, ExposesStableIdentityAndApiDefaults)
 {
     using namespace memochat::tests::r18::picacg_adapter;
 
+    const std::string api_key(29, 'a');
+    const std::string hmac_key(63, 'b');
+    setenv("MEMOCHAT_R18_PICACG_API_KEY", api_key.c_str(), 1);
+    setenv("MEMOCHAT_R18_PICACG_HMAC_KEY", hmac_key.c_str(), 1);
+
     EXPECT_STREQ(SourceId(), "picacg.official");
     EXPECT_STREQ(ApiHost(), "picaapi.picacomic.com");
-    // Default client signing material is public; env can override.
+    // The test injects canonical-length signing material through the runtime environment.
     EXPECT_FALSE(std::string(ApiKey()).empty());
     EXPECT_FALSE(std::string(HmacKey()).empty());
     EXPECT_FALSE(HasCredentials(true, false));
     EXPECT_FALSE(HasCredentials(false, true));
     EXPECT_TRUE(HasCredentials(false, false));
-    EXPECT_STREQ(MissingCredentialsMessage(), "Picacg account login required");
+    EXPECT_FALSE(HasValidSigningMaterial(29, 32));
+    EXPECT_FALSE(HasValidSigningMaterial(28, 63));
+    EXPECT_TRUE(HasValidSigningMaterial(29, 63));
+    EXPECT_STREQ(MissingCredentialsMessage(), "Picacg signing configuration is missing or invalid");
     EXPECT_STREQ(GetMethod(), "GET");
     EXPECT_STREQ(PostMethod(), "POST");
     EXPECT_EQ(ApiTimeoutSeconds(), 8);
@@ -118,6 +132,13 @@ TEST(R18PicacgAdapterAlgorithmsTest, ExposesImageFetchGuards)
     EXPECT_TRUE(ShouldUseImagePlaceholder(199, false));
     EXPECT_TRUE(ShouldUseImagePlaceholder(300, false));
     EXPECT_TRUE(ShouldUseImagePlaceholder(200, true));
+    EXPECT_TRUE(IsImageRedirectStatus(301));
+    EXPECT_TRUE(IsImageRedirectStatus(302));
+    EXPECT_TRUE(IsImageRedirectStatus(307));
+    EXPECT_TRUE(IsImageRedirectStatus(308));
+    EXPECT_FALSE(IsImageRedirectStatus(200));
+    EXPECT_FALSE(IsImageRedirectStatus(404));
+    EXPECT_EQ(MaxImageRedirects(), 2U);
 }
 
 TEST(R18PicacgAdapterAlgorithmsTest, RequiresCanonicalExactConfiguredMediaOrigin)
@@ -130,6 +151,14 @@ TEST(R18PicacgAdapterAlgorithmsTest, RequiresCanonicalExactConfiguredMediaOrigin
     EXPECT_STREQ(AllowedImageHostsConfigSection(), "R18Picacg");
     EXPECT_STREQ(AllowedImageHostsConfigKey(), "AllowedImageHosts");
     EXPECT_STREQ(ImageTargetPrefix(), "/static/");
+    EXPECT_STREQ(RedirectImageHost(), "img.picacomic.com");
+    const std::string redirect_image = "/asset/rs:fill:300:400:0/g:sm/cover.jpg";
+    const std::string redirect_html = "/asset/index.html";
+    const std::string redirect_query = "/asset/cover.jpg?next=https://attacker.invalid";
+    EXPECT_TRUE(IsRedirectImageTarget(redirect_image.data(), redirect_image.size()));
+    EXPECT_FALSE(IsRedirectImageTarget(redirect_html.data(), redirect_html.size()));
+    EXPECT_FALSE(IsRedirectImageTarget(redirect_query.data(), redirect_query.size()));
+    EXPECT_FALSE(IsRedirectImageTarget("/", 1));
     EXPECT_TRUE(IsExactHostInPolicy(exact.data(), exact.size(), policy.data(), policy.size()));
     EXPECT_FALSE(IsExactHostInPolicy(suffix_trick.data(), suffix_trick.size(), policy.data(), policy.size()));
     EXPECT_FALSE(IsExactHostInPolicy(exact.data(), exact.size(), "", 0));

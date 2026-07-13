@@ -760,4 +760,28 @@ bool R18Service::HandleClearAccount(const memochat::gate::routing::GateRequest& 
                              });
 }
 
+bool R18Service::HandleCheckin(const memochat::gate::routing::GateRequest& request,
+                               memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string source_id = memochat::json::glaze_safe_get<std::string>(src, "source_id", "jm.official");
+            const auto result = memochat::r18::R18SourceService::Instance().CheckinForUser(uid, source_id);
+            const std::string status = memochat::json::glaze_safe_get<std::string>(result, "status", "error");
+            const bool ok = status == "ok" || status == "already";
+            if (!ok)
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = memochat::json::glaze_safe_get<std::string>(result, "message", "check-in failed");
+                root["data"] = result;
+                return true;
+            }
+            WriteOk(root, result);
+            return true;
+        });
+}
+
 } // namespace memochat::gate::services::r18

@@ -71,6 +71,10 @@ public:
     R18ImagePayload FetchImage(const std::string& source_id, const std::string& image_url);
     R18ImagePayload FetchImageForUser(int uid, const std::string& source_id, const std::string& image_url);
 
+    // Daily check-in for sources that support it (currently JMComic).
+    // Returns a JSON payload with status/message; errors stored on the credential.
+    memochat::json::JsonValue CheckinForUser(int uid, const std::string& source_id);
+
 private:
     R18SourceService();
 

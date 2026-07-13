@@ -77,7 +77,7 @@ bool PicacgSigningConfigured()
 {
     const std::string api_key = picacg_adapter::modules::ApiKey();
     const std::string hmac_key = picacg_adapter::modules::HmacKey();
-    return picacg_adapter::modules::HasCredentials(api_key.empty(), hmac_key.empty());
+    return picacg_adapter::modules::HasValidSigningMaterial(api_key.size(), hmac_key.size());
 }
 
 void ApplyRuntimeSourceAvailability(R18SourceRecord& rec, int uid = 0)
@@ -336,6 +336,8 @@ json::JsonValue R18SourceService::ListSourcesForUser(int uid)
     json::JsonValue arr{json::array_t{}};
     const auto append_source = [this, &arr, uid](const std::string& id)
     {
+        if (id == kPicacgSourceId && !PicacgSigningConfigured())
+            return;
         const auto it = sources_.find(id);
         if (it == sources_.end())
             return;
@@ -345,11 +347,10 @@ json::JsonValue R18SourceService::ListSourcesForUser(int uid)
     append_source(kPicacgSourceId);
     append_source(kNhentaiSourceId);
     append_source(kEhentaiSourceId);
-    append_source(kMockSourceId);
     for (const auto& [id, source] : sources_)
     {
         if (id != kJmSourceId && id != kPicacgSourceId && id != kNhentaiSourceId && id != kEhentaiSourceId &&
-            id != kMockSourceId)
+            id != kMockSourceId && source.enabled && source.status != source_service::modules::StagedJsStatus())
         {
             json::glaze_append(arr, PublicSourceRecord(source, uid));
         }
@@ -393,8 +394,8 @@ json::JsonValue R18SourceService::ListAccounts(int uid)
         json::glaze_append(managed, item);
     };
     append_managed(kJmSourceId, "禁漫天堂", false, true);
-    append_managed(kPicacgSourceId, "哔咔漫画", true, false);
-    append_managed(kNhentaiSourceId, "nHentai", false, true);
+    if (PicacgSigningConfigured())
+        append_managed(kPicacgSourceId, "哔咔漫画", true, false);
     append_managed(kEhentaiSourceId, "e-hentai", false, true); // cookie optional
     data["managed"] = managed;
     return data;
@@ -412,8 +413,8 @@ bool R18SourceService::SaveAccount(int uid,
     }
     if (!R18SourceCredentialStore::Instance().UpsertLogin(uid, source_id, username, password, error))
         return false;
-    // Auto-login when credentials are present and source needs auth.
-    if (SourceNeedsAccount(source_id) || source_id == kEhentaiSourceId)
+    // Auto-login when credentials are present and source supports/needs remote auth.
+    if (SourceNeedsAccount(source_id) || source_id == kEhentaiSourceId || source_id == kJmSourceId)
     {
         std::string login_error;
         if (!LoginAccount(uid, source_id, &login_error) && error != nullptr && error->empty())
@@ -484,6 +485,26 @@ bool R18SourceService::LoginAccount(int uid, const std::string& source_id, std::
         return R18SourceCredentialStore::Instance()
             .UpdateSession(uid, source_id, "", "", "configured", "direct access without cookie", error);
     }
+    if (source_id == kJmSourceId)
+    {
+        if (cred->username.empty() || cred->password.empty())
+        {
+            // JM login is optional; mark as direct access when no credentials given.
+            return R18SourceCredentialStore::Instance()
+                .UpdateSession(uid, source_id, "", "", "authenticated", "direct access (no account)", error);
+        }
+        std::string jm_uid;
+        std::string login_error;
+        if (!JmLogin(cred->username, cred->password, &jm_uid, &login_error))
+        {
+            R18SourceCredentialStore::Instance().MarkError(uid, source_id, login_error, nullptr);
+            if (error)
+                *error = login_error;
+            return false;
+        }
+        return R18SourceCredentialStore::Instance()
+            .UpdateSession(uid, source_id, jm_uid, "", "authenticated", "login ok", error);
+    }
     // Direct-access sources: mark configured, no remote login.
     return R18SourceCredentialStore::Instance()
         .UpdateSession(uid, source_id, "", "", "authenticated", "direct access", error);
@@ -492,6 +513,33 @@ bool R18SourceService::LoginAccount(int uid, const std::string& source_id, std::
 bool R18SourceService::ClearAccount(int uid, const std::string& source_id, std::string* error)
 {
     return R18SourceCredentialStore::Instance().Clear(uid, source_id, error);
+}
+
+json::JsonValue R18SourceService::CheckinForUser(int uid, const std::string& source_id)
+{
+    json::JsonValue data;
+    data["source_id"] = source_id;
+    if (source_id == kJmSourceId)
+    {
+        const std::string jm_uid = SessionTokenFor(uid, source_id);
+        if (jm_uid.empty())
+        {
+            data["status"] = "not_logged_in";
+            data["message"] = "JM check-in requires an account login first";
+            return data;
+        }
+        std::string checkin_error;
+        if (JmCheckin(jm_uid, &data, &checkin_error))
+        {
+            return data;
+        }
+        data["status"] = "error";
+        data["message"] = checkin_error;
+        return data;
+    }
+    data["status"] = "unsupported";
+    data["message"] = "check-in is not supported for this source";
+    return data;
 }
 
 std::string R18SourceService::SessionTokenFor(int uid, const std::string& source_id)
@@ -671,10 +719,16 @@ R18SourceService::SearchForUser(int uid, const std::string& source_id, const std
     {
         json::JsonValue result;
         std::string error;
-        if (JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error))
-        {
+        const std::string jm_uid = SessionTokenFor(uid, source_id);
+        const bool ok = jm_uid.empty()
+                            ? JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error)
+                            : JmSearchWithToken(keyword,
+                                                source_service::modules::NormalizeSearchPage(page),
+                                                jm_uid,
+                                                &result,
+                                                &error);
+        if (ok)
             return result;
-        }
         return ErrorData(kJmSourceId, error);
     }
     if (source_id == kPicacgSourceId)
@@ -748,10 +802,11 @@ json::JsonValue R18SourceService::DetailForUser(int uid, const std::string& sour
     {
         json::JsonValue result;
         std::string error;
-        if (JmDetail(comic_id, &result, &error))
-        {
+        const std::string jm_uid = SessionTokenFor(uid, source_id);
+        const bool ok =
+            jm_uid.empty() ? JmDetail(comic_id, &result, &error) : JmDetailWithToken(comic_id, jm_uid, &result, &error);
+        if (ok)
             return result;
-        }
         json::JsonValue data;
         data["source_id"] = kJmSourceId;
         data["comic_id"] = comic_id;
@@ -846,10 +901,11 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
     {
         json::JsonValue result;
         std::string error;
-        if (JmPages(chapter_id, &result, &error))
-        {
+        const std::string jm_uid = SessionTokenFor(uid, source_id);
+        const bool ok = jm_uid.empty() ? JmPages(chapter_id, &result, &error)
+                                       : JmPagesWithToken(chapter_id, jm_uid, &result, &error);
+        if (ok)
             return result;
-        }
         json::JsonValue data;
         data["source_id"] = kJmSourceId;
         data["chapter_id"] = chapter_id;

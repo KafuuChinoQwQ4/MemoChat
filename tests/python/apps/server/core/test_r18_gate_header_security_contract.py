@@ -5,6 +5,7 @@ from tests.python.support.paths import repo_root
 REPO_ROOT = repo_root()
 R18_SERVICE = REPO_ROOT / "apps/server/core/R18Service/domain/services/r18"
 R18_GATEWAY_INI = REPO_ROOT / "apps/server/core/R18Service/r18gateway.ini"
+R18_CHART_VALUES = REPO_ROOT / "infra/deploy/kubernetes/charts/memochat/values.yaml"
 GATE_HTTP_CONNECTION = REPO_ROOT / "apps/server/core/GateShared/HttpConnection.cpp"
 R18_QML = REPO_ROOT / "apps/client/desktop/MemoChat-qml/features/r18"
 
@@ -39,11 +40,27 @@ class R18GateHeaderSecurityContractTests(unittest.TestCase):
         self.assertIn("ResolvePublicImageEndpoints", picacg)
         self.assertIn("IsPublicIpv4Address", picacg)
         self.assertIn("IsPublicIpv6Address", picacg)
+        self.assertIn("OutboundProxyEnabled", picacg)
+        self.assertIn("HttpGetBounded", picacg)
+        self.assertIn("IsImageRedirectStatus", picacg)
+        self.assertIn("MaxImageRedirects", picacg)
+        self.assertIn("response.location", picacg)
         self.assertIn("parser.body_limit", picacg)
         self.assertIn("IsAllowedImageContentType", picacg)
         self.assertLess(picacg.index("ValidatePicacgImageUrl"), picacg.index("ReadCachedImage"))
         fetch = picacg.split("R18ImagePayload PicacgFetchImage", 1)[1]
-        self.assertLess(fetch.index("ResolvePublicImageEndpoints"), fetch.index("HttpGetPinned"))
+        self.assertLess(fetch.index("ResolvePublicImageEndpoints"), fetch.index("OutboundProxyEnabled"))
+        self.assertLess(fetch.index("OutboundProxyEnabled"), fetch.index("HttpGetBounded"))
+        self.assertLess(fetch.index("OutboundProxyEnabled"), fetch.index("HttpGetPinned"))
+
+    def test_picacg_official_media_origin_is_configured_without_wildcards(self):
+        gateway_config = read(R18_GATEWAY_INI)
+        chart_values = read(R18_CHART_VALUES)
+
+        self.assertIn("AllowedImageHosts=storage-b.picacomic.com,img.picacomic.com", gateway_config)
+        self.assertIn('allowedImageHosts: "storage-b.picacomic.com,img.picacomic.com"', chart_values)
+        self.assertNotIn("AllowedImageHosts=*", gateway_config)
+        self.assertNotIn('allowedImageHosts: "*"', chart_values)
 
     def test_standard_qml_client_contains_no_global_source_mutation_route(self):
         source = "\n".join(

@@ -73,6 +73,13 @@ interface R18Page {
   url?: string
 }
 
+export interface R18CheckinResult {
+  source_id: string
+  uid?: string
+  status: "ok" | "already" | "not_logged_in" | "unsupported" | "error"
+  message?: string
+}
+
 function unwrap<T>(response: R18Envelope<T>, operation: string): T {
   if (response.error !== 0 || response.data === undefined) {
     throw new Error(response.message || `${operation} failed: ${response.error}`)
@@ -157,6 +164,13 @@ export function createR18Api(http: HttpClient) {
         source_id: sourceId,
       })
       return unwrap(response, "R18 account clear")
+    },
+
+    async checkin(sourceId: string = "jm.official"): Promise<R18CheckinResult> {
+      const response = await http.post<R18Envelope<R18CheckinResult>>(ENDPOINTS.r18Checkin, {
+        source_id: sourceId,
+      })
+      return unwrap(response, "R18 check-in")
     },
   }
 }
