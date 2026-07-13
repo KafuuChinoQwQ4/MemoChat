@@ -23,6 +23,30 @@ export interface R18Source {
   builtin?: boolean
   status?: string
   message?: string
+  auth_required?: boolean
+  direct_access?: boolean
+  account_status?: string
+  account_username?: string
+  has_account?: boolean
+}
+
+export interface R18ManagedAccount {
+  source_id: string
+  name?: string
+  auth_required?: boolean
+  direct_access?: boolean
+  username?: string
+  has_password?: boolean
+  has_session?: boolean
+  status?: string
+  message?: string
+  updated_at_ms?: number
+}
+
+export interface R18AccountsPayload {
+  managed?: R18ManagedAccount[]
+  accounts?: R18ManagedAccount[]
+  sources?: R18Source[]
 }
 
 export interface R18ComicItem {
@@ -103,6 +127,36 @@ export function createR18Api(http: HttpClient) {
       return (unwrap(response, "R18 chapter pages").pages ?? [])
         .map((page) => page.url?.trim() ?? "")
         .filter(Boolean)
+    },
+
+    async listAccounts(): Promise<R18AccountsPayload> {
+      const response = await http.get<R18Envelope<R18AccountsPayload>>(ENDPOINTS.r18Accounts)
+      return unwrap(response, "R18 accounts")
+    },
+
+    async saveAccount(sourceId: string, username: string, password: string): Promise<R18AccountsPayload> {
+      const response = await http.post<R18Envelope<R18AccountsPayload>>(ENDPOINTS.r18AccountSave, {
+        source_id: sourceId,
+        username,
+        password,
+      })
+      return unwrap(response, "R18 account save")
+    },
+
+    async loginAccount(sourceId: string, username?: string, password?: string): Promise<R18AccountsPayload> {
+      const response = await http.post<R18Envelope<R18AccountsPayload>>(ENDPOINTS.r18AccountLogin, {
+        source_id: sourceId,
+        username: username ?? "",
+        password: password ?? "",
+      })
+      return unwrap(response, "R18 account login")
+    },
+
+    async clearAccount(sourceId: string): Promise<R18AccountsPayload> {
+      const response = await http.post<R18Envelope<R18AccountsPayload>>(ENDPOINTS.r18AccountClear, {
+        source_id: sourceId,
+      })
+      return unwrap(response, "R18 account clear")
     },
   }
 }

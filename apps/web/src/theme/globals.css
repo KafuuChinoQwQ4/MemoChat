@@ -14,9 +14,10 @@
 
 /* ── Animated background ──────────────────────────────────────── */
 @keyframes bg-drift {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0%   { background-position: 0% 0%, 100% 100%, 50% 0%, 0% 50%; }
+  33%  { background-position: 100% 20%, 0% 80%, 80% 100%, 40% 0%; }
+  66%  { background-position: 40% 100%, 60% 0%, 0% 40%, 100% 60%; }
+  100% { background-position: 0% 0%, 100% 100%, 50% 0%, 0% 50%; }
 }
 
 /* ── Component entrance ───────────────────────────────────────── */
@@ -42,7 +43,7 @@
   50%      { opacity: 0; }
 }
 
-/* ── Default: dark theme background (matches dark.css) ──────── */
+/* ── Default: dark night black-purple animated gradient ──────── */
 html {
   font-family: var(--font-family-zh);
   font-size: 14px;
@@ -55,26 +56,37 @@ html {
 
   /* Default = dark, avoids white flash before ThemeProvider fires */
   background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.024) 0 1px, transparent 1px 88px),
-    repeating-linear-gradient(0deg,  rgba(255,255,255,0.018) 0 1px, transparent 1px 88px),
-    linear-gradient(118deg, transparent 0%,  rgba(64,156,132,0.20) 18%, transparent 46%),
-    linear-gradient(252deg, transparent 3%,  rgba(186,115,71,0.16) 24%, transparent 50%),
-    linear-gradient(180deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0) 32%),
-    linear-gradient(148deg, #03050a 0%, #071019 40%, #101419 73%, #17170f 100%);
-  background-color: #03050a;
+    radial-gradient(circle at 18% 22%, rgba(168, 85, 247, 0.38) 0%, transparent 42%),
+    radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.34) 0%, transparent 46%),
+    radial-gradient(circle at 70% 78%, rgba(236, 72, 153, 0.22) 0%, transparent 48%),
+    radial-gradient(circle at 24% 84%, rgba(59, 7, 100, 0.55) 0%, transparent 50%),
+    linear-gradient(145deg, #07010f 0%, #14061f 32%, #1a0b2e 58%, #0b0214 100%);
+  background-color: #07010f;
+  background-size: 160% 160%, 180% 180%, 170% 170%, 200% 200%, 100% 100%;
   background-attachment: fixed;
+  animation: bg-drift 22s ease-in-out infinite;
 }
 
-/* ── Light theme override ─────────────────────────────────────── */
+/* ── Light theme: daytime blue-pink animated gradient ─────────── */
 html[data-theme="light"] {
   background:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,179,237,0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(154,118,232,0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 60% 40%, rgba(74,222,128,0.08) 0%, transparent 50%),
-    linear-gradient(160deg, #deeef9 0%, #eef0fa 40%, #f5eef8 70%, #eef5ef 100%);
-  background-color: #e8eff8;
+    radial-gradient(circle at 16% 18%, rgba(96, 165, 250, 0.55) 0%, transparent 44%),
+    radial-gradient(circle at 84% 22%, rgba(244, 114, 182, 0.48) 0%, transparent 46%),
+    radial-gradient(circle at 72% 80%, rgba(129, 140, 248, 0.34) 0%, transparent 48%),
+    radial-gradient(circle at 28% 86%, rgba(56, 189, 248, 0.32) 0%, transparent 50%),
+    linear-gradient(145deg, #dbeafe 0%, #e0f2fe 28%, #fce7f3 62%, #f5d0fe 100%);
+  background-color: #e0f2fe;
+  background-size: 160% 160%, 180% 180%, 170% 170%, 200% 200%, 100% 100%;
   background-attachment: fixed;
-  animation: none;
+  animation: bg-drift 20s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  html[data-theme="light"] {
+    animation: none;
+    background-size: 100% 100%;
+  }
 }
 
 body {

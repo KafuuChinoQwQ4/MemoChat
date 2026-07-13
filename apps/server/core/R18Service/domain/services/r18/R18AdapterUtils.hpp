@@ -35,6 +35,12 @@ bool HttpGet(const std::string& url,
              HttpResult* out,
              std::string* error,
              int timeout_seconds = 20);
+bool HttpPost(const std::string& url,
+              const std::vector<std::pair<std::string, std::string>>& headers,
+              const std::string& body,
+              HttpResult* out,
+              std::string* error,
+              int timeout_seconds = 20);
 bool Md5Hex(const std::string& input, std::string* out, std::string* error);
 bool Aes256EcbDecrypt(const std::string& cipher_text, const std::string& key, std::string* out, std::string* error);
 std::string UrlEncode(const std::string& input);

@@ -43,6 +43,7 @@ public:
     static R18SourceService& Instance();
 
     memochat::json::JsonValue ListSources();
+    memochat::json::JsonValue ListSourcesForUser(int uid);
     bool EnableSource(const std::string& id, bool enabled, std::string* error);
     bool DeleteSource(const std::string& id, std::string* error);
     R18SourceRecord ImportZip(const std::string& file_name,
@@ -50,16 +51,34 @@ public:
                               const std::string& binary,
                               std::string* error);
 
+    // Unified account manager (per MemoChat uid).
+    memochat::json::JsonValue ListAccounts(int uid);
+    bool SaveAccount(int uid,
+                     const std::string& source_id,
+                     const std::string& username,
+                     const std::string& password,
+                     std::string* error);
+    bool LoginAccount(int uid, const std::string& source_id, std::string* error);
+    bool ClearAccount(int uid, const std::string& source_id, std::string* error);
+
     memochat::json::JsonValue Search(const std::string& source_id, const std::string& keyword, int page);
+    memochat::json::JsonValue
+    SearchForUser(int uid, const std::string& source_id, const std::string& keyword, int page);
     memochat::json::JsonValue Detail(const std::string& source_id, const std::string& comic_id);
+    memochat::json::JsonValue DetailForUser(int uid, const std::string& source_id, const std::string& comic_id);
     memochat::json::JsonValue Pages(const std::string& source_id, const std::string& chapter_id);
+    memochat::json::JsonValue PagesForUser(int uid, const std::string& source_id, const std::string& chapter_id);
     R18ImagePayload FetchImage(const std::string& source_id, const std::string& image_url);
+    R18ImagePayload FetchImageForUser(int uid, const std::string& source_id, const std::string& image_url);
 
 private:
     R18SourceService();
 
     bool CanDispatchSource(const std::string& source_id, std::string* error);
+    bool CanDispatchSourceForUser(int uid, const std::string& source_id, std::string* error);
     std::optional<R18SourceRecord> SourceSnapshot(const std::string& source_id);
+    std::string SessionTokenFor(int uid, const std::string& source_id);
+    std::string SessionCookieFor(int uid, const std::string& source_id);
     void LoadLocked();
     void LoadManifestLocked(const std::filesystem::path& manifest_path);
     void SaveLocked();

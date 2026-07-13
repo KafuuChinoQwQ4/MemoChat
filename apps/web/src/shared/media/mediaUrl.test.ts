@@ -25,8 +25,17 @@ describe("media URL resolution", () => {
     )
   })
 
+  it("rewrites local legacy absolute media download URLs to same-origin authorized paths", () => {
+    const legacy = "http://127.0.0.1:8080/media/download?asset=avatar-key&token=stale"
+    expect(resolveMediaUrl(legacy)).toBe("/media/download?asset=avatar-key")
+    expect(isAuthorizedMediaUrl(resolveMediaUrl(legacy))).toBe(true)
+    expect(resolveMediaUrl("http://localhost:8094/media/download?asset=avatar-key")).toBe(
+      "/media/download?asset=avatar-key",
+    )
+  })
+
   it("does not rewrite or authorize an absolute download URL from another origin", () => {
-    const external = "http://127.0.0.1:8080/media/download?asset=avatar-key"
+    const external = "http://evil.example/media/download?asset=avatar-key"
     expect(resolveMediaUrl(external)).toBe(external)
     expect(isAuthorizedMediaUrl(external)).toBe(false)
   })

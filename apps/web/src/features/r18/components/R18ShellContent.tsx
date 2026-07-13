@@ -5,6 +5,7 @@ import { useSessionStore } from "@/core/session/sessionStore"
 import {
   createR18Api,
   type R18ComicItem,
+  type R18ManagedAccount,
   type R18Source,
 } from "@/features/r18/api/r18Api"
 import { getGateway } from "@/shared/gateway/ClientGateway"
@@ -22,6 +23,59 @@ import styles from "./R18ShellContent.module.css"
 
 function sourceTitle(source: R18Source): string {
   return source.title?.trim() || source.name?.trim() || source.id
+}
+
+function sourceStatusLabel(source: R18Source): string {
+  if (source.enabled) {
+    if (source.direct_access) return "可直接访问"
+    if (source.account_status === "authenticated") return "已登录"
+    return source.version || source.status || source.id
+  }
+  if (source.status === "auth-required" || source.status === "credentials-missing") {
+    return "需要登录"
+  }
+  if (source.status === "staged-js") {
+    return "JS 源待运行时接入"
+  }
+  const message = source.message?.trim() ?? ""
+  if (
+    message === "Picacg credentials missing" ||
+    message === "Picacg account login required"
+  ) {
+    return "需要登录"
+  }
+  if (message.includes("source runtime adapter")) {
+    return "JS 源待运行时接入"
+  }
+  if (message) {
+    return message
+  }
+  return source.status || "不可用"
+}
+
+function humanizeR18Error(message?: string | null): string {
+  const text = message?.trim() ?? ""
+  if (!text) {
+    return "加载失败"
+  }
+  if (text === "Picacg credentials missing" || text === "Picacg account login required") {
+    return "哔咔源需要账号登录，请在左侧「账号管理」中保存账号密码"
+  }
+  if (text.startsWith("Picacg login token missing") || text.startsWith("Picacg login failed")) {
+    return "哔咔登录未拿到会话，请检查账号密码是否正确（已保存，可重试登录）"
+  }
+  if (text === "source is disabled") {
+    return "当前内容源已禁用"
+  }
+  if (text === "source not found") {
+    return "内容源不存在"
+  }
+  return text
+}
+
+function isSourceFailureItem(item: R18ComicItem): boolean {
+  const title = item.title?.trim() ?? ""
+  return !item.comic_id && (title === "官方源请求失败" || title === "内容源请求失败")
 }
 
 const DIALOG_FOCUSABLE_SELECTOR = [
@@ -348,6 +402,200 @@ function ReaderOverlay({
   )
 }
 
+// ─── Account manager ─────────────────────────────────────────────────────
+
+function accountStatusLabel(account: R18ManagedAccount): string {
+  if (account.direct_access && !account.auth_required) {
+    if (account.status === "authenticated" && account.has_session) return "可选 Cookie 已配置"
+    if (account.direct_access) return "无需账号，可直接访问"
+  }
+  switch (account.status) {
+    case "authenticated":
+      return "已登录"
+    case "configured":
+      return "已保存，待登录"
+    case "error":
+      return account.message?.trim() || "登录失败"
+    case "not_configured":
+      return account.auth_required ? "未配置账号" : "无需账号"
+    case "direct-access":
+      return "无需账号，可直接访问"
+    default:
+      return account.message?.trim() || account.status || "未知状态"
+  }
+}
+
+function AccountManagerPanel({
+  accounts,
+  busySourceId,
+  drafts,
+  onDraftChange,
+  onSave,
+  onLogin,
+  onClear,
+  onClose,
+}: {
+  accounts: R18ManagedAccount[]
+  busySourceId: string | null
+  drafts: Record<string, { username: string; password: string }>
+  onDraftChange: (sourceId: string, field: "username" | "password", value: string) => void
+  onSave: (sourceId: string) => void
+  onLogin: (sourceId: string) => void
+  onClear: (sourceId: string) => void
+  onClose: () => void
+}) {
+  const dialogRef = useDialogAccessibility(onClose)
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="r18-account-dialog-title"
+      tabIndex={-1}
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 92,
+        display: "grid", placeItems: "center", padding: 24,
+        background: "var(--r18-dialog-backdrop)",
+        backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+      }}
+    >
+      <GlassSurface
+        elevated
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(640px, calc(100vw - 48px))",
+          maxHeight: "min(760px, calc(100vh - 48px))",
+          borderRadius: 18, overflow: "hidden",
+          display: "flex", flexDirection: "column",
+        }}
+      >
+        <div style={{
+          padding: "16px 18px", display: "flex", alignItems: "center",
+          gap: 12, borderBottom: "1px solid var(--divider)", flexShrink: 0,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div id="r18-account-dialog-title" style={{ fontWeight: 700, fontSize: 15 }}>
+              内容源账号管理
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+              无需账号的源可直接访问；需要账号的源填写后自动保存并登录
+            </div>
+          </div>
+          <CloseButton onClose={onClose} />
+        </div>
+
+        <GlassScrollArea style={{ flex: 1, padding: "12px 14px 16px" }}>
+          <div style={{ display: "grid", gap: 12 }}>
+            {accounts.map((account) => {
+              const sourceId = account.source_id
+              const draft = drafts[sourceId] ?? {
+                username: account.username ?? "",
+                password: "",
+              }
+              const busy = busySourceId === sourceId
+              const needsAccount = Boolean(account.auth_required)
+              const optionalCookie = !needsAccount && sourceId.includes("ehentai")
+              return (
+                <GlassSurface
+                  key={sourceId}
+                  style={{
+                    padding: 14,
+                    borderRadius: 14,
+                    border: "1px solid var(--divider)",
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>
+                        {account.name || sourceId}
+                      </div>
+                      <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>
+                        {accountStatusLabel(account)}
+                      </div>
+                      {account.message && account.status === "error" && (
+                        <div style={{ marginTop: 4, fontSize: 12, color: "var(--color-badge)" }}>
+                          {account.message}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: 11,
+                      padding: "3px 8px",
+                      borderRadius: 999,
+                      border: "1px solid var(--divider)",
+                      color: needsAccount ? "var(--text-primary)" : "var(--text-secondary)",
+                      background: "var(--glass-btn-bg)",
+                    }}>
+                      {needsAccount ? "需要账号" : "直接访问"}
+                    </span>
+                  </div>
+
+                  {(needsAccount || optionalCookie) ? (
+                    <>
+                      <GlassTextField
+                        value={draft.username}
+                        onChange={(e) => onDraftChange(sourceId, "username", e.target.value)}
+                        placeholder={optionalCookie ? "备注名（可选）" : "账号 / 邮箱"}
+                        autoComplete="username"
+                      />
+                      <GlassTextField
+                        type="password"
+                        value={draft.password}
+                        onChange={(e) => onDraftChange(sourceId, "password", e.target.value)}
+                        placeholder={optionalCookie
+                          ? "可选 Cookie（ipb_member_id=...; ipb_pass_hash=...）"
+                          : (account.has_password ? "密码（留空则保留已保存密码）" : "密码")}
+                        autoComplete="current-password"
+                      />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        <GlassButton
+                          variant="primary"
+                          disabled={busy}
+                          onClick={() => onSave(sourceId)}
+                          style={{ fontSize: 12 }}
+                        >
+                          {busy ? "处理中…" : "保存并登录"}
+                        </GlassButton>
+                        <GlassButton
+                          disabled={busy || (!account.has_password && !draft.password && !account.has_session)}
+                          onClick={() => onLogin(sourceId)}
+                          style={{ fontSize: 12 }}
+                        >
+                          重新登录
+                        </GlassButton>
+                        <GlassButton
+                          disabled={busy || (!account.has_password && !account.has_session && !(account.username?.trim()))}
+                          onClick={() => onClear(sourceId)}
+                          style={{ fontSize: 12 }}
+                        >
+                          清除
+                        </GlassButton>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                      此源无需账号密码，可在左侧直接选择后搜索浏览。
+                    </div>
+                  )}
+                </GlassSurface>
+              )
+            })}
+            {accounts.length === 0 && (
+              <div style={{ padding: 28, textAlign: "center", color: "var(--text-disabled)", fontSize: 13 }}>
+                暂无托管账号项
+              </div>
+            )}
+          </div>
+        </GlassScrollArea>
+      </GlassSurface>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────
 
 export function R18ShellContent() {
@@ -366,6 +614,10 @@ export function R18ShellContent() {
     chapterId: string
     chapterTitle: string
   } | null>(null)
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false)
+  const [accountDrafts, setAccountDrafts] = useState<Record<string, { username: string; password: string }>>({})
+  const [accountBusySourceId, setAccountBusySourceId] = useState<string | null>(null)
+  const [accountActionError, setAccountActionError] = useState<string | null>(null)
 
   const authReady = uid !== null && token !== null
   const api = useMemo(() => createR18Api(getGateway().http), [])
@@ -393,7 +645,20 @@ export function R18ShellContent() {
     },
   })
 
+  const accountsQuery = useQuery({
+    queryKey: ["r18", "accounts", uid],
+    enabled: authReady && accessQuery.data?.allowed === true,
+    queryFn: async () => {
+      if (!authReady || accessQuery.data?.allowed !== true) throw new Error("R18 access denied")
+      return api.listAccounts()
+    },
+  })
+
   const sources = useMemo(() => sourcesQuery.data ?? [], [sourcesQuery.data])
+  const managedAccounts = useMemo(
+    () => accountsQuery.data?.managed ?? accountsQuery.data?.accounts ?? [],
+    [accountsQuery.data],
+  )
   const selectedSource = useMemo(
     () => sources.find((s) => s.id === selectedSourceId && s.enabled) ?? sources.find((s) => s.enabled),
     [sources, selectedSourceId],
@@ -402,6 +667,22 @@ export function R18ShellContent() {
   useEffect(() => {
     if (!selectedSourceId && selectedSource?.id) setSelectedSourceId(selectedSource.id)
   }, [selectedSource?.id, selectedSourceId])
+
+  useEffect(() => {
+    if (!accountPanelOpen || managedAccounts.length === 0) return
+    setAccountDrafts((prev) => {
+      const next = { ...prev }
+      for (const account of managedAccounts) {
+        if (!next[account.source_id]) {
+          next[account.source_id] = {
+            username: account.username ?? "",
+            password: "",
+          }
+        }
+      }
+      return next
+    })
+  }, [accountPanelOpen, managedAccounts])
 
   const searchQuery = useQuery({
     queryKey: ["r18", "search", uid, selectedSource?.id, submittedKeyword, page],
@@ -425,6 +706,80 @@ export function R18ShellContent() {
   function submitSearch() {
     setSubmittedKeyword(keyword.trim())
     setPage(1)
+  }
+
+  function updateAccountDraft(sourceId: string, field: "username" | "password", value: string) {
+    setAccountDrafts((prev) => ({
+      ...prev,
+      [sourceId]: {
+        username: field === "username" ? value : (prev[sourceId]?.username ?? ""),
+        password: field === "password" ? value : (prev[sourceId]?.password ?? ""),
+      },
+    }))
+  }
+
+  async function refreshAccountViews() {
+    await Promise.all([accountsQuery.refetch(), sourcesQuery.refetch()])
+  }
+
+  async function saveAccount(sourceId: string) {
+    const draft = accountDrafts[sourceId] ?? { username: "", password: "" }
+    setAccountBusySourceId(sourceId)
+    setAccountActionError(null)
+    try {
+      const payload = await api.saveAccount(sourceId, draft.username.trim(), draft.password)
+      setAccountDrafts((prev) => ({
+        ...prev,
+        [sourceId]: { username: draft.username.trim(), password: "" },
+      }))
+      await refreshAccountViews()
+      // Prefer server-managed payload when present.
+      if (payload.managed) {
+        // no-op; query refetch already applied
+      }
+    } catch (error) {
+      setAccountActionError(error instanceof Error ? error.message : "保存账号失败")
+    } finally {
+      setAccountBusySourceId(null)
+    }
+  }
+
+  async function loginAccount(sourceId: string) {
+    const draft = accountDrafts[sourceId]
+    setAccountBusySourceId(sourceId)
+    setAccountActionError(null)
+    try {
+      await api.loginAccount(sourceId, draft?.username?.trim() || undefined, draft?.password || undefined)
+      setAccountDrafts((prev) => ({
+        ...prev,
+        [sourceId]: {
+          username: draft?.username?.trim() ?? prev[sourceId]?.username ?? "",
+          password: "",
+        },
+      }))
+      await refreshAccountViews()
+    } catch (error) {
+      setAccountActionError(error instanceof Error ? error.message : "登录失败")
+    } finally {
+      setAccountBusySourceId(null)
+    }
+  }
+
+  async function clearAccount(sourceId: string) {
+    setAccountBusySourceId(sourceId)
+    setAccountActionError(null)
+    try {
+      await api.clearAccount(sourceId)
+      setAccountDrafts((prev) => ({
+        ...prev,
+        [sourceId]: { username: "", password: "" },
+      }))
+      await refreshAccountViews()
+    } catch (error) {
+      setAccountActionError(error instanceof Error ? error.message : "清除账号失败")
+    } finally {
+      setAccountBusySourceId(null)
+    }
   }
 
   if (!authReady) {
@@ -500,8 +855,21 @@ export function R18ShellContent() {
       {/* ── Source list sidebar ─────────────────────────────────── */}
       <aside className={styles.sourceSidebar}>
         <div className={styles.sourceHeader}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>R18</div>
-          <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>内容源</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>R18</div>
+              <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>内容源</div>
+            </div>
+            <GlassButton
+              onClick={() => {
+                setAccountActionError(null)
+                setAccountPanelOpen(true)
+              }}
+              style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
+            >
+              账号
+            </GlassButton>
+          </div>
         </div>
         <GlassScrollArea className={styles.sourceList ?? ""}>
           {sourcesQuery.isLoading ? (
@@ -514,12 +882,24 @@ export function R18ShellContent() {
               <button
                 key={source.id}
                 className={styles.sourceButton}
-                disabled={!source.enabled}
-                onClick={() => { setSelectedSourceId(source.id); setPage(1) }}
+                disabled={!source.enabled && source.status !== "auth-required" && source.status !== "credentials-missing"}
+                onClick={() => {
+                  if (!source.enabled && (source.status === "auth-required" || source.status === "credentials-missing")) {
+                    setAccountActionError(null)
+                    setAccountPanelOpen(true)
+                    return
+                  }
+                  if (!source.enabled) return
+                  setSelectedSourceId(source.id)
+                  setPage(1)
+                }}
                 style={{
                   border: "none", borderRadius: 10,
                   padding: "10px 12px", textAlign: "left",
-                  cursor: source.enabled ? "pointer" : "not-allowed", transition: "background 120ms ease",
+                  cursor: source.enabled || source.status === "auth-required" || source.status === "credentials-missing"
+                    ? "pointer"
+                    : "not-allowed",
+                  transition: "background 120ms ease",
                   background: active ? "var(--tint-selected)" : "transparent",
                   color: source.enabled ? "var(--text-primary)" : "var(--text-disabled)",
                 }}
@@ -535,8 +915,8 @@ export function R18ShellContent() {
                     background: source.enabled ? "var(--color-brand-green)" : "var(--text-disabled)",
                   }} />
                 </div>
-                <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>
-                  {source.version || source.status || source.id}
+                <div style={{ marginTop: 3, fontSize: 12, color: source.enabled ? "var(--text-secondary)" : "var(--text-disabled)" }}>
+                  {sourceStatusLabel(source)}
                 </div>
               </button>
             )
@@ -578,10 +958,14 @@ export function R18ShellContent() {
           </GlassButton>
         </div>
 
-        {(sourcesQuery.error || searchQuery.error) && (
+        {(sourcesQuery.error || searchQuery.error || searchQuery.data?.error_message) && (
           <div style={{ margin: "10px 16px 0", color: "var(--color-badge)", fontSize: 13 }}>
-            {(sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
-              (searchQuery.error instanceof Error ? searchQuery.error.message : "加载失败")}
+            {humanizeR18Error(
+              (sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
+              (searchQuery.error instanceof Error ? searchQuery.error.message : null) ||
+              searchQuery.data?.error_message ||
+              null,
+            )}
           </div>
         )}
 
@@ -599,7 +983,7 @@ export function R18ShellContent() {
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
-              {(searchQuery.data?.items ?? []).map((item) => (
+              {(searchQuery.data?.items ?? []).filter((item) => !isSourceFailureItem(item)).map((item) => (
                 <GlassSurface
                   key={`${item.source_id}-${item.comic_id}`}
                   elevated
@@ -641,18 +1025,46 @@ export function R18ShellContent() {
                 </GlassSurface>
               ))}
 
-              {(searchQuery.data?.items ?? []).length === 0 && !searchQuery.isLoading && (
+              {(searchQuery.data?.items ?? []).filter((item) => !isSourceFailureItem(item)).length === 0 && !searchQuery.isLoading && (
                 <div style={{
                   gridColumn: "1 / -1", padding: 60, textAlign: "center",
                   color: "var(--text-disabled)", fontSize: 14,
                 }}>
-                  暂无结果，请搜索关键词
+                  {searchQuery.data?.error_message
+                    ? humanizeR18Error(searchQuery.data.error_message)
+                    : "暂无结果，请搜索关键词"}
                 </div>
               )}
             </div>
           )}
         </GlassScrollArea>
       </section>
+
+      {accountActionError && (
+        <div style={{
+          position: "fixed", left: 16, right: 16, bottom: 16, zIndex: 96,
+          maxWidth: 520, margin: "0 auto",
+          padding: "10px 12px", borderRadius: 12,
+          border: "1px solid var(--divider)",
+          background: "var(--glass-btn-bg)",
+          color: "var(--color-badge)", fontSize: 13,
+        }}>
+          {humanizeR18Error(accountActionError)}
+        </div>
+      )}
+
+      {accountPanelOpen && (
+        <AccountManagerPanel
+          accounts={managedAccounts}
+          busySourceId={accountBusySourceId}
+          drafts={accountDrafts}
+          onDraftChange={updateAccountDraft}
+          onSave={(sourceId) => { void saveAccount(sourceId) }}
+          onLogin={(sourceId) => { void loginAccount(sourceId) }}
+          onClear={(sourceId) => { void clearAccount(sourceId) }}
+          onClose={() => setAccountPanelOpen(false)}
+        />
+      )}
 
       {/* ── Chapter list overlay ────────────────────────────────── */}
       {comicForChapters && (

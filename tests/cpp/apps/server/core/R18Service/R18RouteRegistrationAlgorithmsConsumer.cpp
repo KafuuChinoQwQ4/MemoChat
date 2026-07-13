@@ -71,4 +71,24 @@ const char* ImagePath()
 {
     return memochat::r18::route_registration::modules::ImagePath();
 }
+
+const char* AccountsPath()
+{
+    return memochat::r18::route_registration::modules::AccountsPath();
+}
+
+const char* AccountSavePath()
+{
+    return memochat::r18::route_registration::modules::AccountSavePath();
+}
+
+const char* AccountLoginPath()
+{
+    return memochat::r18::route_registration::modules::AccountLoginPath();
+}
+
+const char* AccountClearPath()
+{
+    return memochat::r18::route_registration::modules::AccountClearPath();
+}
 } // namespace memochat::tests::r18::route_registration

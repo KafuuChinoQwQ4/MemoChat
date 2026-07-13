@@ -61,4 +61,43 @@ describe("createR18Api", () => {
 
     await expect(api.getAccess()).rejects.toThrow("policy unavailable")
   })
+
+  it("uses account management endpoints", async () => {
+    const http = mockHttp()
+    http.get.mockResolvedValue({
+      error: 0,
+      data: {
+        managed: [{ source_id: "picacg.official", status: "not_configured", auth_required: true }],
+      },
+    })
+    http.post
+      .mockResolvedValueOnce({
+        error: 0,
+        data: { managed: [{ source_id: "picacg.official", status: "authenticated", username: "a@b.c" }] },
+      })
+      .mockResolvedValueOnce({
+        error: 0,
+        data: { managed: [{ source_id: "picacg.official", status: "not_configured" }] },
+      })
+    const api = createR18Api(http as unknown as HttpClient)
+
+    await expect(api.listAccounts()).resolves.toMatchObject({
+      managed: [{ source_id: "picacg.official" }],
+    })
+    await expect(api.saveAccount("picacg.official", "a@b.c", "secret")).resolves.toMatchObject({
+      managed: [{ status: "authenticated" }],
+    })
+    await expect(api.clearAccount("picacg.official")).resolves.toMatchObject({
+      managed: [{ status: "not_configured" }],
+    })
+    expect(http.get).toHaveBeenCalledWith("/api/r18/accounts")
+    expect(http.post).toHaveBeenNthCalledWith(1, "/api/r18/account/save", {
+      source_id: "picacg.official",
+      username: "a@b.c",
+      password: "secret",
+    })
+    expect(http.post).toHaveBeenNthCalledWith(2, "/api/r18/account/clear", {
+      source_id: "picacg.official",
+    })
+  })
 })

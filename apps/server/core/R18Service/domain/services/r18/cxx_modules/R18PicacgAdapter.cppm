@@ -16,16 +16,22 @@ const char* ApiHost()
     return "picaapi.picacomic.com";
 }
 
+// Official Android client app-key / app-secret are public client signing material.
+// Prefer env overrides; fall back so users only need account/password login.
 const char* ApiKey()
 {
     const char* value = std::getenv("MEMOCHAT_R18_PICACG_API_KEY");
-    return value == nullptr ? "" : value;
+    if (value != nullptr && value[0] != '\0')
+        return value;
+    return "C69BAF41DA5ABD1FFEDC6D2FEA56B";
 }
 
 const char* HmacKey()
 {
     const char* value = std::getenv("MEMOCHAT_R18_PICACG_HMAC_KEY");
-    return value == nullptr ? "" : value;
+    if (value != nullptr && value[0] != '\0')
+        return value;
+    return "~d}$Q7$eIni=V)9\\RK/P.RM4;9H0c#L";
 }
 
 bool HasCredentials(bool api_key_empty, bool hmac_key_empty)
@@ -35,7 +41,12 @@ bool HasCredentials(bool api_key_empty, bool hmac_key_empty)
 
 const char* MissingCredentialsMessage()
 {
-    return "Picacg credentials missing";
+    return "Picacg account login required";
+}
+
+const char* AccountLoginRequiredMessage()
+{
+    return "Picacg account login required";
 }
 
 const char* GetMethod()

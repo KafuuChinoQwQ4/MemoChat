@@ -369,7 +369,7 @@ bool R18Service::HandleListSources(const memochat::gate::routing::GateRequest& r
     else
     {
         JsonValue data;
-        data["sources"] = memochat::r18::R18SourceService::Instance().ListSources();
+        data["sources"] = memochat::r18::R18SourceService::Instance().ListSourcesForUser(uid);
         WriteOk(root, data);
     }
     WriteGetJson(response, root);
@@ -501,15 +501,18 @@ bool R18Service::HandleDeleteSource(const memochat::gate::routing::GateRequest& 
 bool R18Service::HandleSearch(const memochat::gate::routing::GateRequest& request,
                               memochat::gate::routing::GateResponse& response)
 {
-    return HandleJsonRequest(
-        request,
-        response,
-        [](const JsonValue& src, JsonValue& root, const std::string&, int)
-        {
-            const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Search(body.source_id, body.keyword, body.page));
-            return true;
-        });
+    return HandleJsonRequest(request,
+                             response,
+                             [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+                             {
+                                 const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
+                                 WriteOk(root,
+                                         memochat::r18::R18SourceService::Instance().SearchForUser(uid,
+                                                                                                   body.source_id,
+                                                                                                   body.keyword,
+                                                                                                   body.page));
+                                 return true;
+                             });
 }
 
 bool R18Service::HandleComicDetail(const memochat::gate::routing::GateRequest& request,
@@ -518,10 +521,11 @@ bool R18Service::HandleComicDetail(const memochat::gate::routing::GateRequest& r
     return HandleJsonRequest(
         request,
         response,
-        [](const JsonValue& src, JsonValue& root, const std::string&, int)
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
         {
             const auto body = memochat::r18::R18ComicDetailRequestFromJsonValue(src);
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Detail(body.source_id, body.comic_id));
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance().DetailForUser(uid, body.source_id, body.comic_id));
             return true;
         });
 }
@@ -532,10 +536,11 @@ bool R18Service::HandleChapterPages(const memochat::gate::routing::GateRequest& 
     return HandleJsonRequest(
         request,
         response,
-        [](const JsonValue& src, JsonValue& root, const std::string&, int)
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
         {
             const auto body = memochat::r18::R18ChapterPagesRequestFromJsonValue(src);
-            WriteOk(root, memochat::r18::R18SourceService::Instance().Pages(body.source_id, body.chapter_id));
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance().PagesForUser(uid, body.source_id, body.chapter_id));
             return true;
         });
 }
@@ -627,7 +632,7 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
     }
     const std::string source_id = QueryParam(request, "source_id", memochat::r18::service::modules::DefaultSourceId());
     const std::string image_url = QueryParam(request, "image_url");
-    auto payload = memochat::r18::R18SourceService::Instance().FetchImage(source_id, image_url);
+    auto payload = memochat::r18::R18SourceService::Instance().FetchImageForUser(uid, source_id, image_url);
     if (!payload.ok)
     {
         response.status = memochat::r18::service::modules::BadGatewayHttpStatus();
@@ -639,6 +644,120 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
     response.content_type = payload.content_type;
     response.body = std::move(payload.body);
     return true;
+}
+
+bool R18Service::HandleListAccounts(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    JsonValue root;
+    int uid = 0;
+    if (!RequireBearerAuth(request, root, uid))
+    {
+        WriteGetJson(response, root);
+        response.status = memochat::r18::service::modules::UnauthorizedHttpStatus();
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    if (const auto access = RequireR18Access(uid, root); access != R18AccessDecision::Allowed)
+    {
+        WriteGetJson(response, root);
+        response.status = AccessFailureStatus(access);
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    WriteOk(root, memochat::r18::R18SourceService::Instance().ListAccounts(uid));
+    WriteGetJson(response, root);
+    response.headers["Cache-Control"] = "no-store";
+    return true;
+}
+
+bool R18Service::HandleSaveAccount(const memochat::gate::routing::GateRequest& request,
+                                   memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string source_id = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
+            const std::string username = memochat::json::glaze_safe_get<std::string>(src, "username", "");
+            const std::string password = memochat::json::glaze_safe_get<std::string>(src, "password", "");
+            std::string error;
+            if (!memochat::r18::R18SourceService::Instance().SaveAccount(uid, source_id, username, password, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error.empty() ? "failed to save account" : error;
+                return true;
+            }
+            // Credentials are persisted even when remote login fails; for auth-required
+            // sources surface the login error so the unified account manager can prompt retry.
+            auto accounts = memochat::r18::R18SourceService::Instance().ListAccounts(uid);
+            if (!error.empty())
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error;
+                root["data"] = std::move(accounts);
+                return true;
+            }
+            WriteOk(root, accounts);
+            return true;
+        });
+}
+
+bool R18Service::HandleLoginAccount(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string source_id = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
+            const std::string username = memochat::json::glaze_safe_get<std::string>(src, "username", "");
+            const std::string password = memochat::json::glaze_safe_get<std::string>(src, "password", "");
+            std::string error;
+            bool ok = true;
+            if (!username.empty() || !password.empty())
+            {
+                ok =
+                    memochat::r18::R18SourceService::Instance().SaveAccount(uid, source_id, username, password, &error);
+            }
+            else
+            {
+                ok = memochat::r18::R18SourceService::Instance().LoginAccount(uid, source_id, &error);
+            }
+            auto accounts = memochat::r18::R18SourceService::Instance().ListAccounts(uid);
+            if (!ok || !error.empty())
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error.empty() ? "login failed" : error;
+                root["data"] = std::move(accounts);
+                return true;
+            }
+            WriteOk(root, accounts);
+            return true;
+        });
+}
+
+bool R18Service::HandleClearAccount(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(request,
+                             response,
+                             [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+                             {
+                                 const std::string source_id =
+                                     memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
+                                 std::string error;
+                                 if (!memochat::r18::R18SourceService::Instance().ClearAccount(uid, source_id, &error))
+                                 {
+                                     root["error"] = ErrorCodes::Error_Json;
+                                     root["message"] = error.empty() ? "failed to clear account" : error;
+                                     return true;
+                                 }
+                                 WriteOk(root, memochat::r18::R18SourceService::Instance().ListAccounts(uid));
+                                 return true;
+                             });
 }
 
 } // namespace memochat::gate::services::r18

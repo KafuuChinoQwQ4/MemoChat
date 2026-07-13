@@ -85,6 +85,22 @@ function isTrustedMediaEndpoint(ref: string, pathname: string): boolean {
   }
 }
 
+function isLocalMediaHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase()
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  )
+}
+
+function isMediaDownloadPath(pathname: string): boolean {
+  if (pathname === "/media/download") return true
+  if (!pathname.startsWith("/media/download/")) return false
+  return !pathname.includes("..")
+}
+
 function isMediaDownloadUrl(ref: string): boolean {
   return isTrustedMediaEndpoint(ref, "/media/download")
 }
@@ -100,6 +116,18 @@ function currentMediaDownloadUrl(ref: string): string {
     if (key !== "uid" && key !== "token") target.searchParams.append(key, value)
   })
   return serializeUrl(target, Boolean(mediaBaseUrl()))
+}
+
+/** Rewrite legacy desktop absolute media URLs (often http://127.0.0.1:8080/...) */
+function rewriteLocalMediaDownloadUrl(ref: string): string | null {
+  try {
+    const parsed = new URL(ref)
+    if (!isMediaDownloadPath(parsed.pathname)) return null
+    if (!isLocalMediaHost(parsed.hostname)) return null
+    return currentMediaDownloadUrl(ref)
+  } catch {
+    return null
+  }
 }
 
 function mediaDownloadUrl(mediaKey: string): string {
@@ -119,6 +147,8 @@ export function resolveMediaUrl(ref: string): string {
   if (isDefaultAvatarRef(clean)) return DEFAULT_AVATAR_DATA_URL
 
   if (isHttpUrl(clean)) {
+    const localRewrite = rewriteLocalMediaDownloadUrl(clean)
+    if (localRewrite) return localRewrite
     return isMediaDownloadUrl(clean) ? currentMediaDownloadUrl(clean) : clean
   }
 

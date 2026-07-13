@@ -680,4 +680,244 @@ R18ImagePayload PicacgFetchImage(const std::filesystem::path& cache_root, const 
     return payload;
 }
 
+bool PicacgLogin(const std::string& email, const std::string& password, std::string* token_out, std::string* error)
+{
+    if (token_out == nullptr)
+    {
+        SetError(error, "Picacg login token output is null");
+        return false;
+    }
+    const std::string path = "/auth/sign-in";
+    const std::string path_no_slash = "auth/sign-in";
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (!PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, "", &headers, error))
+        return false;
+    // Escape minimal JSON string content.
+    auto escape = [](const std::string& in)
+    {
+        std::string out;
+        out.reserve(in.size() + 8);
+        for (char c : in)
+        {
+            if (c == '\\' || c == '"')
+            {
+                out.push_back('\\');
+                out.push_back(c);
+            }
+            else if (c == '\n')
+            {
+                out += "\\n";
+            }
+            else
+            {
+                out.push_back(c);
+            }
+        }
+        return out;
+    };
+    const std::string body =
+        std::string("{\"email\":\"") + escape(email) + "\",\"password\":\"" + escape(password) + "\"}";
+    const std::string url = std::string("https://") + picacg_adapter::modules::ApiHost() + path;
+    HttpResult response;
+    if (!HttpPost(url, headers, body, &response, error, picacg_adapter::modules::ApiTimeoutSeconds()))
+        return false;
+    if (!picacg_adapter::modules::IsSuccessStatus(response.status))
+    {
+        SetError(error, "Picacg login HTTP " + std::to_string(response.status));
+        return false;
+    }
+    JsonValue root;
+    if (!json::glaze_parse(root, response.body))
+    {
+        SetError(error, "Picacg login invalid JSON");
+        return false;
+    }
+
+    // Official API uses {"code":200,"message":"...","data":{"token":"..."}}.
+    // Some edge responses omit data or only echo {"code":200,"message":"success"}.
+    const int api_code = static_cast<int>(FieldInt(root, "code", response.status));
+    const std::string api_message = FieldString(root, "message", FieldString(root, "error", ""));
+    if (api_code != 0 && api_code != 200)
+    {
+        SetError(error,
+                 api_message.empty() ? ("Picacg login failed code " + std::to_string(api_code))
+                                     : ("Picacg login failed: " + api_message));
+        return false;
+    }
+
+    const JsonValue data = json::glaze_get(root, "data");
+    std::string token = FieldString(data, "token");
+    if (token.empty())
+        token = FieldString(json::glaze_get(data, "user"), "token");
+    if (token.empty())
+        token = FieldString(root, "token");
+    if (token.empty())
+    {
+        // Preserve remote message when present so UI can show why login did not unlock.
+        if (!api_message.empty() && api_message != "success")
+            SetError(error, "Picacg login token missing: " + api_message);
+        else
+            SetError(error,
+                     "Picacg login token missing (upstream returned no session; check account/password "
+                     "or API availability)");
+        return false;
+    }
+    *token_out = token;
+    return true;
+}
+
+bool PicacgSearchWithToken(const std::string& keyword,
+                           int page,
+                           const std::string& token,
+                           json::JsonValue* out,
+                           std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "Picacg search output pointer is null");
+        return false;
+    }
+    const int normalized_page = picacg_adapter::modules::NormalizeSearchPage(page);
+    const std::string path = "/comics/advanced-search?page=" + std::to_string(normalized_page);
+    const std::string body = R"({"keyword":")" + keyword + R"(","sort":"dd"})";
+    const std::string path_no_slash = "comics/advanced-search?page=" + std::to_string(normalized_page);
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (!PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, token, &headers, error))
+        return false;
+    const std::string url = std::string("https://") + picacg_adapter::modules::ApiHost() + path;
+    HttpResult response;
+    if (!HttpPost(url, headers, body, &response, error, picacg_adapter::modules::ApiTimeoutSeconds()))
+        return false;
+    if (!picacg_adapter::modules::IsSuccessStatus(response.status))
+    {
+        SetError(error, "Picacg search HTTP " + std::to_string(response.status));
+        return false;
+    }
+    JsonValue root;
+    if (!json::glaze_parse(root, response.body))
+    {
+        SetError(error, picacg_adapter::modules::SearchInvalidJsonMessage());
+        return false;
+    }
+    const JsonValue data = json::glaze_get(root, "data");
+    const JsonValue comics = json::glaze_get(data, "comics");
+    JsonValue result;
+    result["source_id"] = picacg_adapter::modules::SourceId();
+    result["keyword"] = keyword;
+    result["page"] = normalized_page;
+    result["items"] = JsonValue{json::array_t{}};
+    result["max_page"] = FieldInt(comics, "pages", 1);
+    const JsonValue docs = json::glaze_get(comics, "docs");
+    if (const auto* values = json::glaze_get_array(docs))
+    {
+        for (const auto& comic : *values)
+            json::glaze_append(result["items"], PicacgComicToJson(JsonValue(comic)));
+    }
+    *out = result;
+    return true;
+}
+
+bool PicacgDetailWithToken(const std::string& comic_id,
+                           const std::string& token,
+                           json::JsonValue* out,
+                           std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "Picacg detail output pointer is null");
+        return false;
+    }
+    JsonValue data;
+    if (!PicacgApiGet("/comics/" + comic_id, token, &data, error))
+        return false;
+    JsonValue result;
+    result["source_id"] = picacg_adapter::modules::SourceId();
+    result["comic_id"] = comic_id;
+    result["title"] = FieldString(data, "title", comic_id);
+    result["description"] = FieldString(data, "description");
+    const std::string file_server = FieldString(json::glaze_get(data, "thumb"), "fileServer");
+    const std::string thumb_path = FieldString(json::glaze_get(data, "thumb"), "path");
+    const std::string cover_url = file_server.empty() ? "" : file_server + "/static/" + thumb_path;
+    result["cover"] = detail::ImageProxyUrl(picacg_adapter::modules::SourceId(), cover_url);
+    result["chapters"] = JsonValue{json::array_t{}};
+    JsonValue episodes_data;
+    if (!PicacgApiGet("/comics/" + comic_id + "/eps?page=1", token, &episodes_data, error))
+        return false;
+    int order = picacg_adapter::modules::DefaultEpisodeOrder();
+    const JsonValue eps = json::glaze_get(episodes_data, "eps");
+    const JsonValue docs = json::glaze_get(eps, "docs");
+    if (const auto* values = json::glaze_get_array(docs))
+    {
+        for (const auto& ep : *values)
+        {
+            JsonValue chapter;
+            const JsonValue epj(ep);
+            const std::string ep_id = FieldString(epj, "_id", std::to_string(order));
+            chapter["source_id"] = picacg_adapter::modules::SourceId();
+            chapter["comic_id"] = comic_id;
+            chapter["chapter_id"] = comic_id + ":" + ep_id;
+            chapter["title"] = FieldString(epj, "title", "Episode " + std::to_string(order));
+            chapter["order"] = order++;
+            json::glaze_append(result["chapters"], chapter);
+        }
+    }
+    if (picacg_adapter::modules::ShouldUseFallbackEpisode(order == picacg_adapter::modules::DefaultEpisodeOrder()))
+    {
+        JsonValue chapter;
+        chapter["source_id"] = picacg_adapter::modules::SourceId();
+        chapter["comic_id"] = comic_id;
+        chapter["chapter_id"] = comic_id + ":1";
+        chapter["title"] = picacg_adapter::modules::DefaultEpisodeTitle();
+        chapter["order"] = picacg_adapter::modules::DefaultEpisodeOrder();
+        json::glaze_append(result["chapters"], chapter);
+    }
+    *out = result;
+    return true;
+}
+
+bool PicacgPagesWithToken(const std::string& comic_id,
+                          const std::string& chapter_id,
+                          const std::string& token,
+                          json::JsonValue* out,
+                          std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "Picacg pages output pointer is null");
+        return false;
+    }
+    std::string ep = chapter_id;
+    const auto sep = chapter_id.find(':');
+    if (sep != std::string::npos)
+        ep = chapter_id.substr(sep + 1);
+    const std::string path = "/comics/" + comic_id + "/order/" + ep + "/pages?page=1";
+    JsonValue data;
+    if (!PicacgApiGet(path, token, &data, error))
+        return false;
+    JsonValue result;
+    result["source_id"] = picacg_adapter::modules::SourceId();
+    result["chapter_id"] = chapter_id;
+    result["pages"] = JsonValue{json::array_t{}};
+    const JsonValue pages = json::glaze_get(data, "pages");
+    const JsonValue docs = json::glaze_get(pages, "docs");
+    int index = 1;
+    if (const auto* values = json::glaze_get_array(docs))
+    {
+        for (const auto& page : *values)
+        {
+            const JsonValue pagej(page);
+            const std::string file_server = FieldString(json::glaze_get(pagej, "media"), "fileServer");
+            const std::string media_path = FieldString(json::glaze_get(pagej, "media"), "path");
+            const std::string image_url = file_server.empty() ? "" : file_server + "/static/" + media_path;
+            JsonValue page_value;
+            page_value["index"] = index++;
+            page_value["image_id"] = FieldString(pagej, "_id", std::to_string(index));
+            page_value["url"] = detail::ImageProxyUrl(picacg_adapter::modules::SourceId(), image_url);
+            json::glaze_append(result["pages"], page_value);
+        }
+    }
+    *out = result;
+    return true;
+}
+
 } // namespace memochat::r18

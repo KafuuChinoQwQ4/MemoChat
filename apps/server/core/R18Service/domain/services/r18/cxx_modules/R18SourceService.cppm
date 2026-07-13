@@ -110,6 +110,31 @@ const char* PicacgSourceVersion()
     return "2.2.1";
 }
 
+const char* NhentaiSourceVersion()
+{
+    return "1.0.0";
+}
+
+const char* EhentaiSourceVersion()
+{
+    return "1.0.0";
+}
+
+const char* AuthRequiredStatus()
+{
+    return "auth-required";
+}
+
+const char* AuthRequiredMessage()
+{
+    return "account login required";
+}
+
+const char* DirectAccessStatus()
+{
+    return "direct";
+}
+
 const char* InvalidPackagePayloadMessage()
 {
     return "source package must be JavaScript";

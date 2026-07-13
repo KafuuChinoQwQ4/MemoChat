@@ -81,4 +81,24 @@ const char* ImagePath()
 {
     return "/api/r18/image";
 }
+
+const char* AccountsPath()
+{
+    return "/api/r18/accounts";
+}
+
+const char* AccountSavePath()
+{
+    return "/api/r18/account/save";
+}
+
+const char* AccountLoginPath()
+{
+    return "/api/r18/account/login";
+}
+
+const char* AccountClearPath()
+{
+    return "/api/r18/account/clear";
+}
 } // namespace memochat::r18::route_registration::modules

@@ -19,6 +19,10 @@ const char* FavoriteTogglePath();
 const char* HistoryUpdatePath();
 const char* HistoryPath();
 const char* ImagePath();
+const char* AccountsPath();
+const char* AccountSavePath();
+const char* AccountLoginPath();
+const char* AccountClearPath();
 } // namespace memochat::tests::r18::route_registration
 
 TEST(R18RouteRegistrationAlgorithmsTest, ExposesStableHttpMethods)
@@ -29,6 +33,10 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesStableHttpMethods)
 
 TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths)
 {
+    using memochat::tests::r18::route_registration::AccountClearPath;
+    using memochat::tests::r18::route_registration::AccountLoginPath;
+    using memochat::tests::r18::route_registration::AccountSavePath;
+    using memochat::tests::r18::route_registration::AccountsPath;
     using memochat::tests::r18::route_registration::ChapterPagesPath;
     using memochat::tests::r18::route_registration::ComicDetailPath;
     using memochat::tests::r18::route_registration::FavoriteTogglePath;
@@ -42,7 +50,7 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
     using memochat::tests::r18::route_registration::SourceImportPath;
     using memochat::tests::r18::route_registration::SourcesPath;
 
-    constexpr std::array<std::string_view, 12> expected = {
+    constexpr std::array<std::string_view, 16> expected = {
         "/api/r18/sources",
         "/api/r18/source/import",
         "/api/r18/source/enable",
@@ -55,8 +63,12 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
         "/api/r18/history/update",
         "/api/r18/history",
         "/api/r18/image",
+        "/api/r18/accounts",
+        "/api/r18/account/save",
+        "/api/r18/account/login",
+        "/api/r18/account/clear",
     };
-    const std::array<std::string_view, 12> actual = {
+    const std::array<std::string_view, 16> actual = {
         SourcesPath(),
         SourceImportPath(),
         SourceEnablePath(),
@@ -69,6 +81,10 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
         HistoryUpdatePath(),
         HistoryPath(),
         ImagePath(),
+        AccountsPath(),
+        AccountSavePath(),
+        AccountLoginPath(),
+        AccountClearPath(),
     };
 
     EXPECT_EQ(actual, expected);

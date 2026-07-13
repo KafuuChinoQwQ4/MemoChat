@@ -20,6 +20,12 @@ add_library(GateR18Core STATIC
     domain/services/r18/R18JmAdapter.hpp
     domain/services/r18/R18PicacgAdapter.cpp
     domain/services/r18/R18PicacgAdapter.hpp
+    domain/services/r18/R18NhentaiAdapter.cpp
+    domain/services/r18/R18NhentaiAdapter.hpp
+    domain/services/r18/R18EhentaiAdapter.cpp
+    domain/services/r18/R18EhentaiAdapter.hpp
+    domain/services/r18/R18SourceCredentialStore.cpp
+    domain/services/r18/R18SourceCredentialStore.hpp
     domain/services/r18/R18SourceService.cpp
     domain/services/r18/R18SourceService.hpp
 )

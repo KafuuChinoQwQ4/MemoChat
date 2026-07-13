@@ -39,6 +39,14 @@ public:
                        memochat::gate::routing::GateResponse& response);
     bool HandleImage(const memochat::gate::routing::GateRequest& request,
                      memochat::gate::routing::GateResponse& response);
+    bool HandleListAccounts(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleSaveAccount(const memochat::gate::routing::GateRequest& request,
+                           memochat::gate::routing::GateResponse& response);
+    bool HandleLoginAccount(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleClearAccount(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
 
 private:
     R18Service() = default;

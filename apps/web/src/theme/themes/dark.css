@@ -1,13 +1,7 @@
 /* Dark theme */
 [data-theme="dark"],
 :root:not([data-theme="light"]) {
-  --surface-bg:
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.024) 0 1px, transparent 1px 88px),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 88px),
-    linear-gradient(118deg, transparent 0%, rgba(64, 156, 132, 0.20) 18%, transparent 46%),
-    linear-gradient(252deg, transparent 3%, rgba(186, 115, 71, 0.16) 24%, transparent 50%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0) 32%),
-    linear-gradient(148deg, #03050a 0%, #071019 40%, #101419 73%, #17170f 100%);
+  --surface-bg: transparent;
   --surface-elevated: rgba(13, 18, 25, 0.62);
   --text-primary: #f0f3f0;
   --text-secondary: #aeb5bd;
@@ -18,22 +12,22 @@
   --glass-sheen-height: 38%;
   --glass-input-bg: rgba(6, 10, 15, 0.44);
   --glass-input-border: rgba(255, 255, 255, 0.18);
-  --glass-input-border-focus: rgba(92, 190, 164, 0.78);
+  --glass-input-border-focus: rgba(167, 139, 250, 0.82);
   --glass-btn-text: #dde4e2;
   --glass-btn-bg: rgba(255, 255, 255, 0.09);
   --glass-btn-bg-hover: rgba(255, 255, 255, 0.15);
   --glass-btn-bg-press: rgba(255, 255, 255, 0.22);
   --divider: rgba(255, 255, 255, 0.12);
-  --tint-hover: rgba(92, 190, 164, 0.14);
-  --tint-press: rgba(92, 190, 164, 0.21);
-  --tint-selected: rgba(92, 190, 164, 0.23);
+  --tint-hover: rgba(167, 139, 250, 0.14);
+  --tint-press: rgba(167, 139, 250, 0.22);
+  --tint-selected: rgba(167, 139, 250, 0.24);
 
   /* Sidebar */
-  --sidebar-bg: rgba(8, 12, 18, 0.44);
+  --sidebar-bg: rgba(12, 6, 24, 0.42);
   --sidebar-border: rgba(255, 255, 255, 0.16);
 
   /* List panel */
-  --list-panel-bg: rgba(8, 12, 18, 0.34);
+  --list-panel-bg: rgba(12, 6, 24, 0.32);
   --list-panel-border: rgba(255, 255, 255, 0.13);
 
   /* Message bubbles — teal self, dark other */
@@ -48,24 +42,26 @@
 
   /* Conversation */
   --conversation-bg: transparent;
-  --conversation-topbar-bg: rgba(8, 12, 20, 0.60);
-  --conversation-topbar-border: rgba(255, 255, 255, 0.09);
+  --conversation-topbar-bg: rgba(18, 8, 34, 0.28);
+  --conversation-topbar-border: rgba(255, 255, 255, 0.16);
   --conversation-topbar-color: var(--text-primary);
+  --conversation-topbar-blur: 26px;
+  --conversation-topbar-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
 
   /* Time separator */
   --time-sep-bg: rgba(255, 255, 255, 0.10);
   --time-sep-color: rgba(180, 195, 210, 0.72);
 
   /* Composer */
-  --composer-bg: rgba(6, 10, 16, 0.52);
+  --composer-bg: rgba(12, 6, 24, 0.50);
   --composer-border: rgba(255, 255, 255, 0.09);
-  --composer-input-bg: rgba(6, 10, 16, 0.56);
+  --composer-input-bg: rgba(12, 6, 24, 0.54);
   --composer-input-border: rgba(255, 255, 255, 0.14);
-  --composer-input-focus-border: rgba(92, 190, 164, 0.72);
-  --composer-input-focus-shadow: 0 0 0 3px rgba(92, 190, 164, 0.16);
+  --composer-input-focus-border: rgba(167, 139, 250, 0.74);
+  --composer-input-focus-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
 
   /* Dialog list */
-  --dialog-item-hover: rgba(92, 190, 164, 0.08);
+  --dialog-item-hover: rgba(167, 139, 250, 0.10);
 
   /* R18 overlays */
   --r18-dialog-backdrop: rgba(2, 6, 12, 0.62);

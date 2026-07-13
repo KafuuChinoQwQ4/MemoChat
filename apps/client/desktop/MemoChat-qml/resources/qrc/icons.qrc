@@ -7,9 +7,7 @@
         <file alias="icons/maximize.png">../icons/square.png</file>
         <file alias="icons/close.png">../icons/关闭.png</file>
         <file alias="icons/r18.png">../icons/一般兑换.png</file>
-        <file alias="icons/r18.svg">../icons/r18.svg</file>
         <file alias="icons/user.png">../icons/user.png</file>
-        <file alias="icons/team.png">../icons/team.png</file>
         <file alias="icons/dropdown.png">../icons/下拉.png</file>
         <file alias="icons/image.png">../icons/图片.png</file>
         <file alias="icons/phone.png">../icons/电话.png</file>
