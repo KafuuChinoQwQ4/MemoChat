@@ -22,7 +22,6 @@ void ChatMessageModel::clear()
 
 void ChatMessageModel::setMessages(const std::vector<std::shared_ptr<TextChatData>>& messages, int selfUid)
 {
-    // 使用双缓冲：先在缓冲区构建，然后原子切换
     setMessagesAtomic(messages, selfUid);
 }
 
@@ -30,7 +29,6 @@ void ChatMessageModel::setMessagesAtomic(const std::vector<std::shared_ptr<TextC
 {
     const qint64 startTs = QDateTime::currentMSecsSinceEpoch();
 
-    // 先在缓冲区构建数据
     _itemsBuffer.clear();
     _itemsBuffer.reserve(messages.size());
 
