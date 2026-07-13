@@ -114,7 +114,7 @@ class PetFeatureFlagsContractTests(unittest.TestCase):
             "MEMOCHAT_PET_VOICE_CLONE=${MEMOCHAT_PET_VOICE_CLONE:-false}",
             "MEMOCHAT_PET_VOICE_PROVIDER=${MEMOCHAT_PET_VOICE_PROVIDER:-gpt-sovits}",
             "MEMOCHAT_PET_SOVITS_BASE_URL=${MEMOCHAT_PET_SOVITS_BASE_URL:-http://host.docker.internal:9880}",
-            "MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO=${MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO:-/data/gpt-sovits/refs/kafuu-chino-ref.wav}",
+            "MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO=${MEMOCHAT_PET_SOVITS_REFERENCE_AUDIO:-/data/gpt-sovits/refs/reference.wav}",
             "MEMOCHAT_PET_SOVITS_HOST_DATA_DIR",
             "target: /data/gpt-sovits",
             "MEMOCHAT_PET_SOVITS_OUTPUT_DIR=${MEMOCHAT_PET_SOVITS_OUTPUT_DIR:-/app/.data/pet-voice-cache}",

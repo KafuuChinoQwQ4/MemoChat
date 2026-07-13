@@ -78,7 +78,7 @@ class PetVisionSegmentCaptureReq(BaseModel):
 class PetVoiceTrainingReq(BaseModel):
     uid: int = 0
     profile_id: str = "default"
-    voice_name: str = "Kafuuchino-voice"
+    voice_name: str = "user-voice"
     language: str = "zh-CN"
     reference_audio_path: str
     reference_audio_directory: str = ""
