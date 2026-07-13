@@ -161,11 +161,11 @@
   background: var(--color-brand-green);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 2px 10px rgba(7, 193, 96, 0.28);
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.32);
 }
 .btnPrimary:hover:not(:disabled) {
   background: var(--color-brand-green-dark);
-  box-shadow: 0 4px 14px rgba(7, 193, 96, 0.34);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.38);
 }
 
 .btnDanger {
@@ -220,5 +220,8 @@
 .scrollArea {
   overflow-y: auto;
   overflow-x: hidden;
-  scroll-behavior: smooth;
+  /* Keep programmatic positioning instant. Smooth scrolling is opted into
+     explicitly via element.scrollTo({ behavior: "smooth" }). */
+  scroll-behavior: auto;
+  overflow-anchor: none;
 }

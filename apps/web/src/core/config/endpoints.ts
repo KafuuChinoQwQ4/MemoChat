@@ -50,4 +50,8 @@ export const ENDPOINTS = {
   r18Search:         "/api/r18/search",
   r18ComicDetail:    "/api/r18/comic/detail",
   r18ChapterPages:   "/api/r18/chapter/pages",
+  r18Accounts:       "/api/r18/accounts",
+  r18AccountSave:    "/api/r18/account/save",
+  r18AccountLogin:   "/api/r18/account/login",
+  r18AccountClear:   "/api/r18/account/clear",
 } as const

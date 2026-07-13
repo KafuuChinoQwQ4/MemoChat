@@ -110,6 +110,34 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
         {
             return memochat::gate::services::r18::R18Service::Instance().HandleImage(request, response);
         });
+    registry.Register(
+        modules::GetMethod(),
+        modules::AccountsPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleListAccounts(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::AccountSavePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleSaveAccount(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::AccountLoginPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleLoginAccount(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::AccountClearPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleClearAccount(request, response);
+        });
 }
 
 } // namespace memochat::gate::modules::r18

@@ -33,8 +33,12 @@
   /* ── Color ─────────────────────────────────────────────────── */
   --color-danger: #e84141;
   --color-success: #07c160;
-  --color-brand-green: #07c160;
-  --color-brand-green-dark: #2cb46e;
+  /* Brand accent: violet, harmonizes with blue-pink (light) and black-purple (dark) gradients.
+     Legacy token names kept for call-site compatibility. */
+  --color-brand-green: #8b5cf6;
+  --color-brand-green-dark: #7c3aed;
+  --color-brand: var(--color-brand-green);
+  --color-brand-dark: var(--color-brand-green-dark);
   --color-badge: #e84141;
 
   /* ── Layout ────────────────────────────────────────────────── */
@@ -65,9 +69,11 @@
 
   /* ── Conversation area ─────────────────────────────────────── */
   --conversation-bg: linear-gradient(180deg, #f0f4fb 0%, #e8f0f8 100%);
-  --conversation-topbar-bg: rgba(255, 255, 255, 0.72);
-  --conversation-topbar-border: rgba(148, 163, 184, 0.16);
+  --conversation-topbar-bg: rgba(255, 255, 255, 0.28);
+  --conversation-topbar-border: rgba(255, 255, 255, 0.42);
   --conversation-topbar-color: rgba(15, 23, 42, 0.94);
+  --conversation-topbar-blur: 22px;
+  --conversation-topbar-shadow: 0 8px 24px rgba(30, 45, 80, 0.06);
 
   /* ── Time separator ────────────────────────────────────────── */
   --time-sep-bg: rgba(155, 170, 190, 0.32);

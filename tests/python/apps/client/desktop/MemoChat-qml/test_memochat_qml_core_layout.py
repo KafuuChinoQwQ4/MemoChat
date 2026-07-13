@@ -1,5 +1,6 @@
 import re
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from tests.python.support.paths import repo_root
@@ -2114,10 +2115,51 @@ class MemoChatQmlCoreLayoutTests(unittest.TestCase):
         qrc = APP_CORE_QRC.read_text(encoding="utf-8")
 
         self.assertIn('<file alias="app/icon.ico">../app/icon.ico</file>', qrc)
-        self.assertIn('<file alias="style/stylesheet.qss">../app/style/stylesheet.qss</file>', qrc)
+        self.assertNotIn("style/stylesheet.qss", qrc)
+        self.assertFalse((QML_DIR / "resources/app/style/stylesheet.qss").exists())
         self.assertIn('<file alias="res/head_1.png">../icons/head_1.png</file>', qrc)
         self.assertIn('<file alias="res/head_1.jpg">../icons/head_1.png</file>', qrc)
         self.assertNotIn("../MemoChat-qml/src", qrc)
+
+    def test_registered_image_assets_have_consumers_and_every_client_image_is_packaged(self):
+        image_suffixes = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg"}
+        qrc_paths = tuple(QML_DIR.rglob("*.qrc"))
+        image_entries = []
+        for qrc_path in qrc_paths:
+            for resource in ET.parse(qrc_path).getroot().findall("qresource"):
+                prefix = resource.get("prefix", "").strip("/")
+                for file_node in resource.findall("file"):
+                    source_name = (file_node.text or "").strip()
+                    source_path = (qrc_path.parent / source_name).resolve()
+                    if source_path.suffix.lower() not in image_suffixes:
+                        continue
+                    alias = file_node.get("alias") or source_name
+                    alias = "/".join(part for part in (prefix, alias.strip("/")) if part)
+                    image_entries.append((alias, source_path))
+
+        production_sources = []
+        for path in QML_DIR.rglob("*"):
+            if not path.is_file() or any(part in {"docs", "node_modules", "build", "dist"} for part in path.parts):
+                continue
+            if path.suffix.lower() not in {".qml", ".cpp", ".h", ".ts", ".js"} or path.name.endswith(".d.ts"):
+                continue
+            production_sources.append(path.read_text(encoding="utf-8"))
+        production_text = "\n".join(production_sources)
+
+        for alias, _source_path in image_entries:
+            with self.subTest(alias=alias):
+                self.assertTrue(_source_path.is_file())
+                self.assertIn(alias, production_text)
+
+        registered_sources = {source_path for _, source_path in image_entries}
+        actual_images = {
+            path.resolve()
+            for path in QML_DIR.rglob("*")
+            if path.is_file()
+            and not any(part in {"docs", "live2d", "node_modules", "build", "dist"} for part in path.parts)
+            and path.suffix.lower() in image_suffixes
+        }
+        self.assertEqual(actual_images - registered_sources, set())
 
     def test_qml_controllers_include_core_headers_through_target_include_path(self):
         source = MOMENTS_CONTROLLER.read_text(encoding="utf-8")

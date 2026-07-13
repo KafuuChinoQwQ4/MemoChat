@@ -13,6 +13,7 @@
 #include <charconv>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -139,6 +140,309 @@ bool ParseUrl(const std::string& url, ParsedUrl* out, std::string* error)
     return true;
 }
 
+bool PreferIpv4Endpoints(const tcp::resolver::results_type& endpoints, std::vector<tcp::endpoint>* ordered)
+{
+    if (ordered == nullptr)
+        return false;
+    ordered->clear();
+    std::vector<tcp::endpoint> other;
+    for (const auto& entry : endpoints)
+    {
+        const auto ep = entry.endpoint();
+        if (ep.address().is_v4())
+            ordered->push_back(ep);
+        else
+            other.push_back(ep);
+    }
+    ordered->insert(ordered->end(), other.begin(), other.end());
+    return !ordered->empty();
+}
+
+struct OutboundProxyConfig
+{
+    bool enabled = false;
+    std::string host;
+    std::string port;
+};
+
+std::string TrimAscii(std::string value)
+{
+    auto not_space = [](unsigned char ch)
+    {
+        return !std::isspace(ch);
+    };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
+    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
+    return value;
+}
+
+bool HostMatchesNoProxy(const std::string& host, const std::string& pattern_raw)
+{
+    const std::string pattern = TrimAscii(pattern_raw);
+    if (pattern.empty())
+        return false;
+    if (pattern == "*")
+        return true;
+    std::string host_l = host;
+    std::string pat_l = pattern;
+    std::transform(host_l.begin(),
+                   host_l.end(),
+                   host_l.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    std::transform(pat_l.begin(),
+                   pat_l.end(),
+                   pat_l.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    if (pat_l.rfind("*.", 0) == 0)
+    {
+        const std::string suffix = pat_l.substr(1); // keep leading '.'
+        return host_l.size() >= suffix.size() &&
+               host_l.compare(host_l.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+    if (!pat_l.empty() && pat_l.front() == '.')
+    {
+        return host_l.size() >= pat_l.size() && host_l.compare(host_l.size() - pat_l.size(), pat_l.size(), pat_l) == 0;
+    }
+    return host_l == pat_l;
+}
+
+bool HostBypassesProxy(const std::string& host)
+{
+    if (host.empty())
+        return true;
+    if (host == "localhost" || host == "127.0.0.1" || host == "::1")
+        return true;
+
+    const char* no_proxy_env = std::getenv("no_proxy");
+    if (no_proxy_env == nullptr || *no_proxy_env == '\0')
+        no_proxy_env = std::getenv("NO_PROXY");
+    if (no_proxy_env == nullptr || *no_proxy_env == '\0')
+        return false;
+
+    std::string list = no_proxy_env;
+    std::size_t begin = 0;
+    while (begin <= list.size())
+    {
+        const std::size_t end = list.find(',', begin);
+        const std::string item =
+            TrimAscii(end == std::string::npos ? list.substr(begin) : list.substr(begin, end - begin));
+        if (HostMatchesNoProxy(host, item))
+            return true;
+        if (end == std::string::npos)
+            break;
+        begin = end + 1;
+    }
+    return false;
+}
+
+bool ParseHttpProxyUrl(const std::string& proxy_url, OutboundProxyConfig* out, std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "proxy output is null");
+        return false;
+    }
+    *out = {};
+    const std::string trimmed = TrimAscii(proxy_url);
+    if (trimmed.empty())
+        return true;
+
+    ParsedUrl parsed;
+    if (!ParseUrl(trimmed, &parsed, error))
+        return false;
+    if (parsed.scheme != "http" && parsed.scheme != "https")
+    {
+        SetError(error, "only http/https outbound proxies are supported");
+        return false;
+    }
+    if (parsed.has_userinfo)
+    {
+        SetError(error, "proxy credentials are not supported");
+        return false;
+    }
+    out->enabled = true;
+    out->host = parsed.host;
+    out->port = parsed.port;
+    return true;
+}
+
+bool ResolveOutboundProxy(const std::string& target_host, bool is_https, OutboundProxyConfig* out, std::string* error)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "proxy output is null");
+        return false;
+    }
+    *out = {};
+    if (HostBypassesProxy(target_host))
+        return true;
+
+    const char* proxy_env = nullptr;
+    if (is_https)
+    {
+        proxy_env = std::getenv("https_proxy");
+        if (proxy_env == nullptr || *proxy_env == '\0')
+            proxy_env = std::getenv("HTTPS_PROXY");
+    }
+    if (proxy_env == nullptr || *proxy_env == '\0')
+    {
+        proxy_env = std::getenv("http_proxy");
+        if (proxy_env == nullptr || *proxy_env == '\0')
+            proxy_env = std::getenv("HTTP_PROXY");
+    }
+    if (proxy_env == nullptr || *proxy_env == '\0')
+        return true;
+    return ParseHttpProxyUrl(proxy_env, out, error);
+}
+
+bool ConnectEndpointsPreferIpv4(net::io_context& ioc,
+                                beast::tcp_stream& stream,
+                                const tcp::resolver::results_type& endpoints,
+                                beast::error_code& ec,
+                                int timeout_seconds)
+{
+    std::vector<tcp::endpoint> ordered;
+    if (!PreferIpv4Endpoints(endpoints, &ordered))
+    {
+        ec = net::error::host_not_found;
+        return false;
+    }
+
+    const auto timeout = std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds);
+    for (const auto& ep : ordered)
+    {
+        stream.close();
+        stream.expires_after(timeout);
+        stream.async_connect(ep,
+                             [&](const beast::error_code& attempt_ec)
+                             {
+                                 ec = attempt_ec;
+                             });
+        ioc.restart();
+        ioc.run();
+        if (!ec)
+            return true;
+        stream.close();
+    }
+    return false;
+}
+
+bool ConnectTcpPreferIpv4(beast::tcp_stream& stream,
+                          const tcp::resolver::results_type& endpoints,
+                          beast::error_code& ec,
+                          int timeout_seconds)
+{
+    auto& ioc = static_cast<net::io_context&>(stream.get_executor().context());
+    return ConnectEndpointsPreferIpv4(ioc, stream, endpoints, ec, timeout_seconds);
+}
+
+bool ConnectSslPreferIpv4(beast::ssl_stream<beast::tcp_stream>& stream,
+                          const tcp::resolver::results_type& endpoints,
+                          beast::error_code& ec,
+                          int timeout_seconds)
+{
+    auto& lowest = beast::get_lowest_layer(stream);
+    auto& ioc = static_cast<net::io_context&>(lowest.get_executor().context());
+    return ConnectEndpointsPreferIpv4(ioc, lowest, endpoints, ec, timeout_seconds);
+}
+
+bool HttpConnectThroughProxy(beast::tcp_stream& stream,
+                             const OutboundProxyConfig& proxy,
+                             const std::string& target_host,
+                             const std::string& target_port,
+                             beast::error_code& ec,
+                             int timeout_seconds,
+                             std::string* error)
+{
+    auto& ioc = static_cast<net::io_context&>(stream.get_executor().context());
+    tcp::resolver resolver(ioc);
+    const auto endpoints = resolver.resolve(proxy.host, proxy.port, ec);
+    if (ec)
+    {
+        SetError(error, "proxy resolve failed: " + ec.message());
+        return false;
+    }
+    if (!ConnectEndpointsPreferIpv4(ioc, stream, endpoints, ec, timeout_seconds))
+    {
+        SetError(error, "proxy connect failed: " + ec.message());
+        return false;
+    }
+
+    const std::string authority = target_host + ":" + target_port;
+    http::request<http::empty_body> connect_req{http::verb::connect, authority, 11};
+    connect_req.set(http::field::host, authority);
+    connect_req.set(http::field::proxy_connection, "keep-alive");
+    connect_req.set(http::field::connection, "keep-alive");
+    connect_req.set(http::field::user_agent, adapter_utils::modules::DefaultUserAgent());
+
+    stream.expires_after(std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds));
+    http::write(stream, connect_req, ec);
+    if (ec)
+    {
+        SetError(error, "proxy CONNECT write failed: " + ec.message());
+        return false;
+    }
+
+    beast::flat_buffer buffer;
+    http::response_parser<http::empty_body> parser;
+    parser.skip(true);
+    http::read_header(stream, buffer, parser, ec);
+    if (ec)
+    {
+        SetError(error, "proxy CONNECT read failed: " + ec.message());
+        return false;
+    }
+    const auto& connect_res = parser.get();
+    if (connect_res.result_int() < 200 || connect_res.result_int() >= 300)
+    {
+        SetError(error, "proxy CONNECT HTTP " + std::to_string(connect_res.result_int()));
+        ec = http::error::bad_status;
+        return false;
+    }
+    buffer.consume(buffer.size());
+    return true;
+}
+
+bool EstablishOutboundTcp(beast::tcp_stream& stream,
+                          const ParsedUrl& target,
+                          bool is_https,
+                          int timeout_seconds,
+                          beast::error_code& ec,
+                          std::string* error)
+{
+    OutboundProxyConfig proxy;
+    if (!ResolveOutboundProxy(target.host, is_https, &proxy, error))
+        return false;
+
+    if (proxy.enabled)
+    {
+        if (!HttpConnectThroughProxy(stream, proxy, target.host, target.port, ec, timeout_seconds, error))
+            return false;
+        return true;
+    }
+
+    auto& ioc = static_cast<net::io_context&>(stream.get_executor().context());
+    tcp::resolver resolver(ioc);
+    const auto endpoints = resolver.resolve(target.host, target.port, ec);
+    if (ec)
+    {
+        SetError(error, ec.message());
+        return false;
+    }
+    if (!ConnectEndpointsPreferIpv4(ioc, stream, endpoints, ec, timeout_seconds))
+    {
+        SetError(error, ec.message());
+        return false;
+    }
+    return true;
+}
+
 bool HttpGet(const std::string& url,
              const std::vector<std::pair<std::string, std::string>>& headers,
              HttpResult* out,
@@ -163,7 +467,6 @@ bool HttpGet(const std::string& url,
         return false;
     }
     net::io_context ioc;
-    tcp::resolver resolver(ioc);
 
     http::request<http::empty_body> req{http::verb::get, parsed.target, 11};
     req.set(http::field::host, parsed.host);
@@ -175,12 +478,6 @@ bool HttpGet(const std::string& url,
     beast::flat_buffer buffer;
     http::response<http::string_body> res;
     beast::error_code ec;
-    const auto endpoints = resolver.resolve(parsed.host, parsed.port, ec);
-    if (ec)
-    {
-        SetError(error, ec.message());
-        return false;
-    }
     if (is_https)
     {
         SSL_CTX* native_context = SSL_CTX_new(TLS_client_method());
@@ -200,17 +497,16 @@ bool HttpGet(const std::string& url,
             SetError(error, "failed to set TLS SNI host");
             return false;
         }
-        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
-        beast::get_lowest_layer(stream).connect(endpoints, ec);
-        if (!ec)
+        if (!EstablishOutboundTcp(beast::get_lowest_layer(stream), parsed, true, timeout_seconds, ec, error))
         {
-            stream.handshake(ssl::stream_base::client, ec);
+            return false;
         }
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds));
+        stream.handshake(ssl::stream_base::client, ec);
         if (!ec)
         {
             http::write(stream, req, ec);
         }
-        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds));
         if (!ec)
         {
             http::read(stream, buffer, res, ec);
@@ -226,13 +522,124 @@ bool HttpGet(const std::string& url,
     else
     {
         beast::tcp_stream stream(ioc);
-        stream.expires_after(std::chrono::seconds(timeout_seconds));
-        stream.connect(endpoints, ec);
+        if (!EstablishOutboundTcp(stream, parsed, false, timeout_seconds, ec, error))
+        {
+            return false;
+        }
+        stream.expires_after(std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds));
+        http::write(stream, req, ec);
+        if (!ec)
+        {
+            http::read(stream, buffer, res, ec);
+        }
+        if (ec)
+        {
+            SetError(error, ec.message());
+            return false;
+        }
+        beast::error_code shutdown_error;
+        stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_error);
+    }
+    HttpResult result;
+    result.status = res.result_int();
+    result.body = std::move(res.body());
+    auto ct = res.find(http::field::content_type);
+    if (ct != res.end())
+        result.content_type.assign(ct->value().data(), ct->value().size());
+    *out = std::move(result);
+    return true;
+}
+
+bool HttpPost(const std::string& url,
+              const std::vector<std::pair<std::string, std::string>>& headers,
+              const std::string& body,
+              HttpResult* out,
+              std::string* error,
+              int timeout_seconds)
+{
+    if (out == nullptr)
+    {
+        SetError(error, "HTTP output pointer is null");
+        return false;
+    }
+    ParsedUrl parsed;
+    if (!ParseUrl(url, &parsed, error))
+    {
+        return false;
+    }
+    const bool is_https = adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https");
+    const bool is_http = adapter_utils::modules::IsHttpScheme(parsed.scheme == "http");
+    if (!is_https && !is_http)
+    {
+        SetError(error, adapter_utils::modules::UnsupportedSchemeMessage());
+        return false;
+    }
+    net::io_context ioc;
+
+    http::request<http::string_body> req{http::verb::post, parsed.target, 11};
+    req.set(http::field::host, parsed.host);
+    req.set(http::field::user_agent, adapter_utils::modules::DefaultUserAgent());
+    req.set(http::field::accept_encoding, "identity");
+    for (const auto& [key, value] : headers)
+        req.set(key, value);
+    if (req.find(http::field::content_type) == req.end())
+        req.set(http::field::content_type, "application/json; charset=UTF-8");
+    req.body() = body;
+    req.prepare_payload();
+
+    beast::flat_buffer buffer;
+    http::response<http::string_body> res;
+    beast::error_code ec;
+    if (is_https)
+    {
+        SSL_CTX* native_context = SSL_CTX_new(TLS_client_method());
+        if (native_context == nullptr)
+        {
+            SetError(error, "failed to create TLS context");
+            return false;
+        }
+        ssl::context ctx(native_context);
+        beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
+        if (!ConfigureTlsPeerVerification(ctx, stream, parsed.host, error))
+        {
+            return false;
+        }
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), parsed.host.c_str()))
+        {
+            SetError(error, "failed to set TLS SNI host");
+            return false;
+        }
+        if (!EstablishOutboundTcp(beast::get_lowest_layer(stream), parsed, true, timeout_seconds, ec, error))
+        {
+            return false;
+        }
+        beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds));
+        stream.handshake(ssl::stream_base::client, ec);
         if (!ec)
         {
             http::write(stream, req, ec);
         }
-        stream.expires_after(std::chrono::seconds(timeout_seconds));
+        if (!ec)
+        {
+            http::read(stream, buffer, res, ec);
+        }
+        if (ec)
+        {
+            SetError(error, ec.message());
+            return false;
+        }
+        beast::error_code shutdown_error;
+        stream.shutdown(shutdown_error);
+    }
+    else
+    {
+        beast::tcp_stream stream(ioc);
+        if (!EstablishOutboundTcp(stream, parsed, false, timeout_seconds, ec, error))
+        {
+            return false;
+        }
+        stream.expires_after(std::chrono::seconds(timeout_seconds < 1 ? 1 : timeout_seconds));
+        http::write(stream, req, ec);
         if (!ec)
         {
             http::read(stream, buffer, res, ec);

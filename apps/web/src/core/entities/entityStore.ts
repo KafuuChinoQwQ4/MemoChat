@@ -34,6 +34,7 @@ interface EntitiesActions {
   upsertDialog(d: DialogEntry): void
   setDialogDraft(peerId: number, draft: string): void
   setDialogPinned(peerId: number, pinned: boolean): void
+  clearDialogUnread(peerId: number): void
 
   // Message actions
   appendMessage(peerId: number, msg: RichMessage): void
@@ -114,6 +115,16 @@ export const useEntityStore = create<EntitiesState & EntitiesActions>((set, get)
       const existing = m.get(peerId)
       if (existing) m.set(peerId, { ...existing, isPinned: pinned })
       return { dialogs: m }
+    }),
+  clearDialogUnread: (peerId) =>
+    set((s) => {
+      const m = new Map(s.dialogs)
+      const existing = m.get(peerId)
+      if (existing && existing.unreadCount !== 0) {
+        m.set(peerId, { ...existing, unreadCount: 0 })
+        return { dialogs: m }
+      }
+      return {}
     }),
 
   appendMessage: (peerId, msg) =>

@@ -25,7 +25,7 @@ export function ChatShellContent() {
       {/* Conversation area */}
       <div style={{ flex: 1, overflow: "hidden" }}>
         {selectedPeerId !== null ? (
-          <ConversationPane peerId={selectedPeerId} />
+          <ConversationPane key={selectedPeerId} peerId={selectedPeerId} />
         ) : (
           <GlassSurface style={{
             height: "100%",

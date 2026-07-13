@@ -249,3 +249,6 @@ ui_*.h
 !server/**/config.json
 # Windows downloaded-file metadata / alternate data stream markers.
 *Zone.Identifier
+
+# Local runtime data (R18 source credentials, caches)
+/data/

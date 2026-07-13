@@ -55,12 +55,13 @@ TEST(R18PicacgAdapterAlgorithmsTest, ExposesStableIdentityAndApiDefaults)
 
     EXPECT_STREQ(SourceId(), "picacg.official");
     EXPECT_STREQ(ApiHost(), "picaapi.picacomic.com");
-    EXPECT_STREQ(ApiKey(), "");
-    EXPECT_STREQ(HmacKey(), "");
+    // Default client signing material is public; env can override.
+    EXPECT_FALSE(std::string(ApiKey()).empty());
+    EXPECT_FALSE(std::string(HmacKey()).empty());
     EXPECT_FALSE(HasCredentials(true, false));
     EXPECT_FALSE(HasCredentials(false, true));
     EXPECT_TRUE(HasCredentials(false, false));
-    EXPECT_STREQ(MissingCredentialsMessage(), "Picacg credentials missing");
+    EXPECT_STREQ(MissingCredentialsMessage(), "Picacg account login required");
     EXPECT_STREQ(GetMethod(), "GET");
     EXPECT_STREQ(PostMethod(), "POST");
     EXPECT_EQ(ApiTimeoutSeconds(), 8);

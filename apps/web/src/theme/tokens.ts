@@ -20,6 +20,8 @@ export const TOKEN = {
   colorBadge: "--color-badge",
   colorBrandGreen: "--color-brand-green",
   colorBrandGreenDark: "--color-brand-green-dark",
+  colorBrand: "--color-brand",
+  colorBrandDark: "--color-brand-dark",
   sidebarW: "--sidebar-w",
   listPanelW: "--list-panel-w",
   colGap: "--col-gap",

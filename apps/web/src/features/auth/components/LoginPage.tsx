@@ -9,6 +9,28 @@ import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { BrandMark } from "@/shared/ui/primitives/BrandMark"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 
+function mapLoginError(err: unknown): string {
+  if (!(err instanceof Error)) return "登录失败，请重试"
+  const msg = err.message || ""
+  // HttpClient surfaces gateway/proxy outages as "HTTP 503 ..."
+  if (/\b503\b/.test(msg) || /service unavailable/i.test(msg)) {
+    return "登录服务暂时不可用（HTTP 503）。请确认网关与 LoginServer 已启动后重试"
+  }
+  if (/\b429\b/.test(msg) || /rate limited/i.test(msg) || /local_rate_limited/i.test(msg)) {
+    return "登录尝试过于频繁，请稍后再试"
+  }
+  if (/Chat login timeout/i.test(msg)) {
+    return "聊天通道连接超时，请检查 ChatServer / WebSocket 后重试"
+  }
+  if (/Login failed: error code/i.test(msg)) {
+    const code = msg.match(/error code\s+(\d+)/i)?.[1]
+    if (code === "1009") return "邮箱或密码错误"
+    if (code === "1021") return "请输入有效的邮箱地址"
+    return `登录失败（错误码 ${code ?? "未知"}）`
+  }
+  return msg || "登录失败，请重试"
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
   const { loading, error, setLoading, setError, reset } = useAuthStore()
@@ -23,7 +45,7 @@ export function LoginPage() {
       await postLoginBootstrap({ email, password })
       navigate("/app/chat", { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败，请重试")
+      setError(mapLoginError(err))
     } finally {
       setLoading(false)
     }
