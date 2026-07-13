@@ -1783,8 +1783,8 @@ add_dependencies(gtest_tests chatserver_csession_lifetime_gtest)
 
 gtest_discover_tests(chatserver_csession_lifetime_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
-# CServer accept/timer 循环协程化(P2)停机/不泄漏验收。聚焦 TimerLoop 路径
-# (StartTimer/StopTimer),不触达 AsioIOServicePool 线程池,无需 Docker。
+# CServer accept/timer 回调启动、停机与不泄漏验收。覆盖 Start/AcceptNext 以及
+# StartTimer/StopTimer；只使用进程内 Asio 和 loopback 临时端口，无需 Docker。
 add_executable(chatserver_cserver_lifetime_gtest
     main.cpp
     CServerLifetimeTest.cpp

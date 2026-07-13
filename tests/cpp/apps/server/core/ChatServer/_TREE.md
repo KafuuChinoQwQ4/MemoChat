@@ -8,7 +8,7 @@
 | --- | --- |
 | `CMakeLists.txt` | 注册该测试目标的 CMake 配置 |
 | `CSessionLifetimeTest.cpp` | 验证 CSession 异步读回调在对端断连后释放会话、不会泄漏 session |
-| `CServerLifetimeTest.cpp` | 验证 CServer accept/timer 回调在 StopTimer 后取消并释放服务器 |
+| `CServerLifetimeTest.cpp` | 验证 CServer 能安全启动 accept，并在 StopTimer 后取消 accept/timer 回调和释放服务器 |
 | `AsyncEventDispatcherAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 异步事件分发器算法 module 的桥接 consumer |
 | `AsyncEventDispatcherAlgorithmsTest.cpp` | 验证异步事件分发器发布、轮询、payload guard、刷新和日志字面量算法 |
 | `ChatEnvelopeCodecTest.cpp` | 验证 Chat 内部任务/事件 envelope 的 typed JSON 编解码、分区键和重试边界 |

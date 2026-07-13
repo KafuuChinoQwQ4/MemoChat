@@ -80,30 +80,31 @@ void CServer::AcceptNext()
         std::cerr << _startup_error << std::endl;
         return;
     }
-    _acceptor.async_accept(
-        new_session->GetSocket(),
-        [self = std::move(self), new_session = std::move(new_session)](const boost::system::error_code& error)
-        {
-            if (error)
-            {
-                if (error != boost::asio::error::operation_aborted && self->_acceptor.is_open())
-                {
-                    std::cout << "session accept failed, error is " << error.message() << std::endl;
-                    self->AcceptNext();
-                }
-                return;
-            }
-            if (self->_stopping.load())
-            {
-                return;
-            }
-            {
-                std::lock_guard<std::mutex> lock(self->_mutex);
-                self->_sessions.insert(std::make_pair(new_session->GetSessionId(), new_session));
-            }
-            new_session->Start();
-            self->AcceptNext();
-        });
+    // Do not move new_session while another argument still dereferences it;
+    // function argument evaluation order does not guarantee which runs first.
+    _acceptor.async_accept(new_session->GetSocket(),
+                           [self, new_session](const boost::system::error_code& error)
+                           {
+                               if (error)
+                               {
+                                   if (error != boost::asio::error::operation_aborted && self->_acceptor.is_open())
+                                   {
+                                       std::cout << "session accept failed, error is " << error.message() << std::endl;
+                                       self->AcceptNext();
+                                   }
+                                   return;
+                               }
+                               if (self->_stopping.load())
+                               {
+                                   return;
+                               }
+                               {
+                                   std::lock_guard<std::mutex> lock(self->_mutex);
+                                   self->_sessions.insert(std::make_pair(new_session->GetSessionId(), new_session));
+                               }
+                               new_session->Start();
+                               self->AcceptNext();
+                           });
 }
 
 void CServer::ClearSession(std::string session_id)
