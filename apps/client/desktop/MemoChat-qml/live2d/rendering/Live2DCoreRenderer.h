@@ -16,7 +16,7 @@ struct csmModel;
 class Live2DCoreRenderer final : public Live2DRenderer
 {
 public:
-    explicit Live2DCoreRenderer(const QString& modelPath = QString());
+    explicit Live2DCoreRenderer(const QString& modelPath);
     ~Live2DCoreRenderer() override;
 
     bool isReady() const;
@@ -31,7 +31,6 @@ private:
     struct AlignedBuffer;
     struct CoreApi;
 
-    bool loadDefaultModel();
     bool loadModelFile(const QString& modelPath);
     bool loadMoc(const QString& mocPath);
     bool loadTextures(const QString& modelDirectory, const QVector<QString>& texturePaths);

@@ -12,6 +12,8 @@ instead of a placeholder character.
   `/data/third_party/live2d/CubismSdkForNative-current` on Arch/WSL.
 - Put user-supplied pet model packages under `/data/memochat/pet-assets` or a
   user-selected local directory.
+- Developer model packages kept under `resources/live2d` are local-only and
+  ignored by Git; clean clones do not include a default model or voice.
 - Put large caches, generated audio, model caches, and experiments under `/data`.
 - Do not use `D:` except for legacy Windows checks, backups, or explicit
   Windows-side validation.
@@ -56,7 +58,7 @@ are minimal synthetic assets created for validation tests.
 ## Runtime Boundary
 
 `Live2DAsset` validates local packages without linking the SDK. Native rendering
-will be added behind `MEMOCHAT_ENABLE_LIVE2D_NATIVE` and the existing
-`Live2DRenderItem` visual-state contract. Missing SDKs, missing models, and
-invalid packages should produce recoverable UI diagnostics rather than blank or
-crashing windows.
+only consumes the model selected through the existing `Live2DRenderItem`
+contract; an empty selection stays empty. Missing SDKs, missing models, and
+invalid packages produce recoverable UI diagnostics rather than crashing the
+client.

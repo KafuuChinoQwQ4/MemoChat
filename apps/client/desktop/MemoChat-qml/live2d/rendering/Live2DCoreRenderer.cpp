@@ -613,7 +613,12 @@ struct Live2DCoreRenderer::CoreApi
 
 Live2DCoreRenderer::Live2DCoreRenderer(const QString& modelPath)
 {
-    _ready = modelPath.isEmpty() ? loadDefaultModel() : loadModelFile(modelPath);
+    if (modelPath.trimmed().isEmpty())
+    {
+        _error = QStringLiteral("Live2D model path is empty");
+        return;
+    }
+    _ready = loadModelFile(modelPath);
 }
 
 Live2DCoreRenderer::~Live2DCoreRenderer() = default;
@@ -678,12 +683,6 @@ Live2DCoreRenderer::CoreApi& Live2DCoreRenderer::coreApi()
 {
     static CoreApi api;
     return api;
-}
-
-bool Live2DCoreRenderer::loadDefaultModel()
-{
-    return loadModelFile(
-        clientSourcePath(QStringLiteral("resources/live2d/KafuuChino/香风智乃live2D/香风智乃.model3.json")));
 }
 
 bool Live2DCoreRenderer::loadModelFile(const QString& modelPath)

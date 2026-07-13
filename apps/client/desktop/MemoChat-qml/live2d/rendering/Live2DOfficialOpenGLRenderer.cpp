@@ -51,16 +51,6 @@
 namespace
 {
 
-QString clientSourcePath(const QString& relativePath)
-{
-#ifdef MEMOCHAT_QML_SOURCE_DIR
-    const QString root = QString::fromUtf8(MEMOCHAT_QML_SOURCE_DIR);
-#else
-    const QString root = QCoreApplication::applicationDirPath();
-#endif
-    return QDir(root).absoluteFilePath(relativePath);
-}
-
 QByteArray readFileBytes(const QString& path, QString* error)
 {
     QFile file(path);
@@ -80,7 +70,7 @@ QString resolveModelPath(const QString& modelPath)
     const QString cleaned = modelPath.trimmed();
     if (cleaned.isEmpty())
     {
-        return Live2DOfficialOpenGLRenderer::defaultModelPath();
+        return {};
     }
     if (cleaned.startsWith(QStringLiteral("qrc:/")))
     {
@@ -440,6 +430,13 @@ struct Live2DOfficialOpenGLRenderer::Impl
     {
         QMutexLocker locker(&cubismRenderMutex());
 
+        modelPath = resolveModelPath(inputModelPath);
+        if (modelPath.isEmpty())
+        {
+            error = QStringLiteral("Live2D model path is empty");
+            return false;
+        }
+
         QString frameworkError;
         if (!ensureCubismFramework(&frameworkError))
         {
@@ -454,7 +451,6 @@ struct Live2DOfficialOpenGLRenderer::Impl
         motionManager = CSM_NEW Csm::CubismMotionManager();
         expressionManager = CSM_NEW Csm::CubismExpressionMotionManager();
 
-        modelPath = resolveModelPath(inputModelPath);
         QString fileError;
         const QByteArray modelBytes = readFileBytes(modelPath, &fileError);
         if (modelBytes.isEmpty())
@@ -1189,9 +1185,4 @@ bool Live2DOfficialOpenGLRenderer::isNative() const
 bool Live2DOfficialOpenGLRenderer::render(const QSize& viewportSize, const Live2DVisualState& state)
 {
     return _impl && _impl->render(viewportSize, state);
-}
-
-QString Live2DOfficialOpenGLRenderer::defaultModelPath()
-{
-    return clientSourcePath(QStringLiteral("resources/live2d/KafuuChino/香风智乃live2D/香风智乃.model3.json"));
 }

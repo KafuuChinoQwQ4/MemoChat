@@ -38,19 +38,8 @@ bool PetAssetSettings::load()
 
     const QJsonObject object = document.object();
     applyObject(object.toVariantMap(), false);
-    const bool migrated = migrateLegacyBundledLive2DPaths();
     normalizeVoiceTrainingState();
-    if (migrated)
-    {
-        _dirty = true;
-        const bool saved = save();
-        _status_text = saved ? QStringLiteral("已载入本地草稿，已迁移内置 Live2D 资源路径")
-                             : QStringLiteral("已载入本地草稿，内置 Live2D 资源路径已在内存中迁移");
-    }
-    else
-    {
-        _status_text = QStringLiteral("已载入本地草稿");
-    }
+    _status_text = QStringLiteral("已载入本地草稿");
     emit settingsChanged();
     return true;
 }

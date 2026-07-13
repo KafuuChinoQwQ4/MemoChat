@@ -6,6 +6,7 @@ from tests.python.support.paths import repo_root
 
 REPO_ROOT = repo_root()
 CLIENT_DIR = REPO_ROOT / "apps/client/desktop/MemoChat-qml"
+GITIGNORE = REPO_ROOT / ".gitignore"
 
 PET_ASSET_SETTINGS_H = CLIENT_DIR / "features/pet/assets/PetAssetSettings.h"
 PET_ASSET_SETTINGS_CPP = CLIENT_DIR / "features/pet/assets/PetAssetSettings.cpp"
@@ -143,9 +144,11 @@ QML_EDITABLE_FIELDS = (
 FORBIDDEN_LICENSED_ASSET_TOKENS = (
     "qrc:/src/KafuuChino",
     "<file>src/KafuuChino",
+    "resources/live2d/KafuuChino",
+    "香风智乃",
 )
 
-DEFAULT_LIVE2D_RESOURCE_ROOT = "resources/live2d/KafuuChino"
+DEVELOPER_LIVE2D_RESOURCE_ROOT = "resources/live2d/KafuuChino"
 
 
 def read(path: Path) -> str:
@@ -435,38 +438,29 @@ class PetAssetSettingsContractTests(unittest.TestCase):
             self.assertContains(qml, token)
 
         self.assertNotIn("src/KafuuChino", qml)
-        self.assertNotIn(DEFAULT_LIVE2D_RESOURCE_ROOT, qml)
+        self.assertNotIn(DEVELOPER_LIVE2D_RESOURCE_ROOT, qml)
 
         self.assertContains(cmake, "MEMOCHAT_QML_SOURCE_DIR")
 
-    def test_pet_asset_settings_migrates_legacy_bundled_live2d_paths_on_load(self):
+    def test_pet_asset_settings_does_not_reference_bundled_developer_assets(self):
+        header = read(PET_ASSET_SETTINGS_H)
         source = pet_asset_settings_source()
         persistence = read(PET_ASSET_SETTINGS_PERSISTENCE_CPP)
+        ignore = read(GITIGNORE)
 
         for token in (
             "migrateLegacyBundledLive2DPaths",
             "migrateLegacyBundledLive2DPath",
             "resources/live2d/KafuuChino",
-            "modelRoot",
-            "modelJson",
-            "motionDirectory",
-            "expressionDirectory",
-            "voiceDirectory",
+            "src/KafuuChino",
+            "香风智乃",
         ):
-            self.assertContains(source, token)
+            self.assertNotIn(token, header)
+            self.assertNotIn(token, source)
+            self.assertNotIn(token, persistence)
 
-        self.assertRegex(source, r"QDir::cleanPath\s*\(")
-        self.assertRegex(source, r"\.startsWith\s*\(")
-        self.assertRegex(
-            source,
-            r"applyObject\s*\([^;]+;\s*const\s+bool\s+migrated\s*=\s*migrateLegacyBundledLive2DPaths\s*\(",
-            "Loaded drafts should be migrated immediately after JSON values are applied",
-        )
-        self.assertRegex(
-            persistence,
-            r"if\s*\(\s*migrated\s*\)\s*\{[\s\S]*\bsave\s*\(",
-            "Migrated drafts should be persisted so stale deleted paths do not return next launch",
-        )
+        self.assertIn("/apps/client/desktop/MemoChat-qml/resources/live2d/", ignore)
+        self.assertIn("/apps/client/desktop/MemoChat-qml/src/KafuuChino/", ignore)
 
     def test_pet_asset_settings_does_not_bundle_licensed_live2d_resources(self):
         checked_sources = {
@@ -556,7 +550,7 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         ):
             self.assertContains(qml, token)
 
-        self.assertNotIn(f"{DEFAULT_LIVE2D_RESOURCE_ROOT}/香风智乃voice", qml)
+        self.assertNotIn(f"{DEVELOPER_LIVE2D_RESOURCE_ROOT}/香风智乃voice", qml)
         self.assertNotIn("Kafuuchino-voice.mp3", qml)
         self.assertNotIn("?.", qml, "QML should avoid optional chaining for Qt 6.8 compatibility")
 

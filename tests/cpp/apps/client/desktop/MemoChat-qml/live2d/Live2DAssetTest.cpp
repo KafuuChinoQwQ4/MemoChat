@@ -330,25 +330,21 @@ TEST(Live2DAssetTest, ModelFileLoadsFixtureReferencesAndPackageEntry)
     EXPECT_TRUE(packageFiles.join(QStringLiteral("\n")).contains(QStringLiteral("minimal.model3.json")));
 }
 
-TEST(Live2DAssetTest, RenderPathResolverHandlesDefaultQrcAndRelativeModels)
+TEST(Live2DAssetTest, RenderPathResolverRequiresUserSelectedModel)
 {
     QTemporaryDir temp;
     ASSERT_TRUE(temp.isValid());
     const QString modelPath = temp.filePath(QStringLiteral("avatar.model3.json"));
     writeFile(modelPath, QByteArray("{}"));
 
-    const QString fallback = QStringLiteral(":/models/default/default.model3.json");
-
-    EXPECT_TRUE(Live2DRenderPathResolver::resolveModelPath(temp.path(), QString(), fallback).isEmpty());
-    EXPECT_EQ(
-        Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("qrc:/models/a.model3.json"), fallback),
-                                                   QStringLiteral(":/models/a.model3.json"));
-    EXPECT_EQ(
-        Live2DRenderPathResolver::resolveModelPath(temp.path(), QUrl::fromLocalFile(modelPath).toString(), fallback),
-        QDir::cleanPath(modelPath));
-    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("avatar.model3.json"), fallback),
+    EXPECT_TRUE(Live2DRenderPathResolver::resolveModelPath(temp.path(), QString()).isEmpty());
+    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("qrc:/models/a.model3.json")),
+                                                         QStringLiteral(":/models/a.model3.json"));
+    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QUrl::fromLocalFile(modelPath).toString()),
+              QDir::cleanPath(modelPath));
+    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("avatar.model3.json")),
                                                          QDir::cleanPath(modelPath));
-    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("missing.model3.json"), fallback),
+    EXPECT_EQ(Live2DRenderPathResolver::resolveModelPath(temp.path(), QStringLiteral("missing.model3.json")),
                                                          QDir::cleanPath(
                                                              temp.filePath(QStringLiteral("missing.model3.json"))));
 }

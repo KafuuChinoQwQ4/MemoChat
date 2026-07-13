@@ -323,6 +323,7 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
         source = read(LIVE2D_CPP)
         official_header = read(LIVE2D_OFFICIAL_H)
         official_source = read(LIVE2D_OFFICIAL_CPP)
+        core_source = read(LIVE2D_CORE_CPP)
 
         self.assertIn("Q_PROPERTY(QString modelRoot", header)
         self.assertIn("Q_PROPERTY(QString modelJson", header)
@@ -334,7 +335,9 @@ class UiStartupPerformanceContractTests(unittest.TestCase):
             official_header,
             r"Live2DOfficialOpenGLRenderer\s*\(\s*const\s+QString\s*&\s*modelPath",
         )
-        self.assertIn("defaultModelPath()", official_source)
+        self.assertNotIn("defaultModelPath()", official_source)
+        self.assertNotIn("KafuuChino", core_source + official_source)
+        self.assertNotIn("香风智乃", core_source + official_source)
         self.assertIn("resolveModelPath(inputModelPath)", official_source)
 
     def test_live2d_render_item_treats_empty_model_as_no_model(self):

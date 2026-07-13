@@ -6,7 +6,7 @@
 namespace Live2DRenderPathResolver
 {
 
-QString resolveModelPath(const QString& modelRoot, const QString& modelJson, const QString& defaultModelPath);
+QString resolveModelPath(const QString& modelRoot, const QString& modelJson);
 
 } // namespace Live2DRenderPathResolver
 
