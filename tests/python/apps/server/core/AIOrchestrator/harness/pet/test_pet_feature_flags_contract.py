@@ -220,7 +220,7 @@ class PetFeatureFlagsContractTests(unittest.TestCase):
         ):
             self.assertIn(token, doc)
 
-    def test_cmake_presets_keep_only_windows_full_and_linux_full(self):
+    def test_cmake_presets_keep_only_linux_presets(self):
         presets = read(CMAKE_PRESETS)
         preset_data = json.loads(presets)
         launcher = read(WSLG_LAUNCHER)
@@ -228,12 +228,30 @@ class PetFeatureFlagsContractTests(unittest.TestCase):
         build_names = {item["name"] for item in preset_data["buildPresets"]}
         test_names = {item["name"] for item in preset_data["testPresets"]}
 
-        self.assertEqual(configure_names, {"msvc2022-full", "linux-full-gcc16"})
-        self.assertEqual(build_names, {"msvc2022-full", "linux-full-gcc16"})
-        self.assertEqual(test_names, {"msvc2022-full", "linux-full-gcc16"})
+        self.assertEqual(
+            configure_names,
+            {"linux-full-gcc16", "linux-full-gcc16-webtransport-provider"},
+        )
+        self.assertEqual(
+            build_names,
+            {"linux-full-gcc16", "linux-full-gcc16-webtransport-provider"},
+        )
+        self.assertEqual(test_names, {"linux-full-gcc16"})
+
+        lower_presets = presets.lower()
+        for forbidden in (
+            "msvc",
+            "visual studio",
+            "windows kits",
+            "cl.exe",
+            "x64-windows",
+            "ninja multi-config",
+            "d:/",
+            "c:/",
+        ):
+            self.assertNotIn(forbidden, lower_presets)
 
         for token in (
-            '"msvc2022-full"',
             '"linux-full-gcc16"',
             '"MEMOCHAT_ENABLE_LIVE2D_NATIVE": "ON"',
             '"MEMOCHAT_LIVE2D_SDK_ROOT": "/data/third_party/live2d/CubismSdkForNative-current"',
