@@ -23,7 +23,6 @@
 | `ChatServer.sln` | Visual Studio 解决方案文件 |
 | `ChatServer.vcxproj` | VS 工程文件 |
 | `ChatServer.vcxproj.filters` | VS 工程筛选器 |
-| `ChatServer.vcxproj.user` | VS 工程用户设置 |
 | `PropertySheet.props` | VS 属性表 |
 | `chatdeliveryworker1.ini` | 投递 worker 节点配置 |
 | `chatmessageservice1.ini` | 消息服务节点配置 |
@@ -32,8 +31,6 @@
 | `chatserver1.ini` | 接入节点 1 配置 |
 | `chatserver2.ini` | 接入节点 2 配置 |
 | `config.ini` | 通用/默认配置 |
-| `mysqlcppconn-9-vs14.dll` | MySQL C++ 连接器运行库（Windows） |
-| `mysqlcppconn8-2-vs14.dll` | MySQL C++ 连接器运行库（Windows） |
 | `start.bat` | Windows 启动脚本 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->
