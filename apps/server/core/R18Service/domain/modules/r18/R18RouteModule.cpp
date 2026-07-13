@@ -138,6 +138,13 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
         {
             return memochat::gate::services::r18::R18Service::Instance().HandleClearAccount(request, response);
         });
+    registry.Register(
+        modules::PostMethod(),
+        modules::CheckinPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleCheckin(request, response);
+        });
 }
 
 } // namespace memochat::gate::modules::r18

@@ -27,6 +27,11 @@ bool HasCredentials(bool api_key_empty, bool hmac_key_empty)
     return memochat::r18::picacg_adapter::modules::HasCredentials(api_key_empty, hmac_key_empty);
 }
 
+bool HasValidSigningMaterial(unsigned long long api_key_size, unsigned long long hmac_key_size)
+{
+    return memochat::r18::picacg_adapter::modules::HasValidSigningMaterial(api_key_size, hmac_key_size);
+}
+
 const char* MissingCredentialsMessage()
 {
     return memochat::r18::picacg_adapter::modules::MissingCredentialsMessage();
@@ -117,6 +122,16 @@ const char* ImageTargetPrefix()
     return memochat::r18::picacg_adapter::modules::ImageTargetPrefix();
 }
 
+const char* RedirectImageHost()
+{
+    return memochat::r18::picacg_adapter::modules::RedirectImageHost();
+}
+
+bool IsRedirectImageTarget(const char* target, unsigned long long target_size)
+{
+    return memochat::r18::picacg_adapter::modules::IsRedirectImageTarget(target, target_size);
+}
+
 bool IsExactHostInPolicy(const char* host,
                          unsigned long long host_size,
                          const char* policy,
@@ -158,6 +173,16 @@ unsigned long long MaxImageBytes()
 bool IsAllowedImageContentType(bool jpeg, bool png, bool webp, bool gif, bool avif)
 {
     return memochat::r18::picacg_adapter::modules::IsAllowedImageContentType(jpeg, png, webp, gif, avif);
+}
+
+bool IsImageRedirectStatus(int status)
+{
+    return memochat::r18::picacg_adapter::modules::IsImageRedirectStatus(status);
+}
+
+unsigned long long MaxImageRedirects()
+{
+    return memochat::r18::picacg_adapter::modules::MaxImageRedirects();
 }
 
 const char* ImageUnavailableTitle()

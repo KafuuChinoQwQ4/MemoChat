@@ -16,6 +16,7 @@ import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 import styles from "./R18ShellContent.module.css"
+import { accountInteractionKind, isActionableSource } from "./r18SourceAvailability"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -61,8 +62,11 @@ function humanizeR18Error(message?: string | null): string {
   if (text === "Picacg credentials missing" || text === "Picacg account login required") {
     return "哔咔源需要账号登录，请在左侧「账号管理」中保存账号密码"
   }
-  if (text.startsWith("Picacg login token missing") || text.startsWith("Picacg login failed")) {
-    return "哔咔登录未拿到会话，请检查账号密码是否正确（已保存，可重试登录）"
+  if (text.startsWith("Picacg login token missing") || text.startsWith("Picacg login returned success without a session")) {
+    return "哔咔上游未返回登录会话，请检查签名配置或稍后重试"
+  }
+  if (text.startsWith("Picacg login failed")) {
+    return text.replace("Picacg login failed:", "哔咔登录失败：")
   }
   if (text === "source is disabled") {
     return "当前内容源已禁用"
@@ -405,9 +409,14 @@ function ReaderOverlay({
 // ─── Account manager ─────────────────────────────────────────────────────
 
 function accountStatusLabel(account: R18ManagedAccount): string {
-  if (account.direct_access && !account.auth_required) {
+  const interaction = accountInteractionKind(account)
+  if (interaction === "optional-account") {
+    if (account.status === "authenticated" && account.has_session) return "已登录"
+    return "可直接访问，也可登录账号"
+  }
+  if (interaction === "optional-cookie") {
     if (account.status === "authenticated" && account.has_session) return "可选 Cookie 已配置"
-    if (account.direct_access) return "无需账号，可直接访问"
+    return "可直接访问，也可配置 Cookie"
   }
   switch (account.status) {
     case "authenticated":
@@ -494,8 +503,11 @@ function AccountManagerPanel({
                 password: "",
               }
               const busy = busySourceId === sourceId
-              const needsAccount = Boolean(account.auth_required)
-              const optionalCookie = !needsAccount && sourceId.includes("ehentai")
+              const interaction = accountInteractionKind(account)
+              const needsAccount = interaction === "required-account"
+              const optionalAccount = interaction === "optional-account"
+              const optionalCookie = interaction === "optional-cookie"
+              const supportsCredentials = interaction !== "none"
               return (
                 <GlassSurface
                   key={sourceId}
@@ -530,11 +542,11 @@ function AccountManagerPanel({
                       color: needsAccount ? "var(--text-primary)" : "var(--text-secondary)",
                       background: "var(--glass-btn-bg)",
                     }}>
-                      {needsAccount ? "需要账号" : "直接访问"}
+                      {needsAccount ? "需要账号" : optionalAccount ? "可选账号" : optionalCookie ? "可选 Cookie" : "直接访问"}
                     </span>
                   </div>
 
-                  {(needsAccount || optionalCookie) ? (
+                  {supportsCredentials ? (
                     <>
                       <GlassTextField
                         value={draft.username}
@@ -654,9 +666,13 @@ export function R18ShellContent() {
     },
   })
 
-  const sources = useMemo(() => sourcesQuery.data ?? [], [sourcesQuery.data])
+  const sources = useMemo(
+    () => (sourcesQuery.data ?? []).filter(isActionableSource),
+    [sourcesQuery.data],
+  )
   const managedAccounts = useMemo(
-    () => accountsQuery.data?.managed ?? accountsQuery.data?.accounts ?? [],
+    () => (accountsQuery.data?.managed ?? accountsQuery.data?.accounts ?? [])
+      .filter((account) => accountInteractionKind(account) !== "none"),
     [accountsQuery.data],
   )
   const selectedSource = useMemo(
@@ -882,9 +898,9 @@ export function R18ShellContent() {
               <button
                 key={source.id}
                 className={styles.sourceButton}
-                disabled={!source.enabled && source.status !== "auth-required" && source.status !== "credentials-missing"}
+                disabled={!isActionableSource(source)}
                 onClick={() => {
-                  if (!source.enabled && (source.status === "auth-required" || source.status === "credentials-missing")) {
+                  if (!source.enabled && isActionableSource(source)) {
                     setAccountActionError(null)
                     setAccountPanelOpen(true)
                     return
@@ -896,12 +912,12 @@ export function R18ShellContent() {
                 style={{
                   border: "none", borderRadius: 10,
                   padding: "10px 12px", textAlign: "left",
-                  cursor: source.enabled || source.status === "auth-required" || source.status === "credentials-missing"
+                  cursor: isActionableSource(source)
                     ? "pointer"
                     : "not-allowed",
                   transition: "background 120ms ease",
                   background: active ? "var(--tint-selected)" : "transparent",
-                  color: source.enabled ? "var(--text-primary)" : "var(--text-disabled)",
+                  color: isActionableSource(source) ? "var(--text-primary)" : "var(--text-disabled)",
                 }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--tint-hover)" }}
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent" }}
@@ -912,10 +928,10 @@ export function R18ShellContent() {
                   </span>
                   <span style={{
                     flexShrink: 0, width: 8, height: 8, borderRadius: "50%",
-                    background: source.enabled ? "var(--color-brand-green)" : "var(--text-disabled)",
+                    background: isActionableSource(source) ? "var(--color-brand-green)" : "var(--text-disabled)",
                   }} />
                 </div>
-                <div style={{ marginTop: 3, fontSize: 12, color: source.enabled ? "var(--text-secondary)" : "var(--text-disabled)" }}>
+                <div style={{ marginTop: 3, fontSize: 12, color: isActionableSource(source) ? "var(--text-secondary)" : "var(--text-disabled)" }}>
                   {sourceStatusLabel(source)}
                 </div>
               </button>

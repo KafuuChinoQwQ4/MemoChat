@@ -54,4 +54,5 @@ export const ENDPOINTS = {
   r18AccountSave:    "/api/r18/account/save",
   r18AccountLogin:   "/api/r18/account/login",
   r18AccountClear:   "/api/r18/account/clear",
+  r18Checkin:        "/api/r18/checkin",
 } as const

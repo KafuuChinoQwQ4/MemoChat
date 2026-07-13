@@ -443,11 +443,37 @@ bool EstablishOutboundTcp(beast::tcp_stream& stream,
     return true;
 }
 
-bool HttpGet(const std::string& url,
-             const std::vector<std::pair<std::string, std::string>>& headers,
-             HttpResult* out,
-             std::string* error,
-             int timeout_seconds)
+bool OutboundProxyEnabled(const std::string& url, bool* enabled, std::string* error)
+{
+    if (enabled == nullptr)
+    {
+        SetError(error, "proxy enabled output is null");
+        return false;
+    }
+    *enabled = false;
+    ParsedUrl parsed;
+    if (!ParseUrl(url, &parsed, error))
+        return false;
+    const bool is_https = adapter_utils::modules::IsHttpsScheme(parsed.scheme == "https");
+    const bool is_http = adapter_utils::modules::IsHttpScheme(parsed.scheme == "http");
+    if (!is_https && !is_http)
+    {
+        SetError(error, adapter_utils::modules::UnsupportedSchemeMessage());
+        return false;
+    }
+    OutboundProxyConfig proxy;
+    if (!ResolveOutboundProxy(parsed.host, is_https, &proxy, error))
+        return false;
+    *enabled = proxy.enabled;
+    return true;
+}
+
+bool HttpGetImpl(const std::string& url,
+                 const std::vector<std::pair<std::string, std::string>>& headers,
+                 std::uint64_t max_body_bytes,
+                 HttpResult* out,
+                 std::string* error,
+                 int timeout_seconds)
 {
     if (out == nullptr)
     {
@@ -476,7 +502,8 @@ bool HttpGet(const std::string& url,
         req.set(key, value);
 
     beast::flat_buffer buffer;
-    http::response<http::string_body> res;
+    http::response_parser<http::string_body> parser;
+    parser.body_limit(max_body_bytes == 0 ? std::numeric_limits<std::uint64_t>::max() : max_body_bytes);
     beast::error_code ec;
     if (is_https)
     {
@@ -509,7 +536,7 @@ bool HttpGet(const std::string& url,
         }
         if (!ec)
         {
-            http::read(stream, buffer, res, ec);
+            http::read(stream, buffer, parser, ec);
         }
         if (ec)
         {
@@ -530,7 +557,7 @@ bool HttpGet(const std::string& url,
         http::write(stream, req, ec);
         if (!ec)
         {
-            http::read(stream, buffer, res, ec);
+            http::read(stream, buffer, parser, ec);
         }
         if (ec)
         {
@@ -540,14 +567,42 @@ bool HttpGet(const std::string& url,
         beast::error_code shutdown_error;
         stream.socket().shutdown(tcp::socket::shutdown_both, shutdown_error);
     }
+    auto response = parser.release();
     HttpResult result;
-    result.status = res.result_int();
-    result.body = std::move(res.body());
-    auto ct = res.find(http::field::content_type);
-    if (ct != res.end())
+    result.status = response.result_int();
+    result.body = std::move(response.body());
+    auto ct = response.find(http::field::content_type);
+    if (ct != response.end())
         result.content_type.assign(ct->value().data(), ct->value().size());
+    auto location = response.find(http::field::location);
+    if (location != response.end())
+        result.location.assign(location->value().data(), location->value().size());
     *out = std::move(result);
     return true;
+}
+
+bool HttpGet(const std::string& url,
+             const std::vector<std::pair<std::string, std::string>>& headers,
+             HttpResult* out,
+             std::string* error,
+             int timeout_seconds)
+{
+    return HttpGetImpl(url, headers, 0, out, error, timeout_seconds);
+}
+
+bool HttpGetBounded(const std::string& url,
+                    const std::vector<std::pair<std::string, std::string>>& headers,
+                    std::uint64_t max_body_bytes,
+                    HttpResult* out,
+                    std::string* error,
+                    int timeout_seconds)
+{
+    if (max_body_bytes == 0)
+    {
+        SetError(error, "HTTP body limit must be positive");
+        return false;
+    }
+    return HttpGetImpl(url, headers, max_body_bytes, out, error, timeout_seconds);
 }
 
 bool HttpPost(const std::string& url,

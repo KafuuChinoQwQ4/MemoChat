@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -130,7 +131,11 @@ bool ValidatePicacgImageUrl(const std::string& image_url, ParsedUrl* parsed, std
                                                                            candidate.host.size(),
                                                                            allowed_hosts.data(),
                                                                            allowed_hosts.size());
-    const bool target_allowed = candidate.target.rfind(picacg_adapter::modules::ImageTargetPrefix(), 0) == 0;
+    const bool redirect_image_host = LowerAsciiCopy(candidate.host) == picacg_adapter::modules::RedirectImageHost();
+    const bool target_allowed =
+        candidate.target.rfind(picacg_adapter::modules::ImageTargetPrefix(), 0) == 0 ||
+        (redirect_image_host &&
+         picacg_adapter::modules::IsRedirectImageTarget(candidate.target.data(), candidate.target.size()));
     if (!picacg_adapter::modules::IsCanonicalAllowedImageUrl(candidate.scheme == "https",
                                                              candidate.port == "443",
                                                              candidate.has_userinfo,
@@ -265,6 +270,8 @@ bool HttpGetPinned(net::io_context& ioc,
     result.body = std::move(response.body());
     if (const auto content_type = response.find(http::field::content_type); content_type != response.end())
         result.content_type.assign(content_type->value().data(), content_type->value().size());
+    if (const auto location = response.find(http::field::location); location != response.end())
+        result.location.assign(location->value().data(), location->value().size());
     *out = std::move(result);
     return true;
 }
@@ -328,7 +335,7 @@ bool PicacgHeaders(const std::string& method,
     }
     const std::string api_key = picacg_adapter::modules::ApiKey();
     const std::string hmac_key = picacg_adapter::modules::HmacKey();
-    if (!picacg_adapter::modules::HasCredentials(api_key.empty(), hmac_key.empty()))
+    if (!picacg_adapter::modules::HasValidSigningMaterial(api_key.size(), hmac_key.size()))
     {
         SetError(error, picacg_adapter::modules::MissingCredentialsMessage());
         return false;
@@ -650,6 +657,11 @@ R18ImagePayload PicacgFetchImage(const std::filesystem::path& cache_root, const 
     {
         return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
     }
+    bool outbound_proxy_enabled = false;
+    if (!detail::OutboundProxyEnabled(image_url, &outbound_proxy_enabled, &error))
+    {
+        return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
+    }
 
     std::string cache_key;
     if (!detail::Md5Hex(image_url, &cache_key, &error))
@@ -661,10 +673,42 @@ R18ImagePayload PicacgFetchImage(const std::filesystem::path& cache_root, const 
     {
         return cached;
     }
+    const std::vector<std::pair<std::string, std::string>> headers = {
+        {"Accept", "image/jpeg,image/png,image/webp,image/gif,image/avif"},
+        {"Referer", picacg_adapter::modules::ImageReferer()},
+    };
     detail::HttpResult response;
-    if (!HttpGetPinned(ioc, parsed, endpoints, &response, &error))
+    std::string current_url = image_url;
+    for (unsigned long long redirect_count = 0;; ++redirect_count)
     {
-        return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
+        response = {};
+        const bool fetched = outbound_proxy_enabled
+                                 ? detail::HttpGetBounded(current_url,
+                                                          headers,
+                                                          picacg_adapter::modules::MaxImageBytes(),
+                                                          &response,
+                                                          &error,
+                                                          picacg_adapter::modules::ApiTimeoutSeconds())
+                                 : HttpGetPinned(ioc, parsed, endpoints, &response, &error);
+        if (!fetched)
+            return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
+        if (!picacg_adapter::modules::IsImageRedirectStatus(response.status))
+            break;
+        if (response.location.empty() || redirect_count >= picacg_adapter::modules::MaxImageRedirects())
+        {
+            return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(),
+                                            "Picacg image redirect was rejected");
+        }
+
+        current_url = response.location;
+        if (!ValidatePicacgImageUrl(current_url, &parsed, &error))
+            return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
+        ioc.restart();
+        endpoints.clear();
+        if (!ResolvePublicImageEndpoints(ioc, parsed, &endpoints, &error))
+            return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
+        if (!detail::OutboundProxyEnabled(current_url, &outbound_proxy_enabled, &error))
+            return detail::PlaceholderImage(picacg_adapter::modules::ImageErrorTitle(), error);
     }
     if (picacg_adapter::modules::ShouldUseImagePlaceholder(response.status, response.body.empty()) ||
         response.body.size() > picacg_adapter::modules::MaxImageBytes() ||
@@ -692,25 +736,48 @@ bool PicacgLogin(const std::string& email, const std::string& password, std::str
     std::vector<std::pair<std::string, std::string>> headers;
     if (!PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, "", &headers, error))
         return false;
-    // Escape minimal JSON string content.
+    // Escape JSON string content: handle all control characters and the two special chars.
     auto escape = [](const std::string& in)
     {
         std::string out;
         out.reserve(in.size() + 8);
-        for (char c : in)
+        for (unsigned char c : in)
         {
             if (c == '\\' || c == '"')
             {
                 out.push_back('\\');
-                out.push_back(c);
+                out.push_back(static_cast<char>(c));
             }
             else if (c == '\n')
             {
                 out += "\\n";
             }
+            else if (c == '\r')
+            {
+                out += "\\r";
+            }
+            else if (c == '\t')
+            {
+                out += "\\t";
+            }
+            else if (c == '\b')
+            {
+                out += "\\b";
+            }
+            else if (c == '\f')
+            {
+                out += "\\f";
+            }
+            else if (c < 0x20)
+            {
+                // Other ASCII control characters encoded as \u00XX.
+                char buf[8];
+                std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(c));
+                out += buf;
+            }
             else
             {
-                out.push_back(c);
+                out.push_back(static_cast<char>(c));
             }
         }
         return out;
@@ -721,8 +788,23 @@ bool PicacgLogin(const std::string& email, const std::string& password, std::str
     HttpResult response;
     if (!HttpPost(url, headers, body, &response, error, picacg_adapter::modules::ApiTimeoutSeconds()))
         return false;
+    // On non-200 HTTP status, try to parse the JSON body to surface the real API error
+    // (Picacg returns HTTP 400 with {"code":400,"message":"incorrect",...} for bad credentials).
     if (!picacg_adapter::modules::IsSuccessStatus(response.status))
     {
+        if (!response.body.empty())
+        {
+            JsonValue err_root;
+            if (json::glaze_parse(err_root, response.body))
+            {
+                const std::string api_msg = FieldString(err_root, "message", FieldString(err_root, "error", ""));
+                if (!api_msg.empty())
+                {
+                    SetError(error, "Picacg login failed: " + api_msg);
+                    return false;
+                }
+            }
+        }
         SetError(error, "Picacg login HTTP " + std::to_string(response.status));
         return false;
     }
@@ -758,8 +840,8 @@ bool PicacgLogin(const std::string& email, const std::string& password, std::str
             SetError(error, "Picacg login token missing: " + api_message);
         else
             SetError(error,
-                     "Picacg login token missing (upstream returned no session; check account/password "
-                     "or API availability)");
+                     "Picacg login returned success without a session; verify signing configuration or upstream API "
+                     "availability");
         return false;
     }
     *token_out = token;

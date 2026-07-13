@@ -101,4 +101,9 @@ const char* AccountClearPath()
 {
     return "/api/r18/account/clear";
 }
+
+const char* CheckinPath()
+{
+    return "/api/r18/checkin";
+}
 } // namespace memochat::r18::route_registration::modules

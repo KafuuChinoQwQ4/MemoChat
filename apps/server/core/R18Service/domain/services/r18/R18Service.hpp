@@ -47,6 +47,8 @@ public:
                             memochat::gate::routing::GateResponse& response);
     bool HandleClearAccount(const memochat::gate::routing::GateRequest& request,
                             memochat::gate::routing::GateResponse& response);
+    bool HandleCheckin(const memochat::gate::routing::GateRequest& request,
+                       memochat::gate::routing::GateResponse& response);
 
 private:
     R18Service() = default;

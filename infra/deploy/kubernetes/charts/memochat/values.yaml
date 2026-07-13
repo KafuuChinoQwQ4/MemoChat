@@ -260,7 +260,7 @@ focusedGateways:
       configSection: R18Gateway
       port: 8098
       replicaCount: 2
-      allowedImageHosts: ""
+      allowedImageHosts: "storage-b.picacomic.com,img.picacomic.com"
     register:
       serviceName: register
       target: RegisterServer
