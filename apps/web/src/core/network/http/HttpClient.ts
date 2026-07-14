@@ -34,6 +34,7 @@ export class HttpClient {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      credentials: "include",
       signal: opts.signal ?? null,
     })
     throwForStatus(res)
@@ -52,6 +53,7 @@ export class HttpClient {
     const res = await fetch(`${this._baseUrl}${path}`, {
       method: "GET",
       headers,
+      credentials: "include",
       signal: opts.signal ?? null,
     })
     throwForStatus(res)

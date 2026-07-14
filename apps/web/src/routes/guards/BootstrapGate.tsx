@@ -1,6 +1,6 @@
 /**
- * BootstrapGate — shows a loading spinner while post-login bootstrap runs.
- * Only blocks child render, not navigation itself.
+ * BootstrapGate — shows a loading spinner while post-login bootstrap /
+ * session restore runs. Only blocks child render, not navigation itself.
  */
 import { Outlet } from "react-router-dom"
 import { useSessionStore } from "@/core/session/sessionStore"
@@ -8,8 +8,11 @@ import { Spinner } from "@/shared/ui/primitives/Spinner"
 
 export function BootstrapGate() {
   const connState = useSessionStore((s) => s.connState)
-  // While connecting or waiting for chat-login, show a spinner
-  if (connState === "connecting" || connState === "chat_login") {
+  if (
+    connState === "connecting" ||
+    connState === "chat_login" ||
+    connState === "reconnecting"
+  ) {
     return (
       <div style={{
         height: "100%",
@@ -21,7 +24,7 @@ export function BootstrapGate() {
         fontSize: 14,
       }}>
         <Spinner size={28} />
-        <span>正在连接…</span>
+        <span>{connState === "reconnecting" ? "正在恢复登录…" : "正在连接…"}</span>
       </div>
     )
   }

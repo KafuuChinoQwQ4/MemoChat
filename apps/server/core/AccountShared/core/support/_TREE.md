@@ -20,8 +20,8 @@
 | `AuthLoginRateLimiter.hpp` | 登录失败 Redis 限流声明 |
 | `AuthLoginSupport.cpp` | 登录流程支撑逻辑实现 |
 | `AuthLoginSupport.hpp` | 登录支撑声明 |
-| `AuthPublicDtos.cpp` | 账号公开接口请求/响应 DTO 解析实现，包含登录与 refresh token 契约 |
-| `AuthPublicDtos.hpp` | 账号公开接口请求/响应 DTO 声明，包含登录与 refresh token 契约 |
+| `AuthPublicDtos.cpp` | 账号公开接口 DTO 解析实现，包含 refresh token 校验与 Web HttpOnly Cookie 编解码 |
+| `AuthPublicDtos.hpp` | 账号公开接口 DTO 声明，包含 refresh token 与 Web Cookie 契约 |
 | `AuthUserInfo.hpp` | 登录流程使用的轻量用户资料结构 |
 | `Http2ProfileSupport.cpp` | HTTP2 资料处理支撑实现 |
 | `Http2ProfileSupport.hpp` | HTTP2 资料支撑声明 |

@@ -6,7 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `AuthService.cpp` | 认证领域服务实现，凭据锁内完成密码校验、改密撤销、refresh 活跃复查与 token 签发 |
+| `AuthService.cpp` | 认证领域服务实现，完成凭据锁、token 签发及 Web HttpOnly refresh Cookie 轮换/吊销 |
 | `AuthService.hpp` | 认证领域服务声明 |
 | `modules/` | 认证领域服务的项目自有 C++ module interface 子目录 |
 

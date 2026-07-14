@@ -212,6 +212,9 @@ std::size_t AuthInputMaxLength(AuthInputField field);
 bool IsValidAuthEmail(std::string_view email);
 bool IsValidAuthRefreshTokenShape(std::string_view refresh_token);
 std::string AuthRefreshTokenRateLimitSubject(std::string_view refresh_token);
+std::string ExtractWebRefreshTokenCookie(std::string_view cookie_header);
+std::string BuildWebRefreshTokenCookie(std::string_view refresh_token, int ttl_seconds);
+std::string ClearWebRefreshTokenCookie();
 
 AuthInputValidationResult ValidateAuthEmailRequest(const AuthEmailRequestDto& request);
 AuthInputValidationResult ValidateAuthResetPasswordRequest(const AuthResetPasswordRequestDto& request);

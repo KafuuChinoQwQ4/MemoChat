@@ -4,11 +4,26 @@
  */
 import { useSessionStore } from "@/core/session/sessionStore"
 import { resetEntitySession } from "@/core/entities/resetSession"
-import { resetGateway } from "@/shared/gateway/ClientGateway"
+import { getGateway, resetGateway } from "@/shared/gateway/ClientGateway"
 import { FeatureRegistry } from "@/app/container/FeatureRegistry"
 import { teardownContainer } from "@/app/container/DIContainer"
+import { ENDPOINTS } from "@/core/config/endpoints"
+import { logger } from "@/core/common/logger"
 
 export async function logoutTeardown(): Promise<void> {
+  const session = useSessionStore.getState()
+  if (session.token) {
+    try {
+      await getGateway().http.post(ENDPOINTS.authLogout, {
+        client_ver: "3.0.0",
+        all_devices: false,
+      }, {
+        headers: { "X-MemoChat-Client": "web" },
+      })
+    } catch (error) {
+      logger.app.warn("Server logout failed; clearing the local session", error)
+    }
+  }
   FeatureRegistry.teardownAll()
   FeatureRegistry.clear()
   await resetEntitySession()

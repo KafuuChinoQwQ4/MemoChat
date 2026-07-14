@@ -1238,10 +1238,13 @@ class SecurityHardeningContractTests(unittest.TestCase):
             r"const auto rotated\s*=\s*account_persistence\.RotateRefreshToken\s*\(",
         )
 
-    def test_web_login_never_issues_refresh_token_to_browser_javascript(self):
+    def test_web_login_persists_refresh_only_in_http_only_cookie(self):
         auth_service = read(AUTH_SERVICE)
         auth_module = read(AUTH_SERVICE_MODULE)
+        h1_connection = read(H1_HTTP_CONNECTION)
         login_body = function_body(auth_service, "bool AuthService::HandleUserLogin")
+        refresh_body = function_body(auth_service, "bool AuthService::HandleAuthRefresh")
+        logout_body = function_body(auth_service, "bool AuthService::HandleAuthLogout")
 
         self.assertIn(
             "bool ShouldIssueRefreshToken(const char* client_marker, unsigned long client_marker_size)", auth_module
@@ -1249,6 +1252,12 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn('HeaderValue(request, "x-memochat-client")', login_body)
         self.assertIn("auth_algo::ShouldIssueRefreshToken", login_body)
         self.assertIn("AttachIssuedRefreshToken", login_body)
+        self.assertIn('response.headers["Set-Cookie"]', auth_service)
+        self.assertIn("BuildWebRefreshTokenCookie", auth_service)
+        self.assertIn("ExtractWebRefreshTokenCookie", refresh_body)
+        self.assertIn("AttachRefreshTokenForClient", refresh_body)
+        self.assertIn("ClearWebRefreshTokenCookie", logout_body)
+        self.assertIn("access_control_allow_credentials", h1_connection)
 
     def test_password_reset_deletes_redis_http_token_after_successful_update(self):
         auth_service = read(AUTH_SERVICE)

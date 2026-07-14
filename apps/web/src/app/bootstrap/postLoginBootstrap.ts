@@ -18,6 +18,7 @@ import { logger } from "@/core/common/logger"
 import type { ServerInfo } from "@/core/network/transport/transport.types"
 import { applyDialogListPayload, applyGroupListPayload } from "@/app/dispatch/chatListPayloads"
 import type { ApplyEntry, Friend } from "@/core/entities/entityTypes"
+import { ENDPOINTS } from "@/core/config/endpoints"
 
 export interface LoginCredentials {
   email: string
@@ -118,7 +119,7 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
   const session = useSessionStore.getState()
 
   // Step 1: HTTP login
-  const res = await gateway.http.post<LoginResponse>("/user_login", {
+  const res = await gateway.http.post<LoginResponse>(ENDPOINTS.login, {
     email: creds.email,
     passwd: creds.password,
     client_ver: "3.0.0",
@@ -171,6 +172,67 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
   ])
 
   logger.app.info("Bootstrap complete for uid", res.uid)
+}
+
+/**
+ * Restore a previously persisted web session without password.
+ * Uses /auth/refresh to rotate refresh_token and re-issue access_token + login_ticket,
+ * then reconnects chat transport and re-runs list bootstraps.
+ */
+export async function restoreSessionFromRefresh(): Promise<void> {
+  const gateway = getGateway()
+  const session = useSessionStore.getState()
+
+  const res = await gateway.http.post<LoginResponse>(ENDPOINTS.authRefresh, {
+    client_ver: "3.0.0",
+  }, {
+    auth: false,
+    headers: { "X-MemoChat-Client": "web" },
+  })
+
+  const successCode: number = ErrorCodes.SUCCESS
+  if (res.error !== successCode) {
+    throw new Error(`Session restore failed: error code ${res.error}`)
+  }
+  if (!res.access_token || !res.login_ticket) {
+    throw new Error("Session restore missing access credentials")
+  }
+
+  session.setLogin({
+    uid: res.uid,
+    token: res.access_token,
+    loginTicket: res.login_ticket,
+    ticketExpireMs: res.ticket_expire_ms,
+    protocolVersion: res.protocol_version,
+    chatEndpoints: (res.chat_endpoints ?? []).map((ep) => {
+      const endpoint: ChatEndpointInfo = {
+        transport: ep.transport,
+        host: ep.host,
+        port: ep.port,
+        serverName: ep.server_name,
+        priority: ep.priority,
+      }
+      if (ep.path !== undefined) endpoint.path = ep.path
+      if (ep.tls !== undefined) endpoint.tls = ep.tls
+      return endpoint
+    }),
+    profile: {
+      uid: res.user_profile.uid,
+      name: res.user_profile.name,
+      email: res.user_profile.email,
+      icon: res.user_profile.icon,
+      userId: res.user_profile.user_id,
+    },
+  })
+
+  session.setConnState("connecting")
+  await connectAndChatLogin(gateway, res)
+  await sendRelationBootstrap(gateway, res.uid)
+  await Promise.all([
+    sendGroupListBootstrap(gateway, res.uid),
+    sendDialogListBootstrap(gateway, res.uid),
+  ])
+  logger.app.info("Session restore complete for uid", res.uid)
 }
 
 async function connectAndChatLogin(

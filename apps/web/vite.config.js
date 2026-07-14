@@ -37,6 +37,7 @@ export default defineConfig({
         proxy: {
             // Proxy HTTP API calls to Envoy gateway, avoiding CORS
             "/user_login": { target: "https://localhost:8443", secure: false, changeOrigin: true },
+            "/auth": { target: "https://localhost:8443", secure: false, changeOrigin: true },
             "/user_register": { target: "https://localhost:8443", secure: false, changeOrigin: true },
             "/get_varifycode": { target: "https://localhost:8443", secure: false, changeOrigin: true },
             "/reset_pwd": { target: "https://localhost:8443", secure: false, changeOrigin: true },

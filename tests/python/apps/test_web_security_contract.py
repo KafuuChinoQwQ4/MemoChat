@@ -22,16 +22,24 @@ class WebSecurityContractTests(unittest.TestCase):
         self.assertIn('"type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"', package_json)
         self.assertIn("src/**/*.js", gitignore)
 
-    def test_web_does_not_persist_an_unused_refresh_token(self):
+    def test_web_restores_via_http_only_cookie_without_javascript_token_storage(self):
         session_store = read(WEB_APP / "src/core/session/sessionStore.ts")
         session_types = read(WEB_APP / "src/core/session/sessionTypes.ts")
         bootstrap = read(WEB_APP / "src/app/bootstrap/postLoginBootstrap.ts")
+        restore = read(WEB_APP / "src/app/bootstrap/sessionRestore.ts")
+        http_client = read(WEB_APP / "src/core/network/http/HttpClient.ts")
+        runtime_config = read(WEB_APP / "src/core/config/runtimeConfig.ts")
 
         self.assertFalse((WEB_APP / "src/core/session/tokenStorage.ts").exists())
+        self.assertFalse((WEB_APP / "src/core/session/sessionPersistence.ts").exists())
         self.assertNotIn("refreshToken", session_store)
         self.assertNotIn("refreshToken", session_types)
-        self.assertNotIn("sessionStorage", session_store + session_types + bootstrap)
+        self.assertNotIn("localStorage", session_store + session_types + bootstrap + restore)
+        self.assertNotIn("sessionStorage", session_store + session_types + bootstrap + restore)
         self.assertNotIn("res.refresh_token", bootstrap)
+        self.assertIn("restoreSessionFromRefresh()", restore)
+        self.assertIn('credentials: "include"', http_client)
+        self.assertIn('gateBaseUrl: envString("VITE_GATE_BASE_URL")', runtime_config)
         self.assertIn('"X-MemoChat-Client": "web"', bootstrap)
 
     def test_websocket_endpoint_builder_forces_wss_for_non_local_hosts(self):

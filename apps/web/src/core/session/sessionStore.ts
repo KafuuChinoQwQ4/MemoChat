@@ -1,7 +1,8 @@
 /**
  * sessionStore — Zustand store for authentication + connection state.
  * Mirrors ShellViewModel session fields + AppChatRecoveryState machine.
- * Access token and loginTicket are memory-only.
+ * Access token and loginTicket are memory-only. Page reload restore uses an
+ * HttpOnly refresh cookie that is never exposed to this store.
  */
 import { create } from "zustand"
 import type { ConnState, SessionState, UserProfile, ChatEndpointInfo } from "./sessionTypes"

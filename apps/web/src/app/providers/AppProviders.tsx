@@ -7,13 +7,16 @@ import type { ReactNode } from "react"
 import { GatewayProvider } from "./GatewayProvider"
 import { QueryProvider } from "./QueryProvider"
 import { ThemeProvider } from "./ThemeProvider"
+import { SessionRestoreBoot } from "@/app/bootstrap/SessionRestoreBoot"
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <GatewayProvider>
       <QueryProvider>
         <ThemeProvider>
-          {children}
+          <SessionRestoreBoot>
+            {children}
+          </SessionRestoreBoot>
         </ThemeProvider>
       </QueryProvider>
     </GatewayProvider>

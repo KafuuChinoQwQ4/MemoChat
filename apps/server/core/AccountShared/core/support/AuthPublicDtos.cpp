@@ -22,6 +22,20 @@ constexpr std::size_t kMaxRefreshTokenLength = 128;
 constexpr std::size_t kMaxClientVersionLength = 32;
 constexpr std::size_t kRefreshTokenSelectorLength = 36;
 constexpr std::size_t kRefreshTokenVerifierLength = 64;
+constexpr std::string_view kWebRefreshCookieName = "__Host-memochat_refresh";
+
+std::string_view TrimAscii(std::string_view value)
+{
+    while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
+    {
+        value.remove_prefix(1);
+    }
+    while (!value.empty() && (value.back() == ' ' || value.back() == '\t'))
+    {
+        value.remove_suffix(1);
+    }
+    return value;
+}
 
 bool ParseJsonForAuthPublic(std::string_view body, memochat::json::JsonValue* out, std::string* error_out)
 {
@@ -338,6 +352,42 @@ std::string AuthRefreshTokenRateLimitSubject(std::string_view refresh_token)
         return "";
     }
     return std::string(refresh_token.substr(0, refresh_token.find('.')));
+}
+
+std::string ExtractWebRefreshTokenCookie(std::string_view cookie_header)
+{
+    while (!cookie_header.empty())
+    {
+        const auto separator = cookie_header.find(';');
+        const auto entry = TrimAscii(cookie_header.substr(0, separator));
+        const auto equals = entry.find('=');
+        if (equals != std::string_view::npos && TrimAscii(entry.substr(0, equals)) == kWebRefreshCookieName)
+        {
+            const auto value = TrimAscii(entry.substr(equals + 1));
+            return IsValidAuthRefreshTokenShape(value) ? std::string(value) : std::string{};
+        }
+        if (separator == std::string_view::npos)
+        {
+            break;
+        }
+        cookie_header.remove_prefix(separator + 1);
+    }
+    return {};
+}
+
+std::string BuildWebRefreshTokenCookie(std::string_view refresh_token, int ttl_seconds)
+{
+    if (!IsValidAuthRefreshTokenShape(refresh_token) || ttl_seconds <= 0)
+    {
+        return {};
+    }
+    return std::string(kWebRefreshCookieName) + "=" + std::string(refresh_token) +
+           "; Path=/; Max-Age=" + std::to_string(ttl_seconds) + "; HttpOnly; Secure; SameSite=Strict";
+}
+
+std::string ClearWebRefreshTokenCookie()
+{
+    return std::string(kWebRefreshCookieName) + "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict";
 }
 
 AuthInputValidationResult ValidateAuthEmailRequest(const AuthEmailRequestDto& request)

@@ -1,6 +1,7 @@
 /** Login form component */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useSessionStore } from "@/core/session/sessionStore"
 import { postLoginBootstrap } from "@/app/bootstrap/postLoginBootstrap"
 import { useAuthStore } from "@/features/auth/store/authStore"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
@@ -33,6 +34,12 @@ function mapLoginError(err: unknown): string {
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const isLoggedIn = useSessionStore((s) => s.token !== null)
+
+  useEffect(() => {
+    if (isLoggedIn) void navigate("/app/chat", { replace: true })
+  }, [isLoggedIn, navigate])
+
   const { loading, error, setLoading, setError, reset } = useAuthStore()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -43,7 +50,7 @@ export function LoginPage() {
     setLoading(true)
     try {
       await postLoginBootstrap({ email, password })
-      navigate("/app/chat", { replace: true })
+      void navigate("/app/chat", { replace: true })
     } catch (err) {
       setError(mapLoginError(err))
     } finally {
@@ -106,7 +113,7 @@ export function LoginPage() {
           <div style={{ textAlign: "right", marginTop: -6 }}>
             <button
               type="button"
-              onClick={() => navigate("/reset")}
+              onClick={() => void navigate("/reset")}
               style={{
                 background: "none",
                 border: "none",
@@ -150,7 +157,7 @@ export function LoginPage() {
         }}>
           还没有账号？{" "}
           <button
-            onClick={() => navigate("/register")}
+            onClick={() => void navigate("/register")}
             style={{
               background: "none",
               border: "none",

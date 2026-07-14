@@ -220,9 +220,33 @@ gateauthsupport::UserInfo ToAuthUserInfo(const account::AccountProfile& profile)
     return userInfo;
 }
 
+bool AttachRefreshTokenForClient(memochat::json::JsonValue& root,
+                                 memochat::gate::routing::GateResponse& response,
+                                 const std::string& refresh_token,
+                                 int refresh_ttl_sec,
+                                 bool expose_in_json)
+{
+    if (expose_in_json)
+    {
+        root["refresh_token"] = refresh_token;
+        root["refresh_token_expires_in_sec"] = refresh_ttl_sec;
+        return true;
+    }
+
+    const auto cookie = gateauthsupport::BuildWebRefreshTokenCookie(refresh_token, refresh_ttl_sec);
+    if (cookie.empty())
+    {
+        return false;
+    }
+    response.headers["Set-Cookie"] = cookie;
+    return true;
+}
+
 bool AttachIssuedRefreshToken(memochat::json::JsonValue& root,
+                              memochat::gate::routing::GateResponse& response,
                               int uid,
-                              const memochat::gate::routing::GateRequest& request)
+                              const memochat::gate::routing::GateRequest& request,
+                              bool expose_in_json)
 {
     const int refresh_ttl_sec = gateauthsupport::GetRefreshTokenTtlSec();
     const auto refresh_token = account::AccountPersistence::Instance().IssueRefreshToken(uid,
@@ -238,9 +262,7 @@ bool AttachIssuedRefreshToken(memochat::json::JsonValue& root,
         return false;
     }
 
-    root["refresh_token"] = refresh_token.refresh_token;
-    root["refresh_token_expires_in_sec"] = refresh_ttl_sec;
-    return true;
+    return AttachRefreshTokenForClient(root, response, refresh_token.refresh_token, refresh_ttl_sec, expose_in_json);
 }
 
 bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& request,
@@ -886,8 +908,8 @@ bool AuthService::HandleUserLogin(const memochat::gate::routing::GateRequest& re
         return true;
     }
     const auto client_marker = HeaderValue(request, "x-memochat-client");
-    if (auth_algo::ShouldIssueRefreshToken(client_marker.data(), client_marker.size()) &&
-        !AttachIssuedRefreshToken(session_root, userInfo.uid, request))
+    const bool expose_refresh_token = auth_algo::ShouldIssueRefreshToken(client_marker.data(), client_marker.size());
+    if (!AttachIssuedRefreshToken(session_root, response, userInfo.uid, request, expose_refresh_token))
     {
         memochat::json::JsonValue failure_root;
         failure_root["trace_id"] = request.trace_id;
@@ -919,8 +941,19 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
         return true;
     }
 
+    const auto client_marker = HeaderValue(request, "x-memochat-client");
+    const bool expose_refresh_token = auth_algo::ShouldIssueRefreshToken(client_marker.data(), client_marker.size());
+    if (!expose_refresh_token && refresh_request.refresh_token.empty())
+    {
+        refresh_request.refresh_token = gateauthsupport::ExtractWebRefreshTokenCookie(HeaderValue(request, "cookie"));
+    }
+
     if (const auto validation = gateauthsupport::ValidateAuthRefreshRequest(refresh_request); !validation.ok())
     {
+        if (!expose_refresh_token)
+        {
+            response.headers["Set-Cookie"] = gateauthsupport::ClearWebRefreshTokenCookie();
+        }
         return WriteValidationFailed(response, root, "/auth_refresh", validation);
     }
     if (!gateauthsupport::IsClientVersionAllowed(refresh_request.client_ver, gateauthsupport::MinClientVersion()))
@@ -947,6 +980,10 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
     int refresh_uid = 0;
     if (!account_persistence.ResolveActiveRefreshTokenUserId(refresh_request.refresh_token, refresh_uid))
     {
+        if (!expose_refresh_token)
+        {
+            response.headers["Set-Cookie"] = gateauthsupport::ClearWebRefreshTokenCookie();
+        }
         root["error"] = ErrorCodes::TokenInvalid;
         memolog::LogWarn("gate.auth_refresh.failed", "refresh token is not active", {});
         WriteJson(response, root);
@@ -971,6 +1008,10 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
 
     if (rotated.status != account::RefreshTokenStatus::Success)
     {
+        if (!expose_refresh_token)
+        {
+            response.headers["Set-Cookie"] = gateauthsupport::ClearWebRefreshTokenCookie();
+        }
         int error_code = ErrorCodes::TokenInvalid;
         if (rotated.status == account::RefreshTokenStatus::StorageError)
         {
@@ -1004,8 +1045,16 @@ bool AuthService::HandleAuthRefresh(const memochat::gate::routing::GateRequest& 
         return true;
     }
 
-    root["refresh_token"] = rotated.refresh_token;
-    root["refresh_token_expires_in_sec"] = gateauthsupport::GetRefreshTokenTtlSec();
+    if (!AttachRefreshTokenForClient(root,
+                                     response,
+                                     rotated.refresh_token,
+                                     gateauthsupport::GetRefreshTokenTtlSec(),
+                                     expose_refresh_token))
+    {
+        root["error"] = ErrorCodes::RPCFailed;
+        WriteJson(response, root);
+        return true;
+    }
     memolog::LogInfo("gate.auth_refresh",
                      "refresh token rotated and session issued",
                      {{"uid", std::to_string(userInfo.uid)}});
@@ -1027,6 +1076,18 @@ bool AuthService::HandleAuthLogout(const memochat::gate::routing::GateRequest& r
         root["error"] = ErrorCodes::Error_Json;
         WriteJson(response, root);
         return true;
+    }
+
+    const auto client_marker = HeaderValue(request, "x-memochat-client");
+    const bool expose_refresh_token = auth_algo::ShouldIssueRefreshToken(client_marker.data(), client_marker.size());
+    if (!expose_refresh_token)
+    {
+        if (logout_request.refresh_token.empty())
+        {
+            logout_request.refresh_token =
+                gateauthsupport::ExtractWebRefreshTokenCookie(HeaderValue(request, "cookie"));
+        }
+        response.headers["Set-Cookie"] = gateauthsupport::ClearWebRefreshTokenCookie();
     }
 
     if (const auto validation = gateauthsupport::ValidateAuthLogoutRequest(logout_request); !validation.ok())

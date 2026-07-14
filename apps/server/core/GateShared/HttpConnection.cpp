@@ -124,6 +124,7 @@ void ApplyCorsHeadersLocal(http::response<Body>& response, const http::request<h
         return;
     }
     response.set(http::field::access_control_allow_origin, origin);
+    response.set(http::field::access_control_allow_credentials, "true");
     response.set(http::field::vary, "Origin");
 }
 
