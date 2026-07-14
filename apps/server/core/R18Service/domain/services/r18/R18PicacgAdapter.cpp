@@ -437,7 +437,12 @@ JsonValue PicacgComicToJson(const JsonValue& comic)
 
 } // namespace
 
-bool PicacgSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error)
+bool PicacgSearch(const std::string& keyword,
+                  int page,
+                  const std::string& sort,
+                  const std::string& tag,
+                  json::JsonValue* out,
+                  std::string* error)
 {
     if (out == nullptr)
     {
@@ -445,8 +450,17 @@ bool PicacgSearch(const std::string& keyword, int page, json::JsonValue* out, st
         return false;
     }
     const int normalized_page = picacg_adapter::modules::NormalizeSearchPage(page);
+    const std::string resolved_sort = picacg_adapter::modules::NormalizeSearchSort(sort.c_str());
+    std::string query = keyword;
+    if (!tag.empty())
+    {
+        if (query.empty())
+            query = tag;
+        else if (query.find(tag) == std::string::npos)
+            query = query + " " + tag;
+    }
     const std::string path = "/comics/advanced-search?page=" + std::to_string(normalized_page);
-    const std::string body = R"({"keyword":")" + keyword + R"(","sort":"dd"})";
+    const std::string body = std::string(R"({"keyword":")") + query + R"(","sort":")" + resolved_sort + R"("})";
     const std::string path_no_slash = "comics/advanced-search?page=" + std::to_string(normalized_page);
     std::vector<std::pair<std::string, std::string>> headers;
     if (!PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, "", &headers, error))
@@ -530,6 +544,8 @@ bool PicacgSearch(const std::string& keyword, int page, json::JsonValue* out, st
     json::JsonValue result;
     result["source_id"] = picacg_adapter::modules::SourceId();
     result["keyword"] = keyword;
+    result["sort"] = resolved_sort;
+    result["tag"] = tag;
     result["page"] = normalized_page;
     result["max_page"] = max_page;
     result["items"] = json::JsonValue{json::array_t{}};
@@ -850,6 +866,8 @@ bool PicacgLogin(const std::string& email, const std::string& password, std::str
 
 bool PicacgSearchWithToken(const std::string& keyword,
                            int page,
+                           const std::string& sort,
+                           const std::string& tag,
                            const std::string& token,
                            json::JsonValue* out,
                            std::string* error)
@@ -860,8 +878,17 @@ bool PicacgSearchWithToken(const std::string& keyword,
         return false;
     }
     const int normalized_page = picacg_adapter::modules::NormalizeSearchPage(page);
+    const std::string resolved_sort = picacg_adapter::modules::NormalizeSearchSort(sort.c_str());
+    std::string query = keyword;
+    if (!tag.empty())
+    {
+        if (query.empty())
+            query = tag;
+        else if (query.find(tag) == std::string::npos)
+            query = query + " " + tag;
+    }
     const std::string path = "/comics/advanced-search?page=" + std::to_string(normalized_page);
-    const std::string body = R"({"keyword":")" + keyword + R"(","sort":"dd"})";
+    const std::string body = std::string(R"({"keyword":")") + query + R"(","sort":")" + resolved_sort + R"("})";
     const std::string path_no_slash = "comics/advanced-search?page=" + std::to_string(normalized_page);
     std::vector<std::pair<std::string, std::string>> headers;
     if (!PicacgHeaders(picacg_adapter::modules::PostMethod(), path_no_slash, token, &headers, error))
@@ -886,6 +913,8 @@ bool PicacgSearchWithToken(const std::string& keyword,
     JsonValue result;
     result["source_id"] = picacg_adapter::modules::SourceId();
     result["keyword"] = keyword;
+    result["sort"] = resolved_sort;
+    result["tag"] = tag;
     result["page"] = normalized_page;
     result["items"] = JsonValue{json::array_t{}};
     result["max_page"] = FieldInt(comics, "pages", 1);

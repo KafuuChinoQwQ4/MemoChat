@@ -14,6 +14,8 @@ extern const char* const kEhentaiSourceId;
 // Optional cookie string for exhentai / restricted galleries.
 bool EhentaiSearch(const std::string& keyword,
                    int page,
+                   const std::string& sort,
+                   const std::string& tag,
                    const std::string& session_cookie,
                    json::JsonValue* out,
                    std::string* error);

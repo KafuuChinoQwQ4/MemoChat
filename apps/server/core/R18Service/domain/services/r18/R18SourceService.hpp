@@ -61,15 +61,27 @@ public:
     bool LoginAccount(int uid, const std::string& source_id, std::string* error);
     bool ClearAccount(int uid, const std::string& source_id, std::string* error);
 
-    memochat::json::JsonValue Search(const std::string& source_id, const std::string& keyword, int page);
-    memochat::json::JsonValue
-    SearchForUser(int uid, const std::string& source_id, const std::string& keyword, int page);
+    memochat::json::JsonValue Search(const std::string& source_id,
+                                     const std::string& keyword,
+                                     int page,
+                                     const std::string& sort = {},
+                                     const std::string& tag = {});
+    memochat::json::JsonValue SearchForUser(int uid,
+                                            const std::string& source_id,
+                                            const std::string& keyword,
+                                            int page,
+                                            const std::string& sort = {},
+                                            const std::string& tag = {});
     memochat::json::JsonValue Detail(const std::string& source_id, const std::string& comic_id);
     memochat::json::JsonValue DetailForUser(int uid, const std::string& source_id, const std::string& comic_id);
     memochat::json::JsonValue Pages(const std::string& source_id, const std::string& chapter_id);
     memochat::json::JsonValue PagesForUser(int uid, const std::string& source_id, const std::string& chapter_id);
-    R18ImagePayload FetchImage(const std::string& source_id, const std::string& image_url);
-    R18ImagePayload FetchImageForUser(int uid, const std::string& source_id, const std::string& image_url);
+    R18ImagePayload
+    FetchImage(const std::string& source_id, const std::string& image_url, long long jm_scramble_id = 0);
+    R18ImagePayload FetchImageForUser(int uid,
+                                      const std::string& source_id,
+                                      const std::string& image_url,
+                                      long long jm_scramble_id = 0);
 
     // Daily check-in for sources that support it (currently JMComic).
     // Returns a JSON payload with status/message; errors stored on the credential.

@@ -53,6 +53,8 @@ unsigned long long MaxImageRedirects();
 const char* ImageUnavailableTitle();
 const char* ImageErrorTitle();
 bool ShouldUseImagePlaceholder(int status, bool body_empty);
+const char* DefaultSearchSort();
+const char* NormalizeSearchSort(const char* sort);
 } // namespace memochat::tests::r18::picacg_adapter
 
 TEST(R18PicacgAdapterAlgorithmsTest, ExposesStableIdentityAndApiDefaults)
@@ -214,4 +216,17 @@ TEST(R18PicacgAdapterAlgorithmsTest, BoundsAndTypesImageResponses)
     EXPECT_TRUE(IsAllowedImageContentType(false, false, false, true, false));
     EXPECT_TRUE(IsAllowedImageContentType(false, false, false, false, true));
     EXPECT_FALSE(IsAllowedImageContentType(false, false, false, false, false));
+}
+
+TEST(R18PicacgAdapterAlgorithmsTest, NormalizesSourceNativeSearchSort)
+{
+    using namespace memochat::tests::r18::picacg_adapter;
+
+    EXPECT_STREQ(DefaultSearchSort(), "dd");
+    EXPECT_STREQ(NormalizeSearchSort(""), "dd");
+    EXPECT_STREQ(NormalizeSearchSort("latest"), "dd");
+    EXPECT_STREQ(NormalizeSearchSort("oldest"), "da");
+    EXPECT_STREQ(NormalizeSearchSort("likes"), "ld");
+    EXPECT_STREQ(NormalizeSearchSort("popular"), "vd");
+    EXPECT_STREQ(NormalizeSearchSort("nope"), "dd");
 }

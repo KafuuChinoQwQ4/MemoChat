@@ -138,4 +138,46 @@ const char* DefaultImageContentType()
 {
     return memochat::r18::jm_adapter::modules::DefaultImageContentType();
 }
+const char* DefaultSearchSort()
+{
+    return memochat::r18::jm_adapter::modules::DefaultSearchSort();
+}
+
+const char* NormalizeSearchSort(const char* sort)
+{
+    return memochat::r18::jm_adapter::modules::NormalizeSearchSort(sort);
+}
+int ScrambleIdThreshold()
+{
+    return memochat::r18::jm_adapter::modules::ScrambleIdThreshold();
+}
+
+int ScrambleFixedTenThreshold()
+{
+    return memochat::r18::jm_adapter::modules::ScrambleFixedTenThreshold();
+}
+
+int ScrambleModEightThreshold()
+{
+    return memochat::r18::jm_adapter::modules::ScrambleModEightThreshold();
+}
+
+int ScrambleStripCount(long long aid, long long scramble_id, unsigned char md5_last_byte)
+{
+    return memochat::r18::jm_adapter::modules::ScrambleStripCount(aid, scramble_id, md5_last_byte);
+}
+
+int ScrambleSourceY(int image_height, int strip_count, int destination_index, int* strip_height_out)
+{
+    return memochat::r18::jm_adapter::modules::ScrambleSourceY(image_height,
+                                                               strip_count,
+                                                               destination_index,
+                                                               strip_height_out);
+}
+
+int ScrambleDestinationY(int image_height, int strip_count, int destination_index)
+{
+    return memochat::r18::jm_adapter::modules::ScrambleDestinationY(image_height, strip_count, destination_index);
+}
+
 } // namespace memochat::tests::r18::jm_adapter

@@ -53,7 +53,14 @@
   --dialog-item-hover: rgba(0, 0, 0, 0.04);
 
   /* R18 overlays */
-  --r18-dialog-backdrop: rgba(15, 23, 42, 0.32);
+  --r18-dialog-backdrop: rgba(15, 23, 42, 0.28);
+  --r18-dialog-panel-bg: color-mix(in srgb, var(--glass-fill) 88%, rgba(255, 255, 255, 0.72));
+  --r18-dialog-panel-border: color-mix(in srgb, var(--glass-stroke) 70%, rgba(148, 163, 184, 0.28));
+  --r18-dialog-header-bg: color-mix(in srgb, rgba(255, 255, 255, 0.55) 70%, transparent);
+  --r18-dialog-chip-bg: color-mix(in srgb, var(--glass-btn-bg) 88%, rgba(255, 255, 255, 0.55));
+  --r18-dialog-chip-bg-hover: var(--tint-hover);
+  --r18-dialog-chip-border: color-mix(in srgb, var(--divider) 80%, rgba(100, 140, 180, 0.18));
+  --r18-dialog-chip-border-hover: color-mix(in srgb, var(--text-primary) 14%, var(--divider));
   --r18-reader-backdrop: rgba(238, 240, 245, 0.98);
   --r18-reader-toolbar-bg: rgba(255, 255, 255, 0.86);
 

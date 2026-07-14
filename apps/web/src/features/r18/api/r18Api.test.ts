@@ -100,4 +100,24 @@ describe("createR18Api", () => {
       source_id: "picacg.official",
     })
   })
+
+  it("forwards sort/tag filter options on search", async () => {
+    const http = mockHttp()
+    http.post.mockResolvedValue({
+      error: 0,
+      data: { items: [], max_page: 1, sort: "mv_t", tag: "同人" },
+    })
+    const api = createR18Api(http as unknown as HttpClient)
+
+    await expect(
+      api.search("jm.official", "foo", 2, { sort: "mv_t", tag: "同人" }),
+    ).resolves.toMatchObject({ sort: "mv_t", tag: "同人" })
+    expect(http.post).toHaveBeenCalledWith("/api/r18/search", {
+      source_id: "jm.official",
+      keyword: "foo",
+      page: 2,
+      sort: "mv_t",
+      tag: "同人",
+    })
+  })
 })

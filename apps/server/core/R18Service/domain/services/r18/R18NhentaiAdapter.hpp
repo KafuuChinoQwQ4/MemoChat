@@ -11,7 +11,12 @@ namespace memochat::r18
 
 extern const char* const kNhentaiSourceId;
 
-bool NhentaiSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error);
+bool NhentaiSearch(const std::string& keyword,
+                   int page,
+                   const std::string& sort,
+                   const std::string& tag,
+                   json::JsonValue* out,
+                   std::string* error);
 bool NhentaiDetail(const std::string& comic_id, json::JsonValue* out, std::string* error);
 bool NhentaiPages(const std::string& chapter_id, json::JsonValue* out, std::string* error);
 R18ImagePayload NhentaiFetchImage(const std::filesystem::path& cache_root, const std::string& image_url);

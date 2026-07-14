@@ -300,4 +300,41 @@ bool ShouldUseImagePlaceholder(int status, bool body_empty)
     return !IsSuccessfulHttpRange(status) || body_empty;
 }
 
+
+const char* DefaultSearchSort()
+{
+    return "dd";
+}
+
+const char* NormalizeSearchSort(const char* sort)
+{
+    // Picacg advanced-search sort:
+    // dd=最新, da=最旧, ld=最多爱心, vd=最多指名
+    if (sort == nullptr || sort[0] == '\0')
+        return DefaultSearchSort();
+    auto eq = [](const char* a, const char* b) {
+        if (a == nullptr || b == nullptr)
+            return false;
+        while (*a != '\0' && *b != '\0')
+        {
+            if (*a != *b)
+                return false;
+            ++a;
+            ++b;
+        }
+        return *a == *b;
+    };
+    if (eq(sort, "dd") || eq(sort, "latest") || eq(sort, "new") || eq(sort, "date"))
+        return "dd";
+    if (eq(sort, "da") || eq(sort, "oldest") || eq(sort, "old"))
+        return "da";
+    if (eq(sort, "ld") || eq(sort, "likes") || eq(sort, "like") || eq(sort, "heart"))
+        return "ld";
+    if (eq(sort, "vd") || eq(sort, "views") || eq(sort, "hot") || eq(sort, "popular"))
+        return "vd";
+    if (eq(sort, "dd") || eq(sort, "da") || eq(sort, "ld") || eq(sort, "vd"))
+        return sort;
+    return DefaultSearchSort();
+}
+
 } // namespace memochat::r18::picacg_adapter::modules

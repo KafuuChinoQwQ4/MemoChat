@@ -236,4 +236,120 @@ int LoginTimeoutSeconds()
     return 8;
 }
 
+
+const char* DefaultSearchSort()
+{
+    return "mr";
+}
+
+const char* NormalizeSearchSort(const char* sort)
+{
+    // JMComic order codes:
+    // mr=最新, mv=最多观看(总), mv_t=今日, mv_w=本周, mv_m=本月
+    // tf=最多图片, mp=最多点赞, ld=最多爱心/喜欢
+    if (sort == nullptr || sort[0] == '\0')
+        return DefaultSearchSort();
+    // Compare via string_view without allocating when possible is harder without include;
+    // use simple strcmp-like loops through fixed table.
+    auto eq = [](const char* a, const char* b) {
+        if (a == nullptr || b == nullptr)
+            return false;
+        while (*a != '\0' && *b != '\0')
+        {
+            if (*a != *b)
+                return false;
+            ++a;
+            ++b;
+        }
+        return *a == *b;
+    };
+    if (eq(sort, "mr") || eq(sort, "latest") || eq(sort, "new") || eq(sort, "date"))
+        return "mr";
+    if (eq(sort, "mv") || eq(sort, "views") || eq(sort, "hot") || eq(sort, "popular"))
+        return "mv";
+    if (eq(sort, "mv_t") || eq(sort, "today") || eq(sort, "day"))
+        return "mv_t";
+    if (eq(sort, "mv_w") || eq(sort, "week"))
+        return "mv_w";
+    if (eq(sort, "mv_m") || eq(sort, "month"))
+        return "mv_m";
+    if (eq(sort, "tf") || eq(sort, "images") || eq(sort, "pages"))
+        return "tf";
+    if (eq(sort, "mp") || eq(sort, "likes") || eq(sort, "like"))
+        return "mp";
+    if (eq(sort, "ld") || eq(sort, "heart") || eq(sort, "love"))
+        return "ld";
+    // Pass through already-valid JM codes.
+    if (eq(sort, "mr") || eq(sort, "mv") || eq(sort, "mv_t") || eq(sort, "mv_w") || eq(sort, "mv_m") ||
+        eq(sort, "tf") || eq(sort, "mp") || eq(sort, "ld"))
+        return sort;
+    return DefaultSearchSort();
+}
+
+
+// JMComic photo pages are vertically scrambled. Covers under /media/albums/ are not.
+// Constants and strip math match the public JMComic client algorithm.
+
+int ScrambleIdThreshold()
+{
+    return 220980;
+}
+
+int ScrambleFixedTenThreshold()
+{
+    return 268850;
+}
+
+int ScrambleModEightThreshold()
+{
+    return 421926;
+}
+
+// filename is the image basename without extension (e.g. "00001").
+// md5_last_byte is the last hex char of md5(aid + filename), as an ASCII byte.
+int ScrambleStripCount(long long aid, long long scramble_id, unsigned char md5_last_byte)
+{
+    if (aid < scramble_id)
+        return 0;
+    if (aid < ScrambleFixedTenThreshold())
+        return 10;
+    const int modulus = aid < ScrambleModEightThreshold() ? 10 : 8;
+    int num = static_cast<int>(md5_last_byte) % modulus;
+    num = num * 2 + 2;
+    return num;
+}
+
+// Source Y of the strip that should be pasted at destination index i.
+// Returns strip height through *strip_height_out.
+int ScrambleSourceY(int image_height, int strip_count, int destination_index, int* strip_height_out)
+{
+    if (strip_height_out == nullptr || strip_count <= 1 || image_height <= 0 || destination_index < 0 ||
+        destination_index >= strip_count)
+    {
+        if (strip_height_out != nullptr)
+            *strip_height_out = 0;
+        return 0;
+    }
+    const int over = image_height % strip_count;
+    const int base = image_height / strip_count;
+    int move = base;
+    const int y_src = image_height - (base * (destination_index + 1)) - over;
+    if (destination_index == 0)
+        move += over;
+    *strip_height_out = move;
+    return y_src;
+}
+
+int ScrambleDestinationY(int image_height, int strip_count, int destination_index)
+{
+    if (strip_count <= 1 || image_height <= 0 || destination_index < 0 || destination_index >= strip_count)
+        return 0;
+    const int over = image_height % strip_count;
+    const int base = image_height / strip_count;
+    int y_dst = base * destination_index;
+    if (destination_index != 0)
+        y_dst += over;
+    return y_dst;
+}
+
 } // namespace memochat::r18::jm_adapter::modules

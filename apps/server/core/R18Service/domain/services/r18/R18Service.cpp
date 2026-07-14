@@ -501,18 +501,17 @@ bool R18Service::HandleDeleteSource(const memochat::gate::routing::GateRequest& 
 bool R18Service::HandleSearch(const memochat::gate::routing::GateRequest& request,
                               memochat::gate::routing::GateResponse& response)
 {
-    return HandleJsonRequest(request,
-                             response,
-                             [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
-                             {
-                                 const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
-                                 WriteOk(root,
-                                         memochat::r18::R18SourceService::Instance().SearchForUser(uid,
-                                                                                                   body.source_id,
-                                                                                                   body.keyword,
-                                                                                                   body.page));
-                                 return true;
-                             });
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const auto body = memochat::r18::R18SearchRequestFromJsonValue(src);
+            WriteOk(root,
+                    memochat::r18::R18SourceService::Instance()
+                        .SearchForUser(uid, body.source_id, body.keyword, body.page, body.sort, body.tag));
+            return true;
+        });
 }
 
 bool R18Service::HandleComicDetail(const memochat::gate::routing::GateRequest& request,
@@ -632,7 +631,17 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
     }
     const std::string source_id = QueryParam(request, "source_id", memochat::r18::service::modules::DefaultSourceId());
     const std::string image_url = QueryParam(request, "image_url");
-    auto payload = memochat::r18::R18SourceService::Instance().FetchImageForUser(uid, source_id, image_url);
+    const std::string scramble_id_text = QueryParam(request, "scramble_id");
+    long long scramble_id = 0;
+    if (!scramble_id_text.empty())
+    {
+        char* end = nullptr;
+        const long long parsed = std::strtoll(scramble_id_text.c_str(), &end, 10);
+        if (end != scramble_id_text.c_str() && end != nullptr && *end == '\0' && parsed > 0 && parsed <= 1000000000LL)
+            scramble_id = parsed;
+    }
+    auto payload =
+        memochat::r18::R18SourceService::Instance().FetchImageForUser(uid, source_id, image_url, scramble_id);
     if (!payload.ok)
     {
         response.status = memochat::r18::service::modules::BadGatewayHttpStatus();

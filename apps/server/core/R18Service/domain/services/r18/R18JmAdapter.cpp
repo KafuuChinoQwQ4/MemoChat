@@ -3,11 +3,17 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <utility>
+#include <vector>
+
+#include <turbojpeg.h>
 
 import memochat.r18.jm_adapter_algorithms;
 
@@ -351,13 +357,20 @@ bool IsAllowedJmImageUrl(const std::string& image_url)
                                                       0);
 }
 
-bool JmSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error)
+bool JmSearch(const std::string& keyword,
+              int page,
+              const std::string& sort,
+              const std::string& tag,
+              json::JsonValue* out,
+              std::string* error)
 {
-    return JmSearchWithToken(keyword, page, "", out, error);
+    return JmSearchWithToken(keyword, page, sort, tag, "", out, error);
 }
 
 bool JmSearchWithToken(const std::string& keyword,
                        int page,
+                       const std::string& sort,
+                       const std::string& tag,
                        const std::string& uid,
                        json::JsonValue* out,
                        std::string* error)
@@ -368,8 +381,18 @@ bool JmSearchWithToken(const std::string& keyword,
         return false;
     }
     const int normalized_page = jm_adapter::modules::NormalizeSearchPage(page);
-    const std::string normalized_keyword = keyword.empty() ? "" : detail::UrlEncode(keyword);
-    std::string target = "/search?search_query=" + normalized_keyword + "&o=mr";
+    const std::string resolved_sort = jm_adapter::modules::NormalizeSearchSort(sort.c_str());
+    // Combine free-text keyword with category/tag filter when both are present.
+    std::string query = keyword;
+    if (!tag.empty())
+    {
+        if (query.empty())
+            query = tag;
+        else if (query.find(tag) == std::string::npos)
+            query = query + " " + tag;
+    }
+    const std::string normalized_query = query.empty() ? "" : detail::UrlEncode(query);
+    std::string target = "/search?search_query=" + normalized_query + "&o=" + resolved_sort;
     if (jm_adapter::modules::ShouldAppendSearchPage(normalized_page))
         target += "&page=" + std::to_string(normalized_page);
     json::JsonValue result;
@@ -381,6 +404,8 @@ bool JmSearchWithToken(const std::string& keyword,
     json::JsonValue data;
     data["source_id"] = jm_adapter::modules::SourceId();
     data["keyword"] = keyword;
+    data["sort"] = resolved_sort;
+    data["tag"] = tag;
     data["page"] = normalized_page;
     data["items"] = json::JsonValue{json::array_t{}};
 
@@ -504,6 +529,7 @@ bool JmPagesWithToken(const std::string& chapter_id, const std::string& uid, jso
     data["pages"] = json::JsonValue{json::array_t{}};
 
     const json::JsonValue images = json::glaze_get(result, "images");
+    const long long scramble_id = detail::FieldInt(result, "scramble_id", jm_adapter::modules::ScrambleIdThreshold());
     int index = 1;
     if (const auto* values = json::glaze_get_array(images))
     {
@@ -513,7 +539,8 @@ bool JmPagesWithToken(const std::string& chapter_id, const std::string& uid, jso
             json::JsonValue page;
             page["index"] = index;
             page["image_id"] = chapter_id + "-p" + std::to_string(index);
-            page["url"] = detail::ImageProxyUrl(jm_adapter::modules::SourceId(), JmImageUrl(chapter_id, image_name));
+            page["url"] = detail::ImageProxyUrl(jm_adapter::modules::SourceId(), JmImageUrl(chapter_id, image_name)) +
+                          "&scramble_id=" + std::to_string(scramble_id);
             json::glaze_append(data["pages"], page);
             ++index;
         }
@@ -522,7 +549,291 @@ bool JmPagesWithToken(const std::string& chapter_id, const std::string& uid, jso
     return true;
 }
 
-R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std::string& image_url)
+namespace
+{
+
+bool ParseJmPhotoParts(const std::string& image_url, long long* chapter_id_out, std::string* filename_stem_out)
+{
+    if (chapter_id_out == nullptr || filename_stem_out == nullptr)
+        return false;
+    // Expected: https://host/media/photos/<chapter_id>/<name>.jpg
+    const std::string marker = "/media/photos/";
+    const auto pos = image_url.find(marker);
+    if (pos == std::string::npos)
+        return false;
+    std::string rest = image_url.substr(pos + marker.size());
+    const auto slash = rest.find('/');
+    if (slash == std::string::npos || slash == 0)
+        return false;
+    const std::string chapter = rest.substr(0, slash);
+    std::string name = rest.substr(slash + 1);
+    const auto q = name.find('?');
+    if (q != std::string::npos)
+        name = name.substr(0, q);
+    if (chapter.empty() || name.empty())
+        return false;
+    char* end = nullptr;
+    const long long chapter_id = std::strtoll(chapter.c_str(), &end, 10);
+    if (end == chapter.c_str() || chapter_id <= 0)
+        return false;
+    // strip extension
+    const auto dot = name.find_last_of('.');
+    if (dot != std::string::npos)
+        name = name.substr(0, dot);
+    if (name.empty())
+        return false;
+    *chapter_id_out = chapter_id;
+    *filename_stem_out = std::move(name);
+    return true;
+}
+
+bool IsJmPhotoUrl(const std::string& image_url)
+{
+    return image_url.find("/media/photos/") != std::string::npos;
+}
+
+bool DecodeImageToRgb(const std::string& body,
+                      int* width_out,
+                      int* height_out,
+                      std::vector<unsigned char>* rgb_out,
+                      std::string* error)
+{
+    if (width_out == nullptr || height_out == nullptr || rgb_out == nullptr)
+    {
+        SetError(error, "JM image decode outputs are null");
+        return false;
+    }
+    if (body.empty())
+    {
+        SetError(error, "JM image body is empty");
+        return false;
+    }
+
+    tjhandle handle = tjInitDecompress();
+    if (handle == nullptr)
+    {
+        SetError(error, "turbojpeg init failed");
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    int subsamp = 0;
+    int colorspace = 0;
+    const auto* data = reinterpret_cast<const unsigned char*>(body.data());
+    if (tjDecompressHeader3(handle,
+                            data,
+                            static_cast<unsigned long>(body.size()),
+                            &width,
+                            &height,
+                            &subsamp,
+                            &colorspace) != 0)
+    {
+        const char* msg = tjGetErrorStr2(handle);
+        SetError(error, msg != nullptr ? msg : "jpeg header parse failed");
+        tjDestroy(handle);
+        return false;
+    }
+    if (width <= 0 || height <= 0)
+    {
+        SetError(error, "invalid jpeg dimensions");
+        tjDestroy(handle);
+        return false;
+    }
+
+    std::vector<unsigned char> rgb(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u);
+    if (tjDecompress2(handle,
+                      data,
+                      static_cast<unsigned long>(body.size()),
+                      rgb.data(),
+                      width,
+                      0,
+                      height,
+                      TJPF_RGB,
+                      TJFLAG_FASTDCT) != 0)
+    {
+        const char* msg = tjGetErrorStr2(handle);
+        SetError(error, msg != nullptr ? msg : "jpeg decompress failed");
+        tjDestroy(handle);
+        return false;
+    }
+    tjDestroy(handle);
+    *width_out = width;
+    *height_out = height;
+    *rgb_out = std::move(rgb);
+    return true;
+}
+
+bool EncodeRgbToJpeg(const std::vector<unsigned char>& rgb,
+                     int width,
+                     int height,
+                     std::string* jpeg_out,
+                     std::string* error)
+{
+    if (jpeg_out == nullptr)
+    {
+        SetError(error, "jpeg output is null");
+        return false;
+    }
+    if (width <= 0 || height <= 0 ||
+        rgb.size() < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u)
+    {
+        SetError(error, "invalid rgb buffer");
+        return false;
+    }
+    tjhandle handle = tjInitCompress();
+    if (handle == nullptr)
+    {
+        SetError(error, "turbojpeg compress init failed");
+        return false;
+    }
+    unsigned char* jpeg_buf = nullptr;
+    unsigned long jpeg_size = 0;
+    if (tjCompress2(handle,
+                    rgb.data(),
+                    width,
+                    0,
+                    height,
+                    TJPF_RGB,
+                    &jpeg_buf,
+                    &jpeg_size,
+                    TJSAMP_420,
+                    90,
+                    TJFLAG_FASTDCT) != 0)
+    {
+        const char* msg = tjGetErrorStr2(handle);
+        SetError(error, msg != nullptr ? msg : "jpeg compress failed");
+        tjDestroy(handle);
+        return false;
+    }
+    jpeg_out->assign(reinterpret_cast<char*>(jpeg_buf), reinterpret_cast<char*>(jpeg_buf) + jpeg_size);
+    tjFree(jpeg_buf);
+    tjDestroy(handle);
+    return true;
+}
+
+bool UnscrambleJmRgb(const std::vector<unsigned char>& src_rgb,
+                     int width,
+                     int height,
+                     int strip_count,
+                     std::vector<unsigned char>* dst_rgb,
+                     std::string* error)
+{
+    if (dst_rgb == nullptr)
+    {
+        SetError(error, "unscramble output is null");
+        return false;
+    }
+    if (strip_count <= 1)
+    {
+        *dst_rgb = src_rgb;
+        return true;
+    }
+    if (width <= 0 || height <= 0 ||
+        src_rgb.size() < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u)
+    {
+        SetError(error, "invalid scramble source buffer");
+        return false;
+    }
+
+    dst_rgb->assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u, 0);
+    const std::size_t stride = static_cast<std::size_t>(width) * 3u;
+    for (int i = 0; i < strip_count; ++i)
+    {
+        int strip_height = 0;
+        const int y_src = jm_adapter::modules::ScrambleSourceY(height, strip_count, i, &strip_height);
+        const int y_dst = jm_adapter::modules::ScrambleDestinationY(height, strip_count, i);
+        if (strip_height <= 0 || y_src < 0 || y_dst < 0 || y_src + strip_height > height ||
+            y_dst + strip_height > height)
+        {
+            SetError(error, "invalid scramble strip geometry");
+            return false;
+        }
+        for (int row = 0; row < strip_height; ++row)
+        {
+            const unsigned char* src = src_rgb.data() + static_cast<std::size_t>(y_src + row) * stride;
+            unsigned char* dst = dst_rgb->data() + static_cast<std::size_t>(y_dst + row) * stride;
+            std::memcpy(dst, src, stride);
+        }
+    }
+    return true;
+}
+
+bool MaybeUnscrambleJmImage(const std::string& image_url,
+                            long long scramble_id,
+                            R18ImagePayload* payload,
+                            std::string* error)
+{
+    if (payload == nullptr)
+        return false;
+    if (!IsJmPhotoUrl(image_url))
+        return true; // covers/albums stay as-is
+
+    long long chapter_id = 0;
+    std::string filename_stem;
+    if (!ParseJmPhotoParts(image_url, &chapter_id, &filename_stem))
+        return true; // not a parseable photo URL; leave untouched
+
+    if (scramble_id <= 0)
+        scramble_id = jm_adapter::modules::ScrambleIdThreshold();
+    int strip_count = 0;
+    if (chapter_id < scramble_id)
+    {
+        strip_count = 0;
+    }
+    else if (chapter_id < jm_adapter::modules::ScrambleFixedTenThreshold())
+    {
+        strip_count = 10;
+    }
+    else
+    {
+        std::string md5_hex;
+        if (!detail::Md5Hex(std::to_string(chapter_id) + filename_stem, &md5_hex, error))
+            return false;
+        if (md5_hex.empty())
+        {
+            SetError(error, "md5 empty for scramble key");
+            return false;
+        }
+        strip_count = jm_adapter::modules::ScrambleStripCount(chapter_id,
+                                                              scramble_id,
+                                                              static_cast<unsigned char>(md5_hex.back()));
+    }
+    if (strip_count <= 1)
+        return true;
+
+    // JM currently serves chapter photos as JPEG. Do not leak a still-scrambled
+    // body if the upstream format changes unexpectedly.
+    if (payload->body.size() < 3 || static_cast<unsigned char>(payload->body[0]) != 0xFF ||
+        static_cast<unsigned char>(payload->body[1]) != 0xD8)
+    {
+        SetError(error, "JM scrambled photo is not JPEG");
+        return false;
+    }
+
+    int width = 0;
+    int height = 0;
+    std::vector<unsigned char> rgb;
+    if (!DecodeImageToRgb(payload->body, &width, &height, &rgb, error))
+        return false;
+
+    std::vector<unsigned char> restored;
+    if (!UnscrambleJmRgb(rgb, width, height, strip_count, &restored, error))
+        return false;
+
+    std::string jpeg;
+    if (!EncodeRgbToJpeg(restored, width, height, &jpeg, error))
+        return false;
+
+    payload->body = std::move(jpeg);
+    payload->content_type = jm_adapter::modules::DefaultImageContentType();
+    return true;
+}
+
+} // namespace
+
+R18ImagePayload
+JmFetchImage(const std::filesystem::path& cache_root, const std::string& image_url, long long scramble_id)
 {
     if (!IsAllowedJmImageUrl(image_url))
     {
@@ -535,6 +846,12 @@ R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std:
     {
         return detail::FailedImage(error);
     }
+    if (IsJmPhotoUrl(image_url))
+    {
+        if (scramble_id <= 0)
+            scramble_id = jm_adapter::modules::ScrambleIdThreshold();
+        cache_key += "-unscrambled-v1-" + std::to_string(scramble_id);
+    }
     R18ImagePayload cached;
     if (detail::ReadCachedImage(cache_root, cache_key, &cached))
         return cached;
@@ -544,7 +861,7 @@ R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std:
         return cached;
 
     const std::vector<std::pair<std::string, std::string>> headers = {
-        {"Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
+        {"Accept", "image/jpeg,image/jpg,image/png;q=0.9,image/webp;q=0.5,*/*;q=0.1"},
         {"Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"},
         {"Referer", "https://localhost/"},
         {"Sec-Fetch-Dest", "image"},
@@ -568,6 +885,15 @@ R18ImagePayload JmFetchImage(const std::filesystem::path& cache_root, const std:
                                ? jm_adapter::modules::DefaultImageContentType()
                                : result.content_type;
     payload.body = std::move(result.body);
+
+    // JM chapter photos are vertically scrambled; restore before caching/serving.
+    std::string unscramble_error;
+    if (!MaybeUnscrambleJmImage(image_url, scramble_id, &payload, &unscramble_error))
+    {
+        // Prefer a readable placeholder over serving scrambled strips.
+        return detail::PlaceholderImage("JMComic image unscramble failed", unscramble_error);
+    }
+
     detail::WriteCachedImage(cache_root, cache_key, payload);
     return payload;
 }

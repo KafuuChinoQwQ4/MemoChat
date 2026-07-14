@@ -1,6 +1,6 @@
 /** R18ShellContent — source switcher + search + chapter reader */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { useSessionStore } from "@/core/session/sessionStore"
 import {
   createR18Api,
@@ -17,6 +17,13 @@ import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 import styles from "./R18ShellContent.module.css"
 import { accountInteractionKind, isActionableSource } from "./r18SourceAvailability"
+import { defaultSortForSource, filterTagOptions, sourceFilterConfig } from "./r18SourceFilters"
+import {
+  flattenR18SearchPages,
+  hasMoreR18SearchPages,
+  latestR18SearchPage,
+  shouldLoadMoreR18SearchOnScroll,
+} from "./r18SearchPagination"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -175,13 +182,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
       type="button"
       aria-label="关闭"
       onClick={onClose}
-      style={{
-        width: 34, height: 34, flexShrink: 0,
-        borderRadius: 10, border: "1px solid var(--divider)",
-        background: "var(--glass-btn-bg)", color: "var(--text-secondary)",
-        cursor: "pointer", fontSize: 18, lineHeight: 1,
-        display: "grid", placeItems: "center",
-      }}
+      className={styles.dialogClose ?? ""}
     >
       ×
     </button>
@@ -219,43 +220,28 @@ function ChapterListOverlay({
       aria-labelledby="r18-chapter-dialog-title"
       tabIndex={-1}
       onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 90,
-        display: "grid", placeItems: "center", padding: 24,
-        background: "var(--r18-dialog-backdrop)",
-        backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-      }}
+      className={styles.dialogBackdrop ?? ""}
     >
       <GlassSurface
         elevated
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(560px, calc(100vw - 48px))",
-          maxHeight: "min(680px, calc(100vh - 48px))",
-          borderRadius: 18, overflow: "hidden",
-          display: "flex", flexDirection: "column",
-        }}
+        className={styles.dialogPanel ?? ""}
       >
-        {/* Header */}
-        <div style={{
-          padding: "16px 18px", display: "flex", alignItems: "center",
-          gap: 12, borderBottom: "1px solid var(--divider)", flexShrink: 0,
-        }}>
+        <div className={styles.dialogHeader ?? ""}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div id="r18-chapter-dialog-title" style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div id="r18-chapter-dialog-title" className={styles.dialogTitle ?? ""}>
               {comic.title || "未命名"}
             </div>
-            {comic.author && (
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 3 }}>
-                {comic.author}
+            {(comic.author || comic.subtitle) && (
+              <div className={styles.dialogSubtitle ?? ""}>
+                {comic.author || comic.subtitle}
               </div>
             )}
           </div>
           <CloseButton onClose={onClose} />
         </div>
 
-        {/* Chapter list */}
-        <GlassScrollArea style={{ flex: 1, padding: "10px 12px 14px" }}>
+        <GlassScrollArea className={styles.dialogBody ?? ""}>
           {chaptersQuery.isLoading && (
             <div style={{ display: "grid", placeItems: "center", padding: 40 }}>
               <Spinner size={26} />
@@ -271,20 +257,13 @@ function ChapterListOverlay({
               暂无章节
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8 }}>
+          <div className={styles.chapterGrid ?? ""}>
             {(chaptersQuery.data ?? []).map((ch) => (
               <button
                 key={ch.chapter_id}
+                type="button"
+                className={styles.chapterChip ?? ""}
                 onClick={() => onSelectChapter(ch.chapter_id, ch.title || `第 ${(ch.index ?? 0) + 1} 话`)}
-                style={{
-                  padding: "9px 12px", border: "1px solid var(--divider)",
-                  borderRadius: 9, background: "var(--glass-btn-bg)",
-                  color: "var(--text-primary)", fontSize: 13, textAlign: "left",
-                  cursor: "pointer", transition: "background 120ms ease",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--tint-hover)" }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--glass-btn-bg)" }}
               >
                 {ch.title || `第 ${(ch.index ?? 0) + 1} 话`}
               </button>
@@ -301,17 +280,20 @@ function ChapterListOverlay({
 function ReaderPage({ url }: { url: string }) {
   const loaded = useMediaUrl(url)
   if (!loaded) return (
-    <div style={{ width: "100%", minHeight: 200, display: "grid", placeItems: "center", background: "var(--tint-hover)", borderRadius: 8 }}>
+    <div className={styles.readerPagePlaceholder ?? ""}>
       <Spinner size={22} />
     </div>
   )
   return (
-    <img
-      src={loaded}
-      alt=""
-      loading="lazy"
-      style={{ width: "100%", display: "block", borderRadius: 8 }}
-    />
+    <div className={styles.readerPageFrame ?? ""}>
+      <img
+        src={loaded}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={styles.readerPageImage ?? ""}
+      />
+    </div>
   )
 }
 
@@ -345,43 +327,24 @@ function ReaderOverlay({
       aria-modal="true"
       aria-labelledby="r18-reader-dialog-title"
       tabIndex={-1}
-      style={{
-        position: "fixed", inset: 0, zIndex: 95,
-        display: "flex", flexDirection: "column",
-        background: "var(--r18-reader-backdrop)",
-        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-      }}
+      className={styles.readerBackdrop ?? ""}
     >
-      {/* Reader topbar */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12,
-        padding: "10px 18px", borderBottom: "1px solid var(--divider)",
-        background: "var(--r18-reader-toolbar-bg)", flexShrink: 0,
-      }}>
+      <div className={styles.readerToolbar ?? ""}>
         <button
           type="button"
           onClick={onClose}
           aria-label="返回"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 9,
-            border: "1px solid var(--divider)",
-            background: "var(--glass-btn-bg)", color: "var(--text-primary)",
-            cursor: "pointer", fontSize: 13, flexShrink: 0,
-          }}
+          className={styles.readerBackButton ?? ""}
         >
           ← 返回
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div id="r18-reader-dialog-title" style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {comic.title || "未命名"} · {chapterTitle}
-          </div>
+        <div id="r18-reader-dialog-title" className={styles.readerTitle ?? ""}>
+          {comic.title || "未命名"} · {chapterTitle}
         </div>
       </div>
 
-      {/* Page list */}
-      <GlassScrollArea style={{ flex: 1 }}>
-        <div style={{ maxWidth: 820, margin: "0 auto", padding: "20px 16px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <GlassScrollArea className={styles.readerScroll ?? ""}>
+        <div className={styles.readerPages ?? ""}>
           {imagesQuery.isLoading && (
             <div style={{ display: "grid", placeItems: "center", padding: 60 }}>
               <Spinner size={30} />
@@ -462,32 +425,20 @@ function AccountManagerPanel({
       aria-labelledby="r18-account-dialog-title"
       tabIndex={-1}
       onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 92,
-        display: "grid", placeItems: "center", padding: 24,
-        background: "var(--r18-dialog-backdrop)",
-        backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-      }}
+      className={styles.dialogBackdrop ?? ""}
+      style={{ zIndex: 92 }}
     >
       <GlassSurface
         elevated
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(640px, calc(100vw - 48px))",
-          maxHeight: "min(760px, calc(100vh - 48px))",
-          borderRadius: 18, overflow: "hidden",
-          display: "flex", flexDirection: "column",
-        }}
+        className={`${styles.dialogPanel ?? ""} ${styles.accountDialogPanel ?? ""}`}
       >
-        <div style={{
-          padding: "16px 18px", display: "flex", alignItems: "center",
-          gap: 12, borderBottom: "1px solid var(--divider)", flexShrink: 0,
-        }}>
+        <div className={styles.dialogHeader ?? ""}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div id="r18-account-dialog-title" style={{ fontWeight: 700, fontSize: 15 }}>
+            <div id="r18-account-dialog-title" className={styles.dialogTitle ?? ""}>
               内容源账号管理
             </div>
-            <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+            <div className={styles.dialogSubtitle ?? ""}>
               无需账号的源可直接访问；需要账号的源填写后自动保存并登录
             </div>
           </div>
@@ -616,7 +567,15 @@ export function R18ShellContent() {
   const [selectedSourceId, setSelectedSourceId] = useState("")
   const [keyword, setKeyword] = useState("")
   const [submittedKeyword, setSubmittedKeyword] = useState("")
-  const [page, setPage] = useState(1)
+  const [sort, setSort] = useState("")
+  const [tag, setTag] = useState("")
+  const [submittedSort, setSubmittedSort] = useState("")
+  const [submittedTag, setSubmittedTag] = useState("")
+  const [customTag, setCustomTag] = useState("")
+  const [filterBarOpen, setFilterBarOpen] = useState(false)
+  const [sortSectionOpen, setSortSectionOpen] = useState(false)
+  const [tagSectionOpen, setTagSectionOpen] = useState(false)
+  const [tagQuery, setTagQuery] = useState("")
 
   /** Comic whose chapter list is open */
   const [comicForChapters, setComicForChapters] = useState<R18ComicItem | null>(null)
@@ -684,6 +643,21 @@ export function R18ShellContent() {
     if (!selectedSourceId && selectedSource?.id) setSelectedSourceId(selectedSource.id)
   }, [selectedSource?.id, selectedSourceId])
 
+  const filterConfig = useMemo(
+    () => sourceFilterConfig(selectedSource?.id),
+    [selectedSource?.id],
+  )
+
+  useEffect(() => {
+    const nextSort = defaultSortForSource(selectedSource?.id)
+    setSort(nextSort)
+    setSubmittedSort(nextSort)
+    setTag("")
+    setSubmittedTag("")
+    setCustomTag("")
+    setTagQuery("")
+  }, [selectedSource?.id])
+
   useEffect(() => {
     if (!accountPanelOpen || managedAccounts.length === 0) return
     setAccountDrafts((prev) => {
@@ -700,16 +674,71 @@ export function R18ShellContent() {
     })
   }, [accountPanelOpen, managedAccounts])
 
-  const searchQuery = useQuery({
-    queryKey: ["r18", "search", uid, selectedSource?.id, submittedKeyword, page],
+  const searchQuery = useInfiniteQuery({
+    queryKey: ["r18", "search", uid, selectedSource?.id, submittedKeyword, submittedSort, submittedTag],
     enabled: authReady && accessQuery.data?.allowed === true && Boolean(selectedSource?.id),
-    queryFn: async () => {
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
       if (!authReady || accessQuery.data?.allowed !== true || !selectedSource?.id) {
         throw new Error("Missing R18 search input")
       }
-      return api.search(selectedSource.id, submittedKeyword, page)
+      // Every source uses the same rule: one scroll load = one upstream page.
+      return api.search(selectedSource.id, submittedKeyword, pageParam, {
+        sort: submittedSort,
+        tag: submittedTag,
+      })
+    },
+    getNextPageParam: (lastPage, _pages, lastPageParam) => {
+      const pageItems = (lastPage.items ?? []).filter((item) => !isSourceFailureItem(item))
+      if (!hasMoreR18SearchPages(lastPageParam, lastPage.max_page, pageItems.length)) {
+        return undefined
+      }
+      return lastPageParam + 1
     },
   })
+
+  const searchItems = useMemo(
+    () => flattenR18SearchPages(searchQuery.data?.pages ?? []).filter((item) => !isSourceFailureItem(item)),
+    [searchQuery.data?.pages],
+  )
+  const latestSearchPage = useMemo(
+    () => latestR18SearchPage(searchQuery.data?.pages ?? []),
+    [searchQuery.data?.pages],
+  )
+  const searchScrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const area = searchScrollRef.current
+    if (!area) return
+
+    const onScroll = () => {
+      const distanceToBottom = area.scrollHeight - area.scrollTop - area.clientHeight
+      if (
+        !shouldLoadMoreR18SearchOnScroll(distanceToBottom, {
+          hasMore: Boolean(searchQuery.hasNextPage),
+          isLoading: searchQuery.isLoading,
+          isFetchingNextPage: searchQuery.isFetchingNextPage,
+        })
+      ) {
+        return
+      }
+      void searchQuery.fetchNextPage()
+    }
+
+    area.addEventListener("scroll", onScroll, { passive: true })
+    onScroll()
+    return () => area.removeEventListener("scroll", onScroll)
+  }, [
+    searchItems.length,
+    searchQuery.fetchNextPage,
+    searchQuery.hasNextPage,
+    searchQuery.isFetchingNextPage,
+    searchQuery.isLoading,
+    selectedSource?.id,
+    submittedKeyword,
+    submittedSort,
+    submittedTag,
+  ])
 
   async function attestR18Access() {
     try {
@@ -719,9 +748,27 @@ export function R18ShellContent() {
     }
   }
 
-  function submitSearch() {
+  function submitSearch(next?: { sort?: string; tag?: string }) {
+    const nextSort = next?.sort ?? sort
+    const nextTag = (next?.tag ?? tag).trim()
+    setSort(nextSort)
+    setTag(nextTag)
     setSubmittedKeyword(keyword.trim())
-    setPage(1)
+    setSubmittedSort(nextSort)
+    setSubmittedTag(nextTag)
+  }
+
+  function applySort(nextSort: string) {
+    submitSearch({ sort: nextSort, tag })
+  }
+
+  function applyTag(nextTag: string) {
+    setCustomTag(nextTag)
+    submitSearch({ sort, tag: nextTag })
+  }
+
+  function applyCustomTag() {
+    applyTag(customTag.trim())
   }
 
   function updateAccountDraft(sourceId: string, field: "username" | "password", value: string) {
@@ -907,7 +954,6 @@ export function R18ShellContent() {
                   }
                   if (!source.enabled) return
                   setSelectedSourceId(source.id)
-                  setPage(1)
                 }}
                 style={{
                   border: "none", borderRadius: 10,
@@ -952,34 +998,175 @@ export function R18ShellContent() {
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitSearch() } }}
             />
           </div>
-          <GlassButton onClick={submitSearch} variant="primary" style={{ flexShrink: 0 }}>搜索</GlassButton>
+          <GlassButton onClick={() => submitSearch()} variant="primary" style={{ flexShrink: 0 }}>搜索</GlassButton>
         </div>
 
-        {/* Pagination row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-          <GlassButton
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            style={{ padding: "5px 12px", fontSize: 12 }}
+        {/* Source-native sort / tag filters (whole bar collapsible) */}
+        <div className={styles.filterBar}>
+          <button
+            type="button"
+            className={styles.filterMasterToggle}
+            aria-expanded={filterBarOpen}
+            onClick={() => setFilterBarOpen((open) => !open)}
           >
-            ← 上一页
-          </GlassButton>
-          <span style={{ fontSize: 13, color: "var(--text-secondary)", flex: 1, textAlign: "center" }}>第 {page} 页</span>
-          <GlassButton
-            onClick={() => setPage((p) => p + 1)}
-            disabled={!searchQuery.data?.max_page || page >= (searchQuery.data.max_page ?? 1)}
-            style={{ padding: "5px 12px", fontSize: 12 }}
-          >
-            下一页 →
-          </GlassButton>
+            <span className={styles.filterMasterLeft}>
+              <span className={styles.filterLabel}>筛选</span>
+              <span className={styles.filterSummaryInline}>
+                {submittedKeyword ? `关键词「${submittedKeyword}」` : "无关键词"}
+                {` · ${
+                  filterConfig.sorts.find((s) => s.id === submittedSort)?.label
+                  ?? filterConfig.sorts[0]?.label
+                  ?? "默认排序"
+                }`}
+                {` · ${
+                  submittedTag
+                    ? (filterConfig.tags.find((t) => t.id === submittedTag)?.label ?? submittedTag)
+                    : "全部 tag"
+                }`}
+              </span>
+            </span>
+            <span className={styles.filterToggleMeta}>
+              <span className={styles.filterCount}>{Math.max(0, filterConfig.tags.length - 1)}</span>
+              <span className={styles.filterChevron} data-open={filterBarOpen ? "true" : "false"}>▾</span>
+            </span>
+          </button>
+
+          {filterBarOpen && (
+            <div className={styles.filterBarBody}>
+              <div className={styles.filterGroup}>
+                <button
+                  type="button"
+                  className={styles.filterToggle}
+                  aria-expanded={sortSectionOpen}
+                  onClick={() => setSortSectionOpen((open) => !open)}
+                >
+                  <span className={styles.filterLabel}>排序 / 分类</span>
+                  <span className={styles.filterToggleMeta}>
+                    {filterConfig.sorts.find((s) => s.id === submittedSort)?.label
+                      ?? filterConfig.sorts[0]?.label
+                      ?? "默认"}
+                    <span className={styles.filterChevron} data-open={sortSectionOpen ? "true" : "false"}>▾</span>
+                  </span>
+                </button>
+                {sortSectionOpen && (
+                  <div className={styles.filterPanel}>
+                    <div className={styles.filterChips}>
+                      {filterConfig.sorts.map((option) => {
+                        const active = submittedSort === option.id
+                        return (
+                          <button
+                            key={`sort-${option.id || "default"}`}
+                            type="button"
+                            className={styles.filterChip}
+                            data-active={active ? "true" : "false"}
+                            onClick={() => applySort(option.id)}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.filterGroup}>
+                <button
+                  type="button"
+                  className={styles.filterToggle}
+                  aria-expanded={tagSectionOpen}
+                  onClick={() => setTagSectionOpen((open) => !open)}
+                >
+                  <span className={styles.filterLabel}>Tag / 分类</span>
+                  <span className={styles.filterToggleMeta}>
+                    {submittedTag
+                      ? (filterConfig.tags.find((t) => t.id === submittedTag)?.label ?? submittedTag)
+                      : "全部"}
+                    <span className={styles.filterCount}>{Math.max(0, filterConfig.tags.length - 1)}</span>
+                    <span className={styles.filterChevron} data-open={tagSectionOpen ? "true" : "false"}>▾</span>
+                  </span>
+                </button>
+                {tagSectionOpen && (
+                  <div className={styles.filterPanel}>
+                    <div className={styles.tagSearchRow}>
+                      <GlassTextField
+                        value={tagQuery}
+                        onChange={(e) => setTagQuery(e.target.value)}
+                        placeholder="搜索官方 tag…"
+                      />
+                      {tagQuery ? (
+                        <GlassButton
+                          onClick={() => setTagQuery("")}
+                          style={{ flexShrink: 0, padding: "5px 12px", fontSize: 12 }}
+                        >
+                          清空
+                        </GlassButton>
+                      ) : null}
+                    </div>
+                    <div className={styles.filterChipsScroll}>
+                      <div className={styles.filterChips}>
+                        {filterTagOptions(filterConfig.tags, tagQuery).map((option) => {
+                          const active = submittedTag === option.id
+                          return (
+                            <button
+                              key={`tag-${option.id || "all"}`}
+                              type="button"
+                              className={styles.filterChip}
+                              data-active={active ? "true" : "false"}
+                              onClick={() => applyTag(option.id)}
+                            >
+                              {option.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {filterTagOptions(filterConfig.tags, tagQuery).length === 0 && (
+                        <div className={styles.filterEmpty}>没有匹配的 tag，可改关键词或用下方自定义</div>
+                      )}
+                    </div>
+                    {filterConfig.allowCustomTag && (
+                      <div className={styles.customTagRow}>
+                        <GlassTextField
+                          value={customTag}
+                          onChange={(e) => setCustomTag(e.target.value)}
+                          placeholder={filterConfig.tagPlaceholder}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              applyCustomTag()
+                            }
+                          }}
+                        />
+                        <GlassButton
+                          onClick={applyCustomTag}
+                          style={{ flexShrink: 0, padding: "5px 12px", fontSize: 12 }}
+                        >
+                          应用
+                        </GlassButton>
+                        {submittedTag ? (
+                          <GlassButton
+                            onClick={() => applyTag("")}
+                            style={{ flexShrink: 0, padding: "5px 12px", fontSize: 12 }}
+                          >
+                            清除
+                          </GlassButton>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {(sourcesQuery.error || searchQuery.error || searchQuery.data?.error_message) && (
+
+        {(sourcesQuery.error || searchQuery.error || latestSearchPage?.error_message) && (
           <div style={{ margin: "10px 16px 0", color: "var(--color-badge)", fontSize: 13 }}>
             {humanizeR18Error(
               (sourcesQuery.error instanceof Error ? sourcesQuery.error.message : null) ||
               (searchQuery.error instanceof Error ? searchQuery.error.message : null) ||
-              searchQuery.data?.error_message ||
+              latestSearchPage?.error_message ||
               null,
             )}
           </div>
@@ -992,14 +1179,14 @@ export function R18ShellContent() {
         )}
 
         {/* Comic grid */}
-        <GlassScrollArea style={{ flex: 1, minHeight: 0, padding: 16 }}>
+        <GlassScrollArea ref={searchScrollRef} style={{ flex: 1, minHeight: 0, padding: 16 }}>
           {searchQuery.isLoading ? (
             <div style={{ display: "grid", placeItems: "center", height: 200 }}>
               <Spinner size={28} />
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
-              {(searchQuery.data?.items ?? []).filter((item) => !isSourceFailureItem(item)).map((item) => (
+              {searchItems.map((item) => (
                 <GlassSurface
                   key={`${item.source_id}-${item.comic_id}`}
                   elevated
@@ -1041,14 +1228,30 @@ export function R18ShellContent() {
                 </GlassSurface>
               ))}
 
-              {(searchQuery.data?.items ?? []).filter((item) => !isSourceFailureItem(item)).length === 0 && !searchQuery.isLoading && (
+              {searchItems.length === 0 && !searchQuery.isLoading && (
                 <div style={{
                   gridColumn: "1 / -1", padding: 60, textAlign: "center",
                   color: "var(--text-disabled)", fontSize: 14,
                 }}>
-                  {searchQuery.data?.error_message
-                    ? humanizeR18Error(searchQuery.data.error_message)
-                    : "暂无结果，请搜索关键词"}
+                  {latestSearchPage?.error_message
+                    ? humanizeR18Error(latestSearchPage.error_message)
+                    : "暂无结果，可切换排序 / tag 或搜索关键词"}
+                </div>
+              )}
+
+              {searchItems.length > 0 && (
+                <div style={{
+                  gridColumn: "1 / -1",
+                  padding: "10px 4px 4px",
+                  textAlign: "center",
+                  color: "var(--text-secondary)",
+                  fontSize: 12,
+                }}>
+                  {searchQuery.isFetchingNextPage
+                    ? "正在加载更多…"
+                    : searchQuery.hasNextPage
+                      ? "继续下滑加载更多"
+                      : "已经到底了"}
                 </div>
               )}
             </div>

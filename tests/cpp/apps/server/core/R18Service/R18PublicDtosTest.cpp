@@ -12,7 +12,7 @@
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceToggleRequestDto>(
     std::array<std::string_view, 1>{"source_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SearchRequestDto>(
-    std::array<std::string_view, 3>{"source_id", "keyword", "page"}));
+    std::array<std::string_view, 5>{"source_id", "keyword", "page", "sort", "tag"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ComicDetailRequestDto>(
     std::array<std::string_view, 2>{"source_id", "comic_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ChapterPagesRequestDto>(
@@ -51,16 +51,20 @@ TEST(R18PublicDtosTest, DecodesSourceToggleRequest)
 
 TEST(R18PublicDtosTest, DecodesSearchRequestAndDefaults)
 {
-    const auto full =
-        memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({"source_id":"builtin","keyword":"abc","page":3})"));
+    const auto full = memochat::r18::R18SearchRequestFromJsonValue(
+        Parse(R"({"source_id":"builtin","keyword":"abc","page":3,"sort":"mv_t","tag":"同人"})"));
     EXPECT_EQ(full.source_id, "builtin");
     EXPECT_EQ(full.keyword, "abc");
     EXPECT_EQ(full.page, 3);
+    EXPECT_EQ(full.sort, "mv_t");
+    EXPECT_EQ(full.tag, "同人");
 
     const auto defaults = memochat::r18::R18SearchRequestFromJsonValue(Parse(R"({})"));
     EXPECT_EQ(defaults.source_id, "");
     EXPECT_EQ(defaults.keyword, "");
     EXPECT_EQ(defaults.page, 1);
+    EXPECT_EQ(defaults.sort, "");
+    EXPECT_EQ(defaults.tag, "");
 }
 
 TEST(R18PublicDtosTest, DecodesDetailAndPagesRequests)

@@ -256,9 +256,29 @@ bool HostAllowed(const std::string& host)
     return false;
 }
 
+std::string NormalizeNhentaiSort(const std::string& sort)
+{
+    if (sort.empty() || sort == "date" || sort == "recent")
+        return "";
+    if (sort == "popular" || sort == "popular-all" || sort == "all")
+        return "popular";
+    if (sort == "popular-today" || sort == "today" || sort == "day")
+        return "popular-today";
+    if (sort == "popular-week" || sort == "week")
+        return "popular-week";
+    if (sort == "popular-month" || sort == "month")
+        return "popular-month";
+    return "";
+}
+
 } // namespace
 
-bool NhentaiSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error)
+bool NhentaiSearch(const std::string& keyword,
+                   int page,
+                   const std::string& sort,
+                   const std::string& tag,
+                   json::JsonValue* out,
+                   std::string* error)
 {
     if (out == nullptr)
     {
@@ -266,9 +286,32 @@ bool NhentaiSearch(const std::string& keyword, int page, json::JsonValue* out, s
         return false;
     }
     const int normalized_page = page < 1 ? 1 : page;
-    // Empty query: browse latest via /api/v2/galleries; keyword search uses /api/v2/search.
+    const std::string resolved_sort = NormalizeNhentaiSort(sort);
+    // Tag filter becomes language:"x" / tag:"name"; free-text keyword is ANDed when present.
+    auto FormatNhentaiTag = [](const std::string& raw) -> std::string
+    {
+        if (raw.empty())
+            return {};
+        if (raw.find(':') != std::string::npos)
+            return raw;
+        // Common language chips map better to language:"..." than generic tag:"...".
+        if (raw == "chinese" || raw == "english" || raw == "japanese" || raw == "translated")
+            return std::string("language:\"") + raw + "\"";
+        return std::string("tag:\"") + raw + "\"";
+    };
+    std::string query = keyword;
+    const std::string formatted_tag = FormatNhentaiTag(tag);
+    if (!formatted_tag.empty())
+    {
+        if (query.empty())
+            query = formatted_tag;
+        else
+            query = query + " " + formatted_tag;
+    }
+    // Empty query + no sort: browse latest via /api/v2/galleries.
+    // Any sort or keyword/tag uses /api/v2/search.
     JsonValue root;
-    if (keyword.empty())
+    if (query.empty() && resolved_sort.empty())
     {
         const std::string path = "/api/v2/galleries?page=" + std::to_string(normalized_page);
         if (!NhentaiGetJson(path, &root, error))
@@ -276,8 +319,10 @@ bool NhentaiSearch(const std::string& keyword, int page, json::JsonValue* out, s
     }
     else
     {
-        const std::string path =
-            "/api/v2/search?query=" + UrlEncode(keyword) + "&page=" + std::to_string(normalized_page);
+        std::string path = "/api/v2/search?query=" + UrlEncode(query.empty() ? "*" : query) +
+                           "&page=" + std::to_string(normalized_page);
+        if (!resolved_sort.empty())
+            path += "&sort=" + UrlEncode(resolved_sort);
         if (!NhentaiGetJson(path, &root, error))
             return false;
     }
@@ -285,6 +330,8 @@ bool NhentaiSearch(const std::string& keyword, int page, json::JsonValue* out, s
     JsonValue result;
     result["source_id"] = kNhentaiSourceId;
     result["keyword"] = keyword;
+    result["sort"] = resolved_sort;
+    result["tag"] = tag;
     result["page"] = normalized_page;
     result["max_page"] = FieldInt(root, "num_pages", 1);
     result["items"] = JsonValue{json::array_t{}};

@@ -200,4 +200,14 @@ bool ShouldUseImagePlaceholder(int status, bool body_empty)
     return memochat::r18::picacg_adapter::modules::ShouldUseImagePlaceholder(status, body_empty);
 }
 
+const char* DefaultSearchSort()
+{
+    return memochat::r18::picacg_adapter::modules::DefaultSearchSort();
+}
+
+const char* NormalizeSearchSort(const char* sort)
+{
+    return memochat::r18::picacg_adapter::modules::NormalizeSearchSort(sort);
+}
+
 } // namespace memochat::tests::r18::picacg_adapter
