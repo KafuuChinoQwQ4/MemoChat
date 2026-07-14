@@ -703,30 +703,35 @@ R18SourceRecord R18SourceService::ImportZip(const std::string& file_name,
     return rec;
 }
 
-json::JsonValue R18SourceService::Search(const std::string& source_id, const std::string& keyword, int page)
+json::JsonValue R18SourceService::Search(const std::string& source_id,
+                                         const std::string& keyword,
+                                         int page,
+                                         const std::string& sort,
+                                         const std::string& tag)
 {
-    return SearchForUser(0, source_id, keyword, page);
+    return SearchForUser(0, source_id, keyword, page, sort, tag);
 }
 
-json::JsonValue
-R18SourceService::SearchForUser(int uid, const std::string& source_id, const std::string& keyword, int page)
+json::JsonValue R18SourceService::SearchForUser(int uid,
+                                                const std::string& source_id,
+                                                const std::string& keyword,
+                                                int page,
+                                                const std::string& sort,
+                                                const std::string& tag)
 {
     std::string dispatch_error;
     if (!CanDispatchSourceForUser(uid, source_id, &dispatch_error))
         return ErrorData(source_id, dispatch_error);
 
+    const int normalized_page = source_service::modules::NormalizeSearchPage(page);
     if (source_id == kJmSourceId)
     {
         json::JsonValue result;
         std::string error;
         const std::string jm_uid = SessionTokenFor(uid, source_id);
         const bool ok = jm_uid.empty()
-                            ? JmSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error)
-                            : JmSearchWithToken(keyword,
-                                                source_service::modules::NormalizeSearchPage(page),
-                                                jm_uid,
-                                                &result,
-                                                &error);
+                            ? JmSearch(keyword, normalized_page, sort, tag, &result, &error)
+                            : JmSearchWithToken(keyword, normalized_page, sort, tag, jm_uid, &result, &error);
         if (ok)
             return result;
         return ErrorData(kJmSourceId, error);
@@ -737,12 +742,8 @@ R18SourceService::SearchForUser(int uid, const std::string& source_id, const std
         std::string error;
         const std::string token = SessionTokenFor(uid, source_id);
         const bool ok = token.empty()
-                            ? PicacgSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error)
-                            : PicacgSearchWithToken(keyword,
-                                                    source_service::modules::NormalizeSearchPage(page),
-                                                    token,
-                                                    &result,
-                                                    &error);
+                            ? PicacgSearch(keyword, normalized_page, sort, tag, &result, &error)
+                            : PicacgSearchWithToken(keyword, normalized_page, sort, tag, token, &result, &error);
         if (ok)
             return result;
         return ErrorData(kPicacgSourceId, error);
@@ -751,7 +752,7 @@ R18SourceService::SearchForUser(int uid, const std::string& source_id, const std
     {
         json::JsonValue result;
         std::string error;
-        if (NhentaiSearch(keyword, source_service::modules::NormalizeSearchPage(page), &result, &error))
+        if (NhentaiSearch(keyword, normalized_page, sort, tag, &result, &error))
             return result;
         return ErrorData(kNhentaiSourceId, error);
     }
@@ -759,11 +760,7 @@ R18SourceService::SearchForUser(int uid, const std::string& source_id, const std
     {
         json::JsonValue result;
         std::string error;
-        if (EhentaiSearch(keyword,
-                          source_service::modules::NormalizeSearchPage(page),
-                          SessionCookieFor(uid, source_id),
-                          &result,
-                          &error))
+        if (EhentaiSearch(keyword, normalized_page, sort, tag, SessionCookieFor(uid, source_id), &result, &error))
             return result;
         return ErrorData(kEhentaiSourceId, error);
     }
@@ -771,6 +768,8 @@ R18SourceService::SearchForUser(int uid, const std::string& source_id, const std
     json::JsonValue data;
     data["source_id"] = source_id;
     data["keyword"] = keyword;
+    data["sort"] = sort;
+    data["tag"] = tag;
     data["page"] = page;
     data["items"] = json::JsonValue{json::array_t{}};
     data["max_page"] = 1;
@@ -974,19 +973,23 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
     return data;
 }
 
-R18ImagePayload R18SourceService::FetchImage(const std::string& source_id, const std::string& image_url)
+R18ImagePayload
+R18SourceService::FetchImage(const std::string& source_id, const std::string& image_url, long long jm_scramble_id)
 {
-    return FetchImageForUser(0, source_id, image_url);
+    return FetchImageForUser(0, source_id, image_url, jm_scramble_id);
 }
 
-R18ImagePayload R18SourceService::FetchImageForUser(int uid, const std::string& source_id, const std::string& image_url)
+R18ImagePayload R18SourceService::FetchImageForUser(int uid,
+                                                    const std::string& source_id,
+                                                    const std::string& image_url,
+                                                    long long jm_scramble_id)
 {
     std::string dispatch_error;
     if (!CanDispatchSourceForUser(uid, source_id, &dispatch_error))
         return detail::FailedImage(dispatch_error);
 
     if (source_id == kJmSourceId && !image_url.empty())
-        return JmFetchImage(image_cache_root_, image_url);
+        return JmFetchImage(image_cache_root_, image_url, jm_scramble_id);
     if (source_id == kPicacgSourceId && !image_url.empty())
         return PicacgFetchImage(image_cache_root_, image_url);
     if (source_id == kNhentaiSourceId && !image_url.empty())

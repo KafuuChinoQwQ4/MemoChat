@@ -15,6 +15,12 @@ int ApiTimeoutSeconds();
 int ImageTimeoutSeconds();
 int MaxConcurrentImageFetches();
 int SearchPageSize();
+int ScrambleIdThreshold();
+int ScrambleFixedTenThreshold();
+int ScrambleModEightThreshold();
+int ScrambleStripCount(long long aid, long long scramble_id, unsigned char md5_last_byte);
+int ScrambleSourceY(int image_height, int strip_count, int destination_index, int* strip_height_out);
+int ScrambleDestinationY(int image_height, int strip_count, int destination_index);
 const char* ApiHostAt(int index);
 int ApiHostCount();
 bool ShouldTrimJsonPayload(bool start_missing, bool end_missing, bool end_before_start);
@@ -32,6 +38,8 @@ bool IsAllowedImageUrl(bool scheme_is_https, bool host_matches, bool target_has_
 const char* ImageTargetPrefix();
 bool ShouldUseDefaultImageContentType(bool content_type_empty);
 const char* DefaultImageContentType();
+const char* DefaultSearchSort();
+const char* NormalizeSearchSort(const char* sort);
 } // namespace memochat::tests::r18::jm_adapter
 
 TEST(R18JmAdapterAlgorithmsTest, ExposesStableIdentityAndRuntimeDefaults)
@@ -107,4 +115,67 @@ TEST(R18JmAdapterAlgorithmsTest, ExposesChapterAndImageGuards)
     EXPECT_TRUE(ShouldUseDefaultImageContentType(true));
     EXPECT_FALSE(ShouldUseDefaultImageContentType(false));
     EXPECT_STREQ(DefaultImageContentType(), "image/jpeg");
+}
+
+TEST(R18JmAdapterAlgorithmsTest, NormalizesSourceNativeSearchSort)
+{
+    using namespace memochat::tests::r18::jm_adapter;
+
+    EXPECT_STREQ(DefaultSearchSort(), "mr");
+    EXPECT_STREQ(NormalizeSearchSort(""), "mr");
+    EXPECT_STREQ(NormalizeSearchSort("latest"), "mr");
+    EXPECT_STREQ(NormalizeSearchSort("today"), "mv_t");
+    EXPECT_STREQ(NormalizeSearchSort("week"), "mv_w");
+    EXPECT_STREQ(NormalizeSearchSort("month"), "mv_m");
+    EXPECT_STREQ(NormalizeSearchSort("popular"), "mv");
+    EXPECT_STREQ(NormalizeSearchSort("likes"), "mp");
+    EXPECT_STREQ(NormalizeSearchSort("love"), "ld");
+    EXPECT_STREQ(NormalizeSearchSort("unknown"), "mr");
+}
+
+TEST(R18JmAdapterAlgorithmsTest, ComputesJmPhotoScrambleStripCount)
+{
+    using namespace memochat::tests::r18::jm_adapter;
+
+    EXPECT_EQ(ScrambleIdThreshold(), 220980);
+    EXPECT_EQ(ScrambleFixedTenThreshold(), 268850);
+    EXPECT_EQ(ScrambleModEightThreshold(), 421926);
+
+    EXPECT_EQ(ScrambleStripCount(100, ScrambleIdThreshold(), 'a'), 0);
+    EXPECT_EQ(ScrambleStripCount(100, 50, 'a'), 10);
+    EXPECT_EQ(ScrambleStripCount(220979, ScrambleIdThreshold(), 'f'), 0);
+    EXPECT_EQ(ScrambleStripCount(220980, ScrambleIdThreshold(), '0'), 10);
+    EXPECT_EQ(ScrambleStripCount(268849, ScrambleIdThreshold(), 'z'), 10);
+
+    // md5 last hex digit '0' -> 48 % 10 = 8 -> 8*2+2 = 18 for aid in [268850, 421926)
+    EXPECT_EQ(ScrambleStripCount(268850, ScrambleIdThreshold(), '0'), 18);
+    // md5 last hex digit 'f' -> 102 % 8 = 6 -> 14 for aid >= 421926
+    EXPECT_EQ(ScrambleStripCount(421926, ScrambleIdThreshold(), 'f'), 14);
+}
+
+TEST(R18JmAdapterAlgorithmsTest, MapsJmScrambleStripGeometry)
+{
+    using namespace memochat::tests::r18::jm_adapter;
+
+    // h=25, num=4 => base=6, over=1
+    // i=0: move=7, y_src=25-6-1=18, y_dst=0
+    // i=1: move=6, y_src=25-12-1=12, y_dst=7
+    // i=2: move=6, y_src=25-18-1=6, y_dst=13
+    // i=3: move=6, y_src=25-24-1=0, y_dst=19
+    int height = 0;
+    EXPECT_EQ(ScrambleSourceY(25, 4, 0, &height), 18);
+    EXPECT_EQ(height, 7);
+    EXPECT_EQ(ScrambleDestinationY(25, 4, 0), 0);
+
+    EXPECT_EQ(ScrambleSourceY(25, 4, 1, &height), 12);
+    EXPECT_EQ(height, 6);
+    EXPECT_EQ(ScrambleDestinationY(25, 4, 1), 7);
+
+    EXPECT_EQ(ScrambleSourceY(25, 4, 2, &height), 6);
+    EXPECT_EQ(height, 6);
+    EXPECT_EQ(ScrambleDestinationY(25, 4, 2), 13);
+
+    EXPECT_EQ(ScrambleSourceY(25, 4, 3, &height), 0);
+    EXPECT_EQ(height, 6);
+    EXPECT_EQ(ScrambleDestinationY(25, 4, 3), 19);
 }

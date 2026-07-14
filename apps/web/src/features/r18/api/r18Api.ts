@@ -104,16 +104,25 @@ export function createR18Api(http: HttpClient) {
       return unwrap(response, "R18 sources").sources ?? []
     },
 
-    async search(sourceId: string, keyword: string, page: number) {
+    async search(
+      sourceId: string,
+      keyword: string,
+      page: number,
+      options?: { sort?: string; tag?: string },
+    ) {
       const response = await http.post<R18Envelope<{
         source_id?: string
         items?: R18ComicItem[]
         max_page?: number
         error_message?: string
+        sort?: string
+        tag?: string
       }>>(ENDPOINTS.r18Search, {
         source_id: sourceId,
         keyword,
         page,
+        sort: options?.sort ?? "",
+        tag: options?.tag ?? "",
       })
       return unwrap(response, "R18 search")
     },

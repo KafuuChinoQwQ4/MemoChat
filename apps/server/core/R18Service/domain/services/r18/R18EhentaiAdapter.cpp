@@ -105,10 +105,68 @@ MakeItem(const std::string& comic_id, const std::string& title, const std::strin
     return item;
 }
 
+std::string NormalizeEhentaiCats(const std::string& value)
+{
+    if (value.empty())
+        return "";
+    // Numeric bitmask passes through.
+    bool all_digits = true;
+    for (char ch : value)
+    {
+        if (ch < '0' || ch > '9')
+        {
+            all_digits = false;
+            break;
+        }
+    }
+    if (all_digits)
+        return value;
+    // Named categories map to e-hentai f_cats "disabled" mask (bit set = hidden).
+    // Base full mask with all categories visible is 0.
+    // Bits: 0 Doujinshi, 1 Manga, 2 Artist CG, 3 Game CG, 4 Western, 5 Non-H, 6 Image Set, 7 Cosplay, 8 Asian Porn, 9
+    // Misc We invert: requested category keeps its bit off; others on.
+    auto bit_for = [](const std::string& name) -> int
+    {
+        if (name == "doujinshi" || name == "Doujinshi")
+            return 0;
+        if (name == "manga" || name == "Manga")
+            return 1;
+        if (name == "artist_cg" || name == "Artist CG" || name == "artist-cg")
+            return 2;
+        if (name == "game_cg" || name == "Game CG" || name == "game-cg")
+            return 3;
+        if (name == "western" || name == "Western")
+            return 4;
+        if (name == "non-h" || name == "Non-H" || name == "non_h")
+            return 5;
+        if (name == "image_set" || name == "Image Set" || name == "imageset")
+            return 6;
+        if (name == "cosplay" || name == "Cosplay")
+            return 7;
+        if (name == "asian_porn" || name == "Asian Porn" || name == "asian-porn")
+            return 8;
+        if (name == "misc" || name == "Misc")
+            return 9;
+        return -1;
+    };
+    const int keep = bit_for(value);
+    if (keep < 0)
+        return "";
+    int mask = 0;
+    for (int bit = 0; bit < 10; ++bit)
+    {
+        if (bit != keep)
+            mask |= (1 << bit);
+    }
+    return std::to_string(mask);
+}
+
 } // namespace
 
 bool EhentaiSearch(const std::string& keyword,
                    int page,
+                   const std::string& sort,
+                   const std::string& tag,
                    const std::string& session_cookie,
                    json::JsonValue* out,
                    std::string* error)
@@ -119,10 +177,22 @@ bool EhentaiSearch(const std::string& keyword,
         return false;
     }
     const int normalized_page = page < 1 ? 1 : page;
+    // sort chips map to f_cats category masks; tag remains free-text / namespace:tag search.
+    const std::string cats = NormalizeEhentaiCats(sort);
+    std::string search = keyword;
+    if (!tag.empty())
+    {
+        // Always append explicit tag filter; category chips do not consume the tag field.
+        if (!search.empty())
+            search += " ";
+        search += tag;
+    }
     std::ostringstream url;
     url << "https://e-hentai.org/?page=" << (normalized_page - 1);
-    if (!keyword.empty())
-        url << "&f_search=" << UrlEncode(keyword);
+    if (!search.empty())
+        url << "&f_search=" << UrlEncode(search);
+    if (!cats.empty())
+        url << "&f_cats=" << cats;
 
     std::string html;
     if (!FetchHtml(url.str(), session_cookie, &html, error))
@@ -131,6 +201,8 @@ bool EhentaiSearch(const std::string& keyword,
     JsonValue result;
     result["source_id"] = kEhentaiSourceId;
     result["keyword"] = keyword;
+    result["sort"] = sort;
+    result["tag"] = tag;
     result["page"] = normalized_page;
     result["max_page"] = normalized_page + 1; // next page available until empty
     result["items"] = JsonValue{json::array_t{}};

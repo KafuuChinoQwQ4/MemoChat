@@ -43,7 +43,7 @@ class R18SourcePaginationContractTests(unittest.TestCase):
 
     def test_jm_cover_fetch_waits_instead_of_returning_queued_placeholder(self):
         source = read(R18_SERVICE_DIR / "R18JmAdapter.cpp")
-        fetch_body = source.split("R18ImagePayload JmFetchImage", 1)[1].rsplit(
+        fetch_body = source.split("JmFetchImage(", 1)[1].rsplit(
             "} // namespace memochat::r18",
             1,
         )[0]
@@ -60,6 +60,16 @@ class R18SourcePaginationContractTests(unittest.TestCase):
             2,
             "JM fetch should re-check cache after waiting for a fetch slot.",
         )
+
+    def test_jm_chapter_pages_propagate_scramble_metadata_and_version_the_cache(self):
+        source = read(R18_SERVICE_DIR / "R18JmAdapter.cpp")
+        pages_body = source.split("bool JmPagesWithToken", 1)[1].split("bool ParseJmPhotoParts", 1)[0]
+        fetch_body = source.split("JmFetchImage(", 1)[1].split("bool JmLogin", 1)[0]
+
+        self.assertIn('FieldInt(result, "scramble_id"', pages_body)
+        self.assertIn('"&scramble_id=" + std::to_string(scramble_id)', pages_body)
+        self.assertIn('cache_key += "-unscrambled-v1-" + std::to_string(scramble_id)', fetch_body)
+        self.assertIn("MaybeUnscrambleJmImage(image_url, scramble_id", fetch_body)
 
     def test_source_enable_and_delete_trim_source_id_before_lookup(self):
         source = read(R18_SERVICE_DIR / "R18SourceService.cpp")

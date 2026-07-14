@@ -7,7 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `R18AdapterUtils.cppm` | 导出 R18 adapter 工具使用的 URL 默认值、编码/转义、缓存内容类型和 Base64 primitive guard |
-| `R18JmAdapter.cppm` | 导出 JM 官方 adapter 使用的源标识、API 默认值、分页、payload 和图片 URL guard |
+| `R18JmAdapter.cppm` | 导出 JM 官方 adapter 使用的源标识、API 默认值、分页、图片 URL guard 与章节图切片反打乱算法 |
 | `R18PicacgAdapter.cppm` | 导出 Picacg 官方 adapter 的精确 host、规范 URL、公网 IP、图片大小与 MIME 判定 |
 | `R18PublicDto.cppm` | 导出 R18 公开请求 DTO 使用的默认 source、page、favorited 与 page_index 选择算法 |
 | `R18Service.cppm` | 导出 R18 service facade 的 Bearer/source-admin 鉴权、导入 payload 与响应状态判定 |

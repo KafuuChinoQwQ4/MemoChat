@@ -11,9 +11,16 @@ namespace memochat::r18
 
 extern const char* const kPicacgSourceId;
 
-bool PicacgSearch(const std::string& keyword, int page, json::JsonValue* out, std::string* error);
+bool PicacgSearch(const std::string& keyword,
+                  int page,
+                  const std::string& sort,
+                  const std::string& tag,
+                  json::JsonValue* out,
+                  std::string* error);
 bool PicacgSearchWithToken(const std::string& keyword,
                            int page,
+                           const std::string& sort,
+                           const std::string& tag,
                            const std::string& token,
                            json::JsonValue* out,
                            std::string* error);

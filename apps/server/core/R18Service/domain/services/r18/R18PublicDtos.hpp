@@ -19,6 +19,10 @@ struct R18SearchRequestDto
     std::string source_id;
     std::string keyword;
     int page = 1;
+    // Source-native sort key (e.g. jm: mr/mv_t, picacg: dd/ld, nhentai: popular-today).
+    std::string sort;
+    // Optional tag/category filter; adapters map it to upstream query/body fields.
+    std::string tag;
 };
 
 struct R18ComicDetailRequestDto

@@ -32,6 +32,12 @@ add_library(GateR18Core STATIC
 memochat_configure_gate_core_lib(GateR18Core)
 target_include_directories(GateR18Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain/services)
 target_link_libraries(GateR18Core PUBLIC GateInfraCore)
+find_library(MEMOCHAT_TURBOJPEG_LIB turbojpeg)
+if(MEMOCHAT_TURBOJPEG_LIB)
+    target_link_libraries(GateR18Core PUBLIC ${MEMOCHAT_TURBOJPEG_LIB})
+else()
+    message(FATAL_ERROR "libturbojpeg is required for JM image unscrambling")
+endif()
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(GateR18Core
         MODULES

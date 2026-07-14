@@ -103,6 +103,8 @@ R18SearchRequestDto R18SearchRequestFromJsonValue(const memochat::json::JsonValu
     const bool has_page = root.isMember("page");
     const auto page = static_cast<int>(memochat::json::glaze_safe_get<int64_t>(root, "page", kDefaultR18Page));
     request.page = public_dto::modules::SelectPageOrDefault(has_page, page, kDefaultR18Page);
+    request.sort = memochat::json::glaze_safe_get<std::string>(root, "sort", "");
+    request.tag = memochat::json::glaze_safe_get<std::string>(root, "tag", "");
     return request;
 }
 
