@@ -4,6 +4,8 @@ export const ENDPOINTS = {
   getVarifyCode:    "/get_varifycode",
   register:         "/user_register",
   login:            "/user_login",
+  authRefresh:      "/auth/refresh",
+  authLogout:       "/auth/logout",
   resetPwd:         "/reset_pwd",
   getUserInfo:      "/get_user_info",
   updateProfile:    "/user_update_profile",

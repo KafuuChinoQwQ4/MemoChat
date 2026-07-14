@@ -177,6 +177,35 @@ TEST(AuthPublicDtosTest, DecodesLogoutRequestWithDefaults)
     EXPECT_TRUE(minimal.all_devices);
 }
 
+TEST(AuthPublicDtosTest, ExtractsWebRefreshCookieWithoutAcceptingPartialNames)
+{
+    const auto refresh_token = ValidRefreshToken();
+    const std::string cookies = "theme=dark; __Host-memochat_refresh=" + refresh_token + "; locale=zh-CN";
+
+    EXPECT_EQ(gateauthsupport::ExtractWebRefreshTokenCookie(cookies), refresh_token);
+    EXPECT_TRUE(gateauthsupport::ExtractWebRefreshTokenCookie("other__Host-memochat_refresh=" + refresh_token).empty());
+    EXPECT_TRUE(gateauthsupport::ExtractWebRefreshTokenCookie("theme=dark").empty());
+}
+
+TEST(AuthPublicDtosTest, BuildsPersistentAndClearingWebRefreshCookies)
+{
+    const auto refresh_token = ValidRefreshToken();
+    const auto persistent = gateauthsupport::BuildWebRefreshTokenCookie(refresh_token, 3600);
+
+    EXPECT_NE(persistent.find("__Host-memochat_refresh=" + refresh_token), std::string::npos);
+    EXPECT_NE(persistent.find("Path=/"), std::string::npos);
+    EXPECT_NE(persistent.find("Max-Age=3600"), std::string::npos);
+    EXPECT_NE(persistent.find("HttpOnly"), std::string::npos);
+    EXPECT_NE(persistent.find("Secure"), std::string::npos);
+    EXPECT_NE(persistent.find("SameSite=Strict"), std::string::npos);
+    EXPECT_TRUE(gateauthsupport::BuildWebRefreshTokenCookie("invalid", 3600).empty());
+
+    const auto clearing = gateauthsupport::ClearWebRefreshTokenCookie();
+    EXPECT_NE(clearing.find("__Host-memochat_refresh="), std::string::npos);
+    EXPECT_NE(clearing.find("Max-Age=0"), std::string::npos);
+    EXPECT_NE(clearing.find("HttpOnly"), std::string::npos);
+}
+
 TEST(AuthPublicDtosTest, DecodesProfileUpdateAndRequiredKeys)
 {
     memochat::json::JsonValue parsed;

@@ -57,7 +57,7 @@ TEST(AuthServiceAlgorithmsTest, TransportLiteralsAndSelection)
     EXPECT_STREQ(PreferredTransport(false, false), "tcp");
 }
 
-TEST(AuthServiceAlgorithmsTest, BrowserMarkerSuppressesRefreshTokenIssuanceOnlyForExactWebValue)
+TEST(AuthServiceAlgorithmsTest, BrowserMarkerKeepsRefreshTokenOutOfJsonBody)
 {
     using memochat::tests::account::auth_service::ShouldIssueRefreshToken;
 
