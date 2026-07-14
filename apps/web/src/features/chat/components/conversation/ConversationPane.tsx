@@ -16,6 +16,9 @@ import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import type { RichMessage } from "@/core/entities/entityTypes"
+import { GroupManagementPanel } from "@/features/group/components/GroupManagementPanel"
+import { useGroupManagement } from "@/features/group/hooks/useGroupManagement"
+import { useGroupMembers } from "@/features/group/hooks/useGroupMembers"
 
 interface ConversationPaneProps {
   peerId: number
@@ -117,6 +120,16 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
   const [firstUnreadClientMsgId, setFirstUnreadClientMsgId] = useState<string | null>(null)
   const [jumpingToUnread, setJumpingToUnread] = useState(false)
   const [readyToShow, setReadyToShow] = useState(false)
+  const [groupManageOpen, setGroupManageOpen] = useState(false)
+  const friendsList = useMemo(() => Array.from(friendsMap.values()), [friendsMap])
+  const selectedGroup = selectedIsGroup ? groupsMap.get(peerId) : undefined
+  const groupManagement = useGroupManagement(selectedIsGroup ? peerId : null)
+  const groupMembers = useGroupMembers(selectedGroup, friendsList, messages)
+  const pendingGroupApplies = useEntityStore((s) => s.pendingGroupApplies)
+
+  useEffect(() => {
+    setGroupManageOpen(false)
+  }, [peerId, selectedIsGroup])
   const peerTitle = useMemo(() => {
     const dialogTitle = dialogsMap.get(peerId)?.title?.trim()
     if (selectedIsGroup) {
@@ -530,6 +543,7 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
   return (
     <div
       style={{
+        position: "relative",
         height: "100%",
         display: "flex",
         flexDirection: "column",
@@ -577,6 +591,15 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
           {peerTitle}
         </div>
         <div style={{ position: "relative", zIndex: 1, display: "flex", gap: 6, alignItems: "center" }}>
+          {selectedIsGroup ? (
+            <GlassButton
+              type="button"
+              onClick={() => setGroupManageOpen(true)}
+              style={{ padding: "5px 9px", fontSize: 12 }}
+            >
+              群管理
+            </GlassButton>
+          ) : null}
           <GlassButton
             type="button"
             onClick={() => void runSmartAction("summary")}
@@ -775,6 +798,24 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
 
       {/* Composer */}
       <ComposerBar onSend={handleSend} />
+
+      {selectedIsGroup && selectedGroup ? (
+        <GroupManagementPanel
+          group={selectedGroup}
+          friends={friendsList}
+          members={groupMembers}
+          pendingApplies={pendingGroupApplies}
+          open={groupManageOpen}
+          statusText={groupManagement.statusText}
+          statusError={groupManagement.statusError}
+          busy={groupManagement.busy}
+          onClose={() => {
+            setGroupManageOpen(false)
+            groupManagement.clearStatus()
+          }}
+          actions={groupManagement.actions}
+        />
+      ) : null}
     </div>
   )
 }

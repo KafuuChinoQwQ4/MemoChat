@@ -3,7 +3,7 @@
  * All features access entities through ports, not direct import of this store.
  */
 import { create } from "zustand"
-import type { Friend, Group, DialogEntry, RichMessage, ApplyEntry } from "./entityTypes"
+import type { Friend, Group, DialogEntry, RichMessage, ApplyEntry, GroupApplyEntry } from "./entityTypes"
 
 interface EntitiesState {
   users: Map<number, { uid: number; name: string; email: string; icon: string }>
@@ -14,6 +14,8 @@ interface EntitiesState {
   /** keyed by peerId → array of messages (newest last) */
   messages: Map<number, RichMessage[]>
   applyList: ApplyEntry[]
+  /** Pending group join applies for current user as reviewer */
+  pendingGroupApplies: GroupApplyEntry[]
   /** IsLoadConFin equivalent — true when all pages loaded */
   dialogListFinished: boolean
 }
@@ -35,6 +37,7 @@ interface EntitiesActions {
   setDialogDraft(peerId: number, draft: string): void
   setDialogPinned(peerId: number, pinned: boolean): void
   clearDialogUnread(peerId: number): void
+  removeDialog(peerId: number): void
 
   // Message actions
   appendMessage(peerId: number, msg: RichMessage): void
@@ -47,6 +50,11 @@ interface EntitiesActions {
   // Apply list
   setApplyList(list: ApplyEntry[]): void
   appendApply(entry: ApplyEntry): void
+
+  // Group apply list
+  setPendingGroupApplies(list: GroupApplyEntry[]): void
+  upsertPendingGroupApply(entry: GroupApplyEntry): void
+  removePendingGroupApply(applyId: number): void
 
   // Reset (on logout)
   reset(): void
@@ -65,6 +73,7 @@ const INITIAL: EntitiesState = {
   dialogs: new Map(),
   messages: new Map(),
   applyList: [],
+  pendingGroupApplies: [],
   dialogListFinished: false,
 }
 
@@ -126,6 +135,13 @@ export const useEntityStore = create<EntitiesState & EntitiesActions>((set, get)
       }
       return {}
     }),
+  removeDialog: (peerId) =>
+    set((s) => {
+      if (!s.dialogs.has(peerId)) return {}
+      const m = new Map(s.dialogs)
+      m.delete(peerId)
+      return { dialogs: m }
+    }),
 
   appendMessage: (peerId, msg) =>
     set((s) => {
@@ -177,6 +193,17 @@ export const useEntityStore = create<EntitiesState & EntitiesActions>((set, get)
 
   setApplyList: (list) => set({ applyList: list }),
   appendApply: (entry) => set((s) => ({ applyList: [...s.applyList, entry] })),
+
+  setPendingGroupApplies: (list) => set({ pendingGroupApplies: list }),
+  upsertPendingGroupApply: (entry) =>
+    set((s) => {
+      const others = s.pendingGroupApplies.filter((item) => item.applyId !== entry.applyId)
+      return { pendingGroupApplies: [...others, entry] }
+    }),
+  removePendingGroupApply: (applyId) =>
+    set((s) => ({
+      pendingGroupApplies: s.pendingGroupApplies.filter((item) => item.applyId !== applyId),
+    })),
 
   reset: () => set({ ...INITIAL }),
 

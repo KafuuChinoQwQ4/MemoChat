@@ -1,6 +1,6 @@
 /**
  * IconSidebar — 72px vertical icon navigation bar.
- * Mirrors desktop QML tab icon bar (chat/contacts/groups/moments/agent/settings).
+ * Mirrors desktop QML tab icon bar (chat/contacts/moments/agent/settings).
  */
 import { useNavigate, useLocation } from "react-router-dom"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
@@ -8,7 +8,7 @@ import { useSessionStore } from "@/core/session/sessionStore"
 import { cn } from "@/shared/lib/classnames"
 import { logoutTeardown } from "@/app/bootstrap/logoutTeardown"
 
-type IconName = "chat" | "contacts" | "groups" | "moments" | "r18" | "agent" | "settings" | "logout"
+type IconName = "chat" | "contacts" | "moments" | "r18" | "agent" | "settings" | "logout"
 
 interface NavItem {
   path: string
@@ -19,7 +19,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { path: "/app/chat",     label: "消息",  icon: "chat"     },
   { path: "/app/contacts", label: "联系人", icon: "contacts" },
-  { path: "/app/groups",   label: "群组",  icon: "groups"   },
   { path: "/app/moments",  label: "朋友圈", icon: "moments"  },
   { path: "/app/r18",      label: "R18",   icon: "r18"      },
   { path: "/app/agent",    label: "AI助手", icon: "agent"    },
@@ -55,14 +54,6 @@ function SimpleIcon({ name, size = 22 }: { name: IconName; size?: number }) {
           <path d="M4.8 18.5c.6-3.1 2.4-4.7 5.2-4.7s4.6 1.6 5.2 4.7" />
           <path d="M15.4 6.3c1.7.3 2.8 1.6 2.8 3.2 0 1.2-.6 2.3-1.5 2.8" />
           <path d="M16.7 14.4c1.5.6 2.5 1.9 2.9 4.1" />
-        </svg>
-      )
-    case "groups":
-      return (
-        <svg {...common}>
-          <path d="M6.5 9.4 12 5.8l5.5 3.6v7.4c0 1-.7 1.7-1.7 1.7H8.2c-1 0-1.7-.7-1.7-1.7Z" />
-          <path d="M10 18.4v-4.5h4v4.5" />
-          <path d="M4.2 11.1 12 6l7.8 5.1" />
         </svg>
       )
     case "moments":

@@ -1,5 +1,5 @@
 /** MomentsShellContent — moments feed */
-import { useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type TransitionEvent as ReactTransitionEvent } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { ENDPOINTS } from "@/core/config/endpoints"
@@ -42,6 +42,7 @@ interface MomentItem {
   createdAt: number
   likeCount: number
   commentCount: number
+  hasLiked?: boolean
 }
 
 interface MomentContentItem {
@@ -61,6 +62,8 @@ interface MomentDto {
   created_at: number
   like_count: number
   comment_count: number
+  has_liked?: boolean
+  liked?: boolean
   user_id?: string
   user_name?: string
   user_nick?: string
@@ -167,6 +170,7 @@ function mapMoment(item: MomentDto): MomentItem {
     createdAt: Number(item.created_at || 0),
     likeCount: Math.max(0, Number(item.like_count ?? 0)),
     commentCount: Math.max(0, Number(item.comment_count ?? 0)),
+    hasLiked: Boolean(item.has_liked ?? item.liked),
   }
 }
 
@@ -206,6 +210,36 @@ function previewTextStyle(text: string): CSSProperties {
     WebkitLineClamp: TEXT_PREVIEW_MAX_LINES,
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
+  }
+}
+
+interface SourceRect {
+  top: number
+  left: number
+  width: number
+  height: number
+}
+
+function readSourceRect(el: HTMLElement | null): SourceRect | null {
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return null
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+function targetExpandRect(viewportWidth: number, viewportHeight: number): SourceRect {
+  const maxWidth = Math.min(560, Math.max(320, viewportWidth - 48))
+  const maxHeight = Math.min(720, Math.max(360, viewportHeight - 48))
+  return {
+    width: maxWidth,
+    height: maxHeight,
+    left: Math.round((viewportWidth - maxWidth) / 2),
+    top: Math.round((viewportHeight - maxHeight) / 2),
   }
 }
 
@@ -359,81 +393,150 @@ function MomentMediaBlocks({
   )
 }
 
-function MomentDetailOverlay({ moment, onClose }: { moment: MomentItem; onClose: () => void }) {
+function MomentExpandOverlay({
+  moment,
+  sourceRect,
+  onClose,
+}: {
+  moment: MomentItem
+  sourceRect: SourceRect
+  onClose: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const target = targetExpandRect(
+    typeof window !== "undefined" ? window.innerWidth : 1200,
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  )
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setExpanded(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") requestClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function requestClose() {
+    if (closing) return
+    setClosing(true)
+    setExpanded(false)
+  }
+
+  function handleTransitionEnd(event: ReactTransitionEvent<HTMLDivElement>) {
+    if (event.target !== panelRef.current) return
+    if (!closing) return
+    if (event.propertyName !== "width" && event.propertyName !== "transform" && event.propertyName !== "top") {
+      return
+    }
+    onClose()
+  }
+
+  const active = expanded && !closing
+  const geometry = active ? target : sourceRect
+
   return (
     <div
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      aria-label="动态全文"
+      onClick={requestClose}
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 80,
-        padding: 24,
-        display: "grid",
-        placeItems: "center",
-        background: "rgba(2, 6, 12, 0.58)",
-        backdropFilter: "blur(14px)",
+        zIndex: 90,
+        background: active ? "rgba(2, 6, 12, 0.42)" : "rgba(2, 6, 12, 0)",
+        backdropFilter: active ? "blur(8px)" : "blur(0px)",
+        transition: "background 220ms ease, backdrop-filter 220ms ease",
       }}
     >
-      <GlassSurface
-        elevated
+      <div
+        ref={panelRef}
         onClick={(event) => event.stopPropagation()}
+        onTransitionEnd={handleTransitionEnd}
         style={{
-          width: "min(760px, calc(100vw - 48px))",
-          maxHeight: "min(780px, calc(100vh - 48px))",
-          padding: 18,
-          borderRadius: 18,
+          position: "fixed",
+          top: geometry.top,
+          left: geometry.left,
+          width: geometry.width,
+          height: geometry.height,
+          borderRadius: active ? 18 : 12,
           overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
+          boxShadow: active
+            ? "0 24px 64px rgba(0,0,0,0.28), 0 8px 24px rgba(0,0,0,0.16)"
+            : "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)",
+          transition:
+            "top 240ms cubic-bezier(0.2, 0.85, 0.2, 1), left 240ms cubic-bezier(0.2, 0.85, 0.2, 1), width 240ms cubic-bezier(0.2, 0.85, 0.2, 1), height 240ms cubic-bezier(0.2, 0.85, 0.2, 1), border-radius 240ms ease, box-shadow 240ms ease",
+          willChange: "top, left, width, height",
+          zIndex: 91,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-          <Avatar src={moment.authorIcon} name={moment.authorName} size={40} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{moment.authorName}</div>
-            <div style={{ fontSize: 12, color: "var(--text-disabled)", marginTop: 2 }}>
-              {formatMessageTime(moment.createdAt)}
-              {moment.location ? ` · ${moment.location}` : ""}
+        <GlassSurface
+          elevated
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "inherit",
+            padding: active ? 18 : 15,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            transition: "padding 240ms ease",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexShrink: 0 }}>
+            <Avatar src={moment.authorIcon} name={moment.authorName} size={active ? 40 : 36} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: active ? 15 : 14, fontWeight: 700 }}>{moment.authorName}</div>
+              <div style={{ fontSize: 12, color: "var(--text-disabled)", marginTop: 2 }}>
+                {formatMessageTime(moment.createdAt)}
+                {moment.location ? ` · ${moment.location}` : ""}
+              </div>
             </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="关闭"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              border: "1px solid var(--divider)",
-              color: "var(--text-secondary)",
-              background: "rgba(255,255,255,0.08)",
-              cursor: "pointer",
-              fontSize: 18,
-            }}
-          >
-            ×
-          </button>
-        </div>
-        <div style={{ overflowY: "auto", paddingRight: 4 }}>
-          {moment.content ? (
-            <p
+            <button
+              type="button"
+              onClick={requestClose}
+              aria-label="关闭"
               style={{
-                fontSize: 15,
-                lineHeight: 1.72,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "anywhere",
-                color: "var(--text-primary)",
-                margin: 0,
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                border: "1px solid var(--divider)",
+                color: "var(--text-secondary)",
+                background: "rgba(255,255,255,0.08)",
+                cursor: "pointer",
+                fontSize: 18,
               }}
             >
-              {moment.content}
-            </p>
-          ) : null}
-          <MomentMediaBlocks media={moment.media} full />
-        </div>
-      </GlassSurface>
+              ×
+            </button>
+          </div>
+          <div style={{ overflowY: "auto", paddingRight: 4, minHeight: 0, flex: 1 }}>
+            {moment.content ? (
+              <p
+                style={{
+                  fontSize: active ? 15 : 14,
+                  lineHeight: 1.72,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                  color: "var(--text-primary)",
+                  margin: 0,
+                }}
+              >
+                {moment.content}
+              </p>
+            ) : null}
+            <MomentMediaBlocks media={moment.media} full />
+          </div>
+        </GlassSurface>
+      </div>
     </div>
   )
 }
@@ -442,12 +545,21 @@ export function MomentsShellContent() {
   const uid = useSessionStore((s) => s.uid)
   const token = useSessionStore((s) => s.token)
   const queryClient = useQueryClient()
-  const [selectedMoment, setSelectedMoment] = useState<MomentItem | null>(null)
+  const [expandedMoment, setExpandedMoment] = useState<{
+    moment: MomentItem
+    sourceRect: SourceRect
+  } | null>(null)
+  const cardRefs = useRef<Map<string, HTMLElement>>(new Map())
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
+  const [commentOpenIds, setCommentOpenIds] = useState<Set<string>>(() => new Set())
+  const [actionBusyIds, setActionBusyIds] = useState<Set<string>>(() => new Set())
+  const [actionStatus, setActionStatus] = useState("")
   const [draftText, setDraftText] = useState("")
   const [draftLocation, setDraftLocation] = useState("")
   const [visibility, setVisibility] = useState(0)
   const [publishing, setPublishing] = useState(false)
   const [publishStatus, setPublishStatus] = useState("")
+  const likedOptimisticRef = useRef<Map<string, boolean>>(new Map())
   const { data, isLoading, error } = useQuery({
     queryKey: ["moments", "feed", uid],
     enabled: uid !== null && token !== null,
@@ -499,6 +611,135 @@ export function MomentsShellContent() {
     }
   }
 
+
+  function setBusy(momentId: string, busy: boolean) {
+    setActionBusyIds((prev) => {
+      const next = new Set(prev)
+      if (busy) next.add(momentId)
+      else next.delete(momentId)
+      return next
+    })
+  }
+
+  function patchMomentInCache(momentId: string, patch: Partial<MomentItem>) {
+    queryClient.setQueryData<MomentItem[]>(["moments", "feed", uid], (prev) => {
+      if (!prev) return prev
+      return prev.map((item) => (item.id === momentId ? { ...item, ...patch } : item))
+    })
+  }
+
+  function openMomentExpand(moment: MomentItem) {
+    const sourceRect = readSourceRect(cardRefs.current.get(moment.id) ?? null)
+      ?? targetExpandRect(window.innerWidth, window.innerHeight)
+    setExpandedMoment({ moment, sourceRect })
+  }
+
+  function closeMomentExpand() {
+    setExpandedMoment(null)
+  }
+
+  function toggleCommentComposer(momentId: string) {
+    setCommentOpenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(momentId)) next.delete(momentId)
+      else next.add(momentId)
+      return next
+    })
+    setActionStatus("")
+  }
+
+  async function toggleLike(item: MomentItem) {
+    if (uid === null || token === null) {
+      setActionStatus("登录状态无效，请重新登录")
+      return
+    }
+    if (actionBusyIds.has(item.id)) return
+
+    const previousLiked = likedOptimisticRef.current.get(item.id) ?? Boolean(item.hasLiked)
+    const previousCount = item.likeCount
+    const nextLiked = !previousLiked
+    const nextCount = Math.max(0, previousCount + (nextLiked ? 1 : -1))
+    likedOptimisticRef.current.set(item.id, nextLiked)
+    patchMomentInCache(item.id, { hasLiked: nextLiked, likeCount: nextCount })
+    setBusy(item.id, true)
+    setActionStatus(nextLiked ? "点赞中..." : "取消点赞中...")
+    try {
+      const response = await getGateway().http.post<{
+        error?: number
+        code?: number
+        message?: string
+        like_count?: number
+        liked?: boolean
+        has_liked?: boolean
+      }>(
+        ENDPOINTS.momentsLike,
+        {
+          moment_id: Number(item.id),
+          like: nextLiked,
+        },
+      )
+      const errorCode = response.error ?? response.code ?? 0
+      if (errorCode !== 0) {
+        likedOptimisticRef.current.set(item.id, previousLiked)
+        patchMomentInCache(item.id, { hasLiked: previousLiked, likeCount: previousCount })
+        setActionStatus(response.message?.trim() || `点赞失败，错误码 ${errorCode}`)
+        return
+      }
+      const serverLiked = typeof response.has_liked === "boolean"
+        ? response.has_liked
+        : typeof response.liked === "boolean"
+          ? response.liked
+          : nextLiked
+      const serverCount = typeof response.like_count === "number" ? Math.max(0, response.like_count) : nextCount
+      likedOptimisticRef.current.set(item.id, serverLiked)
+      patchMomentInCache(item.id, { hasLiked: serverLiked, likeCount: serverCount })
+      setActionStatus(serverLiked ? "已点赞" : "已取消点赞")
+    } catch (err) {
+      likedOptimisticRef.current.set(item.id, previousLiked)
+      patchMomentInCache(item.id, { hasLiked: previousLiked, likeCount: previousCount })
+      setActionStatus(err instanceof Error ? err.message : "点赞失败")
+    } finally {
+      setBusy(item.id, false)
+    }
+  }
+
+  async function submitComment(item: MomentItem) {
+    if (uid === null || token === null) {
+      setActionStatus("登录状态无效，请重新登录")
+      return
+    }
+    const content = (commentDrafts[item.id] ?? "").trim()
+    if (!content) {
+      setActionStatus("先写一点评论")
+      return
+    }
+    if (actionBusyIds.has(item.id)) return
+    setBusy(item.id, true)
+    setActionStatus("评论发送中...")
+    try {
+      const response = await getGateway().http.post<{ error?: number; code?: number; message?: string }>(
+        ENDPOINTS.momentsComment,
+        {
+          moment_id: Number(item.id),
+          content,
+          reply_uid: 0,
+        },
+      )
+      const errorCode = response.error ?? response.code ?? 0
+      if (errorCode !== 0) {
+        setActionStatus(response.message?.trim() || `评论失败，错误码 ${errorCode}`)
+        return
+      }
+      patchMomentInCache(item.id, { commentCount: item.commentCount + 1 })
+      setCommentDrafts((prev) => ({ ...prev, [item.id]: "" }))
+      setActionStatus("评论已发送")
+    } catch (err) {
+      setActionStatus(err instanceof Error ? err.message : "评论失败")
+    } finally {
+      setBusy(item.id, false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -527,6 +768,9 @@ export function MomentsShellContent() {
         {/* Header */}
         <div style={{ marginBottom: 18, animation: "fade-up 200ms ease both" }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>朋友圈</h2>
+          {actionStatus ? (
+            <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)" }}>{actionStatus}</div>
+          ) : null}
         </div>
 
         <GlassSurface
@@ -631,13 +875,22 @@ export function MomentsShellContent() {
             }}
           >
             {items.map((item, idx) => (
-            <GlassSurface
+            <div
               key={item.id}
+              ref={(node) => {
+                if (node) cardRefs.current.set(item.id, node)
+                else cardRefs.current.delete(item.id)
+              }}
               style={{
                 display: "inline-block",
                 width: "100%",
                 breakInside: "avoid",
                 margin: "0 0 12px",
+              }}
+            >
+            <GlassSurface
+              style={{
+                width: "100%",
                 padding: "15px 16px",
                 borderRadius: 12,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)",
@@ -677,7 +930,10 @@ export function MomentsShellContent() {
                   {hasTextPreviewOverflow(item.content) ? (
                     <button
                       type="button"
-                      onClick={() => setSelectedMoment(item)}
+                      onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+                        event.stopPropagation()
+                        openMomentExpand(item)
+                      }}
                       style={{
                         marginTop: 8,
                         padding: 0,
@@ -698,9 +954,12 @@ export function MomentsShellContent() {
                 </p>
               ) : null}
 
-              <MomentMediaBlocks media={item.media} onOpen={() => setSelectedMoment(item)} />
+              <MomentMediaBlocks
+                media={item.media}
+                onOpen={() => openMomentExpand(item)}
+              />
 
-              {/* Metrics */}
+              {/* Metrics / actions */}
               <div style={{
                 marginTop: 12,
                 paddingTop: 10,
@@ -708,22 +967,119 @@ export function MomentsShellContent() {
                 fontSize: 12,
                 color: "var(--text-secondary)",
                 display: "flex",
-                gap: 16,
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
               }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void toggleLike(item)
+                  }}
+                  disabled={actionBusyIds.has(item.id)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    border: 0,
+                    background: "transparent",
+                    color: item.hasLiked
+                      ? "var(--color-badge, #ff6b8a)"
+                      : "var(--text-secondary)",
+                    cursor: actionBusyIds.has(item.id) ? "not-allowed" : "pointer",
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    font: "inherit",
+                    fontSize: 12,
+                  }}
+                >
                   <HeartIcon /> {item.likeCount}
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    toggleCommentComposer(item.id)
+                  }}
+                  disabled={actionBusyIds.has(item.id)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    border: 0,
+                    background: "transparent",
+                    color: commentOpenIds.has(item.id) ? "#86b7ff" : "var(--text-secondary)",
+                    cursor: actionBusyIds.has(item.id) ? "not-allowed" : "pointer",
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    font: "inherit",
+                    fontSize: 12,
+                  }}
+                >
                   <CommentIcon /> {item.commentCount}
-                </span>
+                </button>
               </div>
+
+              {commentOpenIds.has(item.id) ? (
+                <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                  <textarea
+                    value={commentDrafts[item.id] ?? ""}
+                    onChange={(event) =>
+                      setCommentDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                    }
+                    placeholder="写评论..."
+                    aria-label={`评论动态 ${item.id}`}
+                    maxLength={1000}
+                    rows={2}
+                    style={{
+                      width: "100%",
+                      resize: "vertical",
+                      border: "1px solid var(--divider)",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      background: "rgba(255,255,255,0.10)",
+                      color: "var(--text-primary)",
+                      font: "inherit",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <GlassButton
+                      type="button"
+                      variant="primary"
+                      disabled={actionBusyIds.has(item.id) || !(commentDrafts[item.id] ?? "").trim()}
+                      onClick={() => void submitComment(item)}
+                      style={{ flex: 1 }}
+                    >
+                      发送评论
+                    </GlassButton>
+                    <GlassButton
+                      type="button"
+                      disabled={actionBusyIds.has(item.id)}
+                      onClick={() => toggleCommentComposer(item.id)}
+                      style={{ flex: 1 }}
+                    >
+                      取消
+                    </GlassButton>
+                  </div>
+                </div>
+              ) : null}
             </GlassSurface>
+            </div>
             ))}
           </div>
         )}
       </div>
-      {selectedMoment ? (
-        <MomentDetailOverlay moment={selectedMoment} onClose={() => setSelectedMoment(null)} />
+
+      {expandedMoment ? (
+        <MomentExpandOverlay
+          moment={expandedMoment.moment}
+          sourceRect={expandedMoment.sourceRect}
+          onClose={closeMomentExpand}
+        />
       ) : null}
     </GlassScrollArea>
   )

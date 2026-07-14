@@ -15,8 +15,7 @@ const RegisterPage = lazy(() => import("@/features/auth/components/RegisterPage"
 const ResetPage    = lazy(() => import("@/features/auth/components/ResetPage").then((m) => ({ default: m.ResetPage })))
 const AppShell     = lazy(() => import("./shell/AppShell").then((m) => ({ default: m.AppShell })))
 const ChatTab      = lazy(() => import("@/features/chat/components/ChatShellContent").then((m) => ({ default: m.ChatShellContent })))
-const ContactTab   = lazy(() => import("@/features/contact/components/ContactShellContent").then((m) => ({ default: m.ContactShellContent })))
-const GroupTab     = lazy(() => import("@/features/group/components/GroupShellContent").then((m) => ({ default: m.GroupShellContent })))
+const ContactTab   = lazy(() => import("./shell/ContactsHubContent").then((m) => ({ default: m.ContactsHubContent })))
 const MomentsTab   = lazy(() => import("@/features/moments/components/MomentsShellContent").then((m) => ({ default: m.MomentsShellContent })))
 const R18Tab       = lazy(() => import("@/features/r18/components/R18ShellContent").then((m) => ({ default: m.R18ShellContent })))
 const AgentTab     = lazy(() => import("@/features/agent/components/AgentShellContent").then((m) => ({ default: m.AgentShellContent })))
@@ -46,7 +45,6 @@ const router = createHashRouter([
           { index: true, element: <Navigate to="/app/chat" replace /> },
           { path: "chat",     element: <Suspense fallback={<PageFallback />}><ChatTab /></Suspense> },
           { path: "contacts", element: <Suspense fallback={<PageFallback />}><ContactTab /></Suspense> },
-          { path: "groups",   element: <Suspense fallback={<PageFallback />}><GroupTab /></Suspense> },
           { path: "moments",  element: <Suspense fallback={<PageFallback />}><MomentsTab /></Suspense> },
           { path: "r18",      element: <Suspense fallback={<PageFallback />}><R18Tab /></Suspense> },
           { path: "agent",    element: <Suspense fallback={<PageFallback />}><AgentTab /></Suspense> },

@@ -16,6 +16,10 @@ import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
+import { GroupManagementPanel } from "@/features/group/components/GroupManagementPanel"
+import { useGroupManagement } from "@/features/group/hooks/useGroupManagement"
+import { useGroupMembers } from "@/features/group/hooks/useGroupMembers"
+import { groupContactsByInitial } from "@/shared/lib/contactListGrouping"
 
 const USER_ID_PATTERN = /^u[1-9][0-9]{8}$/
 
@@ -38,6 +42,14 @@ export function GroupShellContent() {
   const friendsMap = useEntityStore((s) => s.friends)
   const uid = useSessionStore((s) => s.uid) ?? 0
   const groups = useMemo(() => Array.from(groupsMap.values()), [groupsMap])
+  const groupedGroups = useMemo(
+    () => groupContactsByInitial(groups, groupDisplayName),
+    [groups],
+  )
+  const orderedGroups = useMemo(
+    () => groupedGroups.flatMap((group) => group.items),
+    [groupedGroups],
+  )
   const friends = useMemo(() => Array.from(friendsMap.values()), [friendsMap])
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -47,6 +59,15 @@ export function GroupShellContent() {
   const [statusText, setStatusText] = useState("")
   const selectedGroup = groups.find((g) => g.groupId === selectedGroupId) ?? null
   const gateway = useMemo(() => getGateway(), [])
+  const [manageOpen, setManageOpen] = useState(false)
+  const groupManagement = useGroupManagement(selectedGroupId)
+  const messagesMap = useEntityStore((s) => s.messages)
+  const groupMessages = useMemo(
+    () => (selectedGroupId ? messagesMap.get(selectedGroupId) ?? [] : []),
+    [messagesMap, selectedGroupId],
+  )
+  const members = useGroupMembers(selectedGroup, friends, groupMessages)
+  const pendingGroupApplies = useEntityStore((s) => s.pendingGroupApplies)
 
   useEffect(() => {
     if (groups.length === 0) {
@@ -54,9 +75,13 @@ export function GroupShellContent() {
       return
     }
     if (selectedGroupId === null || !groups.some((g) => g.groupId === selectedGroupId)) {
-      setSelectedGroupId(groups[0]?.groupId ?? null)
+      setSelectedGroupId(orderedGroups[0]?.groupId ?? null)
     }
-  }, [groups, selectedGroupId])
+  }, [groups, orderedGroups, selectedGroupId])
+
+  useEffect(() => {
+    setManageOpen(false)
+  }, [selectedGroupId])
 
   useEffect(() => {
     return gateway.dispatcher.subscribe(ReqId.ID_CREATE_GROUP_RSP, (frame) => {
@@ -141,6 +166,7 @@ export function GroupShellContent() {
   return (
     <div
       style={{
+        position: "relative",
         display: "grid",
         gridTemplateColumns: "280px minmax(0, 1fr)",
         height: "100%",
@@ -151,7 +177,7 @@ export function GroupShellContent() {
     >
       <GlassScrollArea style={{ borderRight: "1px solid var(--divider)", padding: "10px 8px" }}>
         <div style={{ padding: "6px 10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>群组</div>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>群聊</div>
           <GlassButton
             type="button"
             onClick={() => setCreateOpen((value) => !value)}
@@ -242,32 +268,54 @@ export function GroupShellContent() {
             {statusText}
           </div>
         ) : null}
-        {groups.map((g) => {
-          const name = groupDisplayName(g)
-          return (
-            <button
-              key={g.groupId}
-              onClick={() => setSelectedGroupId(g.groupId)}
+        {groupedGroups.map((group) => (
+          <section key={group.initial} aria-label={`${group.initial} 组`}>
+            <div
+              role="heading"
+              aria-level={2}
               style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 12px", border: "none",
-                background: g.groupId === selectedGroupId ? "var(--tint-selected)" : "transparent",
-                cursor: "pointer", width: "100%", textAlign: "left", borderRadius: 8,
-                color: "var(--text-primary)",
+                position: "sticky",
+                top: 0,
+                zIndex: 2,
+                padding: "7px 10px 5px",
+                background: "color-mix(in srgb, var(--sidebar-bg) 88%, transparent)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                color: "var(--text-secondary)",
+                fontSize: 11,
+                fontWeight: 700,
               }}
             >
-              <Avatar src={g.icon} name={name} size={38} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-                {g.memberCount && (
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{g.memberCount} 人</div>
-                )}
-              </div>
-            </button>
-          )
-        })}
+              {group.initial}
+            </div>
+            {group.items.map((currentGroup) => {
+              const name = groupDisplayName(currentGroup)
+              return (
+                <button
+                  key={currentGroup.groupId}
+                  onClick={() => setSelectedGroupId(currentGroup.groupId)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 12px", border: "none",
+                    background: currentGroup.groupId === selectedGroupId ? "var(--tint-selected)" : "transparent",
+                    cursor: "pointer", width: "100%", textAlign: "left", borderRadius: 8,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <Avatar src={currentGroup.icon} name={name} size={38} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                    {currentGroup.memberCount && (
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{currentGroup.memberCount} 人</div>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </section>
+        ))}
         {groups.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--text-disabled)", padding: 24, fontSize: 13 }}>暂无群组</div>
+          <div style={{ textAlign: "center", color: "var(--text-disabled)", padding: 24, fontSize: 13 }}>暂无群聊</div>
         )}
       </GlassScrollArea>
 
@@ -291,7 +339,7 @@ export function GroupShellContent() {
                   size={64}
                   style={{ boxShadow: "0 10px 30px rgba(0,0,0,0.10)" }}
                 />
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{groupDisplayName(selectedGroup)}</div>
                   <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-secondary)" }}>
                     {(selectedGroup.memberCount ?? 0) > 0 ? `${selectedGroup.memberCount} 人` : "成员数未知"}
@@ -300,6 +348,13 @@ export function GroupShellContent() {
                     群号: {groupPublicIdText(selectedGroup.groupCode)}
                   </div>
                 </div>
+                <GlassButton
+                  type="button"
+                  onClick={() => setManageOpen(true)}
+                  style={{ padding: "8px 12px", fontSize: 13, flexShrink: 0 }}
+                >
+                  群管理
+                </GlassButton>
               </div>
               <div style={{ height: 1, background: "var(--divider)", margin: "24px 0" }} />
               <div style={{ display: "grid", gap: 12, maxWidth: 560 }}>
@@ -317,11 +372,29 @@ export function GroupShellContent() {
             </>
           ) : (
             <div style={{ margin: "auto", color: "var(--text-disabled)", fontSize: 14 }}>
-              选择群组查看详情
+              选择群聊查看详情
             </div>
           )}
         </GlassSurface>
       </div>
+
+      {selectedGroup ? (
+        <GroupManagementPanel
+          group={selectedGroup}
+          friends={friends}
+          members={members}
+          pendingApplies={pendingGroupApplies}
+          open={manageOpen}
+          statusText={groupManagement.statusText}
+          statusError={groupManagement.statusError}
+          busy={groupManagement.busy}
+          onClose={() => {
+            setManageOpen(false)
+            groupManagement.clearStatus()
+          }}
+          actions={groupManagement.actions}
+        />
+      ) : null}
     </div>
   )
 }
