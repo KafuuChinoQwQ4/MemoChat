@@ -248,6 +248,65 @@ export function registerChatRoutes(dispatcher: ChatMessageDispatcher): () => voi
     applyGroupListPayload(frame.payload)
   }))
 
+  // Group management success side-effects (desktop GroupManagementResponseService parity)
+  const handleGroupManagementRsp = (reqId: ReqId, payload: string) => {
+    const data = parseWireObject(payload)
+    if (!data || fieldNumber(data, "error") !== 0) return
+    const groupId = fieldNumber(data, "groupid", "group_id")
+    if (reqId === ReqId.ID_UPDATE_GROUP_ICON_RSP && groupId > 0) {
+      const icon = fieldString(data, "icon")
+      if (icon) {
+        const existing = useEntityStore.getState().groups.get(groupId)
+        if (existing) useEntityStore.getState().upsertGroup({ ...existing, icon })
+        const dialog = useEntityStore.getState().dialogs.get(groupId)
+        if (dialog?.isGroup) useEntityStore.getState().upsertDialog({ ...dialog, avatar: icon })
+      }
+    }
+    if (reqId === ReqId.ID_UPDATE_GROUP_ANNOUNCEMENT_RSP && groupId > 0) {
+      const announcement = fieldString(data, "announcement")
+      const existing = useEntityStore.getState().groups.get(groupId)
+      if (existing) {
+        useEntityStore.getState().upsertGroup({
+          ...existing,
+          ...(announcement ? { announcement } : {}),
+        })
+      }
+    }
+    if (reqId === ReqId.ID_REVIEW_GROUP_APPLY_RSP) {
+      const applyId = fieldNumber(data, "apply_id")
+      if (applyId > 0) useEntityStore.getState().removePendingGroupApply(applyId)
+      if (groupId > 0) {
+        // Refresh group metadata after accept/reject via list request is handled by UI hooks.
+      }
+    }
+    if (reqId === ReqId.ID_QUIT_GROUP_RSP || reqId === ReqId.ID_DISSOLVE_GROUP_RSP) {
+      if (groupId > 0) {
+        useEntityStore.getState().removeGroup(groupId)
+        useEntityStore.getState().removeDialog(groupId)
+        const chat = useChatStore.getState()
+        if (chat.selectedPeerId === groupId && chat.selectedIsGroup) {
+          chat.reset()
+        }
+      }
+    }
+  }
+
+  for (const reqId of [
+    ReqId.ID_INVITE_GROUP_MEMBER_RSP,
+    ReqId.ID_REVIEW_GROUP_APPLY_RSP,
+    ReqId.ID_UPDATE_GROUP_ANNOUNCEMENT_RSP,
+    ReqId.ID_UPDATE_GROUP_ICON_RSP,
+    ReqId.ID_MUTE_GROUP_MEMBER_RSP,
+    ReqId.ID_SET_GROUP_ADMIN_RSP,
+    ReqId.ID_KICK_GROUP_MEMBER_RSP,
+    ReqId.ID_QUIT_GROUP_RSP,
+    ReqId.ID_DISSOLVE_GROUP_RSP,
+  ] as const) {
+    unsubs.push(dispatcher.subscribe(reqId, (frame) => {
+      handleGroupManagementRsp(reqId, frame.payload)
+    }))
+  }
+
   unsubs.push(dispatcher.subscribe(ReqId.ID_GET_DIALOG_LIST_RSP, (frame) => {
     applyDialogListPayload(frame.payload)
   }))

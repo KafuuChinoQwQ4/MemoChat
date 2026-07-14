@@ -4,12 +4,14 @@ import { useEntityStore } from "@/core/entities/entityStore"
 import { useSessionStore } from "@/core/session/sessionStore"
 import { ReqId } from "@/core/network/opcodes/reqIds"
 import { displayNameWithoutInternalId, publicUserIdText } from "@/core/entities/displayIds"
+import type { Friend } from "@/core/entities/entityTypes"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
+import { groupContactsByInitial } from "@/shared/lib/contactListGrouping"
 
 const USER_ID_PATTERN = /^u[1-9][0-9]{8}$/
 
@@ -45,12 +47,47 @@ function parseSearchUser(payload: string): SearchUserResult | null {
   }
 }
 
+function friendDisplayName(friend: Friend): string {
+  return displayNameWithoutInternalId(friend.name, friend.userId, friend.uid, "未知用户")
+}
+
+function ContactInitialHeader({ initial }: { initial: string }) {
+  return (
+    <div
+      role="heading"
+      aria-level={2}
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 2,
+        padding: "7px 10px 5px",
+        background: "color-mix(in srgb, var(--sidebar-bg) 88%, transparent)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        color: "var(--text-secondary)",
+        fontSize: 11,
+        fontWeight: 700,
+      }}
+    >
+      {initial}
+    </div>
+  )
+}
+
 export function ContactShellContent() {
   const friendsMap = useEntityStore((s) => s.friends)
   const applyList = useEntityStore((s) => s.applyList)
   const uid = useSessionStore((s) => s.uid) ?? 0
   const profile = useSessionStore((s) => s.profile)
   const friends = useMemo(() => Array.from(friendsMap.values()), [friendsMap])
+  const groupedFriends = useMemo(
+    () => groupContactsByInitial(friends, friendDisplayName),
+    [friends],
+  )
+  const orderedFriends = useMemo(
+    () => groupedFriends.flatMap((group) => group.items),
+    [groupedFriends],
+  )
   const pendingApplies = useMemo(
     () => applyList.filter((item) => item.status === "pending"),
     [applyList],
@@ -70,9 +107,9 @@ export function ContactShellContent() {
       return
     }
     if (selectedUid === null || !friends.some((f) => f.uid === selectedUid)) {
-      setSelectedUid(friends[0]?.uid ?? null)
+      setSelectedUid(orderedFriends[0]?.uid ?? null)
     }
-  }, [friends, selectedUid])
+  }, [friends, orderedFriends, selectedUid])
 
   useEffect(() => {
     const unsubs = [
@@ -165,7 +202,7 @@ export function ContactShellContent() {
     >
       {/* Friend list sidebar */}
       <GlassScrollArea style={{ borderRight: "1px solid var(--divider)", padding: "10px 8px" }}>
-        <div style={{ padding: "6px 10px 12px", fontWeight: 700, fontSize: 16 }}>联系人</div>
+        <div style={{ padding: "6px 10px 12px", fontWeight: 700, fontSize: 16 }}>好友</div>
         <GlassSurface style={{ padding: 10, margin: "0 0 10px", borderRadius: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>添加好友</div>
           <div style={{ display: "grid", gap: 8 }}>
@@ -263,37 +300,42 @@ export function ContactShellContent() {
           </GlassSurface>
         ) : null}
 
-        {friends.map((f) => {
-          const name = displayNameWithoutInternalId(f.name, f.userId, f.uid, "未知用户")
-          return (
-            <button
-              key={f.uid}
-              onClick={() => setSelectedUid(f.uid)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 12px",
-                border: "none",
-                background: f.uid === selectedUid ? "var(--tint-selected)" : "transparent",
-                cursor: "pointer",
-                width: "100%",
-                textAlign: "left",
-                borderRadius: 10,
-                color: "var(--text-primary)",
-                transition: "background 140ms ease, transform 120ms ease",
-              }}
-            >
-              <Avatar src={f.icon} name={name} size={38} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {publicUserIdText(f.userId)}
-                </div>
-              </div>
-            </button>
-          )
-        })}
+        {groupedFriends.map((group) => (
+          <section key={group.initial} aria-label={`${group.initial} 组`}>
+            <ContactInitialHeader initial={group.initial} />
+            {group.items.map((friend) => {
+              const name = friendDisplayName(friend)
+              return (
+                <button
+                  key={friend.uid}
+                  onClick={() => setSelectedUid(friend.uid)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    border: "none",
+                    background: friend.uid === selectedUid ? "var(--tint-selected)" : "transparent",
+                    cursor: "pointer",
+                    width: "100%",
+                    textAlign: "left",
+                    borderRadius: 10,
+                    color: "var(--text-primary)",
+                    transition: "background 140ms ease, transform 120ms ease",
+                  }}
+                >
+                  <Avatar src={friend.icon} name={name} size={38} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {publicUserIdText(friend.userId)}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </section>
+        ))}
         {friends.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--text-disabled)", padding: 24, fontSize: 13 }}>暂无好友</div>
         )}
@@ -316,13 +358,13 @@ export function ContactShellContent() {
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <Avatar
                   src={selectedFriend.icon}
-                  name={displayNameWithoutInternalId(selectedFriend.name, selectedFriend.userId, selectedFriend.uid, "未知用户")}
+                  name={friendDisplayName(selectedFriend)}
                   size={64}
                   style={{ boxShadow: "0 10px 30px rgba(0,0,0,0.10)" }}
                 />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>
-                    {displayNameWithoutInternalId(selectedFriend.name, selectedFriend.userId, selectedFriend.uid, "未知用户")}
+                    {friendDisplayName(selectedFriend)}
                   </div>
                   <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-secondary)" }}>
                     {publicUserIdText(selectedFriend.userId)}

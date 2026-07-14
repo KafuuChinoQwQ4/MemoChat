@@ -4,6 +4,7 @@ import type { ChatTransport } from "@/core/network/transport/ChatTransport"
 import { ReqId } from "@/core/network/opcodes/reqIds"
 import { ENDPOINTS } from "@/core/config/endpoints"
 import { genClientMsgId } from "@/shared/lib/id"
+import { normalizeAdminPermissionBits } from "@/app/dispatch/chatListPayloads"
 
 export type SmartFeatureType = "summary" | "suggest" | "translate"
 
@@ -59,6 +60,103 @@ export function createChatApi(transport: ChatTransport, _http: HttpClient) {
     /** Fetch group list */
     fetchGroupList(fromUid: number) {
       transport.send(ReqId.ID_GET_GROUP_LIST_REQ, JSON.stringify({ fromuid: fromUid }))
+    },
+
+    /** Invite a user into a group by public user id */
+    inviteGroupMember(fromUid: number, groupId: number, targetUserId: string, reason = "") {
+      transport.send(ReqId.ID_INVITE_GROUP_MEMBER_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        target_user_id: targetUserId.trim(),
+        reason: reason.trim(),
+      }))
+    },
+
+    /** Review a pending group join apply (desktop ID_REVIEW_GROUP_APPLY_REQ) */
+    reviewGroupApply(fromUid: number, applyId: number, agree: boolean) {
+      transport.send(ReqId.ID_REVIEW_GROUP_APPLY_REQ, JSON.stringify({
+        fromuid: fromUid,
+        apply_id: applyId,
+        agree,
+      }))
+    },
+
+    /** Kick a group member by public user id */
+    kickGroupMember(fromUid: number, groupId: number, targetUserId: string) {
+      transport.send(ReqId.ID_KICK_GROUP_MEMBER_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        target_user_id: targetUserId.trim(),
+      }))
+    },
+
+    /** Quit a group (non-owner) */
+    quitGroup(fromUid: number, groupId: number) {
+      transport.send(ReqId.ID_QUIT_GROUP_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+      }))
+    },
+
+    /** Dissolve a group (owner only) */
+    dissolveGroup(fromUid: number, groupId: number) {
+      transport.send(ReqId.ID_DISSOLVE_GROUP_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+      }))
+    },
+
+    /** Update group announcement */
+    updateGroupAnnouncement(fromUid: number, groupId: number, announcement: string) {
+      transport.send(ReqId.ID_UPDATE_GROUP_ANNOUNCEMENT_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        announcement: announcement.slice(0, 1000),
+      }))
+    },
+
+    /** Update group icon URL after media upload */
+    updateGroupIcon(fromUid: number, groupId: number, icon: string) {
+      transport.send(ReqId.ID_UPDATE_GROUP_ICON_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        icon,
+      }))
+    },
+
+    /** Promote/demote a group admin with desktop permission bits */
+    setGroupAdmin(
+      fromUid: number,
+      groupId: number,
+      targetUserId: string,
+      isAdmin: boolean,
+      permissionBits = 0,
+    ) {
+      const bits = normalizeAdminPermissionBits(isAdmin, permissionBits)
+      transport.send(ReqId.ID_SET_GROUP_ADMIN_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        target_user_id: targetUserId.trim(),
+        is_admin: isAdmin,
+        permission_bits: bits,
+        can_change_group_info: isAdmin && (bits & 1) !== 0,
+        can_delete_messages: isAdmin && (bits & 2) !== 0,
+        can_invite_users: isAdmin && (bits & 4) !== 0,
+        can_manage_admins: isAdmin && (bits & 8) !== 0,
+        can_pin_messages: isAdmin && (bits & 16) !== 0,
+        can_ban_users: isAdmin && (bits & 32) !== 0,
+        can_manage_topics: isAdmin && (bits & 64) !== 0,
+      }))
+    },
+
+    /** Mute/unmute a group member (muteSeconds=0 means unmute) */
+    muteGroupMember(fromUid: number, groupId: number, targetUserId: string, muteSeconds: number) {
+      transport.send(ReqId.ID_MUTE_GROUP_MEMBER_REQ, JSON.stringify({
+        fromuid: fromUid,
+        groupid: groupId,
+        target_user_id: targetUserId.trim(),
+        mute_seconds: Math.max(0, Math.floor(muteSeconds) || 0),
+      }))
     },
 
     /** Run desktop-equivalent smart chat features through the AI gateway */

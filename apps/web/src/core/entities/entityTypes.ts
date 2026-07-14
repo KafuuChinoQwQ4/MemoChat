@@ -22,6 +22,15 @@ export interface Group {
   announcement?: string
   isMuted?: boolean
   role?: "owner" | "admin" | "member"
+  /** Desktop-aligned permission bitfield from group list / management responses */
+  permissionBits?: number
+  canChangeInfo?: boolean
+  canDeleteMessages?: boolean
+  canInviteUsers?: boolean
+  canManageAdmins?: boolean
+  canPinMessages?: boolean
+  canBanUsers?: boolean
+  canManageTopics?: boolean
 }
 
 export interface DialogEntry {
@@ -74,4 +83,26 @@ export interface ApplyEntry {
   nick?: string
   desc?: string
   labels?: string[]
+}
+
+export interface GroupApplyEntry {
+  applyId: number
+  groupId: number
+  groupCode?: string
+  applicantUid: number
+  applicantUserId?: string
+  inviterUid?: number
+  inviterUserId?: string
+  type?: number
+  status?: number
+  reason?: string
+}
+
+export interface GroupMemberEntry {
+  uid: number
+  userId?: string
+  name: string
+  icon?: string
+  role?: "owner" | "admin" | "member"
+  source: "self" | "friend" | "message" | "apply"
 }

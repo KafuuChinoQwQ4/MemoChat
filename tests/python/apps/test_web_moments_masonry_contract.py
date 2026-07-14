@@ -32,7 +32,7 @@ class WebMomentsMasonryContractTests(unittest.TestCase):
         self.assertIn("textParts.push(content)", map_body)
         self.assertIn("media,", map_body)
 
-    def test_feed_cards_preview_long_text_and_media_before_detail_overlay(self):
+    def test_feed_cards_preview_long_text_and_media_before_expand_overlay(self):
         source = read(MOMENTS_COMPONENT)
 
         for token in (
@@ -44,8 +44,8 @@ class WebMomentsMasonryContractTests(unittest.TestCase):
             "maxHeight: full ? undefined : MEDIA_PREVIEW_MAX_HEIGHT",
             "查看全文",
             "查看全部",
-            "function MomentDetailOverlay",
-            "setSelectedMoment(item)",
+            "function MomentExpandOverlay",
+            "openMomentExpand(item)",
             "content: textContent || location",
         ):
             with self.subTest(token=token):
@@ -54,11 +54,11 @@ class WebMomentsMasonryContractTests(unittest.TestCase):
     def test_feed_keeps_masonry_columns_and_renders_media_urls(self):
         source = read(MOMENTS_COMPONENT)
 
-        self.assertIn('import { resolveMediaUrl } from "@/shared/media/mediaUrl"', source)
+        self.assertIn('import { useMediaUrl } from "@/shared/hooks/useMediaUrl"', source)
         self.assertIn("columnWidth: 236", source)
         self.assertIn('breakInside: "avoid"', source)
         self.assertIn("src={source}", source)
-        self.assertIn("resolveMediaUrl(full ? media.mediaKey : media.previewKey)", source)
+        self.assertIn("useMediaUrl(full ? media.mediaKey : media.previewKey)", source)
         self.assertIn("内容未保存，请重新发布", source)
 
 
