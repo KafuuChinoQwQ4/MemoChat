@@ -1,0 +1,107 @@
+# =============================================================================
+# MemoChat Commit Message 规范 (Conventional Commits)
+# 启用: git config commit.template .gitmessage
+# 提交: git commit  （不要用 -m，删除全部 # 行后填写）
+# =============================================================================
+#
+# 格式
+# ----
+#   <type>(<scope>): <description>
+#
+#   [body]
+#
+#   [footer]
+#
+# Header（必填）
+#   type        必填，见下方类型表
+#   scope       可选，小写模块名，多模块用逗号: feat(web,r18):
+#   !           可选，紧跟 type/scope 后表示破坏性变更: feat(api)!:
+#   description 祈使语气现在时 (add/fix/update，非 added/fixed)
+#               首字母小写，无句末句号，整行建议 ≤ 72 字符
+#               type 与描述之间必须是 ": "（冒号+空格）
+#
+# Body（可选）  与 header 空一行；写为什么/怎么做/取舍；每行建议 ≤ 72
+# Footer（可选）与 body 空一行；一行一个:
+#               BREAKING CHANGE: <迁移说明>
+#               Closes #123 | Fixes #123 | Refs #123
+#               Co-authored-by: Name <email>
+#
+# =============================================================================
+# type
+# =============================================================================
+#
+# feat      新功能（用户/调用方可见的新行为、API、UI）
+# fix       缺陷修复（错误行为、崩溃、数据不一致）
+# docs      仅文档（README、注释型文档、.md）
+# style     纯格式（空格/缩进/分号/格式化），不影响逻辑
+#           注意: 不是 CSS/UI 样式；视觉改动用 feat/fix
+# refactor  重构：非 feat、非 fix，行为应保持等价
+# perf      以性能为主要目标（延迟/CPU/内存/IO/渲染）
+# test      仅测试（用例、夹具、mock、e2e），生产代码无行为变更
+# build     构建与依赖（CMake、npm、Docker 构建、qrc、工具链）
+# ci        CI/CD 配置与脚本（Actions、流水线、缓存）
+# chore     杂项维护（.gitignore、脚手架、仓库卫生）；能归到上面的别用 chore
+# revert    回滚提交，description 写被回滚的原 header
+#
+# 可选扩展（非必须）:
+#   build(deps) / chore(deps)  依赖升降级
+#   fix(security) 或 security  安全修复
+#   chore(release)            发版
+#   wip                       仅临时分支，禁止合入 main
+#
+# =============================================================================
+# scope（本项目常用）
+# =============================================================================
+#
+# 客户端: web | desktop | r18 | mobile
+# 服务端: server | chat | account | call | ai | gateway
+# 横切:   auth | proto | db | media | config | deps
+#
+# =============================================================================
+# 示例
+# =============================================================================
+#
+# feat(web): add contact hub and social controls
+#
+# fix(auth): restore web sessions with secure cookies
+#
+# Session cookies lost Secure after the proxy change.
+# Set Secure + SameSite=Lax and align cookie path.
+#
+# Closes #128
+#
+# feat(proto)!: drop legacy source feed protocol
+#
+# BREAKING CHANGE: clients older than v2 must upgrade before R18 feeds.
+#
+# refactor(server): isolate account DB reads behind a seam
+#
+# revert: feat(r18): add source-native infinite browsing
+#
+# This reverts commit bd5d3a5e.
+#
+# build(server): wire ChatAccountDirectory into ChatServer
+#
+# chore: add .gitmessage commit template
+#
+# =============================================================================
+# 禁止
+# =============================================================================
+#
+# × 空/"update"/"fix"/"改了一点"          ✓ fix(auth): handle expired token
+# × 过去式 feat: added button              ✓ feat(web): add login button
+# × 句末句号 / 漏空格 feat:add             ✓ feat(web): add login button
+# × 一次提交塞多个无关改动                  ✓ 拆成 feat / fix / docs
+# × 中文 type、issue 号当 scope、main 上 wip
+#
+# 自检: type 合法？ scope 准？祈使+小写+无句号？有破坏性则 ! 或 BREAKING CHANGE？
+#
+# =============================================================================
+# 编辑区（删掉上方所有 # 行后填写）
+# =============================================================================
+#
+# <type>(<scope>): <description>
+#
+# <body>
+#
+# <footer>
