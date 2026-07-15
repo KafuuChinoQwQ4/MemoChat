@@ -664,14 +664,26 @@ set(MEMOCHAT_GATE_APP_INCLUDE_DIRS
 
 # Apply the shared settings every gate *app/domain* library (the framework
 # runtime core + each Gate<X>Domain route library) needs.
+#
+# Links only the LEAN infra base every gate app needs — GateInfraConfig (which
+# pulls GateInfraRuntime: ConfigMgr, GateGlobals, the IO pool, the readiness-probe
+# contract) — NOT the full GateInfraCore facade. This is what stops the framework
+# from force-linking persistence/cache/clients into every service: the domain-
+# server bootstrap no longer references any concrete DB/Redis manager, so a domain
+# that actually touches a database (Moments, ...) now declares that slice itself
+# instead of inheriting libpq/mongoc/bson silently through the framework. AWS is
+# kept here because GateDomainServer owns the process-wide Aws::InitAPI lifecycle.
 function(memochat_configure_gate_app_lib target_name)
     set_target_properties(${target_name} PROPERTIES FOLDER "Server/GateShared")
     memochat_configure_server_target(${target_name})
     target_include_directories(${target_name} PUBLIC ${MEMOCHAT_GATE_APP_INCLUDE_DIRS})
     target_link_libraries(${target_name} PUBLIC
-        GateInfraCore
+        GateInfraConfig
         memochat_boost_stubs
     )
+    if(AWSSDK_FOUND)
+        target_link_libraries(${target_name} PUBLIC aws-cpp-sdk-s3)
+    endif()
 endfunction()
 
 function(memochat_configure_gate_focused_service target_name)

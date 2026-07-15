@@ -18,6 +18,8 @@
 | `MongoDao.h` | Mongo DAO 接口声明。 |
 | `MongoMgr.cpp` | MongoDB 连接管理实现。 |
 | `MongoMgr.h` | Mongo 连接管理接口声明。 |
+| `PersistenceReadinessProbes.cpp` | Postgres/Mongo 启动就绪探针工厂实现（仅本切片引用具体 Mgr 单例）。 |
+| `PersistenceReadinessProbes.hpp` | 持久化层就绪探针工厂声明，供各服务 main() 注入到共享启动流程。 |
 | `PostgresDao.cpp` | PostgreSQL 通用 DAO 实现，包含媒体资产/下载 grant、通话和朋友圈持久化。 |
 | `PostgresDao.hpp` | Postgres DAO 接口声明。 |
 | `PostgresDaoAccount.cpp` | Postgres 账户相关 DAO 实现，包含密码更新、R18 成人确认/撤销不变量及 refresh token 轮换、吊销与活跃复查。 |

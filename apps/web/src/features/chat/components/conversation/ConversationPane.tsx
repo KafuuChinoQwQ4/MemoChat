@@ -275,6 +275,9 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
     let cancelled = false
     if (myUid <= 0 || peerId <= 0) return () => { cancelled = true }
 
+    // Capture the generation at effect start so a fast peer/account switch
+    // cannot leave loadingHistory=true forever when an older request finishes
+    // after a newer one already started (or after logout cleared the store).
     useChatStore.getState().setLoadingHistory(true)
     void hydrateConversation(myUid, peerId)
       .catch((err: unknown) => {
@@ -282,6 +285,11 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
       })
       .finally(() => {
         if (cancelled) return
+        // Only the still-active conversation may kick off the network history
+        // pull; otherwise a stale peer's response would clear loadingHistory
+        // for the conversation the user just opened.
+        const chat = useChatStore.getState()
+        if (chat.selectedPeerId !== peerId || chat.selectedIsGroup !== selectedIsGroup) return
         if (selectedIsGroup) {
           api.fetchGroupHistory(myUid, peerId)
         } else {
@@ -289,7 +297,15 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
         }
       })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      // If we leave before the history response arrives, drop the spinner so
+      // the next conversation does not inherit a stuck loadingHistory flag.
+      const chat = useChatStore.getState()
+      if (chat.selectedPeerId !== peerId) {
+        chat.setLoadingHistory(false)
+      }
+    }
   }, [api, myUid, peerId, selectedIsGroup])
 
   // Pin to latest before paint on hydrate/history growth. Never animate open.

@@ -175,7 +175,8 @@ Item {
                     { name: "禁漫天堂 JMComic",  subtitle: "内置官方适配器 · 直连 JM API · 可选账号登入",     sourceId: "jm.official" },
                     { name: "哔咔漫画 Picacg",   subtitle: "内置官方适配器 · 直连 Picacg API · 需要账号登入", sourceId: "picacg.official" },
                     { name: "nHentai",           subtitle: "内置适配器 · 直连 nhentai.net",                 sourceId: "nhentai.official" },
-                    { name: "e-hentai",          subtitle: "内置适配器 · 直连 e-hentai.org · 可选 Cookie", sourceId: "ehentai.official" }
+                    { name: "e-hentai",          subtitle: "内置适配器 · 直连 e-hentai.org · 可选 Cookie", sourceId: "ehentai.official" },
+                    { name: "exhentai",          subtitle: "内置适配器 · 直连 exhentai.org · 必须 E-Hentai 登录", sourceId: "exhentai.official" }
                 ]
 
                 delegate: Rectangle {

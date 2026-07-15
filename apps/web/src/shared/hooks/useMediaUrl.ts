@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from "react"
 import { isAuthorizedMediaUrl, resolveMediaUrl } from "@/shared/media/mediaUrl"
+import { loadMediaAuthUrl, peekMediaAuthCache } from "@/shared/media/mediaAuthCache"
 import { useSessionStore } from "@/core/session/sessionStore"
 
 /** Resolves media URLs and fetches protected media with Authorization headers. */
 export function useMediaUrl(ref: string | undefined | null): string {
   const token = useSessionStore((s) => s.token)
   const resolved = useMemo(() => (ref ? resolveMediaUrl(ref) : ""), [ref])
-  const initialUrl = useMemo(() => (resolved && !isAuthorizedMediaUrl(resolved) ? resolved : ""), [resolved])
-  const [url, setUrl] = useState(initialUrl)
+
+  // Seed from the process-wide cache so remounts (dialog switch) paint instantly
+  // without a blank frame while a new fetch would otherwise start.
+  const [url, setUrl] = useState(() => {
+    if (!resolved) return ""
+    if (!isAuthorizedMediaUrl(resolved)) return resolved
+    if (!token) return ""
+    return peekMediaAuthCache(resolved, token) ?? ""
+  })
 
   useEffect(() => {
     if (!resolved) {
@@ -23,32 +31,28 @@ export function useMediaUrl(ref: string | undefined | null): string {
       return
     }
 
-    const controller = new AbortController()
-    let objectUrl = ""
-    setUrl("")
-    // Use `resolved` directly (relative or absolute) so the Vite dev proxy
-    // can intercept relative paths like /media/download — avoids the
-    // the synthetic URL parsing base used when VITE_MEDIA_BASE_URL is unset.
-    fetch(resolved, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`media fetch failed: ${response.status}`)
-        return response.blob()
-      })
-      .then((blob) => {
-        if (controller.signal.aborted) return
-        objectUrl = URL.createObjectURL(blob)
-        setUrl(objectUrl)
+    const cached = peekMediaAuthCache(resolved, token)
+    if (cached) {
+      setUrl(cached)
+      return
+    }
+
+    let cancelled = false
+    // Keep previous paint if we already have a URL for this ref; otherwise blank
+    // until the fetch lands (first mount only).
+    setUrl((prev) => prev)
+    void loadMediaAuthUrl(resolved, token)
+      .then((objectUrl) => {
+        if (!cancelled && objectUrl) setUrl(objectUrl)
       })
       .catch(() => {
-        if (!controller.signal.aborted) setUrl("")
+        if (!cancelled) setUrl("")
       })
 
     return () => {
-      controller.abort()
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      cancelled = true
+      // Do NOT revoke the blob here — the shared cache owns its lifetime so
+      // switching conversations can reuse the same object URL.
     }
   }, [resolved, token])
 

@@ -497,7 +497,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraSupport", cmake)
         self.assertIn(
             "memochat.gate.user_token_validator_algorithms=support/cxx_modules/UserTokenValidator.cppm",
             cmake,
@@ -549,7 +549,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraCache", cmake)
         self.assertIn(
             "memochat.gate.redis_pipeline_algorithms=cache/cxx_modules/RedisPipeline.cppm",
             cmake,
@@ -595,7 +595,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraCache", cmake)
         self.assertIn(
             "memochat.gate.redis_mgr_algorithms=cache/cxx_modules/RedisMgr.cppm",
             cmake,
@@ -649,7 +649,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraPersistence", cmake)
         self.assertIn(
             "memochat.gate.postgres_dao_algorithms=persistence/cxx_modules/PostgresDao.cppm",
             cmake,
@@ -705,7 +705,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraPersistence", cmake)
         self.assertIn(
             "memochat.gate.postgres_dao_account_algorithms=persistence/cxx_modules/PostgresDaoAccount.cppm",
             cmake,
@@ -766,7 +766,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraPersistence", cmake)
         self.assertIn(
             "memochat.gate.mongo_dao_algorithms=persistence/cxx_modules/MongoDao.cppm",
             cmake,
@@ -822,7 +822,7 @@ DEPFILE
         )
         test_cmake = read(REPO_ROOT / "tests" / "cpp" / "apps" / "server" / "core" / "GateShared" / "CMakeLists.txt")
 
-        self.assertIn("memochat_enable_gnu_modules(GateInfraCore", cmake)
+        self.assertIn("memochat_enable_gnu_modules(GateInfraClients", cmake)
         self.assertIn(
             "memochat.gate.chat_grpc_client_algorithms=clients/cxx_modules/ChatGrpcClient.cppm",
             cmake,

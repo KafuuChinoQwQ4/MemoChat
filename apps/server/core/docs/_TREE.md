@@ -8,6 +8,7 @@
 | --- | --- |
 | `database-ownership.md` | 各服务数据库/数据所有权划分说明 |
 | `gate-compatibility-inventory.md` | GateServer 拆分的兼容性接口清单 |
+| `gateshared-layering.md` | GateShared 基础设施分层契约:六个 infra 切片 + INTERFACE 门面 + 探针解耦 |
 | `media-access-control.md` | 媒体资源访问控制设计 |
 | `secret-management.md` | 密钥与凭据管理规范 |
 

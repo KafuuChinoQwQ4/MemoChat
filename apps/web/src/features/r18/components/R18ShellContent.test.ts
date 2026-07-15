@@ -17,8 +17,12 @@ describe("R18 source availability", () => {
     ["picacg.official", "required-account"],
     ["jm.official", "optional-account"],
     ["ehentai.official", "optional-cookie"],
+    ["exhentai.official", "required-ehentai-auth"],
     ["nhentai.official", "none"],
   ])("maps %s to an actionable account mode", (sourceId, expected) => {
-    expect(accountInteractionKind({ source_id: sourceId, auth_required: sourceId === "picacg.official" })).toBe(expected)
+    expect(accountInteractionKind({
+      source_id: sourceId,
+      auth_required: sourceId === "picacg.official" || sourceId === "exhentai.official",
+    })).toBe(expected)
   })
 })

@@ -1,4 +1,5 @@
 #include "PostgresDao.hpp"
+#include "ChatAccountDirectory.hpp"
 #include "db/PqxxCompat.hpp"
 #include <chrono>
 #include <iostream>
@@ -455,7 +456,8 @@ bool PostgresDao::GetGroupHistory(const int64_t& group_id,
             author_uids.push_back(m->from_uid);
         }
     }
-    auto authors = GetUsersByUids(author_uids);
+    // Account profile enrichment goes through the isolation seam (finding #3).
+    auto authors = AccountDirectory().GetManyByUids(author_uids);
     for (auto& m : messages)
     {
         if (!m)

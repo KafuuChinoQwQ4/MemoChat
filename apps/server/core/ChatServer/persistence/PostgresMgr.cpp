@@ -43,30 +43,6 @@ const std::string& PostgresMgr::startupError() const noexcept
     return _dao == nullptr ? unavailable : _dao->startupError();
 }
 
-int PostgresMgr::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
-{
-    EnsurePostgresDaoInitialized(this);
-    return _dao->RegUser(name, email, pwd);
-}
-
-bool PostgresMgr::CheckEmail(const std::string& name, const std::string& email)
-{
-    EnsurePostgresDaoInitialized(this);
-    return _dao->CheckEmail(name, email);
-}
-
-bool PostgresMgr::UpdatePwd(const std::string& email, const std::string& pwd)
-{
-    EnsurePostgresDaoInitialized(this);
-    return _dao->UpdatePwd(email, pwd);
-}
-
-bool PostgresMgr::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo)
-{
-    EnsurePostgresDaoInitialized(this);
-    return _dao->CheckPwd(name, pwd, userInfo);
-}
-
 bool PostgresMgr::AddFriendApply(const int& from, const int& to)
 {
     EnsurePostgresDaoInitialized(this);
@@ -124,6 +100,12 @@ std::shared_ptr<UserInfo> PostgresMgr::GetUser(std::string name)
 {
     EnsurePostgresDaoInitialized(this);
     return _dao->GetUser(name);
+}
+
+std::unordered_map<int, std::shared_ptr<UserInfo>> PostgresMgr::GetUsersByUids(const std::vector<int>& uids)
+{
+    EnsurePostgresDaoInitialized(this);
+    return _dao->GetUsersByUids(uids);
 }
 
 bool PostgresMgr::GetUidByUserId(const std::string& user_id, int& uid)

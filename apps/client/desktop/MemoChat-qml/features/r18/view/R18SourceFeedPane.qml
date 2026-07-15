@@ -12,6 +12,11 @@ Item {
     property string keyword: ""
     property int comicCount: 0
     property bool loading: false
+    property var sortOptions: []
+    property var tagOptions: []
+    property string selectedSort: ""
+    property string selectedTag: ""
+    property bool filtersExpanded: true
     property color fieldFillColor: Qt.rgba(1, 1, 1, 0.16)
     property color fieldStrokeColor: Qt.rgba(1, 1, 1, 0.38)
     property color textPrimaryColor: "#263241"
@@ -25,12 +30,17 @@ Item {
     property color secondaryButtonColor: Qt.rgba(0.54, 0.70, 0.93, 0.22)
     property color secondaryButtonHoverColor: Qt.rgba(0.54, 0.70, 0.93, 0.32)
     property color secondaryButtonPressedColor: Qt.rgba(0.54, 0.70, 0.93, 0.40)
+    property color chipFillColor: Qt.rgba(1, 1, 1, 0.14)
+    property color chipActiveFillColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
+    property color chipBorderColor: Qt.rgba(1, 1, 1, 0.38)
 
     readonly property bool sourceSelected: currentSourceId.length > 0
 
     signal keywordEdited(string keyword)
     signal refreshRequested()
     signal searchRequested()
+    signal sortSelected(string sortId)
+    signal tagSelected(string tagId)
     signal loadMoreProbe(var gridView)
 
     ColumnLayout {
@@ -117,6 +127,76 @@ Item {
                 pressedColor: root.primaryButtonPressedColor
                 enabled: root.sourceSelected
                 onClicked: root.searchRequested()
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            visible: root.filtersExpanded && root.sourceSelected && (root.sortOptions.length > 0 || root.tagOptions.length > 0)
+
+            Text {
+                text: "排序 / 分类（官方）"
+                color: root.textMutedColor
+                font.pixelSize: 12
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: root.sortOptions
+                    delegate: Rectangle {
+                        required property var modelData
+                        width: feedSortLabel.implicitWidth + 18
+                        height: 28
+                        radius: 14
+                        color: (modelData.id || "") === root.selectedSort ? root.chipActiveFillColor : root.chipFillColor
+                        border.color: root.chipBorderColor
+                        Text {
+                            id: feedSortLabel
+                            anchors.centerIn: parent
+                            text: modelData.label || modelData.id || "默认"
+                            color: root.textPrimaryColor
+                            font.pixelSize: 11
+                            font.bold: (modelData.id || "") === root.selectedSort
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.sortSelected(modelData.id || "")
+                        }
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: root.tagOptions
+                    delegate: Rectangle {
+                        required property var modelData
+                        width: feedTagLabel.implicitWidth + 18
+                        height: 28
+                        radius: 14
+                        color: (modelData.id || "") === root.selectedTag ? root.chipActiveFillColor : root.chipFillColor
+                        border.color: root.chipBorderColor
+                        Text {
+                            id: feedTagLabel
+                            anchors.centerIn: parent
+                            text: modelData.label || modelData.id || "全部"
+                            color: root.textPrimaryColor
+                            font.pixelSize: 11
+                            font.bold: (modelData.id || "") === root.selectedTag
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.tagSelected(modelData.id || "")
+                        }
+                    }
+                }
             }
         }
 

@@ -18,7 +18,8 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ComicDetai
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ChapterPagesRequestDto>(
     std::array<std::string_view, 2>{"source_id", "chapter_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18FavoriteToggleRequestDto>(
-    std::array<std::string_view, 3>{"source_id", "comic_id", "favorited"}));
+    std::array<std::string_view,
+               8>{"source_id", "comic_id", "favorited", "title", "cover", "author", "subtitle", "folder_ids"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18HistoryUpdateRequestDto>(
     std::array<std::string_view, 4>{"source_id", "comic_id", "chapter_id", "page_index"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18SourceToggleResponseDto>(
@@ -81,16 +82,25 @@ TEST(R18PublicDtosTest, DecodesDetailAndPagesRequests)
 
 TEST(R18PublicDtosTest, DecodesFavoriteAndHistoryRequestsWithDefaults)
 {
-    const auto favorite = memochat::r18::R18FavoriteToggleRequestFromJsonValue(
-        Parse(R"({"source_id":"s","comic_id":"c","favorited":false})"));
+    const auto favorite = memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(
+        R"({"source_id":"s","comic_id":"c","favorited":false,"title":"T","cover":"C","author":"A","subtitle":"S","folder_ids":["default","fld_1"],"folder_id":"fld_2"})"));
     EXPECT_EQ(favorite.source_id, "s");
     EXPECT_EQ(favorite.comic_id, "c");
     EXPECT_FALSE(favorite.favorited);
+    EXPECT_EQ(favorite.title, "T");
+    EXPECT_EQ(favorite.cover, "C");
+    EXPECT_EQ(favorite.author, "A");
+    EXPECT_EQ(favorite.subtitle, "S");
+    ASSERT_EQ(favorite.folder_ids.size(), 3U);
+    EXPECT_EQ(favorite.folder_ids[0], "default");
+    EXPECT_EQ(favorite.folder_ids[1], "fld_1");
+    EXPECT_EQ(favorite.folder_ids[2], "fld_2");
 
     const auto favorite_defaults = memochat::r18::R18FavoriteToggleRequestFromJsonValue(Parse(R"({})"));
     EXPECT_EQ(favorite_defaults.source_id, "");
     EXPECT_EQ(favorite_defaults.comic_id, "");
     EXPECT_TRUE(favorite_defaults.favorited);
+    EXPECT_TRUE(favorite_defaults.folder_ids.empty());
 
     const auto history = memochat::r18::R18HistoryUpdateRequestFromJsonValue(
         Parse(R"({"source_id":"s","comic_id":"c","chapter_id":"ch","page_index":9})"));

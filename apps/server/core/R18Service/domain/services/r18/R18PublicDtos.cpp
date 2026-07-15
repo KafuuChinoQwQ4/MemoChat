@@ -2,6 +2,8 @@
 
 #include "json/TypedJsonCodec.hpp"
 
+#include <algorithm>
+
 import memochat.r18.public_dto_algorithms;
 
 namespace
@@ -143,6 +145,29 @@ R18FavoriteToggleRequestDto R18FavoriteToggleRequestFromJsonValue(const memochat
     const bool favorited = memochat::json::glaze_safe_get<bool>(root, "favorited", kDefaultR18Favorited);
     request.favorited =
         public_dto::modules::SelectFavoriteStateOrDefault(has_favorited, favorited, kDefaultR18Favorited);
+    request.title = memochat::json::glaze_safe_get<std::string>(root, "title", "");
+    request.cover = memochat::json::glaze_safe_get<std::string>(root, "cover", "");
+    request.author = memochat::json::glaze_safe_get<std::string>(root, "author", "");
+    request.subtitle = memochat::json::glaze_safe_get<std::string>(root, "subtitle", "");
+    request.folder_ids.clear();
+    const auto folders = memochat::json::glaze_get(root, "folder_ids");
+    if (const auto* arr = memochat::json::glaze_get_array(folders))
+    {
+        for (const auto& entry : *arr)
+        {
+            memochat::json::JsonValue v(entry);
+            if (!v.isString())
+                continue;
+            const std::string id = v.asString();
+            if (!id.empty())
+                request.folder_ids.push_back(id);
+        }
+    }
+    // Also accept single folder_id for convenience.
+    const std::string single = memochat::json::glaze_safe_get<std::string>(root, "folder_id", "");
+    if (!single.empty() &&
+        std::find(request.folder_ids.begin(), request.folder_ids.end(), single) == request.folder_ids.end())
+        request.folder_ids.push_back(single);
     return request;
 }
 

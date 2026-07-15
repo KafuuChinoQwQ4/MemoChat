@@ -57,4 +57,11 @@ export const ENDPOINTS = {
   r18AccountLogin:   "/api/r18/account/login",
   r18AccountClear:   "/api/r18/account/clear",
   r18Checkin:        "/api/r18/checkin",
+  r18Library:        "/api/r18/library",
+  r18Favorites:      "/api/r18/favorites",
+  r18FavoriteToggle: "/api/r18/favorite/toggle",
+  r18FavoriteAssign: "/api/r18/favorite/assign",
+  r18FolderCreate:   "/api/r18/folder/create",
+  r18FolderRename:   "/api/r18/folder/rename",
+  r18FolderDelete:   "/api/r18/folder/delete",
 } as const

@@ -10,6 +10,8 @@ import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 
 export function DialogListPanel() {
   const dialogsMap = useEntityStore((s) => s.dialogs)
+  const friendsMap = useEntityStore((s) => s.friends)
+  const groupsMap = useEntityStore((s) => s.groups)
   const dialogs = useMemo(
     () =>
       Array.from(dialogsMap.values()).sort((a, b) => {
@@ -37,9 +39,14 @@ export function DialogListPanel() {
       {/* Conversation items */}
       {dialogs.map((d) => {
         const isActive = d.peerId === selectedPeerId
+        // Prefer dialog fields, fall back to friend/group entity so a dialog-list
+        // row with empty title/avatar still paints after relation bootstrap.
+        const friend = !d.isGroup ? friendsMap.get(d.peerId) : undefined
+        const group = d.isGroup ? groupsMap.get(d.peerId) : undefined
         const title = d.isGroup
-          ? displayNameWithoutInternalId(d.title, undefined, d.peerId, "群聊")
-          : displayNameWithoutInternalId(d.title, undefined, d.peerId, "未知用户")
+          ? displayNameWithoutInternalId(d.title || group?.name, undefined, d.peerId, "群聊")
+          : displayNameWithoutInternalId(d.title || friend?.nick || friend?.name, friend?.userId, d.peerId, "未知用户")
+        const avatar = d.avatar || (d.isGroup ? group?.icon : friend?.icon) || ""
         return (
           <button
             key={d.dialogId ?? `${d.isGroup ? "g" : "u"}_${d.peerId}`}
@@ -66,7 +73,7 @@ export function DialogListPanel() {
               if (!isActive) e.currentTarget.style.background = "transparent"
             }}
           >
-            <Avatar src={d.avatar} name={title} size={42} />
+            <Avatar src={avatar} name={title} size={42} />
             <div style={{ flex: 1, overflow: "hidden" }}>
               <div style={{
                 display: "flex",

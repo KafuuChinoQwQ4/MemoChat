@@ -20,8 +20,8 @@
 | `R18PicacgAdapter.hpp` | Picacg 官方源适配接口声明 |
 | `R18NhentaiAdapter.cpp` | nHentai 官方源搜索（sort/tag）、详情与图片代理适配实现 |
 | `R18NhentaiAdapter.hpp` | nHentai 官方源适配接口声明 |
-| `R18EhentaiAdapter.cpp` | e-hentai 官方源分类（f_cats）/附加 tag 搜索与详情适配实现 |
-| `R18EhentaiAdapter.hpp` | e-hentai 官方源适配接口声明 |
+| `R18EhentaiAdapter.cpp` | e-hentai / exhentai 官方源分类（f_cats）/ 附加 tag 搜索、详情、论坛账密登录与 Cookie 校验实现 |
+| `R18EhentaiAdapter.hpp` | e-hentai / exhentai 官方源适配接口声明 |
 | `R18PublicDtos.cpp` | R18 公开接口请求 DTO 的兼容解析实现 |
 | `R18PublicDtos.hpp` | R18 公开接口请求 DTO 声明 |
 | `R18Service.cpp` | R18 业务服务实现；全局源变更要求 Bearer 与独立 source-admin key，并转发 JM 图片反打乱元数据 |

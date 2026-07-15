@@ -29,19 +29,25 @@ const char* const kMockSourceId = source_service::modules::MockSourceId();
 bool IsBuiltinSourceId(const std::string& id)
 {
     return id == kMockSourceId || id == kJmSourceId || id == kPicacgSourceId || id == kNhentaiSourceId ||
-           id == kEhentaiSourceId;
+           id == kEhentaiSourceId || id == kExhentaiSourceId;
 }
 
 bool IsOfficialBuiltinSourceId(const std::string& source_id)
 {
     return source_id == kJmSourceId || source_id == kPicacgSourceId || source_id == kNhentaiSourceId ||
-           source_id == kEhentaiSourceId;
+           source_id == kEhentaiSourceId || source_id == kExhentaiSourceId;
 }
 
 bool SourceNeedsAccount(const std::string& source_id)
 {
     // e-hentai supports public listing without login; cookie is optional.
-    return source_id == kPicacgSourceId;
+    // exhentai is the members-only mirror and always requires e-hentai family auth.
+    return source_id == kPicacgSourceId || source_id == kExhentaiSourceId;
+}
+
+bool IsEhentaiFamily(const std::string& source_id)
+{
+    return source_id == kEhentaiSourceId || source_id == kExhentaiSourceId;
 }
 
 bool SourceSupportsDirectAccess(const std::string& source_id)
@@ -130,6 +136,17 @@ void ApplyRuntimeSourceAvailability(R18SourceRecord& rec, int uid = 0)
         // Public e-hentai listing works without cookies; cookies improve access/quality.
         rec.enabled = true;
         auto cred = R18SourceCredentialStore::Instance().Get(uid, rec.id);
+        // Fall back to exhentai-bound cookie (same e-hentai account family).
+        if ((!cred || cred->session_cookie.empty()) && uid != 0)
+        {
+            if (auto ex = R18SourceCredentialStore::Instance().Get(uid, kExhentaiSourceId);
+                ex && !ex->session_cookie.empty())
+            {
+                rec.status = source_service::modules::OkStatus();
+                rec.message = "cookie shared from exhentai";
+                return;
+            }
+        }
         if (cred && (!cred->session_cookie.empty() || !cred->password.empty()))
         {
             rec.status = source_service::modules::OkStatus();
@@ -139,6 +156,28 @@ void ApplyRuntimeSourceAvailability(R18SourceRecord& rec, int uid = 0)
         {
             rec.status = source_service::modules::DirectAccessStatus();
             rec.message = "direct access; optional cookie for restricted content";
+        }
+        return;
+    }
+    if (rec.id == kExhentaiSourceId)
+    {
+        // exhentai requires a valid e-hentai family session (cookie or account login).
+        // Cookies are bound across ehentai.official / exhentai.official.
+        auto cred = R18SourceCredentialStore::Instance().Get(uid, rec.id);
+        auto eh_cred = R18SourceCredentialStore::Instance().Get(uid, kEhentaiSourceId);
+        const bool has_cookie =
+            (cred && !cred->session_cookie.empty()) || (eh_cred && !eh_cred->session_cookie.empty());
+        if (has_cookie)
+        {
+            rec.enabled = true;
+            rec.status = source_service::modules::OkStatus();
+            rec.message = "authenticated (e-hentai bound)";
+        }
+        else
+        {
+            rec.enabled = false;
+            rec.status = source_service::modules::AuthRequiredStatus();
+            rec.message = "exhentai requires e-hentai login (account / cookie / web)";
         }
         return;
     }
@@ -153,6 +192,9 @@ json::JsonValue PublicSourceRecord(const R18SourceRecord& source, int uid = 0)
         rec["title"] = public_record.name;
     rec["auth_required"] = SourceNeedsAccount(public_record.id);
     rec["direct_access"] = SourceSupportsDirectAccess(public_record.id) || public_record.id == kEhentaiSourceId;
+    // Expose bound-family hint for web account UI.
+    if (IsEhentaiFamily(public_record.id))
+        rec["auth_family"] = "ehentai";
     if (auto cred = R18SourceCredentialStore::Instance().Get(uid, public_record.id))
     {
         rec["account_status"] = cred->status;
@@ -321,6 +363,7 @@ void R18SourceService::InstallBuiltinSourcesLocked()
     install(kPicacgSourceId, "哔咔漫画", source_service::modules::PicacgSourceVersion());
     install(kNhentaiSourceId, "nHentai", source_service::modules::NhentaiSourceVersion());
     install(kEhentaiSourceId, "e-hentai", source_service::modules::EhentaiSourceVersion());
+    install(kExhentaiSourceId, "exhentai", source_service::modules::ExhentaiSourceVersion());
 }
 
 json::JsonValue R18SourceService::ListSources()
@@ -347,10 +390,12 @@ json::JsonValue R18SourceService::ListSourcesForUser(int uid)
     append_source(kPicacgSourceId);
     append_source(kNhentaiSourceId);
     append_source(kEhentaiSourceId);
+    append_source(kExhentaiSourceId);
     for (const auto& [id, source] : sources_)
     {
         if (id != kJmSourceId && id != kPicacgSourceId && id != kNhentaiSourceId && id != kEhentaiSourceId &&
-            id != kMockSourceId && source.enabled && source.status != source_service::modules::StagedJsStatus())
+            id != kExhentaiSourceId && id != kMockSourceId && source.enabled &&
+            source.status != source_service::modules::StagedJsStatus())
         {
             json::glaze_append(arr, PublicSourceRecord(source, uid));
         }
@@ -397,6 +442,8 @@ json::JsonValue R18SourceService::ListAccounts(int uid)
     if (PicacgSigningConfigured())
         append_managed(kPicacgSourceId, "哔咔漫画", true, false);
     append_managed(kEhentaiSourceId, "e-hentai", false, true); // cookie optional
+    // exhentai is bound to the same e-hentai account; requires login.
+    append_managed(kExhentaiSourceId, "exhentai", true, false);
     data["managed"] = managed;
     return data;
 }
@@ -414,7 +461,7 @@ bool R18SourceService::SaveAccount(int uid,
     if (!R18SourceCredentialStore::Instance().UpsertLogin(uid, source_id, username, password, error))
         return false;
     // Auto-login when credentials are present and source supports/needs remote auth.
-    if (SourceNeedsAccount(source_id) || source_id == kEhentaiSourceId || source_id == kJmSourceId)
+    if (SourceNeedsAccount(source_id) || IsEhentaiFamily(source_id) || source_id == kJmSourceId)
     {
         std::string login_error;
         if (!LoginAccount(uid, source_id, &login_error) && error != nullptr && error->empty())
@@ -454,34 +501,105 @@ bool R18SourceService::LoginAccount(int uid, const std::string& source_id, std::
         return R18SourceCredentialStore::Instance()
             .UpdateSession(uid, source_id, token, "", "authenticated", "login ok", error);
     }
-    if (source_id == kEhentaiSourceId)
+    if (source_id == kEhentaiSourceId || source_id == kExhentaiSourceId)
     {
-        // Prefer explicit cookie in password/session fields; username unused for cookie auth.
+        const bool for_exhentai = source_id == kExhentaiSourceId;
+        // Prefer explicit cookie in password/session fields; username used for forums login.
         std::string cookie = cred->session_cookie;
-        if (cookie.empty() && !cred->password.empty() &&
-            (cred->password.find("ipb_member_id=") != std::string::npos ||
-             cred->password.find("igneous=") != std::string::npos || cred->password.find("sk=") != std::string::npos))
-        {
+        if (cookie.empty() && LooksLikeEhentaiCookie(cred->password))
             cookie = cred->password;
-        }
+
         if (cookie.empty() && !cred->username.empty() && !cred->password.empty() &&
-            cred->password.find('=') == std::string::npos)
+            !LooksLikeEhentaiCookie(cred->password))
         {
-            // No remote username/password login implemented; store as configured.
-            return R18SourceCredentialStore::Instance().UpdateSession(
-                uid,
-                source_id,
-                "",
-                "",
-                "configured",
-                "saved; paste e-hentai cookie into password field for restricted content",
-                error);
+            // Account/password login via forums.e-hentai.org (shared by e-hentai & exhentai).
+            // Always attempt to harvest igneous so the bound exhentai sibling works too.
+            std::string login_error;
+            std::string obtained;
+            if (!EhentaiForumLogin(cred->username, cred->password, /*for_exhentai=*/true, &obtained, &login_error))
+            {
+                // If the account simply lacks exhentai privileges, still accept the e-hentai session
+                // when the caller only asked for e-hentai.
+                if (!for_exhentai)
+                {
+                    std::string soft_error;
+                    std::string soft_cookie;
+                    if (EhentaiForumLogin(cred->username,
+                                          cred->password,
+                                          /*for_exhentai=*/false,
+                                          &soft_cookie,
+                                          &soft_error) &&
+                        !soft_cookie.empty())
+                    {
+                        obtained = std::move(soft_cookie);
+                        login_error.clear();
+                    }
+                }
+                if (obtained.empty())
+                {
+                    R18SourceCredentialStore::Instance().MarkError(uid, source_id, login_error, nullptr);
+                    if (error)
+                        *error = login_error;
+                    return false;
+                }
+            }
+            cookie = std::move(obtained);
         }
+
+        if (cookie.empty() && for_exhentai)
+        {
+            // Fall back to sibling e-hentai cookie (bound account family).
+            if (auto eh = R18SourceCredentialStore::Instance().Get(uid, kEhentaiSourceId);
+                eh && !eh->session_cookie.empty())
+            {
+                cookie = eh->session_cookie;
+            }
+        }
+
+        if (cookie.empty() && for_exhentai)
+        {
+            const std::string msg =
+                "exhentai requires e-hentai login: paste cookie, or username/password, or use web login";
+            R18SourceCredentialStore::Instance().MarkError(uid, source_id, msg, nullptr);
+            if (error)
+                *error = msg;
+            return false;
+        }
+
+        if (!cookie.empty() && for_exhentai)
+        {
+            std::string validate_error;
+            if (!ExhentaiValidateSession(cookie, &validate_error))
+            {
+                R18SourceCredentialStore::Instance().MarkError(uid, source_id, validate_error, nullptr);
+                if (error)
+                    *error = validate_error;
+                return false;
+            }
+        }
+
         if (!cookie.empty())
         {
-            return R18SourceCredentialStore::Instance()
-                .UpdateSession(uid, source_id, "", cookie, "authenticated", "cookie saved", error);
+            // Persist cookie on the requested source and mirror to the sibling (bound family).
+            const char* sibling = for_exhentai ? kEhentaiSourceId : kExhentaiSourceId;
+            const std::string msg = for_exhentai ? "exhentai cookie authenticated" : "cookie saved";
+            if (!R18SourceCredentialStore::Instance()
+                     .UpdateSession(uid, source_id, "", cookie, "authenticated", msg, error))
+                return false;
+            // Mirror silently; sibling failures must not break the primary login.
+            std::string sibling_error;
+            R18SourceCredentialStore::Instance().UpdateSession(uid,
+                                                               sibling,
+                                                               "",
+                                                               cookie,
+                                                               "authenticated",
+                                                               for_exhentai ? "cookie shared from exhentai"
+                                                                            : "cookie shared with exhentai",
+                                                               &sibling_error);
+            return true;
         }
+
+        // e-hentai without cookie: direct access is fine.
         return R18SourceCredentialStore::Instance()
             .UpdateSession(uid, source_id, "", "", "configured", "direct access without cookie", error);
     }
@@ -553,9 +671,22 @@ std::string R18SourceService::SessionTokenFor(int uid, const std::string& source
 std::string R18SourceService::SessionCookieFor(int uid, const std::string& source_id)
 {
     auto cred = R18SourceCredentialStore::Instance().Get(uid, source_id);
-    if (!cred)
-        return {};
-    return cred->session_cookie;
+    if (cred && !cred->session_cookie.empty())
+        return cred->session_cookie;
+    // e-hentai / exhentai share the same account family cookies.
+    if (source_id == kExhentaiSourceId)
+    {
+        if (auto eh = R18SourceCredentialStore::Instance().Get(uid, kEhentaiSourceId);
+            eh && !eh->session_cookie.empty())
+            return eh->session_cookie;
+    }
+    else if (source_id == kEhentaiSourceId)
+    {
+        if (auto ex = R18SourceCredentialStore::Instance().Get(uid, kExhentaiSourceId);
+            ex && !ex->session_cookie.empty())
+            return ex->session_cookie;
+    }
+    return {};
 }
 
 bool R18SourceService::EnableSource(const std::string& id, bool enabled, std::string* error)
@@ -764,6 +895,14 @@ json::JsonValue R18SourceService::SearchForUser(int uid,
             return result;
         return ErrorData(kEhentaiSourceId, error);
     }
+    if (source_id == kExhentaiSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (ExhentaiSearch(keyword, normalized_page, sort, tag, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        return ErrorData(kExhentaiSourceId, error);
+    }
 
     json::JsonValue data;
     data["source_id"] = source_id;
@@ -863,6 +1002,21 @@ json::JsonValue R18SourceService::DetailForUser(int uid, const std::string& sour
         data["chapters"] = json::JsonValue{json::array_t{}};
         return data;
     }
+    if (source_id == kExhentaiSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (ExhentaiDetail(comic_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kExhentaiSourceId;
+        data["comic_id"] = comic_id;
+        data["title"] = FailureTitleForSource(kExhentaiSourceId);
+        data["description"] = error;
+        data["cover"] = "";
+        data["chapters"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
 
     const auto source = SourceSnapshot(source_id);
     json::JsonValue data;
@@ -956,6 +1110,19 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
         data["pages"] = json::JsonValue{json::array_t{}};
         return data;
     }
+    if (source_id == kExhentaiSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (ExhentaiPages(chapter_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kExhentaiSourceId;
+        data["chapter_id"] = chapter_id;
+        data["error_message"] = error;
+        data["pages"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
 
     json::JsonValue data;
     data["source_id"] = source_id;
@@ -996,6 +1163,8 @@ R18ImagePayload R18SourceService::FetchImageForUser(int uid,
         return NhentaiFetchImage(image_cache_root_, image_url);
     if (source_id == kEhentaiSourceId && !image_url.empty())
         return EhentaiFetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
+    if (source_id == kExhentaiSourceId && !image_url.empty())
+        return ExhentaiFetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
     return detail::PlaceholderImage("R18 Source Image", "preview");
 }
 

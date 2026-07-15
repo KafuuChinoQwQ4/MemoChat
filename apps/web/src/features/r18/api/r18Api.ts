@@ -80,6 +80,42 @@ export interface R18CheckinResult {
   message?: string
 }
 
+export interface R18LibraryFolder {
+  id: string
+  name: string
+  created_at_ms?: number
+  updated_at_ms?: number
+}
+
+export interface R18LibraryItem {
+  source_id: string
+  comic_id: string
+  title?: string
+  cover?: string
+  author?: string
+  subtitle?: string
+  folder_ids?: string[]
+  favorited?: boolean
+  favorited_at_ms?: number
+  updated_at_ms?: number
+}
+
+export interface R18LibraryPayload {
+  folders?: R18LibraryFolder[]
+  items?: R18LibraryItem[]
+}
+
+export interface R18FavoriteToggleInput {
+  sourceId: string
+  comicId: string
+  favorited: boolean
+  title?: string
+  cover?: string
+  author?: string
+  subtitle?: string
+  folderIds?: string[]
+}
+
 function unwrap<T>(response: R18Envelope<T>, operation: string): T {
   if (response.error !== 0 || response.data === undefined) {
     throw new Error(response.message || `${operation} failed: ${response.error}`)
@@ -180,6 +216,62 @@ export function createR18Api(http: HttpClient) {
         source_id: sourceId,
       })
       return unwrap(response, "R18 check-in")
+    },
+
+    async getLibrary(): Promise<R18LibraryPayload> {
+      const response = await http.get<R18Envelope<R18LibraryPayload>>(ENDPOINTS.r18Library)
+      return unwrap(response, "R18 library")
+    },
+
+    async listFavorites(folderId?: string): Promise<{ folder_id?: string; items?: R18LibraryItem[] }> {
+      const query = folderId ? `?folder_id=${encodeURIComponent(folderId)}` : ""
+      const response = await http.get<R18Envelope<{ folder_id?: string; items?: R18LibraryItem[] }>>(
+        `${ENDPOINTS.r18Favorites}${query}`,
+      )
+      return unwrap(response, "R18 favorites")
+    },
+
+    async toggleFavorite(input: R18FavoriteToggleInput): Promise<R18LibraryItem> {
+      const response = await http.post<R18Envelope<R18LibraryItem>>(ENDPOINTS.r18FavoriteToggle, {
+        source_id: input.sourceId,
+        comic_id: input.comicId,
+        favorited: input.favorited,
+        title: input.title ?? "",
+        cover: input.cover ?? "",
+        author: input.author ?? "",
+        subtitle: input.subtitle ?? "",
+        folder_ids: input.folderIds ?? [],
+      })
+      return unwrap(response, "R18 favorite toggle")
+    },
+
+    async assignFavoriteFolders(sourceId: string, comicId: string, folderIds: string[]): Promise<R18LibraryItem> {
+      const response = await http.post<R18Envelope<R18LibraryItem>>(ENDPOINTS.r18FavoriteAssign, {
+        source_id: sourceId,
+        comic_id: comicId,
+        folder_ids: folderIds,
+      })
+      return unwrap(response, "R18 favorite assign")
+    },
+
+    async createFolder(name: string): Promise<R18LibraryFolder> {
+      const response = await http.post<R18Envelope<R18LibraryFolder>>(ENDPOINTS.r18FolderCreate, { name })
+      return unwrap(response, "R18 folder create")
+    },
+
+    async renameFolder(folderId: string, name: string): Promise<R18LibraryFolder> {
+      const response = await http.post<R18Envelope<R18LibraryFolder>>(ENDPOINTS.r18FolderRename, {
+        folder_id: folderId,
+        name,
+      })
+      return unwrap(response, "R18 folder rename")
+    },
+
+    async deleteFolder(folderId: string): Promise<R18LibraryPayload> {
+      const response = await http.post<R18Envelope<R18LibraryPayload>>(ENDPOINTS.r18FolderDelete, {
+        folder_id: folderId,
+      })
+      return unwrap(response, "R18 folder delete")
     },
   }
 }

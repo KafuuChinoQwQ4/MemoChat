@@ -13,10 +13,9 @@ public:
     ~PostgresDao();
     bool Ready() const noexcept;
     const std::string& startupError() const noexcept;
-    int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
-    bool CheckEmail(const std::string& name, const std::string& email);
-    bool UpdatePwd(const std::string& email, const std::string& newpwd);
-    bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
+    // Account auth write/verify (RegUser/CheckEmail/UpdatePwd/CheckPwd) was removed
+    // from ChatServer — those belong to the account bounded context only. ChatServer
+    // keeps account *reads* behind IAccountDirectory / GetUser / GetUsersByUids.
     bool AddFriendApply(const int& from, const int& to);
     bool AuthFriendApply(const int& from, const int& to);
     bool AddFriend(const int& from, const int& to, std::string back_name);

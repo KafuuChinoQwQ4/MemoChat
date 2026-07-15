@@ -15,9 +15,6 @@
 #include "GateGlobals.hpp"
 #include "GateWorkerPool.hpp"
 #include "LogicSystem.hpp"
-#include "MongoMgr.hpp"
-#include "PostgresMgr.hpp"
-#include "RedisMgr.hpp"
 #include "SnowflakeUtil.hpp"
 #include "AsioIOServicePool.hpp"
 #include "auth/AuthSecret.hpp"
@@ -61,40 +58,25 @@ bool ParseInt64OrDefault(std::string_view raw, int64_t default_value, int64_t* o
     return true;
 }
 
-bool CheckGateDomainDependencies(const GateDomainDependencies& dependencies, std::string* error)
+// Run every startup readiness probe the service supplied. The bootstrap stays
+// agnostic to WHICH dependencies exist: each probe is contributed by the infra
+// slice that owns the dependency (Postgres/Mongo from GateInfraPersistence,
+// Redis from GateInfraCache), so this shared framework references no concrete
+// manager. Probes run in the order the service listed them.
+bool CheckGateDomainReadiness(const GateReadinessProbes& probes, std::string* error)
 {
-    if (dependencies.postgres)
+    for (const auto& probe : probes)
     {
-        const auto postgres = PostgresMgr::GetInstance();
-        if (!postgres->Ready())
+        if (!probe.check)
         {
-            if (error != nullptr)
-            {
-                *error = "Postgres: " + postgres->StartupError();
-            }
-            return false;
+            continue;
         }
-    }
-    if (dependencies.redis)
-    {
-        const auto redis = RedisMgr::GetInstance();
-        if (!redis->Ready())
+        std::string probe_error;
+        if (!probe.check(&probe_error))
         {
             if (error != nullptr)
             {
-                *error = "Redis: " + redis->StartupError();
-            }
-            return false;
-        }
-    }
-    if (dependencies.mongo)
-    {
-        const auto mongo = MongoMgr::GetInstance();
-        if (!mongo->Ready())
-        {
-            if (error != nullptr)
-            {
-                *error = "Mongo: " + mongo->StartupError();
+                *error = probe.name + ": " + probe_error;
             }
             return false;
         }
@@ -111,7 +93,7 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
                         bool init_aws,
                         GateDomainStartHook on_start,
                         GateDomainLifecycleHook on_stop,
-                        GateDomainDependencies dependencies)
+                        GateReadinessProbes readiness_probes)
 {
     Aws::SDKOptions aws_options;
     bool aws_initialized = false;
@@ -191,7 +173,7 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
         aws_initialized = true;
     }
 
-    if (!CheckGateDomainDependencies(dependencies, &startup_error))
+    if (!CheckGateDomainReadiness(readiness_probes, &startup_error))
     {
         memolog::LogError("gatedomain.dependency_unavailable",
                           service_name + " dependency initialization failed",

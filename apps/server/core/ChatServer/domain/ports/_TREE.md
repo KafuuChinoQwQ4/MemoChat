@@ -6,6 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `IAccountDirectory.hpp` | 账号域读取隔离缝端口：ChatServer 所有 user 身份/资料读取经此接口，便于后续换 gRPC/事件投影 |
 | `IChatSessionConfig.h` | 会话配置端口 |
 | `IChatSessionRepository.h` | 会话仓储端口 |
 | `IDeliveryGateway.h` | 投递网关端口 |

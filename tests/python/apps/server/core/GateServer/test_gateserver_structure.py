@@ -736,12 +736,13 @@ class GateServerStructureTests(unittest.TestCase):
         self.assertTrue(account_dao_path.exists(), "GateServerCore account DAO split source should exist")
 
         cmake_source = strip_cmake_comments(read(GATE_CORE / "CMakeLists.txt"))
-        # Phase 1 split: the whole Dao/Mgr persistence layer is a single shared
-        # unit in GateInfraCore (PostgresMgr forwards to all PostgresDao methods,
-        # and PostgresDao is one class split across two .cpp files). Both DAO
-        # sources therefore compile into GateInfraCore.
-        infra_match = re.search(r"add_library\s*\(\s*GateInfraCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
-        self.assertIsNotNone(infra_match, "GateInfraCore static library source list should be explicit")
+        # Infra decomposition: the whole Dao/Mgr persistence layer is a single
+        # shared unit (PostgresMgr forwards to all PostgresDao methods, and
+        # PostgresDao is one class split across two .cpp files). It is now isolated
+        # in its own leaf slice GateInfraPersistence — the only slice that links
+        # the heavy DB externals — so both DAO sources compile into that slice.
+        infra_match = re.search(r"add_library\s*\(\s*GateInfraPersistence\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
+        self.assertIsNotNone(infra_match, "GateInfraPersistence static library source list should be explicit")
         infra_sources = infra_match.group("body")
 
         self.assertIn("PostgresDao.cpp", infra_sources)
@@ -1879,8 +1880,8 @@ class GateServerStructureTests(unittest.TestCase):
         )
 
         cmake_source = strip_cmake_comments(read(GATE_CORE / "CMakeLists.txt"))
-        target_match = re.search(r"add_library\s*\(\s*GateInfraCore\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
-        self.assertIsNotNone(target_match, "GateInfraCore static library source list should be explicit")
+        target_match = re.search(r"add_library\s*\(\s*GateInfraClients\s+STATIC(?P<body>.*?)\)", cmake_source, re.S)
+        self.assertIsNotNone(target_match, "GateInfraClients static library source list should be explicit")
         self.assertIn("clients/AuthVerifyClient.cpp", target_match.group("body"))
 
     def test_auth_verify_client_public_header_is_narrow_verify_request_contract(self):

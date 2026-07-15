@@ -1,5 +1,7 @@
+#include "CacheReadinessProbes.hpp"
 #include "GateDomainServer.hpp"
 #include "GateRouteProfileRegistrar.hpp"
+#include "PersistenceReadinessProbes.hpp"
 
 // MomentsGatewayServer — moments feed domain peeled off GateServer (gateserver
 // split Phase 4). Serves /healthz, /readyz and /api/moments/*. Owns memo moments
@@ -13,5 +15,7 @@ int main()
                                /*init_aws=*/false,
                                {},
                                {},
-                               {.postgres = true, .redis = true, .mongo = true});
+                               {memochat::gate::persistence::PostgresReadinessProbe(),
+                                memochat::gate::cache::RedisReadinessProbe(),
+                                memochat::gate::persistence::MongoReadinessProbe()});
 }

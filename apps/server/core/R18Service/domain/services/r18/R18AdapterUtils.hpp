@@ -28,6 +28,8 @@ struct HttpResult
     std::string content_type;
     std::string location;
     std::string body;
+    // Raw Set-Cookie header values (may include attributes after ';').
+    std::vector<std::string> set_cookies;
 };
 
 bool ParseUrl(const std::string& url, ParsedUrl* out, std::string* error);

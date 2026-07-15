@@ -13,6 +13,8 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `ChatAccountDirectory.cpp` | 账号域读取隔离缝适配器：今日经 [AccountPostgres] 桥接 memo_account，供 IAccountDirectory 使用 |
+| `ChatAccountDirectory.hpp` | 账号域读取隔离缝适配器声明（进程单例 + AccountDirectory() 访问器） |
 | `ChatMessageRepository.cpp` | 消息仓储实现 |
 | `ChatMessageRepository.hpp` | 消息仓储声明 |
 | `ChatOutboxRepairScheduler.cpp` | Outbox 修复调度适配器实现，将领域端口调用转发到 Postgres 持久化 |

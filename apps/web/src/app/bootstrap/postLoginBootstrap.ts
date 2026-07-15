@@ -118,6 +118,21 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
   const gateway = getGateway()
   const session = useSessionStore.getState()
 
+  // Account switch without an explicit logout leaves the previous user's
+  // entity/chat UI state in memory (Zustand stores are process-wide). Wipe it
+  // before applying the new session so dialogs/friends/messages cannot leak
+  // across accounts and the first click after switch is not stuck on stale
+  // peer ids / loading flags.
+  if (session.uid !== null) {
+    const [{ resetEntitySession }, { useChatStore }] = await Promise.all([
+      import("@/core/entities/resetSession"),
+      import("@/features/chat/store/chatStore"),
+    ])
+    await resetEntitySession()
+    useChatStore.getState().reset()
+    useSessionStore.getState().clearSession()
+  }
+
   // Step 1: HTTP login
   const res = await gateway.http.post<LoginResponse>(ENDPOINTS.login, {
     email: creds.email,

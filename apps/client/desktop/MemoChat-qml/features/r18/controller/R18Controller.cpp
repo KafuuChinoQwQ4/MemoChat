@@ -2,6 +2,7 @@
 
 #include "global.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QUrl>
 #include <QUrlQuery>
@@ -44,6 +45,9 @@ void R18Controller::selectSource(const QString& sourceId)
     }
     _current_source_id = nextSource;
     _comics.clear();
+    // Reset filters when switching sources; QML can re-apply source-default sort.
+    _search_sort.clear();
+    _search_tag.clear();
     setSearchState(0, false);
     if (_current_source_id.isEmpty())
     {
@@ -54,6 +58,23 @@ void R18Controller::selectSource(const QString& sourceId)
         setStatusText(QStringLiteral("已选择漫画源: %1").arg(_current_source_id));
     }
     emit currentSourceChanged();
+    emit searchFiltersChanged();
+}
+
+void R18Controller::setSearchSort(const QString& sort)
+{
+    if (_search_sort == sort)
+        return;
+    _search_sort = sort;
+    emit searchFiltersChanged();
+}
+
+void R18Controller::setSearchTag(const QString& tag)
+{
+    if (_search_tag == tag)
+        return;
+    _search_tag = tag;
+    emit searchFiltersChanged();
 }
 
 void R18Controller::search(const QString& keyword, int page)
@@ -74,6 +95,8 @@ void R18Controller::search(const QString& keyword, int page)
     payload[QStringLiteral("source_id")] = _current_source_id;
     payload[QStringLiteral("keyword")] = keyword;
     payload[QStringLiteral("page")] = normalizedPage;
+    payload[QStringLiteral("sort")] = _search_sort;
+    payload[QStringLiteral("tag")] = _search_tag;
     _pending_search_page = normalizedPage;
     if (normalizedPage == 1)
     {
@@ -109,14 +132,58 @@ void R18Controller::openChapter(const QString& sourceId, const QString& chapterI
     postJson(QStringLiteral("/api/r18/chapter/pages"), payload, QStringLiteral("pages"));
 }
 
-void R18Controller::toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited)
+void R18Controller::toggleFavorite(const QString& sourceId,
+                                   const QString& comicId,
+                                   bool favorited,
+                                   const QString& title,
+                                   const QString& cover,
+                                   const QString& author,
+                                   const QString& subtitle,
+                                   const QStringList& folderIds)
 {
     QJsonObject payload;
     payload[QStringLiteral("source_id")] = sourceId.isEmpty() ? _current_source_id : sourceId;
     payload[QStringLiteral("comic_id")] = comicId.isEmpty()
             ? _current_comic.value(QStringLiteral("comic_id")).toString() : comicId;
     payload[QStringLiteral("favorited")] = favorited;
+    payload[QStringLiteral("title")] = title.isEmpty()   ? _current_comic.value(QStringLiteral("title")).toString()
+                                                         : title;
+    payload[QStringLiteral("cover")] = cover.isEmpty()   ? _current_comic.value(QStringLiteral("cover")).toString()
+                                                         : cover;
+    payload[QStringLiteral("author")] = author.isEmpty() ? _current_comic.value(QStringLiteral("author")).toString()
+                                                         : author;
+    payload[QStringLiteral("subtitle")] = subtitle.isEmpty()
+            ? _current_comic.value(QStringLiteral("subtitle")).toString() : subtitle;
+    QJsonArray folders;
+    for (const auto& fid : folderIds)
+    {
+        if (!fid.trimmed().isEmpty())
+            folders.append(fid.trimmed());
+    }
+    if (folders.isEmpty() && favorited)
+        folders.append(QStringLiteral("default"));
+    payload[QStringLiteral("folder_ids")] = folders;
     postJson(QStringLiteral("/api/r18/favorite/toggle"), payload, QStringLiteral("favorite"));
+}
+
+void R18Controller::refreshLibrary()
+{
+    QUrl url(gate_url_prefix + QStringLiteral("/api/r18/library"));
+    getJson(url, QStringLiteral("library"));
+}
+
+void R18Controller::createFolder(const QString& name)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("name")] = name.trimmed();
+    postJson(QStringLiteral("/api/r18/folder/create"), payload, QStringLiteral("folder_create"));
+}
+
+void R18Controller::deleteFolder(const QString& folderId)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("folder_id")] = folderId.trimmed();
+    postJson(QStringLiteral("/api/r18/folder/delete"), payload, QStringLiteral("folder_delete"));
 }
 
 void R18Controller::updateHistory(const QString& sourceId,

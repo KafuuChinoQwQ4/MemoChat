@@ -22,6 +22,7 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
         {
             refreshSources();
             refreshHistory();
+            refreshLibrary();
         }
     }
     else if (op == QStringLiteral("sources"))
@@ -53,6 +54,11 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
         _current_comic = data.toVariantMap();
         emit currentComicChanged();
         _chapters.setItems(data.value(QStringLiteral("chapters")).toArray().toVariantList());
+        // Sync favorited flag when present on detail payload.
+        if (data.contains(QStringLiteral("favorited")))
+            setCurrentFavorite(data.value(QStringLiteral("favorited")).toBool());
+        else if (data.contains(QStringLiteral("favorite")))
+            setCurrentFavorite(data.value(QStringLiteral("favorite")).toBool());
     }
     else if (op == QStringLiteral("pages"))
     {
@@ -63,6 +69,19 @@ void R18Controller::handleResponse(const QString& op, const QJsonObject& root)
     }
     else if (op == QStringLiteral("favorite"))
     {
-        setCurrentFavorite(data.value(QStringLiteral("favorited")).toBool());
+        setCurrentFavorite(data.value(QStringLiteral("favorited")).toBool(true));
+        // Refresh library after favorite mutations so folders stay in sync.
+        refreshLibrary();
+    }
+    else if (op == QStringLiteral("library") || op == QStringLiteral("folder_delete"))
+    {
+        _folders.setItems(data.value(QStringLiteral("folders")).toArray().toVariantList());
+        _library.setItems(data.value(QStringLiteral("items")).toArray().toVariantList());
+        emit libraryChanged();
+    }
+    else if (op == QStringLiteral("folder_create"))
+    {
+        // Re-fetch full library after creating a folder.
+        refreshLibrary();
     }
 }

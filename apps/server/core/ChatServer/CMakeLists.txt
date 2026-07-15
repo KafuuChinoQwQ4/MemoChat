@@ -57,6 +57,7 @@ set(CHATSERVER_MESSAGING_SOURCES
 )
 
 set(CHATSERVER_PERSISTENCE_SOURCES
+    persistence/ChatAccountDirectory.cpp
     persistence/ChatMessageRepository.cpp
     persistence/ChatOutboxRepairScheduler.cpp
     persistence/ChatRelationRepository.cpp

@@ -3,6 +3,7 @@
 #include "PostgresDao.hpp"
 #include "Singleton.hpp"
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 class PostgresMgr : public Singleton<PostgresMgr>
@@ -13,10 +14,7 @@ public:
     ~PostgresMgr();
     bool Ready();
     const std::string& startupError() const noexcept;
-    int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
-    bool CheckEmail(const std::string& name, const std::string& email);
-    bool UpdatePwd(const std::string& email, const std::string& pwd);
-    bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
+    // Account auth write/verify methods removed — see PostgresDao.hpp.
     bool AddFriendApply(const int& from, const int& to);
     bool AuthFriendApply(const int& from, const int& to);
     bool AddFriend(const int& from, const int& to, std::string back_name);
@@ -27,6 +25,9 @@ public:
     std::vector<std::string> GetFriendTags(const int& self_id, const int& friend_id);
     std::shared_ptr<UserInfo> GetUser(int uid);
     std::shared_ptr<UserInfo> GetUser(std::string name);
+    // Facade over PostgresDao::GetUsersByUids — keeps the account-data batch
+    // seam reachable through the process-wide manager used by ChatAccountDirectory.
+    std::unordered_map<int, std::shared_ptr<UserInfo>> GetUsersByUids(const std::vector<int>& uids);
     bool GetUidByUserId(const std::string& user_id, int& uid);
     bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit = 10);
     bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo>>& user_info);

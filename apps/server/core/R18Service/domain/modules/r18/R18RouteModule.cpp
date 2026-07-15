@@ -90,6 +90,48 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
             return memochat::gate::services::r18::R18Service::Instance().HandleFavoriteToggle(request, response);
         });
     registry.Register(
+        modules::GetMethod(),
+        modules::LibraryPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleLibrary(request, response);
+        });
+    registry.Register(
+        modules::GetMethod(),
+        modules::FavoritesPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleFavorites(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::FolderCreatePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleFolderCreate(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::FolderRenamePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleFolderRename(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::FolderDeletePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleFolderDelete(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::FavoriteAssignPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleFavoriteAssign(request, response);
+        });
+    registry.Register(
         modules::PostMethod(),
         modules::HistoryUpdatePath(),
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)

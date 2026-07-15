@@ -1,5 +1,6 @@
 #include "ChatRelationRepository.hpp"
 
+#include "ChatAccountDirectory.hpp"
 #include "PostgresMgr.hpp"
 
 import memochat.chat.relation_repository_algorithms;
@@ -11,12 +12,14 @@ namespace relation_repository_modules = memochat::chat::persistence::relation_re
 
 bool ChatRelationRepository::GetUidByUserId(const std::string& user_id, int& uid)
 {
-    return PostgresMgr::GetInstance()->GetUidByUserId(user_id, uid);
+    // Account identity resolution goes through the isolation seam (finding #3).
+    return AccountDirectory().ResolveUidByPublicId(user_id, uid);
 }
 
 std::shared_ptr<UserInfo> ChatRelationRepository::GetUserByUid(int uid)
 {
-    return PostgresMgr::GetInstance()->GetUser(uid);
+    // Account profile reads go through the isolation seam (finding #3).
+    return AccountDirectory().GetByUid(uid);
 }
 
 bool ChatRelationRepository::RefreshDialogsForOwner(int owner_uid)

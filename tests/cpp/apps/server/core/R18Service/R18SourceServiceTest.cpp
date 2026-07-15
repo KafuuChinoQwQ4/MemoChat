@@ -79,6 +79,7 @@ TEST(R18SourceServiceTest, PicacgWithoutAccountIsAuthRequiredInListSources)
     bool found_picacg = false;
     bool found_nhentai = false;
     bool found_ehentai = false;
+    bool found_exhentai = false;
     for (std::size_t i = 0; i < sources.size(); ++i)
     {
         const auto source = sources[static_cast<int>(i)];
@@ -101,10 +102,18 @@ TEST(R18SourceServiceTest, PicacgWithoutAccountIsAuthRequiredInListSources)
             found_ehentai = true;
             EXPECT_TRUE(memochat::json::glaze_safe_get<bool>(source, "enabled", false));
         }
+        if (id == "exhentai.official")
+        {
+            found_exhentai = true;
+            EXPECT_FALSE(memochat::json::glaze_safe_get<bool>(source, "enabled", true));
+            EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(source, "status", ""), "auth-required");
+            EXPECT_TRUE(memochat::json::glaze_safe_get<bool>(source, "auth_required", false));
+        }
     }
     EXPECT_TRUE(found_picacg);
     EXPECT_TRUE(found_nhentai);
     EXPECT_TRUE(found_ehentai);
+    EXPECT_TRUE(found_exhentai);
 
     const auto denied = service.SearchForUser(4242, "picacg.official", "query", 1);
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(denied, "error_message", ""),
@@ -113,6 +122,10 @@ TEST(R18SourceServiceTest, PicacgWithoutAccountIsAuthRequiredInListSources)
     ASSERT_TRUE(items.is_array());
     ASSERT_GE(items.size(), 1U);
     EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(items[0], "title", ""), "官方源请求失败");
+
+    const auto ex_denied = service.SearchForUser(4242, "exhentai.official", "query", 1);
+    EXPECT_EQ(memochat::json::glaze_safe_get<std::string>(ex_denied, "error_message", ""),
+              "exhentai requires e-hentai login (account / cookie / web)");
 }
 
 TEST(R18SourceServiceTest, ListsOnlyActionableProductionSources)
@@ -150,13 +163,14 @@ TEST(R18SourceServiceTest, AccountManagerSavesAndListsWithoutExposingSecrets)
     const auto accounts = service.ListAccounts(777);
     const auto managed = accounts["managed"];
     ASSERT_TRUE(managed.is_array());
-    EXPECT_EQ(managed.size(), 3U);
+    EXPECT_EQ(managed.size(), 4U);
     bool found = false;
     for (std::size_t i = 0; i < managed.size(); ++i)
     {
         const auto item = managed[static_cast<int>(i)];
         const auto source_id = memochat::json::glaze_safe_get<std::string>(item, "source_id", "");
-        EXPECT_TRUE(source_id == "jm.official" || source_id == "picacg.official" || source_id == "ehentai.official");
+        EXPECT_TRUE(source_id == "jm.official" || source_id == "picacg.official" || source_id == "ehentai.official" ||
+                    source_id == "exhentai.official");
         if (source_id != "ehentai.official")
             continue;
         found = true;

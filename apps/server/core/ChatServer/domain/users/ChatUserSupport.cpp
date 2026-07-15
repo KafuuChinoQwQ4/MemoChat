@@ -1,5 +1,6 @@
 #include "ChatUserSupport.hpp"
 
+#include "ChatAccountDirectory.hpp"
 #include "ChatUserProfileDto.hpp"
 #include "PostgresMgr.hpp"
 #include "RedisMgr.hpp"
@@ -39,7 +40,7 @@ void GetUserByUid(const std::string& uid_str, memochat::json::JsonValue& rtvalue
         rtvalue["error"] = ErrorCodes::UidInvalid;
         return;
     }
-    auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
+    auto user_info = AccountDirectory().GetByUid(uid);
     if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;
@@ -70,7 +71,7 @@ void GetUserByName(const std::string& name, memochat::json::JsonValue& rtvalue)
         return;
     }
 
-    auto user_info = PostgresMgr::GetInstance()->GetUser(name);
+    auto user_info = AccountDirectory().GetByName(name);
     if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         rtvalue["error"] = ErrorCodes::UidInvalid;
@@ -102,7 +103,7 @@ bool GetBaseInfo(const std::string& base_key, int uid, std::shared_ptr<UserInfo>
         }
     }
 
-    auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
+    auto user_info = AccountDirectory().GetByUid(uid);
     if (user_support_modules::ShouldReportMissingUser(user_info != nullptr))
     {
         return false;

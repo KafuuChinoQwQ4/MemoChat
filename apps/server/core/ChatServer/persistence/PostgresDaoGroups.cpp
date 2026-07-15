@@ -1,4 +1,5 @@
 #include "PostgresDao.hpp"
+#include "ChatAccountDirectory.hpp"
 #include "ConfigMgr.hpp"
 #include "PostgresDaoUtil.hpp"
 #include "db/PqxxCompat.hpp"
@@ -307,8 +308,8 @@ bool PostgresDao::GetGroupMemberList(const int64_t& group_id,
             member_uids.push_back(info->uid);
         }
     }
-    // Step 2: batch user base-info (account-data seam, replaces JOIN).
-    auto users = GetUsersByUids(member_uids);
+    // Step 2: batch user base-info via the account isolation seam (finding #3).
+    auto users = AccountDirectory().GetManyByUids(member_uids);
     for (auto& info : member_list)
     {
         const auto uit = users.find(info->uid);
