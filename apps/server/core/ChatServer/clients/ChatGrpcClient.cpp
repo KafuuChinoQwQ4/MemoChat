@@ -1,4 +1,5 @@
 #include "ChatGrpcClient.hpp"
+#include "ChatAccountDirectory.hpp"
 #include "ConfigMgr.hpp"
 #include "PostgresMgr.hpp"
 #include "RedisMgr.hpp"
@@ -113,7 +114,7 @@ bool ChatGrpcClient::GetBaseInfo(std::string base_key, int uid, std::shared_ptr<
     else
     {
         std::shared_ptr<UserInfo> user_info = nullptr;
-        user_info = PostgresMgr::GetInstance()->GetUser(uid);
+        user_info = AccountDirectory().GetByUid(uid);
         if (user_info == nullptr)
         {
             return false;

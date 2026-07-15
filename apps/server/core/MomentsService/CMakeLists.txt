@@ -22,7 +22,13 @@ add_library(GateMomentsDomain STATIC
 )
 memochat_configure_gate_app_lib(GateMomentsDomain)
 target_include_directories(GateMomentsDomain PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(GateMomentsDomain PUBLIC GateRuntimeCore)
+# Moments owns no Gate<X>Core facade, so it declares its infra slices explicitly
+# instead of inheriting the full closure the framework used to force on everyone:
+# MomentsPersistence calls PostgresMgr/MongoMgr (GateInfraPersistence) and
+# MomentsService delegates to the shared user-token validator (GateInfraSupport,
+# which brings GateInfraCache for the Redis readiness probe). The AI/Media/etc
+# services get these transitively through their own cores; Moments is explicit.
+target_link_libraries(GateMomentsDomain PUBLIC GateRuntimeCore GateInfraPersistence GateInfraSupport)
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(GateMomentsDomain
         MODULES

@@ -9,9 +9,19 @@ export function isActionableSource(source: R18Source): boolean {
   )
 }
 
-export type AccountInteractionKind = "required-account" | "optional-account" | "optional-cookie" | "none"
+export type AccountInteractionKind =
+  | "required-account"
+  | "optional-account"
+  | "optional-cookie"
+  | "required-ehentai-auth"
+  | "none"
 
+/**
+ * exhentai is members-only and bound to e-hentai accounts.
+ * Supports: account/password (forums login), cookie paste, web login (open forums → paste cookie).
+ */
 export function accountInteractionKind(account: R18ManagedAccount): AccountInteractionKind {
+  if (account.source_id === "exhentai.official") return "required-ehentai-auth"
   if (account.source_id === "picacg.official" || account.auth_required) return "required-account"
   if (account.source_id === "jm.official") return "optional-account"
   if (account.source_id === "ehentai.official") return "optional-cookie"

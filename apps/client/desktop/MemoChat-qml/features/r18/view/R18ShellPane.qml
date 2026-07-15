@@ -11,7 +11,7 @@ Item {
     property var backdrop: null
     property string keyword: ""
     property string activeChapterId: ""
-    property int viewMode: 0 // 0 shelf, 1 search, 2 detail, 3 reader, 4 sources, 5 history
+    property int viewMode: 0 // 0 shelf, 1 search, 2 detail, 3 reader, 4 sources, 5 history, 6 library
     property int sourceViewMode: 0 // 0 add, 1 catalog, 2 comics, 3 tags
     property bool readerChromeVisible: true
     property bool sourceHelpVisible: false
@@ -19,9 +19,15 @@ Item {
     property string sourceFeedKeyword: ""
     property bool comicBottomLoadArmed: false
     property var sourceTagBuckets: []
+    property var sourceSortOptions: []
+    property var sourceTagOptions: []
+    property string selectedFolderId: ""
+    property string newFolderName: ""
     readonly property string gatewayBaseUrl: typeof gateMediaUrlPrefix === "string" && gateMediaUrlPrefix.length > 0
                                              ? gateMediaUrlPrefix
                                              : (typeof gateUrlPrefix === "string" ? gateUrlPrefix : "")
+    readonly property string currentSearchSort: root.r18Controller ? root.r18Controller.searchSort : ""
+    readonly property string currentSearchTag: root.r18Controller ? root.r18Controller.searchTag : ""
 
     readonly property color pageBackgroundColor: "transparent"
     readonly property color panelFillColor: Qt.rgba(1, 1, 1, 0.16)
@@ -95,6 +101,7 @@ Item {
         var query = searchText === undefined ? "" : searchText
         root.sourceFeedKeyword = query
         root.comicBottomLoadArmed = false
+        root.syncSourceFilters()
         root.r18Controller.search(query, 1)
     }
 
@@ -104,6 +111,7 @@ Item {
         }
         root.comicBottomLoadArmed = false
         root.r18Controller.selectSource(sourceId)
+        root.syncSourceFilters(true)
         root.sourceViewMode = 2
         root.loadSourceFeed()
     }
@@ -114,7 +122,44 @@ Item {
         }
         root.comicBottomLoadArmed = false
         root.r18Controller.selectSource(sourceId)
+        root.syncSourceFilters(true)
         root.r18Controller.search(root.keyword, 1)
+    }
+
+    function syncSourceFilters(resetDefaults) {
+        if (!root.r18Controller) {
+            root.sourceSortOptions = []
+            root.sourceTagOptions = []
+            return
+        }
+        var sid = root.r18Controller.currentSourceId
+        var cfg = R18ShellRuntime.sourceFilterConfig(sid)
+        root.sourceSortOptions = cfg.sorts || []
+        root.sourceTagOptions = cfg.tags || []
+        if (resetDefaults) {
+            var defaultSort = R18ShellRuntime.defaultSortForSource(sid)
+            root.r18Controller.setSearchSort(defaultSort)
+            root.r18Controller.setSearchTag("")
+        }
+    }
+
+    function applySearchSort(sortId) {
+        if (!root.r18Controller)
+            return
+        root.r18Controller.setSearchSort(sortId || "")
+        root.comicBottomLoadArmed = false
+        var kw = root.viewMode === 4 ? root.sourceFeedKeyword : root.keyword
+        root.r18Controller.search(kw, 1)
+    }
+
+    function applySearchTag(tagId) {
+        if (!root.r18Controller)
+            return
+        root.r18Controller.setSearchTag(tagId || "")
+        root.comicBottomLoadArmed = false
+        var kw = root.viewMode === 4 ? root.sourceFeedKeyword : root.keyword
+        // If keyword empty and tag set, still search with empty keyword + tag filter.
+        root.r18Controller.search(kw, 1)
     }
 
     function rebuildSourceTagBuckets() {
@@ -122,11 +167,14 @@ Item {
             root.sourceTagBuckets = []
             return
         }
-        root.sourceTagBuckets = R18ShellRuntime.buildSourceTagBuckets(root.r18Controller.comicModel)
+        var derived = R18ShellRuntime.buildSourceTagBuckets(root.r18Controller.comicModel)
+        var sid = root.r18Controller.currentSourceId
+        root.sourceTagBuckets = R18ShellRuntime.mergeOfficialAndDerivedTags(sid, derived)
     }
 
     function openSourceFeed() {
         root.sourceViewMode = 2
+        root.syncSourceFilters(false)
         root.loadSourceFeed("")
     }
 
@@ -144,9 +192,11 @@ Item {
         }
         root.viewMode = 4
         root.sourceViewMode = 2
-        root.sourceFeedKeyword = tag
+        // Prefer official tag filter over stuffing into free-text keyword.
+        root.r18Controller.setSearchTag(tag)
+        root.sourceFeedKeyword = ""
         root.comicBottomLoadArmed = false
-        root.r18Controller.search(tag, 1)
+        root.r18Controller.search("", 1)
     }
 
     function maybeLoadMoreComics(gridView) {
@@ -184,6 +234,7 @@ Item {
         root.comicBottomLoadArmed = false
         root.viewMode = 1
         if (root.r18Controller) {
+            root.syncSourceFilters(false)
             root.r18Controller.search(root.keyword, 1)
         }
     }
@@ -204,6 +255,8 @@ Item {
             root.sourceViewMode = 0
             root.sourceHelpVisible = false
             root.r18Controller.refreshSources()
+        } else if (mode === 6) {
+            root.r18Controller.refreshLibrary()
         }
     }
 
@@ -218,6 +271,14 @@ Item {
         target: root.r18Controller ? root.r18Controller.comicModel : null
         function onCountChanged() {
             root.comicBottomLoadArmed = false
+            root.rebuildSourceTagBuckets()
+        }
+    }
+
+    Connections {
+        target: root.r18Controller
+        function onCurrentSourceChanged() {
+            root.syncSourceFilters(false)
             root.rebuildSourceTagBuckets()
         }
     }
@@ -292,7 +353,7 @@ Item {
                         historyCount: root.modelCount(root.r18Controller ? root.r18Controller.historyModel : null)
                         followCount: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null)
                         sourceCount: root.modelCount(root.r18Controller ? root.r18Controller.sourceModel : null)
-                        favoriteCount: root.r18Controller && root.r18Controller.currentFavorite ? 1 : 0
+                        favoriteCount: root.modelCount(root.r18Controller ? root.r18Controller.libraryModel : null)
                         homeFieldFillColor: root.homeFieldFillColor
                         homeFieldStrokeColor: root.homeFieldStrokeColor
                         homeCardFillColor: root.homeCardFillColor
@@ -310,11 +371,7 @@ Item {
                         }
                         onEntryActivated: function(action, modeValue) {
                             if (action === "favorite") {
-                                if (root.currentComicId().length > 0) {
-                                    root.viewMode = 2
-                                } else {
-                                    root.activateMode(1)
-                                }
+                                root.activateMode(6)
                             } else {
                                 root.activateMode(modeValue)
                             }
@@ -327,6 +384,10 @@ Item {
                         keyword: root.keyword
                         comicCount: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null)
                         currentSourceId: root.r18Controller ? root.r18Controller.currentSourceId : ""
+                        sortOptions: root.sourceSortOptions
+                        tagOptions: root.sourceTagOptions
+                        selectedSort: root.currentSearchSort
+                        selectedTag: root.currentSearchTag
                         fieldFillColor: root.fieldFillColor
                         textPrimaryColor: root.textPrimaryColor
                         textMutedColor: root.textMutedColor
@@ -340,6 +401,8 @@ Item {
                             root.keyword = keyword
                             root.searchNow()
                         }
+                        onSortSelected: function(sortId) { root.applySearchSort(sortId) }
+                        onTagSelected: function(tagId) { root.applySearchTag(tagId) }
                         onLoadMoreProbe: function(gridView) { root.maybeLoadMoreComics(gridView) }
                     }
 
@@ -412,6 +475,10 @@ Item {
                         sourceCatalogInput: root.sourceCatalogInput
                         sourceFeedKeyword: root.sourceFeedKeyword
                         sourceTagBuckets: root.sourceTagBuckets
+                        sortOptions: root.sourceSortOptions
+                        tagOptions: root.sourceTagOptions
+                        selectedSort: root.currentSearchSort
+                        selectedTag: root.currentSearchTag
                         panelFillColor: root.panelFillColor
                         fieldFillColor: root.fieldFillColor
                         fieldStrokeColor: root.fieldStrokeColor
@@ -446,6 +513,7 @@ Item {
                         onPresetSourceSelected: function(sourceId) {
                             if (root.r18Controller) {
                                 root.r18Controller.selectSource(sourceId)
+                                root.syncSourceFilters(true)
                                 root.sourceViewMode = 2
                                 root.loadSourceFeed("")
                             }
@@ -463,6 +531,8 @@ Item {
                         onSourceFeedRequested: function(keyword) { root.loadSourceFeed(keyword) }
                         onSourceTagsRequested: root.openSourceTags()
                         onTagSearchRequested: function(tag) { root.searchByTag(tag) }
+                        onSortSelected: function(sortId) { root.applySearchSort(sortId) }
+                        onTagFilterSelected: function(tagId) { root.applySearchTag(tagId) }
                         onLoadMoreProbe: function(gridView) { root.maybeLoadMoreComics(gridView) }
                     }
 
@@ -480,6 +550,49 @@ Item {
                         secondaryButtonPressedColor: root.secondaryButtonPressedColor
                         onRefreshRequested: if (root.r18Controller) root.r18Controller.refreshHistory()
                         onComicRequested: function(sourceId, itemId) { root.openComic(sourceId, itemId) }
+                    }
+
+                    R18LibraryPane {
+                        libraryModel: root.r18Controller ? root.r18Controller.libraryModel : null
+                        folderModel: root.r18Controller ? root.r18Controller.folderModel : null
+                        selectedFolderId: root.selectedFolderId
+                        newFolderName: root.newFolderName
+                        loading: root.r18Controller && root.r18Controller.loading
+                        gatewayBaseUrl: root.gatewayBaseUrl
+                        itemFillColor: root.itemFillColor
+                        itemHoverFillColor: root.itemHoverFillColor
+                        fieldFillColor: root.fieldFillColor
+                        fieldStrokeColor: root.fieldStrokeColor
+                        textPrimaryColor: root.textPrimaryColor
+                        textSecondaryColor: root.textSecondaryColor
+                        textMutedColor: root.textMutedColor
+                        primaryButtonTextColor: root.primaryButtonTextColor
+                        primaryButtonColor: root.primaryButtonColor
+                        primaryButtonHoverColor: root.primaryButtonHoverColor
+                        primaryButtonPressedColor: root.primaryButtonPressedColor
+                        secondaryButtonColor: root.secondaryButtonColor
+                        secondaryButtonHoverColor: root.secondaryButtonHoverColor
+                        secondaryButtonPressedColor: root.secondaryButtonPressedColor
+                        onRefreshRequested: if (root.r18Controller) root.r18Controller.refreshLibrary()
+                        onFolderSelected: function(folderId) { root.selectedFolderId = folderId }
+                        onCreateFolderRequested: function(name) {
+                            if (root.r18Controller) {
+                                root.r18Controller.createFolder(name)
+                                root.newFolderName = ""
+                            }
+                        }
+                        onDeleteFolderRequested: function(folderId) {
+                            if (root.r18Controller)
+                                root.r18Controller.deleteFolder(folderId)
+                            if (root.selectedFolderId === folderId)
+                                root.selectedFolderId = ""
+                        }
+                        onComicRequested: function(sourceId, comicId) { root.openComic(sourceId, comicId) }
+                        onUnfavoriteRequested: function(sourceId, comicId) {
+                            if (root.r18Controller)
+                                root.r18Controller.toggleFavorite(sourceId, comicId, false)
+                        }
+                        onNewFolderNameEdited: function(name) { root.newFolderName = name }
                     }
                 }
 

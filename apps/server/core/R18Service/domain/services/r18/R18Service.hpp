@@ -33,6 +33,18 @@ public:
                             memochat::gate::routing::GateResponse& response);
     bool HandleFavoriteToggle(const memochat::gate::routing::GateRequest& request,
                               memochat::gate::routing::GateResponse& response);
+    bool HandleLibrary(const memochat::gate::routing::GateRequest& request,
+                       memochat::gate::routing::GateResponse& response);
+    bool HandleFavorites(const memochat::gate::routing::GateRequest& request,
+                         memochat::gate::routing::GateResponse& response);
+    bool HandleFolderCreate(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleFolderRename(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleFolderDelete(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
+    bool HandleFavoriteAssign(const memochat::gate::routing::GateRequest& request,
+                              memochat::gate::routing::GateResponse& response);
     bool HandleHistoryUpdate(const memochat::gate::routing::GateRequest& request,
                              memochat::gate::routing::GateResponse& response);
     bool HandleHistory(const memochat::gate::routing::GateRequest& request,

@@ -287,15 +287,40 @@ bool NhentaiSearch(const std::string& keyword,
     }
     const int normalized_page = page < 1 ? 1 : page;
     const std::string resolved_sort = NormalizeNhentaiSort(sort);
-    // Tag filter becomes language:"x" / tag:"name"; free-text keyword is ANDed when present.
+    // Tag filter becomes language:"x" / category:"x" / tag:"name"; free-text keyword is ANDed when present.
     auto FormatNhentaiTag = [](const std::string& raw) -> std::string
     {
         if (raw.empty())
             return {};
-        if (raw.find(':') != std::string::npos)
+        // Already-quoted or multi-token query fragments pass through.
+        if (raw.find('"') != std::string::npos || raw.find(' ') != std::string::npos)
+        {
+            // namespace:value with space but no quotes → quote the value part.
+            const auto colon = raw.find(':');
+            if (colon != std::string::npos && raw.find('"') == std::string::npos)
+            {
+                const std::string ns = raw.substr(0, colon);
+                const std::string value = raw.substr(colon + 1);
+                if (ns == "language" || ns == "category" || ns == "tag" || ns == "parody" || ns == "character" ||
+                    ns == "artist" || ns == "group" || ns == "female" || ns == "male")
+                    return ns + ":\"" + value + "\"";
+            }
             return raw;
+        }
+        const auto colon = raw.find(':');
+        if (colon != std::string::npos)
+        {
+            // language:chinese → language:"chinese"; category:doujinshi → category:"doujinshi"
+            const std::string ns = raw.substr(0, colon);
+            const std::string value = raw.substr(colon + 1);
+            if (ns == "language" || ns == "category" || ns == "tag" || ns == "parody" || ns == "character" ||
+                ns == "artist" || ns == "group" || ns == "female" || ns == "male")
+                return ns + ":\"" + value + "\"";
+            return raw;
+        }
         // Common language chips map better to language:"..." than generic tag:"...".
-        if (raw == "chinese" || raw == "english" || raw == "japanese" || raw == "translated")
+        if (raw == "chinese" || raw == "english" || raw == "japanese" || raw == "translated" || raw == "rewrite" ||
+            raw == "speechless")
             return std::string("language:\"") + raw + "\"";
         return std::string("tag:\"") + raw + "\"";
     };

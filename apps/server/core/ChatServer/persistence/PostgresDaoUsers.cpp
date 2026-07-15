@@ -1,7 +1,6 @@
 #include "PostgresDao.hpp"
-#include "auth/PasswordHasher.hpp"
+#include "ChatAccountDirectory.hpp"
 #include "db/PqxxCompat.hpp"
-#include "SnowflakeUtil.hpp"
 #include <set>
 #include <algorithm>
 #include <iostream>
@@ -18,236 +17,12 @@ bool IsValidUserPublicId(const std::string& user_id)
 {
     return postgres_dao_users_modules::IsValidUserPublicIdShape(user_id.c_str(), static_cast<int>(user_id.size()));
 }
-
-std::string GenerateUserPublicId()
-{
-    return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'u');
-}
 } // namespace
-int PostgresDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd)
-{
-    std::string password_hash;
-    if (!memochat::auth::HashPassword(pwd, password_hash))
-    {
-        return -1;
-    }
 
-    pqxx::connection conn(account_connection_string_);
-    pqxx::work txn(conn);
-    if (!conn.is_open() || !txn.ok())
-    {
-        const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    const auto exists = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
-    if (!exists.ok())
-    {
-        const auto& postgres_error = exists.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    if (!exists.empty())
-    {
-        if (!txn.commit())
-        {
-            const auto& postgres_error = txn.error_message();
-            std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-            return -1;
-        }
-        return 0;
-    }
-
-    const int new_id = txn.exec1("SELECT COALESCE(MAX(id), 1000) + 1 FROM user_id")[0].as<int>();
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    txn.exec0("DELETE FROM user_id");
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    txn.exec_params0("INSERT INTO user_id(id) VALUES ($1)", new_id);
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-
-    std::string user_public_id;
-    for (int i = 0; i < 20; ++i)
-    {
-        user_public_id = GenerateUserPublicId();
-        const auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE user_id = $1 LIMIT 1", user_public_id);
-        if (!rows.ok())
-        {
-            const auto& postgres_error = rows.error_message();
-            std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-            return -1;
-        }
-        if (rows.empty())
-        {
-            break;
-        }
-        user_public_id.clear();
-    }
-    if (user_public_id.empty())
-    {
-        txn.abort();
-
-        return -1;
-    }
-
-    txn.exec_params0("INSERT INTO \"user\"(uid, name, email, pwd, password_hash, nick, icon, user_id) "
-                     "VALUES ($1, $2, $3, '', $4, $5, $6, $7)",
-                     new_id,
-                     name,
-                     email,
-                     password_hash,
-                     name,
-                     "",
-                     user_public_id);
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    if (!txn.commit())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return -1;
-    }
-    return new_id;
-}
-
-bool PostgresDao::CheckEmail(const std::string& name, const std::string& email)
-{
-    (void) name;
-
-    pqxx::connection conn(account_connection_string_);
-    pqxx::read_transaction txn(conn);
-    if (!conn.is_open() || !txn.ok())
-    {
-        const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    const auto rows = txn.exec_params("SELECT 1 FROM \"user\" WHERE email = $1 LIMIT 1", email);
-    if (!rows.ok())
-    {
-        const auto& postgres_error = rows.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    return !rows.empty();
-}
-
-bool PostgresDao::UpdatePwd(const std::string& email, const std::string& newpwd)
-{
-    std::string password_hash;
-    if (!memochat::auth::HashPassword(newpwd, password_hash))
-    {
-        return false;
-    }
-
-    pqxx::connection conn(account_connection_string_);
-    pqxx::work txn(conn);
-    if (!conn.is_open() || !txn.ok())
-    {
-        const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    const auto updated =
-        txn.exec_params("UPDATE \"user\" SET password_hash = $1, pwd = '' WHERE email = $2", password_hash, email);
-    if (!updated.ok())
-    {
-        const auto& postgres_error = updated.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    if (!txn.commit())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    return updated.affected_rows() > 0;
-}
-
-bool PostgresDao::CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo)
-{
-    pqxx::connection conn(account_connection_string_);
-    pqxx::read_transaction txn(conn);
-    if (!conn.is_open() || !txn.ok())
-    {
-        const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    const auto rows = txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
-                                      "FROM \"user\" WHERE name = $1 LIMIT 1",
-                                      name);
-    if (!rows.ok())
-    {
-        const auto& postgres_error = rows.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    if (rows.empty())
-    {
-        if (!txn.ok())
-        {
-            const auto& postgres_error = txn.error_message();
-            std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-            return false;
-        }
-        return false;
-    }
-    const auto& row = rows[0];
-    const std::string password_hash = row["password_hash"].is_null() ? "" : row["password_hash"].c_str();
-    if (!memochat::auth::VerifyPassword(password_hash, pwd))
-    {
-        if (!txn.ok())
-        {
-            const auto& postgres_error = txn.error_message();
-            std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-            return false;
-        }
-        return false;
-    }
-
-    userInfo.name = row["name"].is_null() ? "" : row["name"].c_str();
-    userInfo.email = row["email"].is_null() ? "" : row["email"].c_str();
-    userInfo.uid = row["uid"].as<int>();
-    userInfo.user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
-    userInfo.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
-    userInfo.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
-    userInfo.desc = row["desc"].is_null() ? "" : row["desc"].c_str();
-    userInfo.sex = row["sex"].is_null() ? 0 : row["sex"].as<int>();
-    userInfo.pwd.clear();
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    return true;
-}
+// Account auth write/verify (RegUser/CheckEmail/UpdatePwd/CheckPwd) was removed
+// from ChatServer. Those methods live only in GateShared/PostgresDaoAccount for
+// the account bounded context. ChatServer keeps account *reads* (GetUser /
+// GetUidByUserId / GetUsersByUids) behind IAccountDirectory.
 
 bool PostgresDao::AddFriendApply(const int& from, const int& to)
 {
@@ -745,8 +520,8 @@ bool PostgresDao::GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>
         apply_rows.push_back({row["from_uid"].as<int>(), row["status"].is_null() ? 0 : row["status"].as<int>()});
         from_uids.push_back(row["from_uid"].as<int>());
     }
-    // Step 2: batch user base-info (account-data seam, replaces JOIN).
-    auto users = GetUsersByUids(from_uids);
+    // Step 2: batch user base-info via the account isolation seam (finding #3).
+    auto users = AccountDirectory().GetManyByUids(from_uids);
     for (const auto& ar : apply_rows)
     {
         const auto uit = users.find(ar.uid);
@@ -891,8 +666,8 @@ bool PostgresDao::GetFriendList(int self_id, std::vector<std::shared_ptr<UserInf
         friend_ids.push_back(friend_id);
         back_by_id.emplace(friend_id, row["back"].is_null() ? "" : row["back"].c_str());
     }
-    // Step 2: resolve user base-info in one batch read (account-data seam).
-    auto users = GetUsersByUids(friend_ids);
+    // Step 2: resolve user base-info via the account isolation seam (finding #3).
+    auto users = AccountDirectory().GetManyByUids(friend_ids);
     for (const auto friend_id : friend_ids)
     {
         auto user_info = std::make_shared<UserInfo>();

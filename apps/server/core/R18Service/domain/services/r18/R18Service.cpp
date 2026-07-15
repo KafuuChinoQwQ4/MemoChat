@@ -7,6 +7,7 @@
 #include "r18/R18PublicDtos.hpp"
 #include "r18/R18SourceRecordCodec.hpp"
 #include "r18/R18SourceService.hpp"
+#include "r18/R18LibraryStore.hpp"
 #include "services/account/AccountPersistence.hpp"
 #include "support/BearerAccessAuth.hpp"
 
@@ -549,16 +550,192 @@ bool R18Service::HandleFavoriteToggle(const memochat::gate::routing::GateRequest
 {
     return HandleJsonRequest(request,
                              response,
-                             [](const JsonValue& src, JsonValue& root, const std::string&, int)
+                             [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
                              {
                                  const auto body = memochat::r18::R18FavoriteToggleRequestFromJsonValue(src);
-                                 memochat::r18::R18FavoriteToggleResponseDto resp;
-                                 resp.source_id = body.source_id;
-                                 resp.comic_id = body.comic_id;
-                                 resp.favorited = body.favorited;
-                                 WriteOk(root, memochat::r18::R18FavoriteToggleResponseToJsonValue(resp));
+                                 JsonValue data;
+                                 std::string error;
+                                 if (!memochat::r18::R18LibraryStore::Instance().ToggleFavorite(uid,
+                                                                                                body.source_id,
+                                                                                                body.comic_id,
+                                                                                                body.favorited,
+                                                                                                body.title,
+                                                                                                body.cover,
+                                                                                                body.author,
+                                                                                                body.subtitle,
+                                                                                                body.folder_ids,
+                                                                                                &data,
+                                                                                                &error))
+                                 {
+                                     root["error"] = ErrorCodes::Error_Json;
+                                     root["message"] = error.empty() ? "favorite toggle failed" : error;
+                                     return false;
+                                 }
+                                 WriteOk(root, data);
                                  return true;
                              });
+}
+
+bool R18Service::HandleLibrary(const memochat::gate::routing::GateRequest& request,
+                               memochat::gate::routing::GateResponse& response)
+{
+    JsonValue root;
+    int uid = 0;
+    if (!RequireBearerAuth(request, root, uid))
+    {
+        WriteGetJson(response, root);
+        response.status = memochat::r18::service::modules::UnauthorizedHttpStatus();
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    if (const auto access = RequireR18Access(uid, root); access != R18AccessDecision::Allowed)
+    {
+        WriteGetJson(response, root);
+        response.status = AccessFailureStatus(access);
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    WriteOk(root, memochat::r18::R18LibraryStore::Instance().ListLibrary(uid));
+    root["trace_id"] = request.trace_id;
+    WriteGetJson(response, root);
+    response.headers["Cache-Control"] = "no-store";
+    return true;
+}
+
+bool R18Service::HandleFavorites(const memochat::gate::routing::GateRequest& request,
+                                 memochat::gate::routing::GateResponse& response)
+{
+    JsonValue root;
+    int uid = 0;
+    if (!RequireBearerAuth(request, root, uid))
+    {
+        WriteGetJson(response, root);
+        response.status = memochat::r18::service::modules::UnauthorizedHttpStatus();
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    if (const auto access = RequireR18Access(uid, root); access != R18AccessDecision::Allowed)
+    {
+        WriteGetJson(response, root);
+        response.status = AccessFailureStatus(access);
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+    const std::string folder_id = QueryParam(request, "folder_id");
+    WriteOk(root, memochat::r18::R18LibraryStore::Instance().ListFavorites(uid, folder_id));
+    root["trace_id"] = request.trace_id;
+    WriteGetJson(response, root);
+    response.headers["Cache-Control"] = "no-store";
+    return true;
+}
+
+bool R18Service::HandleFolderCreate(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(request,
+                             response,
+                             [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+                             {
+                                 const std::string name = memochat::json::glaze_safe_get<std::string>(src, "name", "");
+                                 JsonValue data;
+                                 std::string error;
+                                 if (!memochat::r18::R18LibraryStore::Instance().CreateFolder(uid, name, &data, &error))
+                                 {
+                                     root["error"] = ErrorCodes::Error_Json;
+                                     root["message"] = error.empty() ? "create folder failed" : error;
+                                     return false;
+                                 }
+                                 WriteOk(root, data);
+                                 return true;
+                             });
+}
+
+bool R18Service::HandleFolderRename(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string folder_id = memochat::json::glaze_safe_get<std::string>(src, "folder_id", "");
+            const std::string name = memochat::json::glaze_safe_get<std::string>(src, "name", "");
+            JsonValue data;
+            std::string error;
+            if (!memochat::r18::R18LibraryStore::Instance().RenameFolder(uid, folder_id, name, &data, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error.empty() ? "rename folder failed" : error;
+                return false;
+            }
+            WriteOk(root, data);
+            return true;
+        });
+}
+
+bool R18Service::HandleFolderDelete(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string folder_id = memochat::json::glaze_safe_get<std::string>(src, "folder_id", "");
+            JsonValue data;
+            std::string error;
+            if (!memochat::r18::R18LibraryStore::Instance().DeleteFolder(uid, folder_id, &data, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error.empty() ? "delete folder failed" : error;
+                return false;
+            }
+            WriteOk(root, data);
+            return true;
+        });
+}
+
+bool R18Service::HandleFavoriteAssign(const memochat::gate::routing::GateRequest& request,
+                                      memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            const std::string source_id = memochat::json::glaze_safe_get<std::string>(src, "source_id", "");
+            const std::string comic_id = memochat::json::glaze_safe_get<std::string>(src, "comic_id", "");
+            std::vector<std::string> folder_ids;
+            const auto folders = memochat::json::glaze_get(src, "folder_ids");
+            if (const auto* arr = memochat::json::glaze_get_array(folders))
+            {
+                for (const auto& entry : *arr)
+                {
+                    JsonValue v(entry);
+                    if (v.isString())
+                    {
+                        const std::string id = v.asString();
+                        if (!id.empty())
+                            folder_ids.push_back(id);
+                    }
+                }
+            }
+            const std::string single = memochat::json::glaze_safe_get<std::string>(src, "folder_id", "");
+            if (!single.empty() && std::find(folder_ids.begin(), folder_ids.end(), single) == folder_ids.end())
+                folder_ids.push_back(single);
+
+            JsonValue data;
+            std::string error;
+            if (!memochat::r18::R18LibraryStore::Instance()
+                     .AssignFolders(uid, source_id, comic_id, folder_ids, &data, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error.empty() ? "assign folders failed" : error;
+                return false;
+            }
+            WriteOk(root, data);
+            return true;
+        });
 }
 
 bool R18Service::HandleHistoryUpdate(const memochat::gate::routing::GateRequest& request,

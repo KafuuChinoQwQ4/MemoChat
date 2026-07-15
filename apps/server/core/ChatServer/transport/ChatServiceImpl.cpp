@@ -8,6 +8,7 @@
 #include "json/GlazeCompat.hpp"
 
 #include <chrono>
+#include "ChatAccountDirectory.hpp"
 #include "RedisMgr.hpp"
 #include "PostgresMgr.hpp"
 #include "MongoMgr.hpp"
@@ -63,7 +64,7 @@ Status ChatServiceImpl::NotifyAddFriend(ServerContext* context, const AddFriendR
     rtvalue["icon"] = request->icon();
     rtvalue["sex"] = request->sex();
     rtvalue["nick"] = request->nick();
-    auto apply_info = PostgresMgr::GetInstance()->GetUser(request->applyuid());
+    auto apply_info = AccountDirectory().GetByUid(request->applyuid());
     if (apply_info)
     {
         rtvalue["user_id"] = apply_info->user_id;
@@ -214,7 +215,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
         userinfo->icon = root["icon"].asString();
         if (userinfo->user_id.empty())
         {
-            auto user_info = PostgresMgr::GetInstance()->GetUser(uid);
+            auto user_info = AccountDirectory().GetByUid(uid);
             if (user_info == nullptr)
             {
                 return false;
@@ -236,7 +237,7 @@ bool ChatServiceImpl::GetBaseInfo(std::string base_key, int uid, std::shared_ptr
     else
     {
         std::shared_ptr<UserInfo> user_info = nullptr;
-        user_info = PostgresMgr::GetInstance()->GetUser(uid);
+        user_info = AccountDirectory().GetByUid(uid);
         if (user_info == nullptr)
         {
             return false;

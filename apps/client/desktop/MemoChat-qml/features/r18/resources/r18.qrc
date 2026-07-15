@@ -7,6 +7,7 @@
         <file alias="features/r18/view/R18HomeCard.qml">../view/R18HomeCard.qml</file>
         <file alias="features/r18/view/R18HomePane.qml">../view/R18HomePane.qml</file>
         <file alias="features/r18/view/R18ImportedSourceRow.qml">../view/R18ImportedSourceRow.qml</file>
+        <file alias="features/r18/view/R18LibraryPane.qml">../view/R18LibraryPane.qml</file>
         <file alias="features/r18/view/R18OfficialSourceCatalogPane.qml">../view/R18OfficialSourceCatalogPane.qml</file>
         <file alias="features/r18/view/R18OfficialSourceRow.qml">../view/R18OfficialSourceRow.qml</file>
         <file alias="features/r18/view/R18ReaderChrome.qml">../view/R18ReaderChrome.qml</file>

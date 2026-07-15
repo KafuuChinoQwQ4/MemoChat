@@ -1,10 +1,12 @@
 /** R18ShellContent — source switcher + search + chapter reader */
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { useSessionStore } from "@/core/session/sessionStore"
 import {
   createR18Api,
   type R18ComicItem,
+  type R18LibraryFolder,
+  type R18LibraryItem,
   type R18ManagedAccount,
   type R18Source,
 } from "@/features/r18/api/r18Api"
@@ -35,6 +37,7 @@ function sourceTitle(source: R18Source): string {
 
 function sourceStatusLabel(source: R18Source): string {
   if (source.enabled) {
+    if (source.account_status === "authenticated" && source.has_account) return "已登录"
     if (source.direct_access) return "可直接访问"
     if (source.account_status === "authenticated") return "已登录"
     return source.version || source.status || source.id
@@ -50,6 +53,9 @@ function sourceStatusLabel(source: R18Source): string {
     message === "Picacg credentials missing" ||
     message === "Picacg account login required"
   ) {
+    return "需要登录"
+  }
+  if (message.startsWith("exhentai requires e-hentai login")) {
     return "需要登录"
   }
   if (message.includes("source runtime adapter")) {
@@ -69,11 +75,31 @@ function humanizeR18Error(message?: string | null): string {
   if (text === "Picacg credentials missing" || text === "Picacg account login required") {
     return "哔咔源需要账号登录，请在左侧「账号管理」中保存账号密码"
   }
+  if (text.startsWith("exhentai requires e-hentai login")) {
+    return "ExHentai 需要先登录 E-Hentai（账密 / Cookie / 网页登入），请在「账号管理」中配置"
+  }
+  if (text.includes("sad panda")) {
+    return "ExHentai 访问被拒绝（Sad Panda）：Cookie 无效或账号无 Ex 权限，请重新登录并确认含 igneous"
+  }
+  if (text.startsWith("e-hentai login failed")) {
+    return text.replace("e-hentai login failed:", "E-Hentai 登录失败：")
+  }
   if (text.startsWith("Picacg login token missing") || text.startsWith("Picacg login returned success without a session")) {
     return "哔咔上游未返回登录会话，请检查签名配置或稍后重试"
   }
   if (text.startsWith("Picacg login failed")) {
     return text.replace("Picacg login failed:", "哔咔登录失败：")
+  }
+  if (text.startsWith("JM login failed")) {
+    return text
+      .replace("JM login failed:", "禁漫登录失败：")
+      .replace("JM login failed", "禁漫登录失败")
+  }
+  if (text.includes("stream truncated") || text.includes("unexpected eof")) {
+    return `禁漫上游连接被中断（${text}）。通常是节点 TLS 异常，请重试；若持续失败可能是账号/密码错误或当前网络无法访问 JM API。`
+  }
+  if (text === "JM username/password required") {
+    return "请填写禁漫账号和密码"
   }
   if (text === "source is disabled") {
     return "当前内容源已禁用"
@@ -371,15 +397,308 @@ function ReaderOverlay({
 
 // ─── Account manager ─────────────────────────────────────────────────────
 
+function comicKey(sourceId?: string, comicId?: string): string {
+  return `${sourceId ?? ""}::${comicId ?? ""}`
+}
+
+function LibraryPanel({
+  folders,
+  items,
+  selectedFolderId,
+  busy,
+  error,
+  newFolderName,
+  onNewFolderNameChange,
+  onSelectFolder,
+  onCreateFolder,
+  onDeleteFolder,
+  onOpenComic,
+  onUnfavorite,
+  onClose,
+}: {
+  folders: R18LibraryFolder[]
+  items: R18LibraryItem[]
+  selectedFolderId: string
+  busy: boolean
+  error: string | null
+  newFolderName: string
+  onNewFolderNameChange: (value: string) => void
+  onSelectFolder: (folderId: string) => void
+  onCreateFolder: () => void
+  onDeleteFolder: (folderId: string) => void
+  onOpenComic: (item: R18LibraryItem) => void
+  onUnfavorite: (item: R18LibraryItem) => void
+  onClose: () => void
+}) {
+  const dialogRef = useDialogAccessibility(onClose)
+  const filtered = selectedFolderId
+    ? items.filter((item) => (item.folder_ids ?? []).includes(selectedFolderId))
+    : items
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="r18-library-dialog-title"
+      tabIndex={-1}
+      onClick={onClose}
+      className={styles.dialogBackdrop ?? ""}
+      style={{ zIndex: 92 }}
+    >
+      <GlassSurface
+        elevated
+        onClick={(e) => e.stopPropagation()}
+        className={`${styles.dialogPanel ?? ""} ${styles.accountDialogPanel ?? ""}`}
+        style={{ width: "min(920px, 96vw)", maxHeight: "88vh" }}
+      >
+        <div className={styles.dialogHeader ?? ""}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div id="r18-library-dialog-title" className={styles.dialogTitle ?? ""}>
+              我的收藏
+            </div>
+            <div className={styles.dialogSubtitle ?? ""}>
+              自定义收藏夹（如「全彩」「无码」），把喜欢的本子归档进去
+            </div>
+          </div>
+          <CloseButton onClose={onClose} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: 0, flex: 1 }}>
+          <div style={{ borderRight: "1px solid var(--divider)", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
+            <GlassButton
+              variant={selectedFolderId === "" ? "primary" : "default"}
+              onClick={() => onSelectFolder("")}
+              style={{ fontSize: 12, justifyContent: "flex-start" }}
+            >
+              全部收藏 ({items.length})
+            </GlassButton>
+            {folders.map((folder) => {
+              const count = items.filter((item) => (item.folder_ids ?? []).includes(folder.id)).length
+              return (
+                <div key={folder.id} style={{ display: "grid", gap: 6 }}>
+                  <GlassButton
+                    variant={selectedFolderId === folder.id ? "primary" : "default"}
+                    onClick={() => onSelectFolder(folder.id)}
+                    style={{ fontSize: 12, justifyContent: "flex-start" }}
+                  >
+                    {folder.name} ({count})
+                  </GlassButton>
+                  {folder.id !== "default" && (
+                    <GlassButton
+                      disabled={busy}
+                      onClick={() => onDeleteFolder(folder.id)}
+                      style={{ fontSize: 11, padding: "4px 8px" }}
+                    >
+                      删除收藏夹
+                    </GlassButton>
+                  )}
+                </div>
+              )
+            })}
+            <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+              <GlassTextField
+                value={newFolderName}
+                onChange={(e) => onNewFolderNameChange(e.target.value)}
+                placeholder="新收藏夹名称，如 全彩"
+              />
+              <GlassButton
+                variant="primary"
+                disabled={busy || !newFolderName.trim()}
+                onClick={onCreateFolder}
+                style={{ fontSize: 12 }}
+              >
+                新建收藏夹
+              </GlassButton>
+            </div>
+            {error && (
+              <div style={{ fontSize: 12, color: "var(--color-badge)" }}>{error}</div>
+            )}
+          </div>
+
+          <GlassScrollArea style={{ padding: 14, minHeight: 360 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
+                该收藏夹还没有本子，去搜索列表点 ♥ 收藏吧
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+                {filtered.map((item) => (
+                  <GlassSurface
+                    key={comicKey(item.source_id, item.comic_id)}
+                    elevated
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => onOpenComic(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          onOpenComic(item)
+                        }
+                      }}
+                    >
+                      <R18Cover
+                        {...(item.cover !== undefined ? { cover: item.cover } : {})}
+                        {...(item.title !== undefined ? { title: item.title } : {})}
+                      />
+                      <div style={{ padding: "10px 11px 8px" }}>
+                        <div style={{
+                          fontWeight: 700, fontSize: 13, lineHeight: 1.35,
+                          overflow: "hidden", display: "-webkit-box",
+                          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                        }}>
+                          {item.title || item.comic_id}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-secondary)" }}>
+                          {item.source_id}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ padding: "0 10px 10px", display: "flex", gap: 6 }}>
+                      <GlassButton
+                        disabled={busy}
+                        onClick={() => onUnfavorite(item)}
+                        style={{ fontSize: 11, padding: "4px 8px" }}
+                      >
+                        取消收藏
+                      </GlassButton>
+                    </div>
+                  </GlassSurface>
+                ))}
+              </div>
+            )}
+          </GlassScrollArea>
+        </div>
+      </GlassSurface>
+    </div>
+  )
+}
+
+function FavoriteFolderPicker({
+  comic,
+  folders,
+  initialFolderIds,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  comic: R18ComicItem
+  folders: R18LibraryFolder[]
+  initialFolderIds: string[]
+  busy: boolean
+  onConfirm: (folderIds: string[]) => void
+  onClose: () => void
+}) {
+  const dialogRef = useDialogAccessibility(onClose)
+  const [selected, setSelected] = useState<string[]>(
+    initialFolderIds.length > 0 ? initialFolderIds : ["default"],
+  )
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter((x) => x !== id)
+        return next.length === 0 ? ["default"] : next
+      }
+      return [...prev, id]
+    })
+  }
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="r18-fav-picker-title"
+      tabIndex={-1}
+      onClick={onClose}
+      className={styles.dialogBackdrop ?? ""}
+      style={{ zIndex: 93 }}
+    >
+      <GlassSurface
+        elevated
+        onClick={(e) => e.stopPropagation()}
+        className={styles.dialogPanel ?? ""}
+        style={{ width: "min(420px, 94vw)" }}
+      >
+        <div className={styles.dialogHeader ?? ""}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div id="r18-fav-picker-title" className={styles.dialogTitle ?? ""}>
+              收藏到…
+            </div>
+            <div className={styles.dialogSubtitle ?? ""}>
+              {comic.title || comic.comic_id}
+            </div>
+          </div>
+          <CloseButton onClose={onClose} />
+        </div>
+        <div style={{ padding: 14, display: "grid", gap: 8 }}>
+          {folders.map((folder) => {
+            const checked = selected.includes(folder.id)
+            return (
+              <label
+                key={folder.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: "1px solid var(--divider)",
+                  cursor: "pointer",
+                  background: checked
+                    ? "color-mix(in srgb, var(--color-brand-green, #22c55e) 12%, transparent)"
+                    : "transparent",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(folder.id)}
+                />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{folder.name}</span>
+              </label>
+            )
+          })}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <GlassButton
+              variant="primary"
+              disabled={busy}
+              onClick={() => onConfirm(selected)}
+              style={{ fontSize: 12 }}
+            >
+              {busy ? "保存中…" : "确认收藏"}
+            </GlassButton>
+            <GlassButton disabled={busy} onClick={onClose} style={{ fontSize: 12 }}>
+              取消
+            </GlassButton>
+          </div>
+        </div>
+      </GlassSurface>
+    </div>
+  )
+}
+
+// ─── Account manager ─────────────────────────────────────────────────────
+
 function accountStatusLabel(account: R18ManagedAccount): string {
   const interaction = accountInteractionKind(account)
   if (interaction === "optional-account") {
     if (account.status === "authenticated" && account.has_session) return "已登录"
+    if (account.status === "error") return account.message?.trim() || "登录失败"
     return "可直接访问，也可登录账号"
   }
   if (interaction === "optional-cookie") {
     if (account.status === "authenticated" && account.has_session) return "可选 Cookie 已配置"
+    if (account.status === "error") return account.message?.trim() || "配置失败"
     return "可直接访问，也可配置 Cookie"
+  }
+  if (interaction === "required-ehentai-auth") {
+    if (account.status === "authenticated" && account.has_session) return "已登录（绑定 E-Hentai）"
+    if (account.status === "error") return account.message?.trim() || "登录失败"
+    if (account.status === "configured") return "已保存，待验证 Ex 权限"
+    return "必须登录 E-Hentai（账密 / Cookie / 网页）"
   }
   switch (account.status) {
     case "authenticated":
@@ -395,6 +714,19 @@ function accountStatusLabel(account: R18ManagedAccount): string {
     default:
       return account.message?.trim() || account.status || "未知状态"
   }
+}
+
+function isAccountLoggedIn(account: R18ManagedAccount): boolean {
+  return account.status === "authenticated" && Boolean(account.has_session)
+}
+
+function accountBadgeLabel(account: R18ManagedAccount, interaction: ReturnType<typeof accountInteractionKind>): string {
+  if (isAccountLoggedIn(account)) return "已登录"
+  if (interaction === "required-account") return "需要账号"
+  if (interaction === "required-ehentai-auth") return "需要 E-H 登录"
+  if (interaction === "optional-account") return "可选账号"
+  if (interaction === "optional-cookie") return "可选 Cookie"
+  return "直接访问"
 }
 
 function AccountManagerPanel({
@@ -458,29 +790,60 @@ function AccountManagerPanel({
               const needsAccount = interaction === "required-account"
               const optionalAccount = interaction === "optional-account"
               const optionalCookie = interaction === "optional-cookie"
+              const requiredEhentaiAuth = interaction === "required-ehentai-auth"
               const supportsCredentials = interaction !== "none"
+              const loggedIn = isAccountLoggedIn(account)
+              const badgeLabel = accountBadgeLabel(account, interaction)
               return (
                 <GlassSurface
                   key={sourceId}
                   style={{
                     padding: 14,
                     borderRadius: 14,
-                    border: "1px solid var(--divider)",
+                    border: loggedIn
+                      ? "1px solid color-mix(in srgb, var(--color-success, #22c55e) 55%, var(--divider))"
+                      : "1px solid var(--divider)",
                     display: "grid",
                     gap: 10,
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>
-                        {account.name || sourceId}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>
+                          {account.name || sourceId}
+                        </div>
+                        {loggedIn && (
+                          <span
+                            title={account.username ? `账号：${account.username}` : "已登录"}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 999,
+                              color: "var(--color-success, #16a34a)",
+                              background: "color-mix(in srgb, var(--color-success, #22c55e) 16%, transparent)",
+                              border: "1px solid color-mix(in srgb, var(--color-success, #22c55e) 40%, transparent)",
+                            }}
+                          >
+                            ✓ 已登录
+                          </span>
+                        )}
                       </div>
                       <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>
                         {accountStatusLabel(account)}
+                        {loggedIn && account.username ? ` · ${account.username}` : ""}
                       </div>
                       {account.message && account.status === "error" && (
                         <div style={{ marginTop: 4, fontSize: 12, color: "var(--color-badge)" }}>
-                          {account.message}
+                          {humanizeR18Error(account.message)}
+                        </div>
+                      )}
+                      {requiredEhentaiAuth && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
+                          ExHentai 为 E-Hentai 内网/会员源，必须使用同一 E-Hentai 账号。
+                          支持三种方式：① 账密登入 ② 粘贴 Cookie（含 ipb_member_id / ipb_pass_hash / igneous）
+                          ③ 网页登入后粘贴 Cookie。
                         </div>
                       )}
                     </div>
@@ -489,11 +852,18 @@ function AccountManagerPanel({
                       fontSize: 11,
                       padding: "3px 8px",
                       borderRadius: 999,
-                      border: "1px solid var(--divider)",
-                      color: needsAccount ? "var(--text-primary)" : "var(--text-secondary)",
-                      background: "var(--glass-btn-bg)",
+                      border: loggedIn
+                        ? "1px solid color-mix(in srgb, var(--color-success, #22c55e) 45%, var(--divider))"
+                        : "1px solid var(--divider)",
+                      color: loggedIn
+                        ? "var(--color-success, #16a34a)"
+                        : (needsAccount || requiredEhentaiAuth) ? "var(--text-primary)" : "var(--text-secondary)",
+                      background: loggedIn
+                        ? "color-mix(in srgb, var(--color-success, #22c55e) 14%, transparent)"
+                        : "var(--glass-btn-bg)",
+                      fontWeight: loggedIn ? 700 : 400,
                     }}>
-                      {needsAccount ? "需要账号" : optionalAccount ? "可选账号" : optionalCookie ? "可选 Cookie" : "直接访问"}
+                      {badgeLabel}
                     </span>
                   </div>
 
@@ -502,18 +872,51 @@ function AccountManagerPanel({
                       <GlassTextField
                         value={draft.username}
                         onChange={(e) => onDraftChange(sourceId, "username", e.target.value)}
-                        placeholder={optionalCookie ? "备注名（可选）" : "账号 / 邮箱"}
+                        placeholder={
+                          optionalCookie
+                            ? "备注名（可选）"
+                            : requiredEhentaiAuth
+                              ? "E-Hentai 账号 / 邮箱（账密登入）"
+                              : "账号 / 邮箱"
+                        }
                         autoComplete="username"
                       />
                       <GlassTextField
                         type="password"
                         value={draft.password}
                         onChange={(e) => onDraftChange(sourceId, "password", e.target.value)}
-                        placeholder={optionalCookie
-                          ? "可选 Cookie（ipb_member_id=...; ipb_pass_hash=...）"
-                          : (account.has_password ? "密码（留空则保留已保存密码）" : "密码")}
+                        placeholder={
+                          optionalCookie
+                            ? "可选 Cookie（ipb_member_id=...; ipb_pass_hash=...）"
+                            : requiredEhentaiAuth
+                              ? "密码 或 完整 Cookie（ipb_member_id=...; igneous=...）"
+                              : (account.has_password ? "密码（留空则保留已保存密码）" : "密码")
+                        }
                         autoComplete="current-password"
                       />
+                      {requiredEhentaiAuth && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                          <a
+                            href="https://forums.e-hentai.org/index.php?act=Login"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            style={{ fontSize: 12, color: "var(--text-primary)", textDecoration: "underline" }}
+                          >
+                            网页登入 E-Hentai 论坛
+                          </a>
+                          <a
+                            href="https://exhentai.org/"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            style={{ fontSize: 12, color: "var(--text-secondary)", textDecoration: "underline" }}
+                          >
+                            打开 ExHentai 校验权限
+                          </a>
+                          <span style={{ fontSize: 11, color: "var(--text-disabled)" }}>
+                            登录后从浏览器复制 Cookie 粘贴到上方密码框
+                          </span>
+                        </div>
+                      )}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         <GlassButton
                           variant="primary"
@@ -521,7 +924,7 @@ function AccountManagerPanel({
                           onClick={() => onSave(sourceId)}
                           style={{ fontSize: 12 }}
                         >
-                          {busy ? "处理中…" : "保存并登录"}
+                          {busy ? "处理中…" : requiredEhentaiAuth ? "保存并验证" : "保存并登录"}
                         </GlassButton>
                         <GlassButton
                           disabled={busy || (!account.has_password && !draft.password && !account.has_session)}
@@ -589,6 +992,13 @@ export function R18ShellContent() {
   const [accountDrafts, setAccountDrafts] = useState<Record<string, { username: string; password: string }>>({})
   const [accountBusySourceId, setAccountBusySourceId] = useState<string | null>(null)
   const [accountActionError, setAccountActionError] = useState<string | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [libraryFolderId, setLibraryFolderId] = useState("")
+  const [newFolderName, setNewFolderName] = useState("")
+  const [libraryError, setLibraryError] = useState<string | null>(null)
+  const [libraryBusy, setLibraryBusy] = useState(false)
+  const [favoritePickerComic, setFavoritePickerComic] = useState<R18ComicItem | null>(null)
+  const [favoriteBusyKey, setFavoriteBusyKey] = useState<string | null>(null)
 
   const authReady = uid !== null && token !== null
   const api = useMemo(() => createR18Api(getGateway().http), [])
@@ -625,6 +1035,24 @@ export function R18ShellContent() {
     },
   })
 
+  const libraryQuery = useQuery({
+    queryKey: ["r18", "library", uid],
+    enabled: authReady && accessQuery.data?.allowed === true,
+    queryFn: async () => {
+      if (!authReady || accessQuery.data?.allowed !== true) throw new Error("R18 access denied")
+      return api.getLibrary()
+    },
+  })
+
+  const libraryFolders = libraryQuery.data?.folders ?? []
+  const libraryItems = libraryQuery.data?.items ?? []
+  const favoritedKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const item of libraryItems) {
+      set.add(comicKey(item.source_id, item.comic_id))
+    }
+    return set
+  }, [libraryItems])
   const sources = useMemo(
     () => (sourcesQuery.data ?? []).filter(isActionableSource),
     [sourcesQuery.data],
@@ -845,6 +1273,105 @@ export function R18ShellContent() {
     }
   }
 
+  async function refreshLibrary() {
+    await libraryQuery.refetch()
+  }
+
+  async function createLibraryFolder() {
+    const name = newFolderName.trim()
+    if (!name) return
+    setLibraryBusy(true)
+    setLibraryError(null)
+    try {
+      const folder = await api.createFolder(name)
+      setNewFolderName("")
+      setLibraryFolderId(folder.id)
+      await refreshLibrary()
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : "创建收藏夹失败")
+    } finally {
+      setLibraryBusy(false)
+    }
+  }
+
+  async function deleteLibraryFolder(folderId: string) {
+    setLibraryBusy(true)
+    setLibraryError(null)
+    try {
+      await api.deleteFolder(folderId)
+      if (libraryFolderId === folderId) setLibraryFolderId("")
+      await refreshLibrary()
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : "删除收藏夹失败")
+    } finally {
+      setLibraryBusy(false)
+    }
+  }
+
+  async function confirmFavorite(comic: R18ComicItem, folderIds: string[]) {
+    const sourceId = comic.source_id || selectedSource?.id || ""
+    const comicId = comic.comic_id || ""
+    if (!sourceId || !comicId) return
+    const key = comicKey(sourceId, comicId)
+    setFavoriteBusyKey(key)
+    setLibraryError(null)
+    try {
+      await api.toggleFavorite({
+        sourceId,
+        comicId,
+        favorited: true,
+        title: comic.title ?? "",
+        cover: comic.cover ?? "",
+        author: comic.author ?? "",
+        subtitle: comic.subtitle ?? "",
+        folderIds,
+      })
+      setFavoritePickerComic(null)
+      await refreshLibrary()
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : "收藏失败")
+    } finally {
+      setFavoriteBusyKey(null)
+    }
+  }
+
+  async function unfavoriteItem(item: { source_id?: string; comic_id?: string }) {
+    const sourceId = item.source_id || ""
+    const comicId = item.comic_id || ""
+    if (!sourceId || !comicId) return
+    const key = comicKey(sourceId, comicId)
+    setFavoriteBusyKey(key)
+    setLibraryError(null)
+    try {
+      await api.toggleFavorite({
+        sourceId,
+        comicId,
+        favorited: false,
+      })
+      await refreshLibrary()
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : "取消收藏失败")
+    } finally {
+      setFavoriteBusyKey(null)
+    }
+  }
+
+  function onFavoriteClick(item: R18ComicItem, e: MouseEvent) {
+    e.stopPropagation()
+    const sourceId = item.source_id || selectedSource?.id || ""
+    const comicId = item.comic_id || ""
+    const key = comicKey(sourceId, comicId)
+    if (favoritedKeys.has(key)) {
+      void unfavoriteItem({ source_id: sourceId, comic_id: comicId })
+      return
+    }
+    setFavoritePickerComic({
+      ...item,
+      source_id: sourceId,
+      comic_id: comicId,
+    })
+  }
+
   if (!authReady) {
     return (
       <div style={{ height: "100%", width: "100%", display: "grid", placeItems: "center", color: "var(--text-disabled)" }}>
@@ -923,15 +1450,27 @@ export function R18ShellContent() {
               <div style={{ fontSize: 16, fontWeight: 700 }}>R18</div>
               <div style={{ marginTop: 3, fontSize: 12, color: "var(--text-secondary)" }}>内容源</div>
             </div>
-            <GlassButton
-              onClick={() => {
-                setAccountActionError(null)
-                setAccountPanelOpen(true)
-              }}
-              style={{ padding: "5px 10px", fontSize: 12, flexShrink: 0 }}
-            >
-              账号
-            </GlassButton>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <GlassButton
+                onClick={() => {
+                  setLibraryError(null)
+                  setLibraryOpen(true)
+                  void libraryQuery.refetch()
+                }}
+                style={{ padding: "5px 10px", fontSize: 12 }}
+              >
+                收藏
+              </GlassButton>
+              <GlassButton
+                onClick={() => {
+                  setAccountActionError(null)
+                  setAccountPanelOpen(true)
+                }}
+                style={{ padding: "5px 10px", fontSize: 12 }}
+              >
+                账号
+              </GlassButton>
+            </div>
           </div>
         </div>
         <GlassScrollArea className={styles.sourceList ?? ""}>
@@ -972,10 +1511,25 @@ export function R18ShellContent() {
                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, fontSize: 14 }}>
                     {sourceTitle(source)}
                   </span>
-                  <span style={{
-                    flexShrink: 0, width: 8, height: 8, borderRadius: "50%",
-                    background: isActionableSource(source) ? "var(--color-brand-green)" : "var(--text-disabled)",
-                  }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    {source.account_status === "authenticated" && (
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: "1px 6px",
+                        borderRadius: 999,
+                        color: "var(--color-success, #16a34a)",
+                        background: "color-mix(in srgb, var(--color-success, #22c55e) 14%, transparent)",
+                        border: "1px solid color-mix(in srgb, var(--color-success, #22c55e) 35%, transparent)",
+                      }}>
+                        已登录
+                      </span>
+                    )}
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: isActionableSource(source) ? "var(--color-brand-green)" : "var(--text-disabled)",
+                    }} />
+                  </div>
                 </div>
                 <div style={{ marginTop: 3, fontSize: 12, color: isActionableSource(source) ? "var(--text-secondary)" : "var(--text-disabled)" }}>
                   {sourceStatusLabel(source)}
@@ -1186,13 +1740,18 @@ export function R18ShellContent() {
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
-              {searchItems.map((item) => (
+              {searchItems.map((item) => {
+                const key = comicKey(item.source_id || selectedSource?.id, item.comic_id)
+                const isFav = favoritedKeys.has(key)
+                const favBusy = favoriteBusyKey === key
+                return (
                 <GlassSurface
-                  key={`${item.source_id}-${item.comic_id}`}
+                  key={key}
                   elevated
                   style={{
                     overflow: "hidden", cursor: "pointer",
                     transition: "transform 150ms ease, box-shadow 150ms ease",
+                    position: "relative",
                   }}
                   onClick={() => setComicForChapters(item)}
                   onMouseEnter={(e) => {
@@ -1207,6 +1766,34 @@ export function R18ShellContent() {
                   role="button"
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setComicForChapters(item) } }}
                 >
+                  <button
+                    type="button"
+                    aria-label={isFav ? "取消收藏" : "收藏"}
+                    disabled={favBusy || !item.comic_id}
+                    onClick={(e) => onFavoriteClick(item, e)}
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      zIndex: 2,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 999,
+                      border: "1px solid var(--divider)",
+                      background: isFav
+                        ? "color-mix(in srgb, #ef4444 88%, white)"
+                        : "color-mix(in srgb, var(--glass-btn-bg) 88%, transparent)",
+                      color: isFav ? "#fff" : "var(--text-primary)",
+                      cursor: favBusy ? "wait" : "pointer",
+                      fontSize: 15,
+                      lineHeight: 1,
+                      display: "grid",
+                      placeItems: "center",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    {isFav ? "♥" : "♡"}
+                  </button>
                   <R18Cover
                     {...(item.cover !== undefined ? { cover: item.cover } : {})}
                     {...(item.title !== undefined ? { title: item.title } : {})}
@@ -1226,7 +1813,8 @@ export function R18ShellContent() {
                     )}
                   </div>
                 </GlassSurface>
-              ))}
+                )
+              })}
 
               {searchItems.length === 0 && !searchQuery.isLoading && (
                 <div style={{
@@ -1282,6 +1870,46 @@ export function R18ShellContent() {
           onLogin={(sourceId) => { void loginAccount(sourceId) }}
           onClear={(sourceId) => { void clearAccount(sourceId) }}
           onClose={() => setAccountPanelOpen(false)}
+        />
+      )}
+
+      {libraryOpen && (
+        <LibraryPanel
+          folders={libraryFolders}
+          items={libraryItems}
+          selectedFolderId={libraryFolderId}
+          busy={libraryBusy}
+          error={libraryError}
+          newFolderName={newFolderName}
+          onNewFolderNameChange={setNewFolderName}
+          onSelectFolder={setLibraryFolderId}
+          onCreateFolder={() => { void createLibraryFolder() }}
+          onDeleteFolder={(folderId) => { void deleteLibraryFolder(folderId) }}
+          onOpenComic={(item) => {
+            setLibraryOpen(false)
+            const comic: R18ComicItem = {
+              source_id: item.source_id,
+              comic_id: item.comic_id,
+            }
+            if (item.title) comic.title = item.title
+            if (item.cover) comic.cover = item.cover
+            if (item.author) comic.author = item.author
+            if (item.subtitle) comic.subtitle = item.subtitle
+            setComicForChapters(comic)
+          }}
+          onUnfavorite={(item) => { void unfavoriteItem(item) }}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
+
+      {favoritePickerComic && (
+        <FavoriteFolderPicker
+          comic={favoritePickerComic}
+          folders={libraryFolders.length > 0 ? libraryFolders : [{ id: "default", name: "默认收藏" }]}
+          initialFolderIds={["default"]}
+          busy={favoriteBusyKey === comicKey(favoritePickerComic.source_id, favoritePickerComic.comic_id)}
+          onConfirm={(folderIds) => { void confirmFavorite(favoritePickerComic, folderIds) }}
+          onClose={() => setFavoritePickerComic(null)}
         />
       )}
 

@@ -9,8 +9,10 @@ Item {
     property var tagBuckets: []
     property bool loading: false
     property bool sourceSelected: false
+    property string selectedTag: ""
     property color itemFillColor: Qt.rgba(1, 1, 1, 0.14)
     property color itemHoverFillColor: Qt.rgba(0.75, 0.87, 1.0, 0.22)
+    property color itemActiveFillColor: Qt.rgba(0.35, 0.61, 0.90, 0.28)
     property color fieldStrokeColor: Qt.rgba(1, 1, 1, 0.38)
     property color textPrimaryColor: "#263241"
     property color textSecondaryColor: "#4e6072"
@@ -38,7 +40,7 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Tag 分类"
+                    text: "Tag / 分类"
                     color: root.textPrimaryColor
                     font.pixelSize: 20
                     font.bold: true
@@ -47,7 +49,7 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: root.tagBuckets.length + " 个标签 · 点击后在当前源中查找"
+                    text: root.tagBuckets.length + " 项 · 含官方分类 + 当前列表派生 tag"
                     color: root.textMutedColor
                     font.pixelSize: 12
                     elide: Text.ElideRight
@@ -82,10 +84,14 @@ Item {
             ScrollBar.vertical: GlassScrollBar {}
 
             delegate: Rectangle {
+                required property var modelData
                 width: GridView.view.cellWidth - 10
                 height: 46
                 radius: 8
-                color: tagMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor
+                readonly property string tagId: modelData.id || modelData.name || ""
+                readonly property bool active: tagId.length > 0 && tagId === root.selectedTag
+                color: active ? root.itemActiveFillColor
+                              : (tagMouse.containsMouse ? root.itemHoverFillColor : root.itemFillColor)
                 border.color: root.fieldStrokeColor
                 antialiasing: true
 
@@ -97,7 +103,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: modelData.name
+                        text: modelData.name || modelData.label || tagId
                         color: root.textPrimaryColor
                         font.pixelSize: 14
                         font.bold: true
@@ -105,6 +111,7 @@ Item {
                     }
 
                     Rectangle {
+                        visible: (modelData.count || 0) > 0 || modelData.official === true
                         Layout.preferredWidth: tagCountText.implicitWidth + 14
                         Layout.preferredHeight: 22
                         radius: 11
@@ -113,7 +120,9 @@ Item {
                         Text {
                             id: tagCountText
                             anchors.centerIn: parent
-                            text: modelData.count
+                            text: modelData.official === true
+                                  ? ((modelData.count || 0) > 0 ? ("官方 · " + modelData.count) : "官方")
+                                  : String(modelData.count || 0)
                             color: root.badgeTextColor
                             font.pixelSize: 11
                         }
@@ -125,7 +134,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.tagSelected(modelData.name)
+                    onClicked: root.tagSelected(tagId)
                 }
             }
         }
@@ -133,7 +142,7 @@ Item {
         Text {
             Layout.fillWidth: true
             visible: root.tagBuckets.length === 0 && !root.loading
-            text: root.sourceSelected ? "当前加载的漫画还没有 tag，可先刷新漫画列表" : "请先选择已导入漫画源"
+            text: root.sourceSelected ? "暂无官方/派生 tag，可先刷新漫画列表" : "请先选择已导入漫画源"
             color: root.textMutedColor
             font.pixelSize: 13
             horizontalAlignment: Text.AlignHCenter

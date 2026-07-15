@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -19,6 +20,8 @@ class R18Controller : public QObject
     Q_PROPERTY(R18ListModel* chapterModel READ chapterModel CONSTANT)
     Q_PROPERTY(R18ListModel* pageModel READ pageModel CONSTANT)
     Q_PROPERTY(R18ListModel* historyModel READ historyModel CONSTANT)
+    Q_PROPERTY(R18ListModel* libraryModel READ libraryModel CONSTANT)
+    Q_PROPERTY(R18ListModel* folderModel READ folderModel CONSTANT)
     Q_PROPERTY(R18ListModel* officialSourceModel READ officialSourceModel CONSTANT)
     Q_PROPERTY(QString officialSourceCatalogUrl READ officialSourceCatalogUrl WRITE setOfficialSourceCatalogUrl NOTIFY
                    officialSourceCatalogUrlChanged)
@@ -31,6 +34,8 @@ class R18Controller : public QObject
     Q_PROPERTY(int currentPageIndex READ currentPageIndex NOTIFY currentPageChanged)
     Q_PROPERTY(int currentSearchPage READ currentSearchPage NOTIFY searchStateChanged)
     Q_PROPERTY(bool currentSearchHasMore READ currentSearchHasMore NOTIFY searchStateChanged)
+    Q_PROPERTY(QString searchSort READ searchSort WRITE setSearchSort NOTIFY searchFiltersChanged)
+    Q_PROPERTY(QString searchTag READ searchTag WRITE setSearchTag NOTIFY searchFiltersChanged)
     Q_PROPERTY(bool accessResolved READ accessResolved NOTIFY accessChanged)
     Q_PROPERTY(bool accessAllowed READ accessAllowed NOTIFY accessChanged)
     Q_PROPERTY(bool accessRevoked READ accessRevoked NOTIFY accessChanged)
@@ -57,6 +62,14 @@ public:
     R18ListModel* historyModel()
     {
         return &_history;
+    }
+    R18ListModel* libraryModel()
+    {
+        return &_library;
+    }
+    R18ListModel* folderModel()
+    {
+        return &_folders;
     }
     R18ListModel* officialSourceModel()
     {
@@ -102,6 +115,14 @@ public:
     {
         return _current_search_has_more;
     }
+    QString searchSort() const
+    {
+        return _search_sort;
+    }
+    QString searchTag() const
+    {
+        return _search_tag;
+    }
     bool accessResolved() const
     {
         return _access_resolved;
@@ -121,10 +142,22 @@ public:
     Q_INVOKABLE void refreshOfficialSources(const QString& catalogUrl = QString());
     Q_INVOKABLE QString pickSourceCatalogPath();
     Q_INVOKABLE void selectSource(const QString& sourceId);
+    Q_INVOKABLE void setSearchSort(const QString& sort);
+    Q_INVOKABLE void setSearchTag(const QString& tag);
     Q_INVOKABLE void search(const QString& keyword, int page = 1);
     Q_INVOKABLE void openComic(const QString& sourceId, const QString& comicId);
     Q_INVOKABLE void openChapter(const QString& sourceId, const QString& chapterId);
-    Q_INVOKABLE void toggleFavorite(const QString& sourceId, const QString& comicId, bool favorited);
+    Q_INVOKABLE void toggleFavorite(const QString& sourceId,
+                                    const QString& comicId,
+                                    bool favorited,
+                                    const QString& title = QString(),
+                                    const QString& cover = QString(),
+                                    const QString& author = QString(),
+                                    const QString& subtitle = QString(),
+                                    const QStringList& folderIds = {});
+    Q_INVOKABLE void refreshLibrary();
+    Q_INVOKABLE void createFolder(const QString& name);
+    Q_INVOKABLE void deleteFolder(const QString& folderId);
     Q_INVOKABLE void
     updateHistory(const QString& sourceId, const QString& comicId, const QString& chapterId, int pageIndex);
 
@@ -138,7 +171,9 @@ signals:
     void currentPageChanged();
     void officialSourceCatalogUrlChanged();
     void searchStateChanged();
+    void searchFiltersChanged();
     void accessChanged();
+    void libraryChanged();
 
 private:
     void postJson(const QString& path, const QJsonObject& payload, const QString& op);
@@ -162,6 +197,8 @@ private:
     R18ListModel _chapters;
     R18ListModel _pages;
     R18ListModel _history;
+    R18ListModel _library;
+    R18ListModel _folders;
     R18ListModel _official_sources;
     QString _official_source_catalog_url;
     QString _status_text;
@@ -175,6 +212,8 @@ private:
     int _current_search_page = 0;
     bool _current_search_has_more = false;
     int _pending_search_page = 0;
+    QString _search_sort;
+    QString _search_tag;
     bool _access_resolved = false;
     bool _access_allowed = false;
     bool _access_revoked = false;

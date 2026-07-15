@@ -120,6 +120,11 @@ const char* EhentaiSourceVersion()
     return "1.0.0";
 }
 
+const char* ExhentaiSourceVersion()
+{
+    return "1.0.0";
+}
+
 const char* AuthRequiredStatus()
 {
     return "auth-required";

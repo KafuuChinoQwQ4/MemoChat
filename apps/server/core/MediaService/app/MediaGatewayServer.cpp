@@ -1,6 +1,8 @@
+#include "CacheReadinessProbes.hpp"
 #include "GateDomainServer.hpp"
 #include "GateRouteProfileRegistrar.hpp"
 #include "MediaStorage.hpp"
+#include "PersistenceReadinessProbes.hpp"
 
 // MediaGatewayServer — media upload/download domain peeled off GateServer
 // (gateserver split Phase 4). Serves /healthz, /readyz and the media routes
@@ -22,5 +24,5 @@ int main()
         {
             ShutdownMediaStorage();
         },
-        {.postgres = true, .redis = true});
+        {memochat::gate::persistence::PostgresReadinessProbe(), memochat::gate::cache::RedisReadinessProbe()});
 }

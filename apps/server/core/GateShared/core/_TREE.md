@@ -17,6 +17,6 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `CMakeLists.txt` | core 子库的构建目标定义。 |
+| `CMakeLists.txt` | 基础设施六切片（Runtime/Config/Cache/Clients/Persistence/Support）的构建定义，及聚合门面 GateInfraCore（INTERFACE）。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -910,69 +910,120 @@ bool JmLogin(const std::string& username, const std::string& password, std::stri
         SetError(error, jm_adapter::modules::LoginRequiredMessage());
         return false;
     }
-    // Build JSON body (escape the two characters that break JSON string literals).
-    auto json_escape = [](const std::string& in)
+
+    // Official JM login expects application/x-www-form-urlencoded fields, not JSON.
+    // Wrong content-type yields: "用戶名和密碼字段不能留空！" even when values are present.
+    const std::string body = std::string(jm_adapter::modules::LoginUsernameField()) + "=" +
+                             detail::UrlEncode(username) + "&" + jm_adapter::modules::LoginPasswordField() + "=" +
+                             detail::UrlEncode(password);
+
+    const auto now = std::chrono::system_clock::now();
+    const auto unix_time = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (!JmApiHeaders(unix_time, "", &headers, error))
+        return false;
+    headers.emplace_back("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+    std::string last_error;
+    for (int index = 0; index < jm_adapter::modules::ApiHostCount(); ++index)
     {
-        std::string out;
-        out.reserve(in.size() + 4);
-        for (unsigned char c : in)
+        const std::string host = jm_adapter::modules::ApiHostAt(index);
+        if (host.empty())
+            continue;
+        const std::string url = "https://" + host + jm_adapter::modules::LoginTarget();
+        HttpResult response;
+        std::string request_error;
+        if (!HttpPost(url, headers, body, &response, &request_error, jm_adapter::modules::LoginTimeoutSeconds()))
         {
-            if (c == '\\' || c == '"')
-            {
-                out.push_back('\\');
-                out.push_back(static_cast<char>(c));
-            }
-            else if (c == '\n')
-                out += "\\n";
-            else if (c == '\r')
-                out += "\\r";
-            else if (c == '\t')
-                out += "\\t";
-            else if (c < 0x20)
-            {
-                char buf[8];
-                std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(c));
-                out += buf;
-            }
-            else
-                out.push_back(static_cast<char>(c));
+            last_error = host + ": " + request_error;
+            continue;
         }
-        return out;
-    };
-    const std::string body = std::string("{\"") + jm_adapter::modules::LoginUsernameField() + "\":\"" +
-                             json_escape(username) + "\",\"" + jm_adapter::modules::LoginPasswordField() + "\":\"" +
-                             json_escape(password) + "\"}";
+        if (response.body.empty())
+        {
+            last_error = host + " HTTP " + std::to_string(response.status) + " empty body";
+            continue;
+        }
 
-    json::JsonValue result;
-    if (!JmApiPost(jm_adapter::modules::LoginTarget(), "", body, &result, error))
-        return false;
+        // Login responses are plain JSON (not the encrypted `data` blob used by search/album).
+        // Failed logins often return HTTP 401 with {"code":401,"errorMsg":"..."}.
+        JsonValue root;
+        if (!json::glaze_parse(root, response.body))
+        {
+            last_error = host + " returned non-JSON login response (HTTP " + std::to_string(response.status) + ")";
+            continue;
+        }
 
-    // Response: {"code":200,"data":{"uid":"...","username":"...","level":...},...}
-    const int64_t code = detail::FieldInt(result, "code", 200);
-    if (code != 0 && code != 200)
-    {
-        const std::string msg = detail::FieldString(result, "message", detail::FieldString(result, "error", ""));
-        SetError(error,
-                 msg.empty()
-                     ? (jm_adapter::modules::LoginFailedMessage() + std::string(" (code ") + std::to_string(code) + ")")
-                     : (jm_adapter::modules::LoginFailedMessage() + std::string(": ") + msg));
-        return false;
+        const int64_t code = detail::FieldInt(root, "code", response.status);
+        const std::string error_msg =
+            detail::FieldString(root,
+                                "errorMsg",
+                                detail::FieldString(root, "message", detail::FieldString(root, "error", "")));
+
+        // data may be object on success, empty array on failure, or rarely an encrypted string.
+        JsonValue data = json::glaze_get(root, "data");
+        std::string uid = detail::FieldString(data, jm_adapter::modules::LoginUidField());
+        if (uid.empty())
+            uid = detail::FieldString(root, jm_adapter::modules::LoginUidField());
+
+        if (uid.empty() && data.isString())
+        {
+            // Fallback: some gateways still wrap login success in encrypted data.
+            const std::string encrypted_data = detail::StringValue(data);
+            std::string cipher_text;
+            if (DecodeBase64(encrypted_data, cipher_text))
+            {
+                std::string key;
+                std::string decrypt_error;
+                if (Md5Hex(std::to_string(unix_time) + "185Hcomic3PAPP7R", &key, &decrypt_error))
+                {
+                    std::string decrypted;
+                    if (Aes256EcbDecrypt(cipher_text, key, &decrypted, &decrypt_error))
+                    {
+                        std::string clear;
+                        if (TrimJsonPayload(decrypted, &clear, &decrypt_error))
+                        {
+                            JsonValue decrypted_root;
+                            if (json::glaze_parse(decrypted_root, clear))
+                            {
+                                uid = detail::FieldString(decrypted_root, jm_adapter::modules::LoginUidField());
+                                if (uid.empty())
+                                {
+                                    const JsonValue nested = json::glaze_get(decrypted_root, "data");
+                                    uid = detail::FieldString(nested, jm_adapter::modules::LoginUidField());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const bool ok_code = (code == 0 || code == 200);
+        if (!uid.empty() && (ok_code || response.status == 200))
+        {
+            *uid_out = std::move(uid);
+            return true;
+        }
+
+        if (!error_msg.empty())
+        {
+            // Prefer semantic upstream error (wrong password etc.) over host noise.
+            last_error = jm_adapter::modules::LoginFailedMessage() + std::string(": ") + error_msg;
+            // Auth failures are definitive — no need to try remaining hosts.
+            if (code == 401 || response.status == 401)
+            {
+                SetError(error, last_error);
+                return false;
+            }
+            continue;
+        }
+
+        last_error =
+            host + " HTTP " + std::to_string(response.status) + " login rejected (code " + std::to_string(code) + ")";
     }
-    const json::JsonValue data = json::glaze_get(result, "data");
-    std::string uid = detail::FieldString(data, jm_adapter::modules::LoginUidField());
-    if (uid.empty())
-    {
-        // Some response shapes embed uid directly on the root.
-        uid = detail::FieldString(result, jm_adapter::modules::LoginUidField());
-    }
-    if (uid.empty())
-    {
-        const std::string msg = detail::FieldString(result, "message", "");
-        SetError(error, msg.empty() ? "JM login succeeded but returned no uid" : "JM login: " + msg);
-        return false;
-    }
-    *uid_out = std::move(uid);
-    return true;
+
+    SetError(error, last_error.empty() ? jm_adapter::modules::LoginFailedMessage() : last_error);
+    return false;
 }
 
 bool JmCheckin(const std::string& uid, json::JsonValue* out, std::string* error)

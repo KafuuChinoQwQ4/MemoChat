@@ -160,49 +160,34 @@ class RegistrationIdentityContractTests(unittest.TestCase):
         self.assertIn("UpdatePassword(email, pwd)", h1_auth)
         self.assertIn("UpdatePwd(email, password)", h1_account)
 
-    def test_chatserver_postgres_registration_checks_duplicate_email_only(self):
+    def test_chatserver_no_longer_owns_account_auth_write_paths(self):
+        """Finding #3: ChatServer must not re-implement account auth writes.
+
+        Registration / password check / reset live only in the account bounded
+        context (GateShared/PostgresDaoAccount). ChatServer keeps account *reads*
+        behind IAccountDirectory.
+        """
         source = read(CHAT_USERS_DAO)
-        body = compact(function_body(source, "int PostgresDao::RegUser"))
-        postgres_branch = body.split("auto con = pool_->getConnection()", 1)[0]
-
-        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', postgres_branch)
-        self.assertNotIn("OR name", postgres_branch)
-        self.assertNotRegex(postgres_branch, r"WHERE\s+email\s*=\s*\$1\s+OR\s+name")
-        self.assertIn("memochat::auth::HashPassword(pwd, password_hash)", body)
-        self.assertIn("uid, name, email, pwd, password_hash, nick, icon, user_id", body)
-        self.assertIn("VALUES ($1, $2, $3, '', $4", body)
-
-    def test_chatserver_reset_password_uses_unique_email_not_nickname(self):
-        source = read(CHAT_USERS_DAO)
-        check_body = compact(function_body(source, "bool PostgresDao::CheckEmail"))
-        update_body = compact(function_body(source, "bool PostgresDao::UpdatePwd"))
-        postgres_check = check_body.split("auto con = pool_->getConnection()", 1)[0]
-        postgres_update = update_body.split("auto con = pool_->getConnection()", 1)[0]
-
-        self.assertIn('SELECT 1 FROM \\"user\\" WHERE email = $1 LIMIT 1', postgres_check)
-        self.assertNotIn("WHERE name = $1", postgres_check)
-        self.assertIn("memochat::auth::HashPassword(newpwd, password_hash)", postgres_update)
-        self.assertIn("UPDATE \\\"user\\\" SET password_hash = $1, pwd = '' WHERE email = $2", postgres_update)
-        self.assertNotIn("SET pwd = $1", postgres_update)
-        self.assertNotIn("SET pwd = $1 WHERE name = $2", postgres_update)
-
-    def test_chatserver_postgres_password_check_verifies_password_hash_only(self):
-        source = read(CHAT_USERS_DAO)
-        body = compact(function_body(source, "bool PostgresDao::CheckPwd"))
-        postgres_branch = body.split("(void) name;", 1)[0]
-
-        self.assertIn("password_hash", postgres_branch)
-        self.assertIn("memochat::auth::VerifyPassword(password_hash, pwd)", postgres_branch)
-        self.assertIn("userInfo.pwd.clear()", postgres_branch)
-        self.assertNotIn("if (pwd != origin_pwd)", body)
-        self.assertNotIn("origin_pwd", body)
-        for removed_helper in (
-            "DecodeLegacyXorPwd",
-            "ShouldAttemptLegacyXorDecode",
-            "IsPasswordAccepted",
-            "legacy_decoded_password_match",
+        header = read(SERVER_CORE / "ChatServer/persistence/PostgresDao.hpp")
+        mgr = read(SERVER_CORE / "ChatServer/persistence/PostgresMgr.hpp")
+        for dead in (
+            "PostgresDao::RegUser",
+            "PostgresDao::CheckEmail",
+            "PostgresDao::UpdatePwd",
+            "PostgresDao::CheckPwd",
+            "int RegUser(",
+            "bool CheckEmail(",
+            "bool UpdatePwd(",
+            "bool CheckPwd(",
         ):
-            self.assertNotIn(removed_helper, postgres_branch)
+            with self.subTest(symbol=dead):
+                self.assertNotIn(dead, source)
+                self.assertNotIn(dead, header)
+                self.assertNotIn(dead, mgr)
+        # Live account-read surface must remain.
+        self.assertIn("GetUser", header)
+        self.assertIn("GetUidByUserId", header)
+        self.assertIn("GetUsersByUids", header)
 
     def test_user_schema_keeps_email_unique_and_nickname_non_unique(self):
         for path in SCHEMA_FILES:

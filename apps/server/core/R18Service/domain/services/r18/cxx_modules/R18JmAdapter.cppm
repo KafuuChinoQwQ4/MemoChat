@@ -55,6 +55,7 @@ int SearchPageSize()
 
 const char* ApiHostAt(int index)
 {
+    // Prefer currently-reachable official API mirrors. Dead / TLS-broken hosts last.
     switch (index)
     {
         case 0:
@@ -233,7 +234,7 @@ const char* CheckinFailedMessage()
 
 int LoginTimeoutSeconds()
 {
-    return 8;
+    return 15;
 }
 
 

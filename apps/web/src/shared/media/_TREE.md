@@ -8,6 +8,8 @@
 | --- | --- |
 | `MediaUploadService.ts` | 封装媒体上传请求。 |
 | `filePicker.ts` | 浏览器文件选择辅助。 |
+| `mediaAuthCache.test.ts` | 鉴权媒体缓存：共享 inflight、会话复用、按 token 隔离、logout 清理。 |
+| `mediaAuthCache.ts` | 鉴权媒体（头像等）进程级 blob URL 缓存，避免切换会话重复拉取 MinIO。 |
 | `mediaUrl.test.ts` | 覆盖同源认证媒体 URL、UUID v4 media key、外部源拒绝和默认头像解析。 |
 | `mediaUrl.ts` | 将服务端媒体引用解析成浏览器 URL，并限制 Bearer 请求到可信媒体端点。 |
 | `uploadTypes.ts` | 媒体上传相关类型定义。 |

@@ -15,6 +15,10 @@ Item {
     property string sourceCatalogInput: ""
     property string sourceFeedKeyword: ""
     property var sourceTagBuckets: []
+    property var sortOptions: []
+    property var tagOptions: []
+    property string selectedSort: ""
+    property string selectedTag: ""
     property color panelFillColor: Qt.rgba(1, 1, 1, 0.16)
     property color fieldFillColor: Qt.rgba(1, 1, 1, 0.16)
     property color fieldStrokeColor: Qt.rgba(1, 1, 1, 0.38)
@@ -57,6 +61,8 @@ Item {
     signal sourceFeedRequested(string keyword)
     signal sourceTagsRequested()
     signal tagSearchRequested(string tag)
+    signal sortSelected(string sortId)
+    signal tagFilterSelected(string tagId)
     signal loadMoreProbe(var gridView)
 
     function modelCount(model) {
@@ -258,6 +264,10 @@ Item {
                 keyword: root.sourceFeedKeyword
                 comicCount: root.modelCount(root.r18Controller ? root.r18Controller.comicModel : null)
                 loading: root.loading
+                sortOptions: root.sortOptions
+                tagOptions: root.tagOptions
+                selectedSort: root.selectedSort
+                selectedTag: root.selectedTag
                 fieldFillColor: root.fieldFillColor
                 fieldStrokeColor: root.fieldStrokeColor
                 textPrimaryColor: root.textPrimaryColor
@@ -274,6 +284,8 @@ Item {
                 onKeywordEdited: function(keyword) { root.sourceFeedKeywordEdited(keyword) }
                 onRefreshRequested: root.sourceFeedRequested(root.sourceFeedKeyword)
                 onSearchRequested: root.sourceFeedRequested(root.sourceFeedKeyword)
+                onSortSelected: function(sortId) { root.sortSelected(sortId) }
+                onTagSelected: function(tagId) { root.tagFilterSelected(tagId) }
                 onLoadMoreProbe: function(gridView) { root.loadMoreProbe(gridView) }
             }
 
@@ -281,6 +293,7 @@ Item {
                 tagBuckets: root.sourceTagBuckets
                 loading: root.loading
                 sourceSelected: root.currentSourceId.length > 0
+                selectedTag: root.selectedTag
                 itemFillColor: root.itemFillColor
                 itemHoverFillColor: root.itemHoverFillColor
                 fieldStrokeColor: root.fieldStrokeColor

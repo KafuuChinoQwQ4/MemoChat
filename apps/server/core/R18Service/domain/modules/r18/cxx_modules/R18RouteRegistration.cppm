@@ -67,6 +67,36 @@ const char* FavoriteTogglePath()
     return "/api/r18/favorite/toggle";
 }
 
+const char* LibraryPath()
+{
+    return "/api/r18/library";
+}
+
+const char* FavoritesPath()
+{
+    return "/api/r18/favorites";
+}
+
+const char* FolderCreatePath()
+{
+    return "/api/r18/folder/create";
+}
+
+const char* FolderRenamePath()
+{
+    return "/api/r18/folder/rename";
+}
+
+const char* FolderDeletePath()
+{
+    return "/api/r18/folder/delete";
+}
+
+const char* FavoriteAssignPath()
+{
+    return "/api/r18/favorite/assign";
+}
+
 const char* HistoryUpdatePath()
 {
     return "/api/r18/history/update";

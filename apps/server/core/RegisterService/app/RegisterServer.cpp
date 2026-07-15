@@ -1,5 +1,7 @@
+#include "CacheReadinessProbes.hpp"
 #include "GateDomainServer.hpp"
 #include "GateRouteProfileRegistrar.hpp"
+#include "PersistenceReadinessProbes.hpp"
 
 // RegisterServer — account creation + recovery, peeled off GateServer
 // (gateserver split Phase 5). Serves /healthz, /readyz, /get_varifycode,
@@ -9,12 +11,13 @@
 // It starts by default after Envoy cut-over.
 int main()
 {
-    return RunGateDomainServer(memochat::gate::profiles::RegisterRegister,
-                               "RegisterServer",
-                               "Register",
-                               /*default_port=*/8101,
-                               /*init_aws=*/false,
-                               {},
-                               {},
-                               {.postgres = true, .redis = true});
+    return RunGateDomainServer(
+        memochat::gate::profiles::RegisterRegister,
+        "RegisterServer",
+        "Register",
+        /*default_port=*/8101,
+        /*init_aws=*/false,
+        {},
+        {},
+        {memochat::gate::persistence::PostgresReadinessProbe(), memochat::gate::cache::RedisReadinessProbe()});
 }

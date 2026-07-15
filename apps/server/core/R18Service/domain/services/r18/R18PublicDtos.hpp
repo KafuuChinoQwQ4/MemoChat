@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace memochat::r18
 {
@@ -42,6 +43,13 @@ struct R18FavoriteToggleRequestDto
     std::string source_id;
     std::string comic_id;
     bool favorited = true;
+    // Optional snapshot metadata for offline library display.
+    std::string title;
+    std::string cover;
+    std::string author;
+    std::string subtitle;
+    // Target folders when favoriting; empty → default folder.
+    std::vector<std::string> folder_ids;
 };
 
 struct R18HistoryUpdateRequestDto
