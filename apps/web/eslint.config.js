@@ -32,12 +32,12 @@ export default tseslint.config(
         typescript: { alwaysTryTypes: true },
       },
       'boundaries/elements': [
-        { type: 'app',     pattern: 'src/app/**/*' },
-        { type: 'core',    pattern: 'src/core/**/*' },
-        { type: 'shared',  pattern: 'src/shared/**/*' },
-        { type: 'feature', pattern: 'src/features/**/*' },
-        { type: 'route',   pattern: 'src/routes/**/*' },
-        { type: 'theme',   pattern: 'src/theme/**/*' },
+        { type: 'feature', pattern: 'src/features/*', mode: 'folder', capture: ['featureName'] },
+        { type: 'app',     pattern: 'src/app', mode: 'folder' },
+        { type: 'core',    pattern: 'src/core', mode: 'folder' },
+        { type: 'shared',  pattern: 'src/shared', mode: 'folder' },
+        { type: 'route',   pattern: 'src/routes', mode: 'folder' },
+        { type: 'theme',   pattern: 'src/theme', mode: 'folder' },
       ],
       'boundaries/ignore': ['src/test/**/*', '**/*.test.*', '**/*.spec.*'],
     },
@@ -53,7 +53,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
 
-      // Boundaries — feature modules must not cross-import each other
+      // Boundaries — feature modules are isolated except where chat composes group UI.
       'boundaries/element-types': [
         'error',
         {
@@ -63,10 +63,18 @@ export default tseslint.config(
             { from: 'app',     allow: ['app', 'core', 'shared', 'feature', 'theme'] },
             // route can import feature + shared + core + theme
             { from: 'route',   allow: ['route', 'feature', 'shared', 'core', 'theme', 'app'] },
-            // feature can import core + shared + theme only (NOT other features)
-            { from: 'feature', allow: ['core', 'shared', 'theme'] },
-            // shared can import core + theme only
-            { from: 'shared',  allow: ['core', 'theme'] },
+            // A feature can use its own files plus lower-level core/shared/theme modules.
+            {
+              from: 'feature',
+              allow: ['core', 'shared', 'theme', ['feature', { featureName: '${from.featureName}' }]],
+            },
+            // Chat embeds group management in the conversation pane. No other cross-feature edge is allowed.
+            {
+              from: [['feature', { featureName: 'chat' }]],
+              allow: [['feature', { featureName: 'group' }]],
+            },
+            // shared modules can compose other shared modules and lower-level core/theme modules.
+            { from: 'shared',  allow: ['shared', 'core', 'theme'] },
             // core is self-contained
             { from: 'core',    allow: ['core'] },
             // theme is self-contained

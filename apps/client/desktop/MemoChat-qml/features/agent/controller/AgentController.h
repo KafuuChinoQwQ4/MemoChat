@@ -27,6 +27,7 @@ class AgentController : public QObject
     Q_PROPERTY(bool modelRefreshBusy READ modelRefreshBusy NOTIFY modelStateChanged)
     Q_PROPERTY(bool apiProviderBusy READ apiProviderBusy NOTIFY modelStateChanged)
     Q_PROPERTY(QString apiProviderStatus READ apiProviderStatus NOTIFY modelStateChanged)
+    Q_PROPERTY(QVariantList apiProviderCandidates READ apiProviderCandidates NOTIFY modelStateChanged)
     Q_PROPERTY(bool thinkingEnabled READ thinkingEnabled WRITE setThinkingEnabled NOTIFY thinkingChanged)
     Q_PROPERTY(bool currentModelSupportsThinking READ currentModelSupportsThinking NOTIFY thinkingChanged)
     Q_PROPERTY(QVariantList knowledgeBases READ knowledgeBases NOTIFY knowledgeBasesChanged)
@@ -76,6 +77,7 @@ public:
     bool modelRefreshBusy() const;
     bool apiProviderBusy() const;
     QString apiProviderStatus() const;
+    QVariantList apiProviderCandidates() const;
     bool thinkingEnabled() const;
     bool currentModelSupportsThinking() const;
     void setThinkingEnabled(bool enabled);
@@ -126,8 +128,9 @@ public:
     Q_INVOKABLE void switchModel(const QString& backend, const QString& model);
     Q_INVOKABLE void switchAgentSkillMode(const QString& mode);
     Q_INVOKABLE void refreshModelList();
-    Q_INVOKABLE void registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey);
-    Q_INVOKABLE void deleteApiProvider(const QString& providerId);
+    Q_INVOKABLE void discoverApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey);
+    Q_INVOKABLE void registerDiscoveredApiModel(const QString& modelName);
+    Q_INVOKABLE void deleteApiProvider(const QString& providerId, const QString& modelName);
 
     Q_INVOKABLE void summarizeChat(const QString& dialogUid, const QString& chatHistoryJson);
     Q_INVOKABLE void suggestReply(const QString& dialogUid, const QString& chatHistoryJson);
@@ -271,6 +274,9 @@ private:
     void ensureUserScope();
     void resetUserScopedRuntime();
     void setCurrentGeneratingMsgId(const QString& msgId);
+    // Returns a short title derived from the first user message (≤24 chars)
+    static QString makeAutoSessionTitle(const QString& content);
+    void maybeAutoRenameSession();
 
     // SSE 流式处理辅助
     void handleStreamChunk(const QJsonObject& chunk);
@@ -288,9 +294,13 @@ private:
     QString _error;
     QVariantList _sessions;
     QVariantList _available_models;
+    QVariantList _api_provider_candidates;
     bool _model_refresh_busy = false;
     bool _api_provider_busy = false;
     QString _api_provider_status;
+    QString _pending_api_provider_name;
+    QString _pending_api_provider_url;
+    QString _pending_api_provider_key;
     bool _thinking_enabled = false;
     QVariantList _knowledge_bases;
     QString _knowledge_search_result;
@@ -323,6 +333,9 @@ private:
     QString _pendingDeleteSessionId;
     QString _pendingDeleteGameRoomId;
     bool _selectNewestSessionAfterList = false;
+    // set on session creation; cleared after the first auto-rename fires
+    QString _pending_auto_rename_session_id;
+    QString _pending_auto_rename_content;
     QVariantList _game_rooms;
     QVariantList _game_templates;
     QVariantList _game_template_presets;

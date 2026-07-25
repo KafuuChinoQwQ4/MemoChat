@@ -32,7 +32,7 @@ class WebMomentsMasonryContractTests(unittest.TestCase):
         self.assertIn("textParts.push(content)", map_body)
         self.assertIn("media,", map_body)
 
-    def test_feed_cards_preview_long_text_and_media_before_expand_overlay(self):
+    def test_feed_cards_preview_long_text_and_media_before_expand(self):
         source = read(MOMENTS_COMPONENT)
 
         for token in (
@@ -44,12 +44,23 @@ class WebMomentsMasonryContractTests(unittest.TestCase):
             "maxHeight: full ? undefined : MEDIA_PREVIEW_MAX_HEIGHT",
             "查看全文",
             "查看全部",
-            "function MomentExpandOverlay",
             "openMomentExpand(item)",
             "content: textContent || location",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, source)
+
+    def test_expand_promotes_the_original_card_with_transform_only_flip(self):
+        source = read(MOMENTS_COMPONENT)
+
+        self.assertNotIn("function MomentExpandOverlay", source)
+        self.assertNotIn("<MomentExpandOverlay", source)
+        self.assertIn('transformOrigin: "top left"', source)
+        self.assertIn('willChange: "transform"', source)
+        self.assertIn('transition: "transform ', source)
+        self.assertIn('role={isExpanded ? "dialog" : undefined}', source)
+        self.assertIn("window.setTimeout", source)
+        self.assertIn("current?.id === closingId && current.closing ? null : current", source)
 
     def test_feed_keeps_masonry_columns_and_renders_media_urls(self):
         source = read(MOMENTS_COMPONENT)

@@ -18,6 +18,7 @@ Rectangle {
     property bool modelRefreshBusy: false
     property bool apiProviderBusy: false
     property string apiProviderStatus: ""
+    property var apiProviderCandidates: []
     property bool thinkingEnabled: root.agentController ? root.agentController.thinkingEnabled : false
     property bool currentModelSupportsThinking: root.agentController ? root.agentController.currentModelSupportsThinking : false
     property var knowledgeBases: root.agentController ? root.agentController.knowledgeBases : []
@@ -470,6 +471,7 @@ Rectangle {
                 modelRefreshBusy: root.modelRefreshBusy
                 apiProviderBusy: root.apiProviderBusy
                 apiProviderStatus: root.apiProviderStatus
+                apiProviderCandidates: root.apiProviderCandidates
                 thinkingEnabled: root.thinkingEnabled
                 currentModelSupportsThinking: root.currentModelSupportsThinking
                 onCloseRequested: modelSettingsLoader.active = false
@@ -478,9 +480,14 @@ Rectangle {
                         root.agentController.thinkingEnabled = checked
                     }
                 }
-                onApiProviderRegistered: function(name, baseUrl, apiKey) {
+                onApiProviderDiscoverRequested: function(name, baseUrl, apiKey) {
                     if (root.agentController) {
-                        root.agentController.registerApiProvider(name, baseUrl, apiKey)
+                        root.agentController.discoverApiProvider(name, baseUrl, apiKey)
+                    }
+                }
+                onApiModelRegisterRequested: function(modelName) {
+                    if (root.agentController && modelName.length > 0) {
+                        root.agentController.registerDiscoveredApiModel(modelName)
                     }
                 }
                 onModelSelected: function(modelType, modelName) {
@@ -488,9 +495,9 @@ Rectangle {
                         root.agentController.switchModel(modelType, modelName)
                     }
                 }
-                onModelDeleted: function(modelType) {
-                    if (root.agentController && modelType.length > 0) {
-                        root.agentController.deleteApiProvider(modelType)
+                onModelDeleted: function(modelType, modelName) {
+                    if (root.agentController && modelType.length > 0 && modelName.length > 0) {
+                        root.agentController.deleteApiProvider(modelType, modelName)
                     }
                 }
                 onRefreshModelsRequested: {

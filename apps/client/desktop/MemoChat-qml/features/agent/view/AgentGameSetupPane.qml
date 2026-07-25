@@ -16,6 +16,7 @@ Rectangle {
     property var availableModels: []
     property string currentModel: ""
     property bool apiProviderBusy: false
+    property var apiProviderCandidates: []
     property bool gameSetupMode: false
     property var gameRulesets: []
     property var gameRolePresets: []
@@ -34,7 +35,8 @@ Rectangle {
     signal draftAgentRemoveRequested(int agentIndex)
     signal createRoomRequested()
     signal rulesetActivated(string rulesetId)
-    signal registerApiProviderRequested(string name, string baseUrl, string apiKey)
+    signal discoverApiProviderRequested(string name, string baseUrl, string apiKey)
+    signal registerApiModelRequested(string modelName)
 
     function firstModel() {
         return AgentGameRuntime.firstModel(root.availableModels)
@@ -151,8 +153,12 @@ Rectangle {
                 Layout.fillWidth: true
                 currentModelLabel: root.currentModel.length > 0 ? root.currentModel : AgentGameRuntime.modelLabel(root.firstModel())
                 apiProviderBusy: root.apiProviderBusy
-                onRegisterRequested: function(name, baseUrl, apiKey) {
-                    root.registerApiProviderRequested(name, baseUrl, apiKey)
+                apiProviderCandidates: root.apiProviderCandidates
+                onDiscoverRequested: function(name, baseUrl, apiKey) {
+                    root.discoverApiProviderRequested(name, baseUrl, apiKey)
+                }
+                onRegisterRequested: function(modelName) {
+                    root.registerApiModelRequested(modelName)
                 }
             }
 

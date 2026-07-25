@@ -13,8 +13,10 @@ Rectangle {
 
     property string currentModelLabel: ""
     property bool apiProviderBusy: false
+    property var apiProviderCandidates: []
 
-    signal registerRequested(string name, string baseUrl, string apiKey)
+    signal discoverRequested(string name, string baseUrl, string apiKey)
+    signal registerRequested(string modelName)
 
     Layout.preferredHeight: apiColumn.implicitHeight + 20
 
@@ -86,13 +88,43 @@ Rectangle {
             GlassButton {
                 Layout.preferredWidth: 72
                 Layout.preferredHeight: 30
-                text: root.apiProviderBusy ? "解析" : "接入"
+                text: root.apiProviderBusy ? "检测" : "检测模型"
                 textPixelSize: 12
                 cornerRadius: 8
                 enabled: !root.apiProviderBusy
                 normalColor: Qt.rgba(0.33, 0.56, 0.84, 0.22)
                 hoverColor: Qt.rgba(0.33, 0.56, 0.84, 0.32)
-                onClicked: root.registerRequested(apiProviderNameField.text, apiBaseUrlField.text, apiKeyField.text)
+                onClicked: root.discoverRequested(apiProviderNameField.text, apiBaseUrlField.text, apiKeyField.text)
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            visible: root.apiProviderCandidates.length > 0
+
+            ComboBox {
+                id: apiCandidateModelBox
+                Layout.fillWidth: true
+                Layout.preferredHeight: 30
+                model: root.apiProviderCandidates
+                textRole: "display_name"
+                enabled: !root.apiProviderBusy
+            }
+
+            GlassButton {
+                Layout.preferredWidth: 104
+                Layout.preferredHeight: 30
+                text: "接入所选"
+                textPixelSize: 12
+                cornerRadius: 8
+                enabled: !root.apiProviderBusy && apiCandidateModelBox.currentIndex >= 0
+                normalColor: Qt.rgba(0.31, 0.65, 0.48, 0.22)
+                hoverColor: Qt.rgba(0.31, 0.65, 0.48, 0.32)
+                onClicked: {
+                    const candidate = root.apiProviderCandidates[apiCandidateModelBox.currentIndex] || {}
+                    root.registerRequested(candidate.model_name || "")
+                }
             }
         }
     }

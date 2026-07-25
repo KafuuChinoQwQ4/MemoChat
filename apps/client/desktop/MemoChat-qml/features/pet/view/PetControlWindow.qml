@@ -5,6 +5,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import MemoChat 1.0
+import "qrc:/qml/components"
 import "../runtime/PetControlRuntime.js" as PetControlRuntime
 
 Window {
@@ -49,6 +50,7 @@ Window {
     readonly property string currentModel: agentController ? agentController.currentModel : ""
     readonly property bool apiProviderBusy: agentController ? agentController.apiProviderBusy : false
     readonly property string apiProviderStatus: agentController ? agentController.apiProviderStatus : ""
+    readonly property var apiProviderCandidates: agentController ? agentController.apiProviderCandidates : []
     readonly property bool modelRefreshBusy: agentController ? agentController.modelRefreshBusy : false
     readonly property var live2dActions: live2dActionAsset.actionItems
 
@@ -139,34 +141,78 @@ Window {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 6
-        radius: 14
+        anchors.margins: 8
+        anchors.topMargin: 12
+        radius: 16
         antialiasing: true
-        color: Qt.rgba(1.0, 0.98, 0.995, 0.96)
-        border.color: root.borderColor
+        color: Qt.rgba(0.26, 0.16, 0.23, 0.16)
+        z: -1
+    }
 
-        Rectangle {
-            z: -1
-            anchors.fill: parent
-            anchors.topMargin: 4
-            anchors.leftMargin: 2
-            anchors.rightMargin: 2
-            radius: parent.radius
-            antialiasing: true
-            color: Qt.rgba(0.37, 0.25, 0.34, 0.14)
-        }
+    GlassSurface {
+        anchors.fill: parent
+        anchors.margins: 8
+        cornerRadius: 16
+        fillColor: Qt.rgba(0.995, 0.972, 0.997, 0.95)
+        strokeColor: Qt.rgba(0.84, 0.74, 0.82, 0.55)
+        strokeWidth: 1
+        glowTopColor: Qt.rgba(1, 1, 1, 0.28)
+        glowBottomColor: Qt.rgba(0.95, 0.90, 0.94, 0.07)
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 12
             spacing: 10
 
-            PetControlHeader {
+            Item {
+                id: panelHeader
                 Layout.fillWidth: true
-                statusText: root.displayStatus()
-                hasError: root.petController && root.petController.error.length > 0
-                borderColor: "#dcc8d4"
-                onCloseRequested: root.hide()
+                Layout.preferredHeight: 32
+
+                DragHandler {
+                    target: null
+                    acceptedButtons: Qt.LeftButton
+                    onActiveChanged: {
+                        if (active) root.startSystemMove()
+                    }
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: 8
+
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        antialiasing: true
+                        color: (root.petController && root.petController.error.length > 0)
+                               ? "#e35b5b" : root.accentColor
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: root.displayStatus()
+                        color: "#4b3042"
+                        font.pixelSize: 13
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    GlassButton {
+                        width: 26
+                        height: 26
+                        text: "×"
+                        textPixelSize: 17
+                        textColor: "#6c4a5e"
+                        cornerRadius: 13
+                        normalColor: Qt.rgba(0, 0, 0, 0.05)
+                        hoverColor: Qt.rgba(0.85, 0.55, 0.65, 0.16)
+                        pressedColor: Qt.rgba(0.80, 0.45, 0.58, 0.28)
+                        enableScaleFeedback: false
+                        onClicked: root.hide()
+                    }
+                }
             }
 
             Flickable {
@@ -182,17 +228,35 @@ Window {
                     width: parent.width
                     spacing: 10
 
-                    PetMenuButton {
+                    GlassButton {
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 34
                         text: "聊天"
-                        enabled: root.petController
+                        textPixelSize: 12
+                        textColor: enabled ? "#4b3042" : "#a997a3"
+                        cornerRadius: 8
+                        normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+                        hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+                        pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+                        disabledColor: Qt.rgba(0, 0, 0, 0.04)
+                        enableScaleFeedback: false
+                        enabled: root.petController !== null
                         onClicked: root.chatRequested()
                     }
 
-                    PetMenuButton {
+                    GlassButton {
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 34
                         text: "打断"
-                        enabled: root.petController && root.petController.sessionId.length > 0
+                        textPixelSize: 12
+                        textColor: enabled ? "#4b3042" : "#a997a3"
+                        cornerRadius: 8
+                        normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+                        hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+                        pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+                        disabledColor: Qt.rgba(0, 0, 0, 0.04)
+                        enableScaleFeedback: false
+                        enabled: root.petController !== null && root.petController.sessionId.length > 0
                         onClicked: root.petController.interrupt()
                     }
 
@@ -307,13 +371,19 @@ Window {
                         currentModel: root.currentModel
                         apiProviderStatus: root.apiProviderStatus
                         apiProviderBusy: root.apiProviderBusy
+                        apiProviderCandidates: root.apiProviderCandidates
                         modelRefreshBusy: root.modelRefreshBusy
                         agentAvailable: root.agentController !== null
                         accentColor: root.accentColor
                         borderColor: root.borderColor
-                        onRegisterRequested: function(providerName, baseUrl, apiKey) {
+                        onDiscoverRequested: function(providerName, baseUrl, apiKey) {
                             if (root.agentController && !root.apiProviderBusy) {
-                                root.agentController.registerApiProvider(providerName, baseUrl, apiKey)
+                                root.agentController.discoverApiProvider(providerName, baseUrl, apiKey)
+                            }
+                        }
+                        onRegisterRequested: function(modelName) {
+                            if (root.agentController && !root.apiProviderBusy && modelName.length > 0) {
+                                root.agentController.registerDiscoveredApiModel(modelName)
                             }
                         }
                         onRefreshRequested: function() {
@@ -332,42 +402,36 @@ Window {
                         Layout.fillWidth: true
                         spacing: 8
 
-                        PetMenuButton {
+                        GlassButton {
                             Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             text: "复位"
+                            textPixelSize: 12
+                            textColor: "#4b3042"
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+                            hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+                            pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+                            enableScaleFeedback: false
                             onClicked: root.resetPositionRequested()
                         }
 
-                        PetMenuButton {
+                        GlassButton {
                             Layout.fillWidth: true
+                            Layout.preferredHeight: 34
                             text: "关闭桌宠"
+                            textPixelSize: 12
+                            textColor: "#4b3042"
+                            cornerRadius: 8
+                            normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+                            hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+                            pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+                            enableScaleFeedback: false
                             onClicked: root.closePetRequested()
                         }
                     }
                 }
             }
-        }
-    }
-
-    component PetMenuButton: Button {
-        id: button
-        font.pixelSize: 12
-        padding: 8
-        background: Rectangle {
-            radius: 8
-            antialiasing: true
-            color: button.down ? "#d6f0ed"
-                               : button.hovered ? "#e8f6f4"
-                                                : "#fffafd"
-            border.color: button.enabled ? "#dcc8d4" : "#eadfe6"
-        }
-        contentItem: Label {
-            text: button.text
-            color: button.enabled ? "#4b3042" : "#a997a3"
-            font: button.font
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
         }
     }
 

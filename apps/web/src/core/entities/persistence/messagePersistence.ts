@@ -4,6 +4,7 @@
  */
 import { hydrateMessages, persistMessage } from "./chatDb"
 import { useEntityStore } from "@/core/entities/entityStore"
+import type { RichMessage } from "@/core/entities/entityTypes"
 
 /** Load persisted messages for a conversation into the entity store */
 export async function hydrateConversation(ownerUid: number, peerId: number): Promise<void> {
@@ -14,7 +15,7 @@ export async function hydrateConversation(ownerUid: number, peerId: number): Pro
 }
 
 /** Persist a new message and append it to the entity store */
-export async function saveAndAppend(ownerUid: number, peerId: number, msg: import("@/core/entities/entityTypes").RichMessage): Promise<void> {
+export async function saveAndAppend(ownerUid: number, peerId: number, msg: RichMessage): Promise<void> {
   useEntityStore.getState().appendMessage(peerId, msg)
   await persistMessage(ownerUid, peerId, msg)
 }

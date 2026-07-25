@@ -21,6 +21,7 @@ const char* SmartPath();
 const char* KbUploadPath();
 const char* KbSearchPath();
 const char* ModelsPath();
+const char* DiscoverApiProviderPath();
 const char* RegisterApiProviderPath();
 const char* DeleteApiProviderPath();
 const char* KbListPathPrefix();
@@ -91,6 +92,7 @@ TEST(AIServiceClientAlgorithmsTest, ExposesHttpDefaultsAndRoutePaths)
     EXPECT_STREQ(KbUploadPath(), "/kb/upload");
     EXPECT_STREQ(KbSearchPath(), "/kb/search");
     EXPECT_STREQ(ModelsPath(), "/models");
+    EXPECT_STREQ(DiscoverApiProviderPath(), "/models/api-provider/discover");
     EXPECT_STREQ(RegisterApiProviderPath(), "/models/api-provider");
     EXPECT_STREQ(DeleteApiProviderPath(), "/models/api-provider/delete");
     EXPECT_STREQ(KbListPathPrefix(), "/kb/list?uid=");

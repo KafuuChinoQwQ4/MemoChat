@@ -45,6 +45,10 @@ public:
     grpc::Status
     ListModels(ServerContext* context, const ai::AIListModelsReq* request, ai::AIListModelsRsp* reply) override;
 
+    grpc::Status DiscoverApiProvider(ServerContext* context,
+                                     const ai::AIDiscoverApiProviderReq* request,
+                                     ai::AIDiscoverApiProviderRsp* reply) override;
+
     grpc::Status RegisterApiProvider(ServerContext* context,
                                      const ai::AIRegisterApiProviderReq* request,
                                      ai::AIRegisterApiProviderRsp* reply) override;

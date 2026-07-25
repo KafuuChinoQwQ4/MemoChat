@@ -7,30 +7,43 @@ import {
 } from "./mediaAuthCache"
 
 describe("mediaAuthCache", () => {
-  const originalCreateObjectURL = URL.createObjectURL
-  const originalRevokeObjectURL = URL.revokeObjectURL
+  const originalCreateObjectUrlDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL")
+  const originalRevokeObjectUrlDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL")
+  const createObjectUrlMock = vi.fn(() => "")
+  const revokeObjectUrlMock = vi.fn()
   let created = 0
 
   beforeEach(() => {
     clearMediaAuthCache()
     created = 0
-    URL.createObjectURL = vi.fn(() => {
+    createObjectUrlMock.mockReset()
+    createObjectUrlMock.mockImplementation(() => {
       created += 1
       return `blob:test-${created}`
-    }) as typeof URL.createObjectURL
-    URL.revokeObjectURL = vi.fn() as typeof URL.revokeObjectURL
+    })
+    revokeObjectUrlMock.mockReset()
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrlMock })
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrlMock })
   })
 
   afterEach(() => {
     clearMediaAuthCache()
-    URL.createObjectURL = originalCreateObjectURL
-    URL.revokeObjectURL = originalRevokeObjectURL
+    if (originalCreateObjectUrlDescriptor) {
+      Object.defineProperty(URL, "createObjectURL", originalCreateObjectUrlDescriptor)
+    } else {
+      Reflect.deleteProperty(URL, "createObjectURL")
+    }
+    if (originalRevokeObjectUrlDescriptor) {
+      Object.defineProperty(URL, "revokeObjectURL", originalRevokeObjectUrlDescriptor)
+    } else {
+      Reflect.deleteProperty(URL, "revokeObjectURL")
+    }
     vi.restoreAllMocks()
   })
 
   it("shares one network fetch across concurrent callers for the same key", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Blob(["img"], { type: "image/png" }), { status: 200 }),
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(new Blob(["img"], { type: "image/png" }), { status: 200 })),
     )
     vi.stubGlobal("fetch", fetchMock)
 
@@ -46,8 +59,8 @@ describe("mediaAuthCache", () => {
   })
 
   it("reuses a ready entry without refetching (dialog remount)", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Blob(["img"], { type: "image/png" }), { status: 200 }),
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(new Blob(["img"], { type: "image/png" }), { status: 200 })),
     )
     vi.stubGlobal("fetch", fetchMock)
 
@@ -60,8 +73,8 @@ describe("mediaAuthCache", () => {
   })
 
   it("isolates cache entries by token (account switch safety)", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Blob(["img"], { type: "image/png" }), { status: 200 }),
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(new Blob(["img"], { type: "image/png" }), { status: 200 })),
     )
     vi.stubGlobal("fetch", fetchMock)
 
@@ -74,8 +87,8 @@ describe("mediaAuthCache", () => {
   })
 
   it("clears and revokes object URLs on logout", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Blob(["img"], { type: "image/png" }), { status: 200 }),
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(new Response(new Blob(["img"], { type: "image/png" }), { status: 200 })),
     )
     vi.stubGlobal("fetch", fetchMock)
 
@@ -83,7 +96,7 @@ describe("mediaAuthCache", () => {
     clearMediaAuthCache()
 
     expect(mediaAuthCacheSizeForTests()).toBe(0)
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:test-1")
+    expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:test-1")
     expect(peekMediaAuthCache("/media/download?asset=d", "tok")).toBeNull()
   })
 })

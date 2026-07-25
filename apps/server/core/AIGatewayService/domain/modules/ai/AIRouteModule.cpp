@@ -70,6 +70,13 @@ void AIRouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regis
         });
     registry.Register(
         modules::PostMethod(),
+        modules::ModelApiDiscoverPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::ai::AIService::Instance().HandleDiscoverApiProvider(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
         modules::ModelApiRegisterPath(),
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {

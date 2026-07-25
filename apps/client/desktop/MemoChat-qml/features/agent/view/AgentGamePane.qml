@@ -12,6 +12,7 @@ Rectangle {
     property string currentModel: ""
     property bool apiProviderBusy: false
     property string apiProviderStatus: ""
+    property var apiProviderCandidates: []
     property var gameRooms: []
     property var gameTemplates: []
     property var gameTemplatePresets: []
@@ -170,6 +171,7 @@ Rectangle {
         availableModels: root.availableModels
         currentModel: root.currentModel
         apiProviderBusy: root.apiProviderBusy
+        apiProviderCandidates: root.apiProviderCandidates
         gameSetupMode: root.gameSetupMode
         gameRulesets: root.gameRulesets
         gameRolePresets: root.gameRolePresets
@@ -192,9 +194,14 @@ Rectangle {
         }
         onCreateRoomRequested: root.createRoom()
         onRulesetActivated: root.refreshRulesetData()
-        onRegisterApiProviderRequested: function(name, baseUrl, apiKey) {
+        onDiscoverApiProviderRequested: function(name, baseUrl, apiKey) {
             if (root.agentController) {
-                root.agentController.registerApiProvider(name, baseUrl, apiKey)
+                root.agentController.discoverApiProvider(name, baseUrl, apiKey)
+            }
+        }
+        onRegisterApiModelRequested: function(modelName) {
+            if (root.agentController && modelName.length > 0) {
+                root.agentController.registerDiscoveredApiModel(modelName)
             }
         }
     }

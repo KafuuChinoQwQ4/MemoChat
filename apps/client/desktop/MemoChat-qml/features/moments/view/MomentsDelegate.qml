@@ -11,9 +11,12 @@ Rectangle {
     id: root
     color: "transparent"
     clip: true
-    // Loader 未设 height：用内容固有高度 + 上下边距，避免正文与点赞行重叠
+    // implicitHeight 跟随内容自适应；height 通过 Behavior 平滑过渡，避免直接跳变和重影
     implicitHeight: Math.max(contentLayout.implicitHeight, contentLayout.childrenRect.height) + 24
     height: implicitHeight
+    Behavior on height {
+        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+    }
 
     property var backdrop: null
     property var controller: null
@@ -39,6 +42,8 @@ Rectangle {
     property int textPreviewMaximumLines: 7
     property int textPreviewLongTextThreshold: 220
     property real mediaPreviewMaximumHeight: 360
+    property bool textExpanded: false
+    property bool mediaExpanded: false
     property real fullMediaContentHeight: mediaContentHeight(items)
     property real previewMediaContentHeight: Math.min(fullMediaContentHeight, mediaPreviewMaximumHeight)
     property bool mediaPreviewOverflow: fullMediaContentHeight > previewMediaContentHeight + 1
@@ -100,12 +105,13 @@ Rectangle {
             color: "#1a1a1a"
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignLeft
-            maximumLineCount: root.textPreviewMaximumLines
-            elide: Text.ElideRight
+            maximumLineCount: root.textExpanded ? 999999 : root.textPreviewMaximumLines
+            elide: root.textExpanded ? Text.ElideNone : Text.ElideRight
 
             MouseArea {
                 anchors.fill: parent
-                enabled: expandText.visible
+                // 仅在文字截断且未展开时，点击正文区域进入详情
+                enabled: !root.textExpanded && expandText.visible
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: root.commentClicked()
             }
@@ -115,7 +121,7 @@ Rectangle {
             id: expandText
             Layout.fillWidth: true
             visible: contentText.visible && (root.textPreviewOverflow || contentText.truncated)
-            text: "查看全文"
+            text: root.textExpanded ? "收起" : "查看全文"
             font.pixelSize: 13
             color: "#4b7fc7"
             horizontalAlignment: Text.AlignLeft
@@ -123,18 +129,22 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.commentClicked()
+                // 原地展开/收起，不创建新组件；height Behavior 保证动画流畅
+                onClicked: root.textExpanded = !root.textExpanded
             }
         }
 
         Item {
             id: mediaColumn
             Layout.fillWidth: true
-            Layout.preferredHeight: root.previewMediaContentHeight
-            Layout.minimumHeight: root.previewMediaContentHeight
+            Layout.preferredHeight: root.mediaExpanded ? root.fullMediaContentHeight : root.previewMediaContentHeight
+            Layout.minimumHeight: root.mediaExpanded ? root.fullMediaContentHeight : root.previewMediaContentHeight
             visible: root.hasMediaContent
-            implicitHeight: root.previewMediaContentHeight
+            implicitHeight: root.mediaExpanded ? root.fullMediaContentHeight : root.previewMediaContentHeight
             clip: true
+            Behavior on implicitHeight {
+                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+            }
 
             Column {
                 id: mediaStack
@@ -241,12 +251,13 @@ Rectangle {
                 }
             }
 
+            // 渐变遮罩 + 展开/收起按钮：点击时原地展开媒体内容，不创建新组件
             Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: Math.min(64, parent.height)
-                visible: root.mediaPreviewOverflow
+                visible: root.mediaPreviewOverflow && !root.mediaExpanded
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.0) }
                     GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.78) }
@@ -257,7 +268,7 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.margins: 10
-                    text: "查看全部"
+                    text: "展开全部"
                     font.pixelSize: 13
                     color: "#4b7fc7"
                 }
@@ -265,7 +276,23 @@ Rectangle {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.commentClicked()
+                    onClicked: root.mediaExpanded = true
+                }
+            }
+
+            Label {
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 10
+                visible: root.mediaPreviewOverflow && root.mediaExpanded
+                text: "收起"
+                font.pixelSize: 13
+                color: "#4b7fc7"
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.mediaExpanded = false
                 }
             }
         }

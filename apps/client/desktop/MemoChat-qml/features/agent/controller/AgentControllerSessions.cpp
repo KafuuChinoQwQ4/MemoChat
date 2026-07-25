@@ -195,6 +195,9 @@ void AgentController::handleSessionRsp(ReqId id, const QString& res, ErrorCodes 
                 emit gameStateChanged();
             }
             _current_session_id = newId;
+            // mark this session for auto-rename on the first AI response
+            _pending_auto_rename_session_id = newId;
+            _pending_auto_rename_content.clear();
             emit sessionChanged();
         }
         loadSessions();
@@ -340,11 +343,17 @@ void AgentController::resetUserScopedRuntime()
     _streamFinalReceived = false;
     _error.clear();
     clearTrace();
+    _pending_auto_rename_session_id.clear();
+    _pending_auto_rename_content.clear();
 
     _available_models.clear();
+    _api_provider_candidates.clear();
     _model_refresh_busy = false;
     _api_provider_busy = false;
     _api_provider_status.clear();
+    _pending_api_provider_name.clear();
+    _pending_api_provider_url.clear();
+    _pending_api_provider_key.clear();
     _thinking_enabled = false;
 
     _knowledge_bases.clear();

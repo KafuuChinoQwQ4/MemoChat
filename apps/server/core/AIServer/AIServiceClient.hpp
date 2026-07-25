@@ -57,13 +57,22 @@ public:
 
     grpc::Status ListModels(memochat::json::JsonValue* out_result);
 
-    grpc::Status RegisterApiProvider(const std::string& provider_name,
+    grpc::Status DiscoverApiProvider(const std::string& provider_name,
                                      const std::string& base_url,
                                      const std::string& api_key,
                                      const std::string& adapter,
                                      memochat::json::JsonValue* out_result);
 
-    grpc::Status DeleteApiProvider(const std::string& provider_id, memochat::json::JsonValue* out_result);
+    grpc::Status RegisterApiProvider(const std::string& provider_name,
+                                     const std::string& base_url,
+                                     const std::string& api_key,
+                                     const std::string& model_name,
+                                     const std::string& adapter,
+                                     memochat::json::JsonValue* out_result);
+
+    grpc::Status DeleteApiProvider(const std::string& provider_id,
+                                   const std::string& model_name,
+                                   memochat::json::JsonValue* out_result);
 
     grpc::Status KbList(int32_t uid, memochat::json::JsonValue* out_result);
 

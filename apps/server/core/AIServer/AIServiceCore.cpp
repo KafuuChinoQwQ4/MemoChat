@@ -568,6 +568,43 @@ grpc::Status AIServiceCore::ListModels(const ai::AIListModelsReq& req, ai::AILis
     return grpc::Status::OK;
 }
 
+grpc::Status AIServiceCore::DiscoverApiProvider(const ai::AIDiscoverApiProviderReq& req,
+                                                ai::AIDiscoverApiProviderRsp* reply)
+{
+    reply->set_code(core_modules::SuccessCode());
+    reply->set_message(core_modules::OkMessage());
+
+    const auto url_check = ValidateProviderBaseUrl(req.base_url());
+    if (!url_check.ok)
+    {
+        memolog::LogWarn("ai.discover_provider.ssrf_guard",
+                         "provider base_url rejected",
+                         {{"reason", url_check.reason}, {"url", req.base_url()}});
+        reply->set_code(core_modules::BadRequestCode());
+        reply->set_message("invalid base_url: " + url_check.reason);
+        return grpc::Status::OK;
+    }
+
+    memochat::json::JsonValue result;
+    auto status =
+        _ai_client->DiscoverApiProvider(req.provider_name(),
+                                        req.base_url(),
+                                        req.api_key(),
+                                        core_modules::ShouldUseDefaultApiProviderAdapter(req.adapter().empty())
+                                            ? core_modules::DefaultApiProviderAdapter()
+                                            : req.adapter(),
+                                        &result);
+    if (!status.ok())
+    {
+        reply->set_code(core_modules::UpstreamFailureCode());
+        reply->set_message("AI orchestrator unavailable");
+        return grpc::Status::OK;
+    }
+
+    ai_service_json_mapper::PopulateDiscoverApiProviderFromJson(result, reply);
+    return grpc::Status::OK;
+}
+
 grpc::Status AIServiceCore::RegisterApiProvider(const ai::AIRegisterApiProviderReq& req,
                                                 ai::AIRegisterApiProviderRsp* reply)
 {
@@ -591,6 +628,7 @@ grpc::Status AIServiceCore::RegisterApiProvider(const ai::AIRegisterApiProviderR
         _ai_client->RegisterApiProvider(req.provider_name(),
                                         req.base_url(),
                                         req.api_key(),
+                                        req.model_name(),
                                         core_modules::ShouldUseDefaultApiProviderAdapter(req.adapter().empty())
                                             ? core_modules::DefaultApiProviderAdapter()
                                             : req.adapter(),
@@ -615,9 +653,10 @@ grpc::Status AIServiceCore::DeleteApiProvider(const ai::AIDeleteApiProviderReq& 
     reply->set_code(core_modules::SuccessCode());
     reply->set_message(core_modules::OkMessage());
     reply->set_provider_id(req.provider_id());
+    reply->set_model_name(req.model_name());
 
     memochat::json::JsonValue result;
-    auto status = _ai_client->DeleteApiProvider(req.provider_id(), &result);
+    auto status = _ai_client->DeleteApiProvider(req.provider_id(), req.model_name(), &result);
     if (!status.ok())
     {
         memolog::LogError(
@@ -632,6 +671,8 @@ grpc::Status AIServiceCore::DeleteApiProvider(const ai::AIDeleteApiProviderReq& 
     reply->set_code(memochat::json::glaze_safe_get<int>(result["code"], core_modules::SuccessCode()));
     reply->set_message(memochat::json::glaze_safe_get<std::string>(result["message"], core_modules::OkMessage()));
     reply->set_provider_id(memochat::json::glaze_safe_get<std::string>(result["provider_id"], req.provider_id()));
+    reply->set_model_name(memochat::json::glaze_safe_get<std::string>(result["model_name"], req.model_name()));
+    reply->set_provider_deleted(memochat::json::glaze_safe_get<bool>(result["provider_deleted"], false));
     return grpc::Status::OK;
 }
 

@@ -380,6 +380,7 @@ public:
     grpc::Status makeRegisterApiProviderCall(const std::string& provider_name,
                                              const std::string& base_url,
                                              const std::string& api_key,
+                                             const std::string& model_name,
                                              const std::string& adapter,
                                              ai::AIRegisterApiProviderRsp* reply)
     {
@@ -393,11 +394,34 @@ public:
         req.set_provider_name(provider_name);
         req.set_base_url(base_url);
         req.set_api_key(api_key);
+        req.set_model_name(model_name);
         req.set_adapter(adapter.empty() ? "openai_compatible" : adapter);
         return _stub->RegisterApiProvider(&ctx, req, reply);
     }
 
-    grpc::Status makeDeleteApiProviderCall(const std::string& provider_id, ai::AIDeleteApiProviderRsp* reply)
+    grpc::Status makeDiscoverApiProviderCall(const std::string& provider_name,
+                                             const std::string& base_url,
+                                             const std::string& api_key,
+                                             const std::string& adapter,
+                                             ai::AIDiscoverApiProviderRsp* reply)
+    {
+        grpc::ClientContext ctx;
+        if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
+        {
+            return auth_status;
+        }
+        AttachProviderAdminMetadata(ctx);
+        ai::AIDiscoverApiProviderReq req;
+        req.set_provider_name(provider_name);
+        req.set_base_url(base_url);
+        req.set_api_key(api_key);
+        req.set_adapter(adapter.empty() ? "openai_compatible" : adapter);
+        return _stub->DiscoverApiProvider(&ctx, req, reply);
+    }
+
+    grpc::Status makeDeleteApiProviderCall(const std::string& provider_id,
+                                           const std::string& model_name,
+                                           ai::AIDeleteApiProviderRsp* reply)
     {
         grpc::ClientContext ctx;
         if (const auto auth_status = PrepareAIServerContext(ctx); !auth_status.ok())
@@ -407,6 +431,7 @@ public:
         AttachProviderAdminMetadata(ctx);
         ai::AIDeleteApiProviderReq req;
         req.set_provider_id(provider_id);
+        req.set_model_name(model_name);
         return _stub->DeleteApiProvider(&ctx, req, reply);
     }
 
@@ -874,10 +899,11 @@ memochat::json::JsonValue AIServiceClient::ListModels()
 memochat::json::JsonValue AIServiceClient::RegisterApiProvider(const std::string& provider_name,
                                                                const std::string& base_url,
                                                                const std::string& api_key,
+                                                               const std::string& model_name,
                                                                const std::string& adapter)
 {
     ai::AIRegisterApiProviderRsp reply;
-    auto status = _impl->makeRegisterApiProviderCall(provider_name, base_url, api_key, adapter, &reply);
+    auto status = _impl->makeRegisterApiProviderCall(provider_name, base_url, api_key, model_name, adapter, &reply);
 
     if (!status.ok())
     {
@@ -896,10 +922,36 @@ memochat::json::JsonValue AIServiceClient::RegisterApiProvider(const std::string
     return memochat::gate::services::ai::AIRegisterApiProviderResponseToJsonValue(response);
 }
 
-memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& provider_id)
+memochat::json::JsonValue AIServiceClient::DiscoverApiProvider(const std::string& provider_name,
+                                                               const std::string& base_url,
+                                                               const std::string& api_key,
+                                                               const std::string& adapter)
+{
+    ai::AIDiscoverApiProviderRsp reply;
+    auto status = _impl->makeDiscoverApiProviderCall(provider_name, base_url, api_key, adapter, &reply);
+
+    if (!status.ok())
+    {
+        return memochat::gate::services::ai::AISimpleResponseToJsonValue(
+            MakeSimpleResponse(500, "AIServer unavailable"));
+    }
+
+    memochat::gate::services::ai::AIDiscoverApiProviderResponseDto response;
+    response.code = reply.code();
+    response.message = reply.message();
+    response.provider_id = reply.provider_id();
+    for (const auto& model : reply.models())
+    {
+        response.models.push_back(ModelInfoToResponseDto(model));
+    }
+    return memochat::gate::services::ai::AIDiscoverApiProviderResponseToJsonValue(response);
+}
+
+memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& provider_id,
+                                                             const std::string& model_name)
 {
     ai::AIDeleteApiProviderRsp reply;
-    auto status = _impl->makeDeleteApiProviderCall(provider_id, &reply);
+    auto status = _impl->makeDeleteApiProviderCall(provider_id, model_name, &reply);
 
     if (!status.ok())
     {
@@ -907,6 +959,7 @@ memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& 
         response.code = 500;
         response.message = "AIServer unavailable";
         response.provider_id = provider_id;
+        response.model_name = model_name;
         return memochat::gate::services::ai::AIDeleteApiProviderResponseToJsonValue(response);
     }
 
@@ -914,6 +967,8 @@ memochat::json::JsonValue AIServiceClient::DeleteApiProvider(const std::string& 
     response.code = reply.code();
     response.message = reply.message();
     response.provider_id = reply.provider_id();
+    response.model_name = reply.model_name();
+    response.provider_deleted = reply.provider_deleted();
     return memochat::gate::services::ai::AIDeleteApiProviderResponseToJsonValue(response);
 }
 

@@ -284,6 +284,7 @@ AI_EXACT_ROUTES = (
     ("GET", "/ai/session/list", "HandleListSessions"),
     ("POST", "/ai/session/delete", "HandleDeleteSession"),
     ("GET", "/ai/model/list", "HandleListModels"),
+    ("POST", "/ai/model/api/discover", "HandleDiscoverApiProvider"),
     ("POST", "/ai/model/api/register", "HandleRegisterApiProvider"),
     ("POST", "/ai/model/api/delete", "HandleDeleteApiProvider"),
     ("POST", "/ai/kb/upload", "HandleKbUpload"),

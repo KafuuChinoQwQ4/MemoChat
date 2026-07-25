@@ -95,6 +95,11 @@ const char* RegisterApiProviderPath()
     return memochat::ai::client::modules::RegisterApiProviderPath();
 }
 
+const char* DiscoverApiProviderPath()
+{
+    return memochat::ai::client::modules::DiscoverApiProviderPath();
+}
+
 const char* DeleteApiProviderPath()
 {
     return memochat::ai::client::modules::DeleteApiProviderPath();

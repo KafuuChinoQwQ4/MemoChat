@@ -26,5 +26,6 @@
 | `test_pet_runtime_components.py` | 验证桌宠运行时各组件 |
 | `test_pet_visual_layer_user_flow.py` | 验证桌宠视觉层的用户流程 |
 | `test_rag_retrieval.py` | 验证 RAG 检索流程 |
+| `test_web_search_tool.py` | 验证 Jina Reader 联网搜索的鉴权、请求和错误契约 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

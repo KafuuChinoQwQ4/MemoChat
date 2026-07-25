@@ -109,7 +109,8 @@ std::string ResolveProviderAdminKey()
 
 bool IsProviderAdminPath(const std::string& path)
 {
-    return path == client_modules::RegisterApiProviderPath() || path == client_modules::DeleteApiProviderPath();
+    return path == client_modules::DiscoverApiProviderPath() || path == client_modules::RegisterApiProviderPath() ||
+           path == client_modules::DeleteApiProviderPath();
 }
 
 } // namespace
@@ -587,7 +588,7 @@ grpc::Status AIServiceClient::ListModels(json::JsonValue* out_result)
     return _impl->GetJson(client_modules::ModelsPath(), out_result);
 }
 
-grpc::Status AIServiceClient::RegisterApiProvider(const std::string& provider_name,
+grpc::Status AIServiceClient::DiscoverApiProvider(const std::string& provider_name,
                                                   const std::string& base_url,
                                                   const std::string& api_key,
                                                   const std::string& adapter,
@@ -600,13 +601,34 @@ grpc::Status AIServiceClient::RegisterApiProvider(const std::string& provider_na
     body["adapter"] = client_modules::ShouldUseDefaultApiProviderAdapter(adapter.empty())
                           ? client_modules::DefaultApiProviderAdapter()
                           : adapter;
+    return _impl->PostJson(client_modules::DiscoverApiProviderPath(), body, out_result);
+}
+
+grpc::Status AIServiceClient::RegisterApiProvider(const std::string& provider_name,
+                                                  const std::string& base_url,
+                                                  const std::string& api_key,
+                                                  const std::string& model_name,
+                                                  const std::string& adapter,
+                                                  json::JsonValue* out_result)
+{
+    json::JsonValue body = json::JsonValue{};
+    body["provider_name"] = provider_name;
+    body["base_url"] = base_url;
+    body["api_key"] = api_key;
+    body["model_name"] = model_name;
+    body["adapter"] = client_modules::ShouldUseDefaultApiProviderAdapter(adapter.empty())
+                          ? client_modules::DefaultApiProviderAdapter()
+                          : adapter;
     return _impl->PostJson(client_modules::RegisterApiProviderPath(), body, out_result);
 }
 
-grpc::Status AIServiceClient::DeleteApiProvider(const std::string& provider_id, json::JsonValue* out_result)
+grpc::Status AIServiceClient::DeleteApiProvider(const std::string& provider_id,
+                                                const std::string& model_name,
+                                                json::JsonValue* out_result)
 {
     json::JsonValue body = json::JsonValue{};
     body["provider_id"] = provider_id;
+    body["model_name"] = model_name;
     return _impl->PostJson(client_modules::DeleteApiProviderPath(), body, out_result);
 }
 

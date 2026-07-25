@@ -59,12 +59,18 @@ public:
 
     memochat::json::JsonValue ListModels();
 
-    memochat::json::JsonValue RegisterApiProvider(const std::string& provider_name,
+    memochat::json::JsonValue DiscoverApiProvider(const std::string& provider_name,
                                                   const std::string& base_url,
                                                   const std::string& api_key,
                                                   const std::string& adapter);
 
-    memochat::json::JsonValue DeleteApiProvider(const std::string& provider_id);
+    memochat::json::JsonValue RegisterApiProvider(const std::string& provider_name,
+                                                  const std::string& base_url,
+                                                  const std::string& api_key,
+                                                  const std::string& model_name,
+                                                  const std::string& adapter);
+
+    memochat::json::JsonValue DeleteApiProvider(const std::string& provider_id, const std::string& model_name);
 
     memochat::json::JsonValue KbUpload(int32_t uid,
                                        const std::string& file_name,

@@ -788,7 +788,6 @@ function AccountManagerPanel({
               const busy = busySourceId === sourceId
               const interaction = accountInteractionKind(account)
               const needsAccount = interaction === "required-account"
-              const optionalAccount = interaction === "optional-account"
               const optionalCookie = interaction === "optional-cookie"
               const requiredEhentaiAuth = interaction === "required-ehentai-auth"
               const supportsCredentials = interaction !== "none"
@@ -1045,7 +1044,10 @@ export function R18ShellContent() {
   })
 
   const libraryFolders = libraryQuery.data?.folders ?? []
-  const libraryItems = libraryQuery.data?.items ?? []
+  const libraryItems = useMemo(
+    () => libraryQuery.data?.items ?? [],
+    [libraryQuery.data?.items],
+  )
   const favoritedKeys = useMemo(() => {
     const set = new Set<string>()
     for (const item of libraryItems) {
@@ -1134,6 +1136,12 @@ export function R18ShellContent() {
     [searchQuery.data?.pages],
   )
   const searchScrollRef = useRef<HTMLDivElement>(null)
+  const {
+    fetchNextPage: fetchNextSearchPage,
+    hasNextPage: hasNextSearchPage,
+    isFetchingNextPage: isFetchingNextSearchPage,
+    isLoading: isSearchLoading,
+  } = searchQuery
 
   useEffect(() => {
     const area = searchScrollRef.current
@@ -1143,14 +1151,14 @@ export function R18ShellContent() {
       const distanceToBottom = area.scrollHeight - area.scrollTop - area.clientHeight
       if (
         !shouldLoadMoreR18SearchOnScroll(distanceToBottom, {
-          hasMore: Boolean(searchQuery.hasNextPage),
-          isLoading: searchQuery.isLoading,
-          isFetchingNextPage: searchQuery.isFetchingNextPage,
+          hasMore: Boolean(hasNextSearchPage),
+          isLoading: isSearchLoading,
+          isFetchingNextPage: isFetchingNextSearchPage,
         })
       ) {
         return
       }
-      void searchQuery.fetchNextPage()
+      void fetchNextSearchPage()
     }
 
     area.addEventListener("scroll", onScroll, { passive: true })
@@ -1158,10 +1166,10 @@ export function R18ShellContent() {
     return () => area.removeEventListener("scroll", onScroll)
   }, [
     searchItems.length,
-    searchQuery.fetchNextPage,
-    searchQuery.hasNextPage,
-    searchQuery.isFetchingNextPage,
-    searchQuery.isLoading,
+    fetchNextSearchPage,
+    hasNextSearchPage,
+    isFetchingNextSearchPage,
+    isSearchLoading,
     selectedSource?.id,
     submittedKeyword,
     submittedSort,

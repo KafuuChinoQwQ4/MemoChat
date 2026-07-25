@@ -13,14 +13,16 @@ Item {
     property bool modelRefreshBusy: false
     property bool apiProviderBusy: false
     property string apiProviderStatus: ""
+    property var apiProviderCandidates: []
     property bool thinkingEnabled: false
     property bool currentModelSupportsThinking: false
 
     signal closeRequested()
     signal thinkingToggled(bool checked)
-    signal apiProviderRegistered(string name, string baseUrl, string apiKey)
+    signal apiProviderDiscoverRequested(string name, string baseUrl, string apiKey)
+    signal apiModelRegisterRequested(string modelName)
     signal modelSelected(string modelType, string modelName)
-    signal modelDeleted(string modelType)
+    signal modelDeleted(string modelType, string modelName)
     signal refreshModelsRequested()
 
     Rectangle {
@@ -162,17 +164,49 @@ Item {
                             GlassButton {
                                 Layout.preferredWidth: 90
                                 Layout.preferredHeight: 30
-                                text: root.apiProviderBusy ? "解析中" : "接入"
+                                text: root.apiProviderBusy ? "检测中" : "检测模型"
                                 textPixelSize: 12
                                 cornerRadius: 8
                                 enabled: !root.apiProviderBusy
                                 normalColor: Qt.rgba(0.35, 0.61, 0.90, 0.24)
                                 hoverColor: Qt.rgba(0.35, 0.61, 0.90, 0.34)
                                 pressedColor: Qt.rgba(0.35, 0.61, 0.90, 0.42)
-                                onClicked: root.apiProviderRegistered(
+                                onClicked: root.apiProviderDiscoverRequested(
                                                apiProviderNameField.text,
                                                apiBaseUrlField.text,
                                                apiKeyField.text)
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            visible: root.apiProviderCandidates.length > 0
+
+                            ComboBox {
+                                id: apiCandidateModelBox
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 30
+                                model: root.apiProviderCandidates
+                                textRole: "display_name"
+                                enabled: !root.apiProviderBusy
+                            }
+
+                            GlassButton {
+                                Layout.preferredWidth: 112
+                                Layout.preferredHeight: 30
+                                text: "接入所选模型"
+                                textPixelSize: 12
+                                cornerRadius: 8
+                                enabled: !root.apiProviderBusy
+                                         && apiCandidateModelBox.currentIndex >= 0
+                                normalColor: Qt.rgba(0.31, 0.65, 0.48, 0.22)
+                                hoverColor: Qt.rgba(0.31, 0.65, 0.48, 0.32)
+                                pressedColor: Qt.rgba(0.31, 0.65, 0.48, 0.40)
+                                onClicked: {
+                                    const candidate = root.apiProviderCandidates[apiCandidateModelBox.currentIndex] || {}
+                                    root.apiModelRegisterRequested(candidate.model_name || "")
+                                }
                             }
                         }
                     }
@@ -253,7 +287,8 @@ Item {
                                 normalColor: Qt.rgba(0.82, 0.38, 0.38, 0.16)
                                 hoverColor: Qt.rgba(0.82, 0.38, 0.38, 0.26)
                                 pressedColor: Qt.rgba(0.82, 0.38, 0.38, 0.34)
-                                onClicked: root.modelDeleted(modelDelegate.modelData.model_type || "")
+                                onClicked: root.modelDeleted(modelDelegate.modelData.model_type || "",
+                                                             modelDelegate.modelData.model_name || "")
                             }
                         }
                     }

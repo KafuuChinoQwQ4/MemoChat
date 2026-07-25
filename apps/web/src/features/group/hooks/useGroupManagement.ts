@@ -3,8 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useEntityStore } from "@/core/entities/entityStore"
 import { useSessionStore } from "@/core/session/sessionStore"
 import { ReqId } from "@/core/network/opcodes/reqIds"
-import { createChatApi } from "@/features/chat/api/chatApi"
-import { useChatStore } from "@/features/chat/store/chatStore"
+import { createGroupApi } from "@/features/group/api/groupApi"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { uploadMedia } from "@/shared/media/MediaUploadService"
 import type { GroupManagementActions } from "@/features/group/components/GroupManagementPanel"
@@ -40,21 +39,18 @@ function payloadGroupId(data: Record<string, unknown>): number {
   return 0
 }
 
-function removeGroupLocally(groupId: number): void {
+function removeGroupLocally(groupId: number, onGroupRemoved?: (groupId: number) => void): void {
   if (groupId <= 0) return
   const store = useEntityStore.getState()
   store.removeGroup(groupId)
   store.removeDialog(groupId)
-  const chat = useChatStore.getState()
-  if (chat.selectedPeerId === groupId && chat.selectedIsGroup) {
-    chat.reset()
-  }
+  onGroupRemoved?.(groupId)
 }
 
-export function useGroupManagement(groupId: number | null) {
+export function useGroupManagement(groupId: number | null, onGroupRemoved?: (groupId: number) => void) {
   const uid = useSessionStore((s) => s.uid) ?? 0
   const gateway = useMemo(() => getGateway(), [])
-  const api = useMemo(() => createChatApi(gateway.chatTransport, gateway.http), [gateway])
+  const api = useMemo(() => createGroupApi(gateway.chatTransport), [gateway.chatTransport])
   const [status, setStatus] = useState<GroupOpStatus>({ text: "", isError: false })
   const [busy, setBusy] = useState(false)
 
@@ -156,14 +152,14 @@ export function useGroupManagement(groupId: number | null) {
             case ReqId.ID_QUIT_GROUP_RSP: {
               const gid = responseGroupId || groupId || 0
               setStatus({ text: "已退出当前群聊", isError: false })
-              removeGroupLocally(gid)
+              removeGroupLocally(gid, onGroupRemoved)
               if (uid > 0) api.fetchGroupList(uid)
               break
             }
             case ReqId.ID_DISSOLVE_GROUP_RSP: {
               const gid = responseGroupId || groupId || 0
               setStatus({ text: "群聊已解散", isError: false })
-              removeGroupLocally(gid)
+              removeGroupLocally(gid, onGroupRemoved)
               if (uid > 0) api.fetchGroupList(uid)
               break
             }
@@ -181,7 +177,7 @@ export function useGroupManagement(groupId: number | null) {
     return () => {
       for (const unsub of unsubs) unsub()
     }
-  }, [api, gateway.dispatcher, groupId, uid])
+  }, [api, gateway.dispatcher, groupId, onGroupRemoved, uid])
 
   const requireReady = useCallback((): boolean => {
     if (uid <= 0) {

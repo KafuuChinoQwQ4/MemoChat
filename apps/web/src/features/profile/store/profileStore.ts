@@ -1,6 +1,5 @@
 /** Profile store — current user profile editing state */
 import { create } from "zustand"
-import type { UserProfile } from "@/core/session/sessionTypes"
 
 interface ProfileStore {
   editMode: boolean

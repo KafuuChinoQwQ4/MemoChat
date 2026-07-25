@@ -89,6 +89,11 @@ AIRegisterApiProviderJsonDto AIRegisterApiProviderFromJsonValue(const memochat::
     return dto;
 }
 
+AIDiscoverApiProviderJsonDto AIDiscoverApiProviderFromJsonValue(const memochat::json::JsonValue& result)
+{
+    return AIRegisterApiProviderFromJsonValue(result);
+}
+
 AIKnowledgeBaseInfoJsonDto AIKnowledgeBaseInfoFromJsonValue(const memochat::json::JsonValue& kb_json)
 {
     AIKnowledgeBaseInfoJsonDto dto;
@@ -172,6 +177,23 @@ void PopulateModelListReply(const AIModelListJsonDto& dto, ai::AIListModelsRsp* 
 }
 
 void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto, ai::AIRegisterApiProviderRsp* reply)
+{
+    if (reply == nullptr)
+    {
+        return;
+    }
+    reply->clear_models();
+    reply->set_code(dto.code);
+    reply->set_message(dto.message);
+    reply->set_provider_id(dto.provider_id);
+
+    for (const auto& model_dto : dto.models)
+    {
+        PopulateModelInfo(model_dto, reply->add_models());
+    }
+}
+
+void PopulateDiscoverApiProviderReply(const AIDiscoverApiProviderJsonDto& dto, ai::AIDiscoverApiProviderRsp* reply)
 {
     if (reply == nullptr)
     {

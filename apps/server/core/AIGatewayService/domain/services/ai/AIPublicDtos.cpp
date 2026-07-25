@@ -147,9 +147,9 @@ AISessionUpdateRequestDto AISessionUpdateRequestFromJsonValue(const memochat::js
     return request;
 }
 
-AIRegisterApiProviderRequestDto AIRegisterApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root)
+AIDiscoverApiProviderRequestDto AIDiscoverApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
-    AIRegisterApiProviderRequestDto request;
+    AIDiscoverApiProviderRequestDto request;
     request.provider_name = memochat::json::glaze_safe_get<std::string>(root, "provider_name", "custom-api");
     request.base_url = memochat::json::glaze_safe_get<std::string>(root, "base_url", "");
     request.api_key = memochat::json::glaze_safe_get<std::string>(root, "api_key", "");
@@ -157,10 +157,22 @@ AIRegisterApiProviderRequestDto AIRegisterApiProviderRequestFromJsonValue(const 
     return request;
 }
 
+AIRegisterApiProviderRequestDto AIRegisterApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    AIRegisterApiProviderRequestDto request;
+    request.provider_name = memochat::json::glaze_safe_get<std::string>(root, "provider_name", "custom-api");
+    request.base_url = memochat::json::glaze_safe_get<std::string>(root, "base_url", "");
+    request.api_key = memochat::json::glaze_safe_get<std::string>(root, "api_key", "");
+    request.adapter = memochat::json::glaze_safe_get<std::string>(root, "adapter", "openai_compatible");
+    request.model_name = memochat::json::glaze_safe_get<std::string>(root, "model_name", "");
+    return request;
+}
+
 AIDeleteApiProviderRequestDto AIDeleteApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     AIDeleteApiProviderRequestDto request;
     request.provider_id = memochat::json::glaze_safe_get<std::string>(root, "provider_id", "");
+    request.model_name = memochat::json::glaze_safe_get<std::string>(root, "model_name", "");
     return request;
 }
 
@@ -337,6 +349,11 @@ memochat::json::JsonValue AIHistoryResponseToJsonValue(const AIHistoryResponseDt
 }
 
 memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(const AIRegisterApiProviderResponseDto& response)
+{
+    return TypedJsonToJsonValue(response);
+}
+
+memochat::json::JsonValue AIDiscoverApiProviderResponseToJsonValue(const AIDiscoverApiProviderResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }

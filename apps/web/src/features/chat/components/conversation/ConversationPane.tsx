@@ -123,7 +123,14 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
   const [groupManageOpen, setGroupManageOpen] = useState(false)
   const friendsList = useMemo(() => Array.from(friendsMap.values()), [friendsMap])
   const selectedGroup = selectedIsGroup ? groupsMap.get(peerId) : undefined
-  const groupManagement = useGroupManagement(selectedIsGroup ? peerId : null)
+  const handleGroupRemoved = useCallback((removedGroupId: number) => {
+    const chat = useChatStore.getState()
+    if (chat.selectedPeerId === removedGroupId && chat.selectedIsGroup) chat.reset()
+  }, [])
+  const groupManagement = useGroupManagement(
+    selectedIsGroup ? peerId : null,
+    handleGroupRemoved,
+  )
   const groupMembers = useGroupMembers(selectedGroup, friendsList, messages)
   const pendingGroupApplies = useEntityStore((s) => s.pendingGroupApplies)
 
@@ -175,20 +182,6 @@ export function ConversationPane({ peerId }: ConversationPaneProps) {
     }
     stickToBottomRef.current = true
   }, [])
-
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
-    if (behavior === "smooth") {
-      const area = scrollAreaRef.current
-      if (!area) {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-      } else {
-        area.scrollTo({ top: area.scrollHeight, behavior: "smooth" })
-      }
-      stickToBottomRef.current = true
-      return
-    }
-    pinToBottomInstant()
-  }, [pinToBottomInstant])
 
   const markConversationRead = useCallback(() => {
     const dialog = useEntityStore.getState().dialogs.get(peerId)

@@ -5,7 +5,7 @@
 import { useEffect } from "react"
 import { Outlet } from "react-router-dom"
 import { IconSidebar } from "./IconSidebar"
-import { useGateway } from "@/app/providers/GatewayProvider"
+import { useGateway } from "@/app/providers/gatewayContext"
 import { registerChatRoutes } from "@/app/dispatch/registerChatRoutes"
 import { startConnectionCoordinator } from "@/app/bootstrap/connectionCoordinator"
 

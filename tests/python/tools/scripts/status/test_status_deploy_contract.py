@@ -149,6 +149,8 @@ class StatusDeployContractTests(unittest.TestCase):
         self.assertIn("env -u WAYLAND_DISPLAY fcitx5 -d", source)
         self.assertIn("start_ibus_daemon", source)
         self.assertIn("select_ibus_libpinyin", source)
+        self.assertIn("IBUS_ADDRESS", source)
+        self.assertIn('[[ "$selected_engine" == "libpinyin" ]]', source)
         self.assertIn("stop_ibus_daemons", source)
         self.assertIn("start_ibus_daemon replace", source)
         self.assertIn("env -u WAYLAND_DISPLAY ibus address", source)
@@ -219,10 +221,42 @@ class StatusDeployContractTests(unittest.TestCase):
                 self.assertIn('export MEMOCHAT_AI_INTERNAL_API_KEY="$generated"', source)
                 self.assertNotIn("MEMOCHAT_AI_INTERNAL_API_KEY=memochat", source)
 
+        for token in (
+            "recover_existing_ai_internal_api_key()",
+            'for pid_file in "${PID_DIR}/AIServer.pid" "${PID_DIR}/AIGatewayService-1.pid"',
+            "MEMOCHAT_AI_INTERNAL_API_KEY=//p",
+            "docker inspect memochat-ai-orchestrator",
+            'export MEMOCHAT_AI_INTERNAL_API_KEY="$recovered"',
+            "Reusing existing local MEMOCHAT_AI_INTERNAL_API_KEY",
+        ):
+            self.assertIn(token, start)
+
         self.assertIn('MEMOCHAT_AI_INTERNAL_API_KEY="${MEMOCHAT_AI_INTERNAL_API_KEY:-}"', start)
         self.assertIn("ensure_ai_internal_api_key\nexport_minio_runtime_credentials", start)
         self.assertLess(start.index("ensure_ai_internal_api_key"), start.index("export_minio_runtime_credentials"))
+        self.assertLess(start.index("recover_existing_ai_internal_api_key"), start.index("openssl rand -hex 32"))
         self.assertIn("MEMOCHAT_AI_INTERNAL_API_KEY=${MEMOCHAT_AI_INTERNAL_API_KEY:-}", ai_compose)
+
+    def test_linux_start_services_reconciles_ai_orchestrator_with_shared_internal_key(self):
+        start = read(START_SERVICES_SCRIPT)
+
+        for token in (
+            'AI_COMPOSE_FILE="${MEMOCHAT_AI_COMPOSE_FILE:-${PROJECT_ROOT}/apps/server/core/AIOrchestrator/docker-compose.yml}"',
+            'AI_WAIT_SECONDS="${MEMOCHAT_AI_WAIT_SECONDS:-60}"',
+            'AI_INTERNAL_AUTH_HEADER="${MEMOCHAT_AI_INTERNAL_AUTH_HEADER:-X-MemoChat-AI-Internal-Key}"',
+            'START_AI_ORCHESTRATOR="${START_AI_ORCHESTRATOR_OVERRIDE:-${MEMOCHAT_START_AI_ORCHESTRATOR:-1}}"',
+            "ensure_ai_orchestrator()",
+            'docker compose -f "$AI_COMPOSE_FILE" up -d --no-deps memochat-ai-orchestrator',
+            'curl -fsS -H "${AI_INTERNAL_AUTH_HEADER}: ${MEMOCHAT_AI_INTERNAL_API_KEY}" http://127.0.0.1:8096/models',
+            "while (( waited < AI_WAIT_SECONDS ))",
+            'echo "[STEP] Start AIOrchestrator"',
+            "ensure_ai_orchestrator",
+            "--skip-ai-orchestrator",
+        ):
+            self.assertIn(token, start)
+
+        self.assertLess(start.index("ensure_ai_internal_api_key\n"), start.index("ensure_ai_orchestrator\n"))
+        self.assertLess(start.index("ensure_ai_orchestrator\n"), start.index("start_topology_core_groups\n"))
 
     def test_linux_local_startup_allows_documented_dev_chat_auth_secret(self):
         start = read(START_SERVICES_SCRIPT)

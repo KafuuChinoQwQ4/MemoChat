@@ -3,6 +3,7 @@
 """
 
 import hmac
+import os
 
 from config import resolve_provider_admin_key, settings
 from fastapi import APIRouter, HTTPException, Request
@@ -11,6 +12,8 @@ from observability.metrics import ai_metrics
 from schemas.api import (
     DeleteApiProviderReq,
     DeleteApiProviderRsp,
+    DiscoverApiProviderReq,
+    DiscoverApiProviderRsp,
     ListModelsRsp,
     ModelInfo,
     ProviderInfo,
@@ -21,10 +24,37 @@ from schemas.api import (
 router = APIRouter()
 
 
+def _provider_models(endpoint) -> list[ModelInfo]:
+    models: list[ModelInfo] = []
+    seen_models: set[str] = set()
+    for model in endpoint.models:
+        model_name = model.get("name", "")
+        if not model_name or model_name in seen_models:
+            continue
+        seen_models.add(model_name)
+        models.append(
+            ModelInfo(
+                model_type=endpoint.provider_id,
+                model_name=model_name,
+                display_name=model.get("display", model_name),
+                is_enabled=True,
+                context_window=model.get("context_window", 0),
+                supports_thinking=bool(model.get("supports_thinking", False)),
+                provider_id=endpoint.provider_id,
+                adapter=endpoint.adapter,
+                deployment=endpoint.deployment,
+            )
+        )
+    return models
+
+
 def _require_provider_admin(request: Request) -> None:
     expected = resolve_provider_admin_key(settings.security)
+    environment = os.getenv("MEMOCHAT_ENV", "").strip().lower()
+    if not expected and environment in {"local", "dev", "development", "test"}:
+        return
     supplied = request.headers.get(settings.security.provider_admin_auth_header, "")
-    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+    if not supplied or not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=403, detail="provider admin auth required")
 
 
@@ -85,6 +115,30 @@ async def list_models():
     )
 
 
+@router.post("/api-provider/discover", response_model=DiscoverApiProviderRsp)
+async def discover_api_provider(req: DiscoverApiProviderReq, request: Request):
+    _require_provider_admin(request)
+    container = HarnessContainer.get_instance()
+    try:
+        endpoint = await container.llm_registry.discover_api_provider(
+            provider_name=req.provider_name,
+            base_url=req.base_url,
+            api_key=req.api_key,
+            adapter=req.adapter,
+        )
+    except Exception as exc:
+        ai_metrics.http_requests.inc(route="/models/api-provider/discover", status="error")
+        return DiscoverApiProviderRsp(code=400, message=str(exc))
+
+    ai_metrics.http_requests.inc(route="/models/api-provider/discover", status="ok")
+    return DiscoverApiProviderRsp(
+        code=0,
+        message="ok",
+        provider_id=endpoint.provider_id,
+        models=_provider_models(endpoint),
+    )
+
+
 @router.post("/api-provider", response_model=RegisterApiProviderRsp)
 async def register_api_provider(req: RegisterApiProviderReq, request: Request):
     _require_provider_admin(request)
@@ -94,38 +148,19 @@ async def register_api_provider(req: RegisterApiProviderReq, request: Request):
             provider_name=req.provider_name,
             base_url=req.base_url,
             api_key=req.api_key,
+            model_name=req.model_name,
             adapter=req.adapter,
         )
     except Exception as exc:
         ai_metrics.http_requests.inc(route="/models/api-provider", status="error")
         return RegisterApiProviderRsp(code=400, message=str(exc))
 
-    models: list[ModelInfo] = []
-    seen_models: set[str] = set()
-    for model in endpoint.models:
-        model_name = model.get("name", "")
-        if not model_name or model_name in seen_models:
-            continue
-        seen_models.add(model_name)
-        models.append(
-            ModelInfo(
-                model_type=endpoint.provider_id,
-                model_name=model_name,
-                display_name=model.get("display", model_name),
-                is_enabled=True,
-                context_window=model.get("context_window", 0),
-                supports_thinking=bool(model.get("supports_thinking", False)),
-                provider_id=endpoint.provider_id,
-                adapter=endpoint.adapter,
-                deployment=endpoint.deployment,
-            )
-        )
     ai_metrics.http_requests.inc(route="/models/api-provider", status="ok")
     return RegisterApiProviderRsp(
         code=0,
         message="ok",
         provider_id=endpoint.provider_id,
-        models=models,
+        models=_provider_models(endpoint),
     )
 
 
@@ -134,14 +169,30 @@ async def delete_api_provider(req: DeleteApiProviderReq, request: Request):
     _require_provider_admin(request)
     container = HarnessContainer.get_instance()
     try:
-        deleted = container.llm_registry.delete_api_provider(req.provider_id)
+        result = container.llm_registry.delete_api_provider(req.provider_id, req.model_name)
     except Exception as exc:
         ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="error")
-        return DeleteApiProviderRsp(code=400, message=str(exc), provider_id=req.provider_id)
+        return DeleteApiProviderRsp(
+            code=400,
+            message=str(exc),
+            provider_id=req.provider_id,
+            model_name=req.model_name,
+        )
 
-    if not deleted:
+    if not result.model_deleted:
         ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="missing")
-        return DeleteApiProviderRsp(code=404, message="provider not found", provider_id=req.provider_id)
+        return DeleteApiProviderRsp(
+            code=404,
+            message="model not found",
+            provider_id=req.provider_id,
+            model_name=req.model_name,
+        )
 
     ai_metrics.http_requests.inc(route="/models/api-provider/delete", status="ok")
-    return DeleteApiProviderRsp(code=0, message="ok", provider_id=req.provider_id)
+    return DeleteApiProviderRsp(
+        code=0,
+        message="ok",
+        provider_id=req.provider_id,
+        model_name=req.model_name,
+        provider_deleted=result.provider_deleted,
+    )

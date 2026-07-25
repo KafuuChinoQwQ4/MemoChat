@@ -147,14 +147,38 @@ def create_app() -> FastAPI:
 
         manager = LLMManager.get_instance()
         available = []
+        seen_backends: set[str] = set()
+
+        # Legacy LLMManager backends (ollama / openai / claude / kimi)
         for backend in ["ollama", "openai", "claude", "kimi"]:
             inst = manager.get_backend(backend)
             if inst is not None:
+                seen_backends.add(backend)
                 try:
                     models = await inst.list_models()
                     available.append({"backend": backend, "models": models, "ok": True})
                 except Exception as e:
                     available.append({"backend": backend, "ok": False, "error": str(e)})
+
+        # Harness providers (deepseek, qwen, kimi-api, gemini, etc.)
+        try:
+            container = HarnessContainer.get_instance()
+            for endpoint in container.llm_registry.list_endpoints():
+                if endpoint.provider_id in seen_backends:
+                    continue
+                seen_backends.add(endpoint.provider_id)
+                available.append(
+                    {
+                        "backend": endpoint.provider_id,
+                        "models": [m.get("name", "") for m in endpoint.models],
+                        "ok": True,
+                        "adapter": endpoint.adapter,
+                        "deployment": endpoint.deployment,
+                    }
+                )
+        except Exception as exc:
+            available.append({"backend": "harness_providers", "ok": False, "error": str(exc)})
+
         return {"status": "ready", "backends": available}
 
     @app.get("/metrics", response_class=PlainTextResponse)
