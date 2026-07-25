@@ -4,7 +4,7 @@ import { useChatStore } from "@/features/chat/store/chatStore"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 
 interface ComposerBarProps {
-  onSend(text: string): void
+  onSend: (text: string) => void
 }
 
 export function ComposerBar({ onSend }: ComposerBarProps) {

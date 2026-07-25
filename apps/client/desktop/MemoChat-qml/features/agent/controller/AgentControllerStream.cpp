@@ -32,6 +32,12 @@ void AgentController::sendStreamMessage(const QString& content)
     QString sessionId = _current_session_id;
 
     _model->appendUserMessage(content);
+    // capture for auto-rename (first message in a freshly created session)
+    if (!_pending_auto_rename_session_id.isEmpty() && _pending_auto_rename_session_id == _current_session_id &&
+        _pending_auto_rename_content.isEmpty())
+    {
+        _pending_auto_rename_content = content;
+    }
     clearTrace();
     clearErrorState();
     QString msgId = makeUuid();
@@ -186,6 +192,7 @@ void AgentController::finishStream(const QString& msgId, const QString& finalCon
     }
 
     emit aiResponseReceived(finalContent);
+    maybeAutoRenameSession();
 
     _streaming = false;
     setCurrentGeneratingMsgId(QString());

@@ -292,11 +292,26 @@ message AIListModelsRsp {
     ModelInfo default_model = 3;   // 默认模型
 }
 
+message AIDiscoverApiProviderReq {
+    string provider_name = 1;      // UI 显示/生成 provider_id 的名称
+    string base_url = 2;           // OpenAI-compatible API base URL
+    string api_key = 3;            // API Key，仅服务端使用
+    string adapter = 4;            // openai_compatible
+}
+
+message AIDiscoverApiProviderRsp {
+    int32 code = 1;
+    string message = 2;
+    string provider_id = 3;
+    repeated ModelInfo models = 4;
+}
+
 message AIRegisterApiProviderReq {
     string provider_name = 1;      // UI 显示/生成 provider_id 的名称
     string base_url = 2;           // OpenAI-compatible API base URL
     string api_key = 3;            // API Key，仅服务端使用
     string adapter = 4;            // openai_compatible
+    string model_name = 5;         // 本次选择接入的单个模型
 }
 
 message AIRegisterApiProviderRsp {
@@ -308,12 +323,15 @@ message AIRegisterApiProviderRsp {
 
 message AIDeleteApiProviderReq {
     string provider_id = 1;
+    string model_name = 2;
 }
 
 message AIDeleteApiProviderRsp {
     int32 code = 1;
     string message = 2;
     string provider_id = 3;
+    string model_name = 4;
+    bool provider_deleted = 5;
 }
 
 // =============================================================================
@@ -356,6 +374,7 @@ service AIService {
 
     // 模型列表
     rpc ListModels(AIListModelsReq) returns (AIListModelsRsp) {}
+    rpc DiscoverApiProvider(AIDiscoverApiProviderReq) returns (AIDiscoverApiProviderRsp) {}
     rpc RegisterApiProvider(AIRegisterApiProviderReq) returns (AIRegisterApiProviderRsp) {}
     rpc DeleteApiProvider(AIDeleteApiProviderReq) returns (AIDeleteApiProviderRsp) {}
 

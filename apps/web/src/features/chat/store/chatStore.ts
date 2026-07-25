@@ -13,11 +13,11 @@ interface ChatStore {
   loadingHistory: boolean
   historyFinished: boolean
 
-  setSelectedConversation(peerId: number, isGroup: boolean): void
-  setComposerText(text: string): void
-  setLoadingHistory(v: boolean): void
-  setHistoryFinished(v: boolean): void
-  reset(): void
+  setSelectedConversation: (peerId: number, isGroup: boolean) => void
+  setComposerText: (text: string) => void
+  setLoadingHistory: (v: boolean) => void
+  setHistoryFinished: (v: boolean) => void
+  reset: () => void
 }
 
 export const useChatStore = create<ChatStore>((set) => ({

@@ -82,6 +82,26 @@ def qml_invokable_names(header_text: str) -> set[str]:
 
 
 class AgentControllerBoundaryTests(unittest.TestCase):
+    def test_api_provider_flow_discovers_then_attaches_and_deletes_one_model(self):
+        controller = read(AGENT_CONTROLLER_DIR / "AgentControllerModels.cpp")
+        control_bar = read(AGENT_DIR / "view" / "AgentModelControlBar.qml")
+
+        discover = function_body(controller, "discoverApiProvider")
+        register = function_body(controller, "registerDiscoveredApiModel")
+        delete = function_body(controller, "deleteApiProvider")
+
+        self.assertIn("/ai/model/api/discover", discover)
+        self.assertNotIn("/ai/model/api/register", discover)
+        self.assertIn('payload["model_name"] = selectedModel', register)
+        self.assertIn("/ai/model/api/register", register)
+        self.assertIn('payload["model_name"] = trimmedModelName', delete)
+        self.assertIn("/ai/model/api/delete", delete)
+
+        self.assertIn("property var apiProviderCandidates", control_bar)
+        self.assertIn('text: root.apiProviderBusy ? "检测中" : "检测模型"', control_bar)
+        self.assertIn('text: "接入所选模型"', control_bar)
+        self.assertIn("modelDelegate.modelData.model_name", control_bar)
+
     def test_agent_controller_qml_surface_is_explicitly_capped(self):
         header = read(AGENT_CONTROLLER_DIR / "AgentController.h")
 
@@ -94,6 +114,7 @@ class AgentControllerBoundaryTests(unittest.TestCase):
             "modelRefreshBusy",
             "apiProviderBusy",
             "apiProviderStatus",
+            "apiProviderCandidates",
             "thinkingEnabled",
             "currentModelSupportsThinking",
             "knowledgeBases",
@@ -144,7 +165,8 @@ class AgentControllerBoundaryTests(unittest.TestCase):
             "switchModel",
             "switchAgentSkillMode",
             "refreshModelList",
-            "registerApiProvider",
+            "discoverApiProvider",
+            "registerDiscoveredApiModel",
             "deleteApiProvider",
             "summarizeChat",
             "suggestReply",
@@ -416,7 +438,8 @@ class AgentControllerBoundaryTests(unittest.TestCase):
             ),
             "AgentControllerModels.cpp": (
                 "refreshModelList",
-                "registerApiProvider",
+                "discoverApiProvider",
+                "registerDiscoveredApiModel",
                 "deleteApiProvider",
             ),
             "AgentControllerGameRooms.cpp": (

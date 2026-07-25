@@ -8,6 +8,7 @@ import { createHashRouter, RouterProvider, Navigate } from "react-router-dom"
 import { AuthGuard } from "./guards/AuthGuard"
 import { BootstrapGate } from "./guards/BootstrapGate"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
+import { postLoginBootstrap } from "@/app/bootstrap/postLoginBootstrap"
 
 // Lazy-load page bundles for code-splitting
 const LoginPage    = lazy(() => import("@/features/auth/components/LoginPage").then((m) => ({ default: m.LoginPage })))
@@ -31,7 +32,7 @@ function PageFallback() {
 
 const router = createHashRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
-  { path: "/login",    element: <Suspense fallback={<PageFallback />}><LoginPage /></Suspense> },
+  { path: "/login",    element: <Suspense fallback={<PageFallback />}><LoginPage onLogin={postLoginBootstrap} /></Suspense> },
   { path: "/register", element: <Suspense fallback={<PageFallback />}><RegisterPage /></Suspense> },
   { path: "/reset",    element: <Suspense fallback={<PageFallback />}><ResetPage /></Suspense> },
   {

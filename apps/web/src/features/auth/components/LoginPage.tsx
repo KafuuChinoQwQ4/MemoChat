@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useSessionStore } from "@/core/session/sessionStore"
-import { postLoginBootstrap } from "@/app/bootstrap/postLoginBootstrap"
 import { useAuthStore } from "@/features/auth/store/authStore"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
@@ -32,7 +31,11 @@ function mapLoginError(err: unknown): string {
   return msg || "登录失败，请重试"
 }
 
-export function LoginPage() {
+interface LoginPageProps {
+  onLogin: (credentials: { email: string; password: string }) => Promise<void>
+}
+
+export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate()
   const isLoggedIn = useSessionStore((s) => s.token !== null)
 
@@ -49,7 +52,7 @@ export function LoginPage() {
     reset()
     setLoading(true)
     try {
-      await postLoginBootstrap({ email, password })
+      await onLogin({ email, password })
       void navigate("/app/chat", { replace: true })
     } catch (err) {
       setError(mapLoginError(err))

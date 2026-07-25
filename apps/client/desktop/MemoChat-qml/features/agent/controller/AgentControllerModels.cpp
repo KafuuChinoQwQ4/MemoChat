@@ -81,7 +81,7 @@ void AgentController::refreshModelList()
     HttpMgr::GetInstance()->GetHttpReq(url, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
-void AgentController::registerApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey)
+void AgentController::discoverApiProvider(const QString& providerName, const QString& baseUrl, const QString& apiKey)
 {
     ensureUserScope();
     const QString trimmedUrl = baseUrl.trimmed();
@@ -94,24 +94,71 @@ void AgentController::registerApiProvider(const QString& providerName, const QSt
     }
 
     clearErrorState();
-    setApiProviderBusy(true, "正在连接 API 并解析模型...");
+    _api_provider_candidates.clear();
+    _pending_api_provider_name =
+        providerName.trimmed().isEmpty() ? QStringLiteral("custom-api") : providerName.trimmed();
+    _pending_api_provider_url = trimmedUrl;
+    _pending_api_provider_key = trimmedKey;
+    setApiProviderBusy(true, "正在检测 API 模型...");
     QJsonObject payload;
-    payload["provider_name"] = providerName.trimmed().isEmpty() ? QStringLiteral("custom-api") : providerName.trimmed();
+    payload["provider_name"] = _pending_api_provider_name;
     payload["base_url"] = trimmedUrl;
     payload["api_key"] = trimmedKey;
     payload["adapter"] = QStringLiteral("openai_compatible");
 
     ReqId reqId = nextAgentHttpRequestId();
-    _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister, QString(), scopedUid());
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDiscover, QString(), scopedUid());
+    HttpMgr::GetInstance()->PostHttpReq(
+        agentApiUrl(QStringLiteral("/ai/model/api/discover")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
+}
+
+void AgentController::registerDiscoveredApiModel(const QString& modelName)
+{
+    ensureUserScope();
+    const QString selectedModel = modelName.trimmed();
+    if (_pending_api_provider_url.isEmpty() || _pending_api_provider_key.isEmpty() || selectedModel.isEmpty())
+    {
+        setApiProviderBusy(false, "请先检测 API 并选择一个模型。");
+        return;
+    }
+
+    bool candidateFound = false;
+    for (const QVariant& candidateValue : _api_provider_candidates)
+    {
+        if (candidateValue.toMap().value(QStringLiteral("model_name")).toString() == selectedModel)
+        {
+            candidateFound = true;
+            break;
+        }
+    }
+    if (!candidateFound)
+    {
+        setApiProviderBusy(false, "所选模型不在本次检测结果中。");
+        return;
+    }
+
+    clearErrorState();
+    setApiProviderBusy(true, QString("正在接入模型 %1...").arg(selectedModel));
+    QJsonObject payload;
+    payload["provider_name"] = _pending_api_provider_name;
+    payload["base_url"] = _pending_api_provider_url;
+    payload["api_key"] = _pending_api_provider_key;
+    payload["adapter"] = QStringLiteral("openai_compatible");
+    payload["model_name"] = selectedModel;
+
+    ReqId reqId = nextAgentHttpRequestId();
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderRegister, selectedModel, scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(
         agentApiUrl(QStringLiteral("/ai/model/api/register")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }
 
-void AgentController::deleteApiProvider(const QString& providerId)
+void AgentController::deleteApiProvider(const QString& providerId, const QString& modelName)
 {
     ensureUserScope();
     const QString trimmedProviderId = providerId.trimmed();
-    if (trimmedProviderId.isEmpty() || !trimmedProviderId.startsWith(QStringLiteral("api-")))
+    const QString trimmedModelName = modelName.trimmed();
+    if (trimmedProviderId.isEmpty() || !trimmedProviderId.startsWith(QStringLiteral("api-")) ||
+                                                                     trimmedModelName.isEmpty())
     {
         setApiProviderBusy(false, "只能删除通过 API 接入的模型。");
         return;
@@ -121,9 +168,10 @@ void AgentController::deleteApiProvider(const QString& providerId)
     setApiProviderBusy(true, "正在删除 API 模型...");
     QJsonObject payload;
     payload["provider_id"] = trimmedProviderId;
+    payload["model_name"] = trimmedModelName;
 
     ReqId reqId = nextAgentHttpRequestId();
-    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete, QString(), scopedUid());
+    _pending_requests.track(reqId, AgentRequestKind::ApiProviderDelete, trimmedModelName, scopedUid());
     HttpMgr::GetInstance()->PostHttpReq(
         agentApiUrl(QStringLiteral("/ai/model/api/delete")), payload, reqId, Modules::LOGINMOD, aiHttpModule());
 }

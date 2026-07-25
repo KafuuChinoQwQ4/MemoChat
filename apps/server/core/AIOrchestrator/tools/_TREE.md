@@ -12,6 +12,6 @@
 | `mcp_bridge.py` | MCP 桥接：经 subprocess+stdio+JSON-RPC 调用外部 MCP Server。 |
 | `registry.py` | 工具注册表：登记所有可用工具（含 MCP）。 |
 | `translator_tool.py` | 翻译工具。 |
-| `web_search_tool.py` | 网络搜索工具。 |
+| `web_search_tool.py` | 通过 Jina Reader Search 返回 LLM-friendly Markdown 的联网搜索工具。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

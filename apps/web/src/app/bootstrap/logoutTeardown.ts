@@ -10,6 +10,7 @@ import { teardownContainer } from "@/app/container/DIContainer"
 import { ENDPOINTS } from "@/core/config/endpoints"
 import { logger } from "@/core/common/logger"
 import { useChatStore } from "@/features/chat/store/chatStore"
+import { clearMediaAuthCache } from "@/shared/media/mediaAuthCache"
 
 export async function logoutTeardown(): Promise<void> {
   const session = useSessionStore.getState()
@@ -27,6 +28,7 @@ export async function logoutTeardown(): Promise<void> {
   }
   FeatureRegistry.teardownAll()
   FeatureRegistry.clear()
+  clearMediaAuthCache()
   await resetEntitySession()
   // Chat UI selection/history flags are process-wide; clear them so the next
   // login does not reopen the previous account's peerId with empty entities.

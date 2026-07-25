@@ -81,6 +81,143 @@ def _clear_service_stubs():
 
 
 class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_openai_compatible_client_applies_model_override_once_for_chat_and_stream(self):
+        _install_service_stubs()
+        try:
+            import harness.llm.service as service
+
+            service = importlib.reload(service)
+            posted_payloads: list[dict] = []
+
+            class FakeResponse:
+                def raise_for_status(self):
+                    return None
+
+                def json(self):
+                    return {
+                        "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                        "usage": {},
+                    }
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+
+                async def aiter_lines(self):
+                    yield 'data: {"choices":[{"delta":{"content":"ok"}}]}'
+                    yield "data: [DONE]"
+
+            class FakeHttpClient:
+                async def post(self, url, json):
+                    posted_payloads.append(json)
+                    return FakeResponse()
+
+                def stream(self, method, url, json):
+                    posted_payloads.append(json)
+                    return FakeResponse()
+
+            client = service._OpenAICompatibleClient("https://api.example.test", "key", "default-model")
+            client._get_client = AsyncMock(return_value=FakeHttpClient())
+            messages = [types.SimpleNamespace(role="user", content="hello")]
+
+            with (
+                patch.object(service, "LLMResponse", side_effect=lambda **kwargs: types.SimpleNamespace(**kwargs)),
+                patch.object(service, "LLMUsage", side_effect=lambda **kwargs: types.SimpleNamespace(**kwargs)),
+                patch.object(service, "LLMStreamChunk", side_effect=lambda **kwargs: types.SimpleNamespace(**kwargs)),
+            ):
+                response = await client.chat(messages, model_name="selected-model")
+                chunks = [chunk async for chunk in client.chat_stream(messages, model_name="selected-model")]
+
+            self.assertEqual(response.model, "selected-model")
+            self.assertEqual([payload["model"] for payload in posted_payloads], ["selected-model", "selected-model"])
+            self.assertTrue(chunks[-1].is_final)
+        finally:
+            _clear_service_stubs()
+            sys.modules.pop("harness.llm.service", None)
+
+    async def test_api_provider_models_are_discovered_attached_and_deleted_independently(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            provider_file = Path(tmpdir) / "api_providers.json"
+            os.environ["MEMOCHAT_API_PROVIDERS_FILE"] = str(provider_file)
+            _install_service_stubs()
+
+            try:
+                import harness.llm.service as service
+
+                service = importlib.reload(service)
+                registry = service.LLMEndpointRegistry()
+                discovered = [
+                    {
+                        "name": "deepseek-v4-flash",
+                        "display": "DeepSeek Flash",
+                        "context_window": 64000,
+                        "supports_thinking": False,
+                    },
+                    {
+                        "name": "deepseek-v4-pro",
+                        "display": "DeepSeek Pro",
+                        "context_window": 64000,
+                        "supports_thinking": True,
+                    },
+                ]
+
+                with (
+                    patch.object(
+                        service.socket,
+                        "getaddrinfo",
+                        return_value=[(None, None, None, "", ("93.184.216.34", 443))],
+                    ),
+                    patch.object(
+                        service._OpenAICompatibleClient, "list_models", new=AsyncMock(return_value=discovered)
+                    ),
+                ):
+                    candidates = await registry.discover_api_provider(
+                        "deepseek",
+                        "https://api.deepseek.com/v1",
+                        "same-key",
+                    )
+                    self.assertEqual(
+                        [model["name"] for model in candidates.models],
+                        ["deepseek-v4-flash", "deepseek-v4-pro"],
+                    )
+                    self.assertFalse(provider_file.exists())
+
+                    endpoint = await registry.register_api_provider(
+                        "deepseek",
+                        "https://api.deepseek.com/v1",
+                        "same-key",
+                        "deepseek-v4-pro",
+                    )
+                    self.assertEqual([model["name"] for model in endpoint.models], ["deepseek-v4-pro"])
+
+                    endpoint = await registry.register_api_provider(
+                        "deepseek",
+                        "https://api.deepseek.com/v1",
+                        "same-key",
+                        "deepseek-v4-flash",
+                    )
+                    self.assertEqual(
+                        sorted(model["name"] for model in endpoint.models),
+                        ["deepseek-v4-flash", "deepseek-v4-pro"],
+                    )
+
+                pro_delete = registry.delete_api_provider(endpoint.provider_id, "deepseek-v4-pro")
+                self.assertTrue(pro_delete.model_deleted)
+                self.assertFalse(pro_delete.provider_deleted)
+                providers = json.loads(provider_file.read_text(encoding="utf-8"))["providers"]
+                self.assertEqual([model["name"] for model in providers[0]["models"]], ["deepseek-v4-flash"])
+
+                flash_delete = registry.delete_api_provider(endpoint.provider_id, "deepseek-v4-flash")
+                self.assertTrue(flash_delete.model_deleted)
+                self.assertTrue(flash_delete.provider_deleted)
+                self.assertEqual(json.loads(provider_file.read_text(encoding="utf-8"))["providers"], [])
+            finally:
+                os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
+                _clear_service_stubs()
+                sys.modules.pop("harness.llm.service", None)
+
     async def test_moonshot_chat_payload_uses_provider_safe_parameters(self):
         _install_service_stubs()
         try:
@@ -247,11 +384,13 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                         "deepseek flash",
                         "https://api.deepseek.com/v1",
                         "same-key",
+                        "deepseek-v4-flash",
                     )
                     second = await registry.register_api_provider(
                         "deepseek pro",
                         "https://api.deepseek.com",
                         "same-key",
+                        "deepseek-v4-pro",
                     )
 
                 self.assertEqual(first.provider_id, second.provider_id)

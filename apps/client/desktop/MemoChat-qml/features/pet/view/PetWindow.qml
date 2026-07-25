@@ -379,11 +379,9 @@ Window {
         syncControlWindowState()
     }
     onXChanged: {
-        scheduleControlWindowPosition()
         scheduleChatWindowPosition()
     }
     onYChanged: {
-        scheduleControlWindowPosition()
         scheduleChatWindowPosition()
     }
     onWidthChanged: {

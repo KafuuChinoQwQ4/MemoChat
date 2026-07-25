@@ -120,6 +120,17 @@ std::string EnvValue(const std::string& name)
     return value == nullptr ? "" : TrimCopy(value);
 }
 
+bool IsLocalEnvironment()
+{
+    std::string environment = EnvValue("MEMOCHAT_ENV");
+    if (environment.empty())
+    {
+        environment = ConfigValue("Log", "Env");
+    }
+    environment = LowerAsciiCopy(std::move(environment));
+    return environment == "local" || environment == "dev" || environment == "development" || environment == "test";
+}
+
 std::string ProviderAdminAuthHeader()
 {
     std::string header = ConfigValue("AIProviderAdmin", "AuthHeader");
@@ -199,7 +210,10 @@ bool RequireProviderAdmin(const memochat::gate::routing::GateRequest& request,
     const std::string configured_key = ResolveProviderAdminKey();
     const std::string supplied = TrimCopy(HeaderValue(request, ProviderAdminAuthHeader()));
     const bool matched = ConstantTimeEquals(supplied, configured_key);
-    if (service_modules::ShouldRejectProviderAdminAuth(!configured_key.empty(), supplied.empty(), matched))
+    if (service_modules::ShouldRejectProviderAdminAuth(!configured_key.empty(),
+                                                       IsLocalEnvironment(),
+                                                       supplied.empty(),
+                                                       matched))
     {
         WriteProviderAdminFailure(response);
         return false;
@@ -482,6 +496,34 @@ bool AIService::HandleListModels(const memochat::gate::routing::GateRequest& req
     return true;
 }
 
+bool AIService::HandleDiscoverApiProvider(const memochat::gate::routing::GateRequest& request,
+                                          memochat::gate::routing::GateResponse& response)
+{
+    memolog::SpanScope span("gate.ai.model.api.discover", "http");
+    json::JsonValue root = json::JsonValue{};
+    json::JsonValue src_root = json::JsonValue{};
+    if (!ParsePostJson(request, response, root, src_root))
+    {
+        return true;
+    }
+
+    const AIDiscoverApiProviderRequestDto provider_request = AIDiscoverApiProviderRequestFromJsonValue(src_root);
+    if (!RequireUserAuth(request, response))
+    {
+        return true;
+    }
+    if (!RequireProviderAdmin(request, response))
+    {
+        return true;
+    }
+    auto result = Client().DiscoverApiProvider(provider_request.provider_name,
+                                               provider_request.base_url,
+                                               provider_request.api_key,
+                                               provider_request.adapter);
+    WriteJson(response, result);
+    return true;
+}
+
 bool AIService::HandleRegisterApiProvider(const memochat::gate::routing::GateRequest& request,
                                           memochat::gate::routing::GateResponse& response)
 {
@@ -505,6 +547,7 @@ bool AIService::HandleRegisterApiProvider(const memochat::gate::routing::GateReq
     auto result = Client().RegisterApiProvider(provider_request.provider_name,
                                                provider_request.base_url,
                                                provider_request.api_key,
+                                               provider_request.model_name,
                                                provider_request.adapter);
     WriteJson(response, result);
     return true;
@@ -530,7 +573,7 @@ bool AIService::HandleDeleteApiProvider(const memochat::gate::routing::GateReque
     {
         return true;
     }
-    auto result = Client().DeleteApiProvider(provider_request.provider_id);
+    auto result = Client().DeleteApiProvider(provider_request.provider_id, provider_request.model_name);
     WriteJson(response, result);
     return true;
 }

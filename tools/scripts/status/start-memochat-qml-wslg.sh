@@ -133,12 +133,24 @@ select_ibus_libpinyin() {
     if ! command -v ibus >/dev/null 2>&1; then
         return 1
     fi
+
+    local ibus_address=""
+    local selected_engine=""
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        if env -u WAYLAND_DISPLAY \
+        ibus_address="$(env -u WAYLAND_DISPLAY ibus address 2>/dev/null || true)"
+        if [[ -z "$ibus_address" ]]; then
+            sleep 0.1
+            continue
+        fi
+
+        env -u WAYLAND_DISPLAY \
+            IBUS_ADDRESS="$ibus_address" \
             GTK_IM_MODULE=ibus \
             QT_IM_MODULE=ibus \
             XMODIFIERS=@im=ibus \
-            ibus engine libpinyin >/dev/null 2>&1; then
+            ibus engine libpinyin >/dev/null 2>&1 || true
+        selected_engine="$(env -u WAYLAND_DISPLAY IBUS_ADDRESS="$ibus_address" ibus engine 2>/dev/null || true)"
+        if [[ "$selected_engine" == "libpinyin" ]]; then
             return 0
         fi
         sleep 0.1

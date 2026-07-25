@@ -610,6 +610,8 @@ class PetQmlContractTests(unittest.TestCase):
             "libibusplatforminputcontextplugin.so",
             "libpinyin",
             "IBUS_ENABLE_SYNC_MODE",
+            "IBUS_ADDRESS",
+            "readAllStandardOutput",
             "--replace",
             "GDK_BACKEND",
             "WAYLAND_DISPLAY",
@@ -899,14 +901,17 @@ class PetQmlContractTests(unittest.TestCase):
         self.assertIn("onClicked: root.closeRequested()", header)
         self.assertIn('text: "AI API 接入"', panel)
         self.assertIn("property var agentController", panel)
-        self.assertIn("root.agentController.registerApiProvider", panel)
+        self.assertIn("root.agentController.discoverApiProvider", panel)
+        self.assertIn("root.agentController.registerDiscoveredApiModel", panel)
         self.assertIn("root.agentController.refreshModelList", panel)
         self.assertIn("root.agentController.switchModel", panel)
+        self.assertIn("onDiscoverRequested", panel)
         self.assertIn("onRegisterRequested", panel)
         self.assertIn("onRefreshRequested", panel)
         self.assertIn("onModelSelected", panel)
         self.assertIn("apiProviderStatus", panel)
         self.assertIn("availableModels", panel)
+        self.assertIn("apiProviderCandidates", panel)
 
     def test_pet_chat_window_is_separate_and_uses_pet_controller(self):
         chat = read_texts(PET_CHAT_WINDOW_QML, PET_CHAT_RUNTIME_JS, PET_CHAT_MESSAGE_LIST_QML, PET_CHAT_COMPOSER_QML)

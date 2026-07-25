@@ -77,6 +77,13 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
             case AgentRequestKind::ModelList:
                 setModelRefreshBusy(false);
                 break;
+            case AgentRequestKind::ApiProviderDiscover:
+                _api_provider_candidates.clear();
+                _pending_api_provider_name.clear();
+                _pending_api_provider_url.clear();
+                _pending_api_provider_key.clear();
+                setApiProviderBusy(false, errorText);
+                break;
             case AgentRequestKind::ApiProviderRegister:
             case AgentRequestKind::ApiProviderDelete:
                 setApiProviderBusy(false, errorText);
@@ -132,7 +139,10 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
 
     if (err != ErrorCodes::SUCCESS)
     {
-        finishWithError(QString("请求失败: error=%1").arg(static_cast<int>(err)));
+        const QString errorText =
+            (err == ErrorCodes::ERR_NETWORK) ? QStringLiteral("AI 服务连接失败，请检查服务是否已启动")
+                                             : QString("请求失败: error=%1").arg(static_cast<int>(err));
+        finishWithError(errorText);
         return;
     }
 
@@ -166,15 +176,34 @@ void AgentController::onHttpFinish(ReqId id, const QString& res, ErrorCodes err,
         case AgentRequestKind::ModelList:
             handleModelListRsp(id, res, err);
             break;
+        case AgentRequestKind::ApiProviderDiscover:
+        {
+            _api_provider_candidates.clear();
+            const QJsonArray models = root["models"].toArray();
+            for (const QJsonValue& model : models)
+            {
+                const QJsonObject modelObject = model.toObject();
+                if (!modelObject["model_name"].toString().trimmed().isEmpty())
+                {
+                    _api_provider_candidates.push_back(modelObject.toVariantMap());
+                }
+            }
+            setApiProviderBusy(false,
+                               QString("检测到 %1 个模型，请选择一个接入。").arg(_api_provider_candidates.size()));
+            break;
+        }
         case AgentRequestKind::ApiProviderRegister:
         {
-            const int modelCount = root["models"].toArray().size();
-            setApiProviderBusy(false, QString("已接入 API，解析到 %1 个模型。").arg(modelCount));
+            setApiProviderBusy(false, QString("已接入模型 %1。").arg(record.messageId));
+            _api_provider_candidates.clear();
+            _pending_api_provider_name.clear();
+            _pending_api_provider_url.clear();
+            _pending_api_provider_key.clear();
             refreshModelList();
             break;
         }
         case AgentRequestKind::ApiProviderDelete:
-            setApiProviderBusy(false, "API 模型已删除。");
+            setApiProviderBusy(false, QString("模型 %1 已删除。").arg(record.messageId));
             refreshModelList();
             break;
         case AgentRequestKind::Summary:

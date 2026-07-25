@@ -192,8 +192,12 @@ grpc::Status RequireAIServerInternalMetadata(const ServerContext* context)
 grpc::Status RequireProviderAdminMetadata(const ServerContext* context)
 {
     const std::string configured_key = ResolveProviderAdminKey();
+    if (configured_key.empty() && IsLocalEnvironment())
+    {
+        return grpc::Status::OK;
+    }
     const std::string supplied = MetadataValue(context, ProviderAdminMetadataKey());
-    if (configured_key.empty() || supplied.empty() || !ConstantTimeEquals(supplied, configured_key))
+    if (supplied.empty() || !ConstantTimeEquals(supplied, configured_key))
     {
         return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, "provider admin auth required");
     }
@@ -304,6 +308,22 @@ AIServiceImpl::ListModels(ServerContext* context, const ai::AIListModelsReq* req
         return auth_status;
     }
     return _core->ListModels(*request, reply);
+}
+
+grpc::Status AIServiceImpl::DiscoverApiProvider(ServerContext* context,
+                                                const ai::AIDiscoverApiProviderReq* request,
+                                                ai::AIDiscoverApiProviderRsp* reply)
+{
+    memolog::SpanScope span(impl_modules::DiscoverApiProviderSpan(), impl_modules::RpcKind());
+    if (const auto auth_status = RequireAIServerInternalMetadata(context); !auth_status.ok())
+    {
+        return auth_status;
+    }
+    if (const auto auth_status = RequireProviderAdminMetadata(context); !auth_status.ok())
+    {
+        return auth_status;
+    }
+    return _core->DiscoverApiProvider(*request, reply);
 }
 
 grpc::Status AIServiceImpl::RegisterApiProvider(ServerContext* context,

@@ -30,6 +30,34 @@ bool isGuardrailBlockedOutput(const QString& text)
 }
 } // namespace
 
+// Truncate user content to a short session title (≤24 chars; ellipsis for longer).
+// Uses simplified() to collapse whitespace/newlines first.
+/*static*/
+QString AgentController::makeAutoSessionTitle(const QString& content)
+{
+    const QString flat = content.simplified();
+    if (flat.length() <= 24)
+        return flat;
+    return flat.left(22) + QStringLiteral("…"); // '…'
+}
+
+// Called after the first AI response in a freshly created session.
+// Renames the session if the pending auto-rename state matches the current session.
+void AgentController::maybeAutoRenameSession()
+{
+    if (_pending_auto_rename_session_id.isEmpty())
+        return;
+    if (_pending_auto_rename_session_id != _current_session_id)
+        return;
+    if (_pending_auto_rename_content.isEmpty())
+        return;
+
+    const QString autoTitle = makeAutoSessionTitle(_pending_auto_rename_content);
+    _pending_auto_rename_session_id.clear();
+    _pending_auto_rename_content.clear();
+    renameSession(_current_session_id, autoTitle);
+}
+
 void AgentController::sendMessage(const QString& content)
 {
     if (content.trimmed().isEmpty())
@@ -40,6 +68,12 @@ void AgentController::sendMessage(const QString& content)
     QString sessionId = _current_session_id;
 
     _model->appendUserMessage(content);
+    // capture for auto-rename (first message in a freshly created session)
+    if (!_pending_auto_rename_session_id.isEmpty() && _pending_auto_rename_session_id == _current_session_id &&
+        _pending_auto_rename_content.isEmpty())
+    {
+        _pending_auto_rename_content = content;
+    }
     clearTrace();
     clearErrorState();
     _loading = true;
@@ -183,6 +217,7 @@ void AgentController::handleChatRsp(ReqId id, const QString& res, ErrorCodes err
     }
     _model->finalizeAllStreamingMessages();
     emit aiResponseReceived(content);
+    maybeAutoRenameSession();
 }
 
 void AgentController::handleSmartRsp(ReqId id, const QString& res, ErrorCodes err, AgentRequestKind kind)

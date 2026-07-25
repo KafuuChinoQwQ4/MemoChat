@@ -278,12 +278,14 @@ class PetWindowControlsContractTests(unittest.TestCase):
         self.assertNotIn('root.sendQuickText("陪我整理一下现在的思路")', panel)
         self.assertNotIn("root.petController.clearSpeech()", panel)
         self.assertIn("property var agentController", panel)
-        self.assertIn("registerApiProvider", panel)
-        self.assertIn("root.agentController.registerApiProvider", panel)
+        self.assertIn("discoverApiProvider", panel)
+        self.assertIn("root.agentController.discoverApiProvider", panel)
+        self.assertIn("root.agentController.registerDiscoveredApiModel", panel)
         self.assertIn("root.agentController.refreshModelList", panel)
         self.assertIn("root.agentController.switchModel", panel)
         self.assertIn("apiProviderStatus", panel)
         self.assertIn("availableModels", panel)
+        self.assertIn("apiProviderCandidates", panel)
 
     def test_pet_chat_window_sends_text_and_minimizes_independently(self):
         chat = "\n".join(

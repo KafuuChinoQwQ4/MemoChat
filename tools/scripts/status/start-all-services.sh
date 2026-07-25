@@ -12,6 +12,7 @@ LOCAL_COMPOSE_FILE="${MEMOCHAT_LOCAL_COMPOSE_FILE:-${PROJECT_ROOT}/infra/deploy/
 WAIT_SECONDS=16
 AUTO_DEPLOY=1
 START_CORE_SERVICES_OVERRIDE=""
+START_AI_ORCHESTRATOR_OVERRIDE=""
 START_CHAT_DELIVERY_WORKER_OVERRIDE=""
 START_RELATION_QUERY_SERVICE_OVERRIDE=""
 START_RELATION_SERVICE_WORKER_OVERRIDE=""
@@ -31,7 +32,7 @@ GPT_SOVITS_WAIT_SECONDS_OVERRIDE=""
 
 usage() {
     cat <<USAGE
-Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N] [--start-chat-delivery-worker] [--start-relation-query-service] [--skip-relation-query-service] [--start-relation-service-worker] [--skip-relation-service-worker] [--start-message-service] [--skip-message-service] [--start-aigateway] [--skip-aigateway] [--start-mediagateway] [--skip-mediagateway] [--start-momentsgateway] [--skip-momentsgateway] [--start-callgateway] [--skip-callgateway] [--start-r18gateway] [--skip-r18gateway] [--start-register] [--skip-register] [--start-login] [--skip-login] [--start-account] [--skip-account] [--skip-core-services]
+Usage: $0 [--no-deploy] [--wait-seconds N] [--skip-docker-deps] [--skip-envoy] [--skip-ai-orchestrator] [--skip-gpt-sovits] [--gpt-sovits-wait-seconds N] [--start-chat-delivery-worker] [--start-relation-query-service] [--skip-relation-query-service] [--start-relation-service-worker] [--skip-relation-service-worker] [--start-message-service] [--skip-message-service] [--start-aigateway] [--skip-aigateway] [--start-mediagateway] [--skip-mediagateway] [--start-momentsgateway] [--skip-momentsgateway] [--start-callgateway] [--skip-callgateway] [--start-r18gateway] [--skip-r18gateway] [--start-register] [--skip-register] [--start-login] [--skip-login] [--start-account] [--skip-account] [--skip-core-services]
 
 Start Linux MemoChat backend services from:
   ${RUNTIME_DIR}
@@ -49,8 +50,10 @@ AIOrchestrator can reach http://host.docker.internal:9880. Set
 MEMOCHAT_START_GPT_SOVITS=0 or pass --skip-gpt-sovits to skip it. Set
 MEMOCHAT_REQUIRE_GPT_SOVITS=0 only when text-only pet replies are acceptable.
 
-Observability and AI/RAG containers are not started by this script. Start the
-broader Docker stack separately when those dependencies are needed.
+AIOrchestrator is started by default with the same generated internal key used
+by AIServer and AIGatewayServer. Its Qdrant/Neo4j dependencies and observability
+containers are not started here; start the broader Docker stacks separately
+when those dependencies are needed.
 USAGE
 }
 
@@ -66,6 +69,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-envoy|--no-envoy)
             START_ENVOY_OVERRIDE=0
+            shift
+            ;;
+        --skip-ai-orchestrator|--no-ai-orchestrator)
+            START_AI_ORCHESTRATOR_OVERRIDE=0
             shift
             ;;
         --skip-docker-deps|--no-docker-deps)
@@ -193,6 +200,10 @@ if [[ -f "$ENV_FILE" ]]; then
     source "$ENV_FILE"
 fi
 
+AI_COMPOSE_FILE="${MEMOCHAT_AI_COMPOSE_FILE:-${PROJECT_ROOT}/apps/server/core/AIOrchestrator/docker-compose.yml}"
+AI_WAIT_SECONDS="${MEMOCHAT_AI_WAIT_SECONDS:-60}"
+AI_INTERNAL_AUTH_HEADER="${MEMOCHAT_AI_INTERNAL_AUTH_HEADER:-X-MemoChat-AI-Internal-Key}"
+
 export MEMOCHAT_ENABLE_KAFKA="${MEMOCHAT_ENABLE_KAFKA:-1}"
 export MEMOCHAT_ENABLE_RABBITMQ="${MEMOCHAT_ENABLE_RABBITMQ:-1}"
 # Start every chat ingress by default. Clients still degrade through their
@@ -206,6 +217,7 @@ export MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER="${MEMOCHAT_ENABLE_LWS_WEBTRANS
 # well-known dev ChatAuth secret; production/staging should keep this unset/0.
 export MEMOCHAT_ALLOW_DEV_SECRETS="${MEMOCHAT_ALLOW_DEV_SECRETS:-1}"
 START_CORE_SERVICES="${START_CORE_SERVICES_OVERRIDE:-${MEMOCHAT_START_CORE_SERVICES:-1}}"
+START_AI_ORCHESTRATOR="${START_AI_ORCHESTRATOR_OVERRIDE:-${MEMOCHAT_START_AI_ORCHESTRATOR:-1}}"
 START_CHAT_DELIVERY_WORKER="${START_CHAT_DELIVERY_WORKER_OVERRIDE:-${MEMOCHAT_START_CHAT_DELIVERY_WORKER:-0}}"
 START_RELATION_QUERY_SERVICE="${START_RELATION_QUERY_SERVICE_OVERRIDE:-${MEMOCHAT_START_RELATION_QUERY_SERVICE:-1}}"
 START_RELATION_SERVICE_WORKER="${START_RELATION_SERVICE_WORKER_OVERRIDE:-${MEMOCHAT_START_RELATION_SERVICE_WORKER:-1}}"
@@ -259,9 +271,45 @@ first_env_value() {
     return 1
 }
 
+recover_existing_ai_internal_api_key() {
+    local pid_file pid recovered
+    for pid_file in "${PID_DIR}/AIServer.pid" "${PID_DIR}/AIGatewayService-1.pid"; do
+        [[ -f "$pid_file" ]] || continue
+        pid="$(<"$pid_file")"
+        [[ -n "$pid" && -r "/proc/${pid}/environ" ]] || continue
+        recovered="$(tr '\0' '\n' <"/proc/${pid}/environ" | sed -n 's/^MEMOCHAT_AI_INTERNAL_API_KEY=//p')"
+        if [[ -n "$recovered" ]]; then
+            printf '%s' "$recovered"
+            return 0
+        fi
+    done
+
+    if command -v docker >/dev/null 2>&1; then
+        recovered="$(
+            docker inspect memochat-ai-orchestrator \
+                --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null |
+                sed -n 's/^MEMOCHAT_AI_INTERNAL_API_KEY=//p'
+        )"
+        if [[ -n "$recovered" ]]; then
+            printf '%s' "$recovered"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 ensure_ai_internal_api_key() {
     if [[ -n "${MEMOCHAT_AI_INTERNAL_API_KEY:-}" ]]; then
         export MEMOCHAT_AI_INTERNAL_API_KEY
+        return 0
+    fi
+
+    local recovered=""
+    recovered="$(recover_existing_ai_internal_api_key || true)"
+    if [[ -n "$recovered" ]]; then
+        export MEMOCHAT_AI_INTERNAL_API_KEY="$recovered"
+        echo "  [INFO] Reusing existing local MEMOCHAT_AI_INTERNAL_API_KEY"
         return 0
     fi
 
@@ -336,6 +384,36 @@ wait_for_redpanda() {
     done
     echo "  [WARN] memochat-redpanda did not answer cluster info within ${WAIT_SECONDS}s; check docker compose ps memochat-redpanda"
     return 0
+}
+
+ensure_ai_orchestrator() {
+    if ! is_truthy "$START_AI_ORCHESTRATOR"; then
+        echo "  [SKIP] AIOrchestrator startup disabled"
+        return 0
+    fi
+
+    if [[ ! -f "$AI_COMPOSE_FILE" ]]; then
+        echo "  [FAIL] AIOrchestrator compose file not found: ${AI_COMPOSE_FILE}" >&2
+        return 1
+    fi
+
+    echo "  [*] Starting AIOrchestrator with the shared internal API key"
+    docker compose -f "$AI_COMPOSE_FILE" up -d --no-deps memochat-ai-orchestrator
+
+    local waited=0
+    while (( waited < AI_WAIT_SECONDS )); do
+        if curl -fsS -H "${AI_INTERNAL_AUTH_HEADER}: ${MEMOCHAT_AI_INTERNAL_API_KEY}" http://127.0.0.1:8096/models >/dev/null 2>&1; then
+            echo "  [OK] AIOrchestrator internal API ready at http://127.0.0.1:8096/models"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    echo "  [FAIL] AIOrchestrator did not become ready within ${AI_WAIT_SECONDS}s" >&2
+    echo "         Check: docker compose -f ${AI_COMPOSE_FILE} ps" >&2
+    echo "         Logs:  docker logs --tail 200 memochat-ai-orchestrator" >&2
+    return 1
 }
 
 ensure_docker_dependencies() {
@@ -1030,6 +1108,10 @@ echo
 
 echo "[STEP] Start GPT-SoVITS voice service"
 start_gpt_sovits
+echo
+
+echo "[STEP] Start AIOrchestrator"
+ensure_ai_orchestrator
 echo
 
 ensure_runtime

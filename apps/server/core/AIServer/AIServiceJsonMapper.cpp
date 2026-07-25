@@ -13,6 +13,11 @@ bool PopulateModelListFromJson(const memochat::json::JsonValue& result, ai::AILi
     return ai_service_algorithms::IsSuccessfulModelListPayload(result.isObject(), dto.code);
 }
 
+void PopulateDiscoverApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIDiscoverApiProviderRsp* reply)
+{
+    PopulateDiscoverApiProviderReply(AIDiscoverApiProviderFromJsonValue(result), reply);
+}
+
 void PopulateRegisterApiProviderFromJson(const memochat::json::JsonValue& result, ai::AIRegisterApiProviderRsp* reply)
 {
     PopulateRegisterApiProviderReply(AIRegisterApiProviderFromJsonValue(result), reply);

@@ -12,6 +12,7 @@ enum class AgentRequestKind
     RenameSession,
     History,
     ModelList,
+    ApiProviderDiscover,
     ApiProviderRegister,
     ApiProviderDelete,
     Summary,
@@ -57,7 +58,8 @@ inline bool isAgentTaskRequest(AgentRequestKind kind)
 
 inline bool isApiProviderRequest(AgentRequestKind kind)
 {
-    return kind == AgentRequestKind::ApiProviderRegister || kind == AgentRequestKind::ApiProviderDelete;
+    return kind == AgentRequestKind::ApiProviderDiscover || kind == AgentRequestKind::ApiProviderRegister ||
+           kind == AgentRequestKind::ApiProviderDelete;
 }
 
 inline QString agentRequestFeatureType(AgentRequestKind kind)

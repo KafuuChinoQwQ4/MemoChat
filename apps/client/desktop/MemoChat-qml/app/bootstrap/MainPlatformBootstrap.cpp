@@ -80,14 +80,41 @@ bool selectIbusLibpinyinEngine()
     }
     for (int attempt = 0; attempt < 10; ++attempt)
     {
-        QProcess process;
         QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
         env.remove(QStringLiteral("WAYLAND_DISPLAY"));
-        process.setProcessEnvironment(env);
-        process.setProgram(QStringLiteral("ibus"));
-        process.setArguments({QStringLiteral("engine"), QStringLiteral("libpinyin")});
-        process.start();
-        if (process.waitForFinished(3000) && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0)
+
+        QProcess addressProcess;
+        addressProcess.setProcessEnvironment(env);
+        addressProcess.setProgram(QStringLiteral("ibus"));
+        addressProcess.setArguments({QStringLiteral("address")});
+        addressProcess.start();
+        if (!addressProcess.waitForFinished(3000))
+        {
+            QThread::msleep(100);
+            continue;
+        }
+        const QString ibusAddress = QString::fromUtf8(addressProcess.readAllStandardOutput()).trimmed();
+        if (ibusAddress.isEmpty())
+        {
+            QThread::msleep(100);
+            continue;
+        }
+        env.insert(QStringLiteral("IBUS_ADDRESS"), ibusAddress);
+
+        QProcess selectProcess;
+        selectProcess.setProcessEnvironment(env);
+        selectProcess.setProgram(QStringLiteral("ibus"));
+        selectProcess.setArguments({QStringLiteral("engine"), QStringLiteral("libpinyin")});
+        selectProcess.start();
+        selectProcess.waitForFinished(3000);
+
+        QProcess verifyProcess;
+        verifyProcess.setProcessEnvironment(env);
+        verifyProcess.setProgram(QStringLiteral("ibus"));
+        verifyProcess.setArguments({QStringLiteral("engine")});
+        verifyProcess.start();
+        if (verifyProcess.waitForFinished(3000) &&
+            QString::fromUtf8(verifyProcess.readAllStandardOutput()).trimmed() == QStringLiteral("libpinyin"))
         {
             return true;
         }

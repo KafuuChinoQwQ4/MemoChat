@@ -4,7 +4,6 @@
  */
 import { useSessionStore } from "@/core/session/sessionStore"
 import { getGateway } from "@/shared/gateway/ClientGateway"
-import { postLoginBootstrap } from "./postLoginBootstrap"
 import { logger } from "@/core/common/logger"
 
 export function startConnectionCoordinator(): () => void {

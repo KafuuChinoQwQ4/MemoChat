@@ -36,6 +36,8 @@ struct AIRegisterApiProviderJsonDto
     std::vector<AIModelInfoJsonDto> models;
 };
 
+using AIDiscoverApiProviderJsonDto = AIRegisterApiProviderJsonDto;
+
 struct AIKnowledgeBaseInfoJsonDto
 {
     std::string kb_id;
@@ -59,6 +61,7 @@ struct AIKbDeleteJsonDto
 
 AIModelInfoJsonDto AIModelInfoFromJsonValue(const memochat::json::JsonValue& model_json);
 AIModelListJsonDto AIModelListFromJsonValue(const memochat::json::JsonValue& result);
+AIDiscoverApiProviderJsonDto AIDiscoverApiProviderFromJsonValue(const memochat::json::JsonValue& result);
 AIRegisterApiProviderJsonDto AIRegisterApiProviderFromJsonValue(const memochat::json::JsonValue& result);
 AIKnowledgeBaseInfoJsonDto AIKnowledgeBaseInfoFromJsonValue(const memochat::json::JsonValue& kb_json);
 AIKnowledgeBaseListJsonDto AIKnowledgeBaseListFromJsonValue(const memochat::json::JsonValue& result);
@@ -66,6 +69,7 @@ AIKbDeleteJsonDto AIKbDeleteFromJsonValue(const memochat::json::JsonValue& resul
 
 void PopulateModelInfo(const AIModelInfoJsonDto& dto, ai::ModelInfo* out);
 void PopulateModelListReply(const AIModelListJsonDto& dto, ai::AIListModelsRsp* reply);
+void PopulateDiscoverApiProviderReply(const AIDiscoverApiProviderJsonDto& dto, ai::AIDiscoverApiProviderRsp* reply);
 void PopulateRegisterApiProviderReply(const AIRegisterApiProviderJsonDto& dto, ai::AIRegisterApiProviderRsp* reply);
 void PopulateKbListReply(const AIKnowledgeBaseListJsonDto& dto, ai::AIKbListRsp* reply);
 void PopulateKbDeleteReply(const AIKbDeleteJsonDto& dto, ai::AIKbDeleteRsp* reply);

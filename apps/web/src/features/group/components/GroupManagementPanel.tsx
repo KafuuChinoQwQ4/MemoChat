@@ -16,7 +16,7 @@ import {
   GROUP_PERM_MANAGE_ADMINS,
   GROUP_PERM_MANAGE_TOPICS,
   GROUP_PERM_PIN_MESSAGES,
-} from "@/app/dispatch/chatListPayloads"
+} from "@/core/network/opcodes/protocol"
 import { Avatar } from "@/shared/ui/primitives/Avatar"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
@@ -137,13 +137,12 @@ export function GroupManagementPanel({
     if (!open) return
     setAnnouncement(group.announcement ?? "")
     setLocalError("")
-    const defaults = availablePermissionOptions(group)
     let bits = 0
-    for (const item of defaults) {
+    for (const item of permissionOptions) {
       if (item.defaultChecked) bits |= item.bit
     }
     setSelectedPermissionBits(bits > 0 ? bits : GROUP_DEFAULT_ADMIN_PERMISSION_BITS)
-  }, [open, group.groupId, group.announcement, group.canChangeInfo, group.canDeleteMessages, group.canInviteUsers, group.canManageAdmins, group.canPinMessages, group.canBanUsers, group.canManageTopics])
+  }, [open, group.groupId, group.announcement, permissionOptions])
 
   if (!open) return null
 

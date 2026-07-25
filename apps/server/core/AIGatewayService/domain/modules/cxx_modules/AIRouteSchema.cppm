@@ -12,6 +12,26 @@ const char* RegisterApiProviderPath()
     return "/ai/model/api/register";
 }
 
+const char* DiscoverApiProviderPath()
+{
+    return "/ai/model/api/discover";
+}
+
+const char* DiscoverApiProviderRouteName()
+{
+    return "ai.model.api.discover";
+}
+
+const char* DiscoverApiProviderRequestTypeName()
+{
+    return "AIDiscoverApiProviderRequestDto";
+}
+
+const char* DiscoverApiProviderResponseTypeName()
+{
+    return "AIDiscoverApiProviderResponseDto";
+}
+
 const char* RegisterApiProviderRouteName()
 {
     return "ai.model.api.register";

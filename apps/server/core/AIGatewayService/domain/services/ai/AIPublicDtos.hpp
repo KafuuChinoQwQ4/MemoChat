@@ -52,7 +52,7 @@ struct AISessionUpdateRequestDto
     std::string title;
 };
 
-struct AIRegisterApiProviderRequestDto
+struct AIDiscoverApiProviderRequestDto
 {
     std::string provider_name = "custom-api";
     std::string base_url;
@@ -60,9 +60,19 @@ struct AIRegisterApiProviderRequestDto
     std::string adapter = "openai_compatible";
 };
 
+struct AIRegisterApiProviderRequestDto
+{
+    std::string provider_name = "custom-api";
+    std::string base_url;
+    std::string api_key;
+    std::string adapter = "openai_compatible";
+    std::string model_name;
+};
+
 struct AIDeleteApiProviderRequestDto
 {
     std::string provider_id;
+    std::string model_name;
 };
 
 struct AIKbUploadRequestDto
@@ -190,11 +200,15 @@ struct AIRegisterApiProviderResponseDto
     std::vector<AIModelInfoResponseDto> models;
 };
 
+using AIDiscoverApiProviderResponseDto = AIRegisterApiProviderResponseDto;
+
 struct AIDeleteApiProviderResponseDto
 {
     int code = 0;
     std::string message;
     std::string provider_id;
+    std::string model_name;
+    bool provider_deleted = false;
 };
 
 struct AIKbUploadResponseDto
@@ -302,6 +316,7 @@ AISmartRequestDto AISmartRequestFromJsonValue(const memochat::json::JsonValue& r
 AISessionCreateRequestDto AISessionCreateRequestFromJsonValue(const memochat::json::JsonValue& root);
 AISessionDeleteRequestDto AISessionDeleteRequestFromJsonValue(const memochat::json::JsonValue& root);
 AISessionUpdateRequestDto AISessionUpdateRequestFromJsonValue(const memochat::json::JsonValue& root);
+AIDiscoverApiProviderRequestDto AIDiscoverApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root);
 AIRegisterApiProviderRequestDto AIRegisterApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root);
 AIDeleteApiProviderRequestDto AIDeleteApiProviderRequestFromJsonValue(const memochat::json::JsonValue& root);
 AIKbUploadRequestDto AIKbUploadRequestFromJsonValue(const memochat::json::JsonValue& root);
@@ -325,6 +340,7 @@ memochat::json::JsonValue AISessionInfoResponseToJsonValue(const AISessionInfoRe
 memochat::json::JsonValue AISessionResponseToJsonValue(const AISessionResponseDto& response, bool include_session);
 memochat::json::JsonValue AISessionListResponseToJsonValue(const AISessionListResponseDto& response);
 memochat::json::JsonValue AIHistoryResponseToJsonValue(const AIHistoryResponseDto& response);
+memochat::json::JsonValue AIDiscoverApiProviderResponseToJsonValue(const AIDiscoverApiProviderResponseDto& response);
 memochat::json::JsonValue AIRegisterApiProviderResponseToJsonValue(const AIRegisterApiProviderResponseDto& response);
 memochat::json::JsonValue AIDeleteApiProviderResponseToJsonValue(const AIDeleteApiProviderResponseDto& response);
 memochat::json::JsonValue AIKbUploadResponseToJsonValue(const AIKbUploadResponseDto& response);

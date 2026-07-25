@@ -36,6 +36,12 @@ class _ValidatedProviderBaseUrl:
     pinned_addresses: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ProviderModelDeleteResult:
+    model_deleted: bool
+    provider_deleted: bool
+
+
 def _wrap_thinking(reasoning: str, content: str) -> str:
     reasoning = (reasoning or "").strip()
     if not reasoning:
@@ -211,8 +217,12 @@ class _OpenAICompatibleClient:
 
     async def chat(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
         client = await self._get_client()
-        payload = _build_openai_compatible_chat_payload(self.base_url, self.model_name, messages, False, **kwargs)
-        self._apply_thinking_payload(payload, kwargs.get("think", False))
+        payload_kwargs = dict(kwargs)
+        selected_model = str(payload_kwargs.pop("model_name", "") or self.model_name).strip()
+        payload = _build_openai_compatible_chat_payload(
+            self.base_url, selected_model, messages, False, **payload_kwargs
+        )
+        self._apply_thinking_payload(payload, payload_kwargs.get("think", False))
         response = await client.post(f"{self.base_url}/chat/completions", json=payload)
         response.raise_for_status()
         data = response.json()
@@ -235,8 +245,10 @@ class _OpenAICompatibleClient:
 
     async def chat_stream(self, messages: list[LLMMessage], **kwargs) -> AsyncIterator[LLMStreamChunk]:
         client = await self._get_client()
-        payload = _build_openai_compatible_chat_payload(self.base_url, self.model_name, messages, True, **kwargs)
-        self._apply_thinking_payload(payload, kwargs.get("think", False))
+        payload_kwargs = dict(kwargs)
+        selected_model = str(payload_kwargs.pop("model_name", "") or self.model_name).strip()
+        payload = _build_openai_compatible_chat_payload(self.base_url, selected_model, messages, True, **payload_kwargs)
+        self._apply_thinking_payload(payload, payload_kwargs.get("think", False))
         async with client.stream("POST", f"{self.base_url}/chat/completions", json=payload) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
@@ -253,7 +265,7 @@ class _OpenAICompatibleClient:
                 delta_obj = data.get("choices", [{}])[0].get("delta", {})
                 reasoning = delta_obj.get("reasoning_content") or delta_obj.get("reasoning") or ""
                 delta = delta_obj.get("content", "")
-                if reasoning and kwargs.get("think", False):
+                if reasoning and payload_kwargs.get("think", False):
                     yield LLMStreamChunk(
                         content=_wrap_thinking(reasoning, ""),
                         reasoning_content=reasoning,
@@ -532,7 +544,7 @@ class LLMEndpointRegistry:
 
         return endpoints
 
-    async def register_api_provider(
+    async def discover_api_provider(
         self,
         provider_name: str,
         base_url: str,
@@ -561,11 +573,48 @@ class LLMEndpointRegistry:
         if not models:
             raise RuntimeError("no models returned from provider")
 
+        matching_provider = self._find_runtime_provider_by_api(adapter, normalized_url, api_key)
+        target_provider_id = str(matching_provider.get("name") or provider_id) if matching_provider else provider_id
+        return ProviderEndpoint(
+            provider_id=target_provider_id,
+            adapter=adapter,
+            deployment="external_api",
+            base_url=normalized_url,
+            default_model=models[0]["name"],
+            enabled=True,
+            thinking_parameter=_guess_thinking_parameter(provider_id, normalized_url),
+            models=models,
+        )
+
+    async def register_api_provider(
+        self,
+        provider_name: str,
+        base_url: str,
+        api_key: str,
+        model_name: str,
+        adapter: str = "openai_compatible",
+    ) -> ProviderEndpoint:
+        selected_model_name = str(model_name or "").strip()
+        if not selected_model_name:
+            raise ValueError("model_name is required")
+
+        discovered_endpoint = await self.discover_api_provider(provider_name, base_url, api_key, adapter)
+        selected_models = [
+            model for model in discovered_endpoint.models if str(model.get("name") or "").strip() == selected_model_name
+        ]
+        if not selected_models:
+            raise ValueError(f"model not found at provider: {selected_model_name}")
+
+        provider_id = _normalize_provider_id(provider_name or "custom-api")
+        normalized_url = discovered_endpoint.base_url
+        validated = _validate_public_provider_base_url(normalized_url)
+
         providers = self._load_runtime_providers()
         existing_provider = self._find_runtime_provider(provider_id)
         matching_provider = self._find_runtime_provider_by_api(adapter, normalized_url, api_key)
         target_provider = existing_provider or matching_provider
         target_provider_id = str(target_provider.get("name") or provider_id) if target_provider else provider_id
+        models = selected_models
         if target_provider:
             models = _merge_model_lists(target_provider.get("models", []), models)
         target_identity = _provider_api_identity(adapter, normalized_url, api_key)
@@ -583,6 +632,7 @@ class LLMEndpointRegistry:
             "base_url": normalized_url,
             "api_key_env": api_key_env,
             "api_key_fingerprint": _provider_api_fingerprint(api_key),
+            "api_key": api_key,  # persisted so key survives container restart
             "default_model": models[0]["name"],
             "enabled": True,
             "timeout_sec": 120,
@@ -607,21 +657,54 @@ class LLMEndpointRegistry:
             models=models,
         )
 
-    def delete_api_provider(self, provider_id: str) -> bool:
+    def delete_api_provider(self, provider_id: str, model_name: str) -> ProviderModelDeleteResult:
         normalized_provider_id = _normalize_provider_id(provider_id or "")
+        selected_model_name = str(model_name or "").strip()
+        if not selected_model_name:
+            raise ValueError("model_name is required")
         providers = self._load_runtime_providers()
-        next_providers = [
-            provider for provider in providers if provider.get("name") not in {provider_id, normalized_provider_id}
-        ]
-        if len(next_providers) == len(providers):
-            return False
+        provider_names = {provider_id, normalized_provider_id}
+        next_providers: list[dict] = []
+        model_deleted = False
+        provider_deleted = False
+        resolved_provider_id = normalized_provider_id
+        for provider in providers:
+            if provider.get("name") not in provider_names:
+                next_providers.append(provider)
+                continue
+            resolved_provider_id = str(provider.get("name") or normalized_provider_id)
+            remaining_models = [
+                model
+                for model in provider.get("models", [])
+                if str(model.get("name") or "").strip() != selected_model_name
+            ]
+            if len(remaining_models) == len(provider.get("models", [])):
+                next_providers.append(provider)
+                continue
+            model_deleted = True
+            if not remaining_models:
+                provider_deleted = True
+                continue
+            updated_provider = dict(provider)
+            updated_provider["models"] = remaining_models
+            if updated_provider.get("default_model") == selected_model_name:
+                updated_provider["default_model"] = remaining_models[0]["name"]
+            next_providers.append(updated_provider)
+        if not model_deleted:
+            return ProviderModelDeleteResult(model_deleted=False, provider_deleted=False)
         self._save_runtime_providers(next_providers)
-        self._runtime_provider_api_keys.pop(provider_id, None)
-        self._runtime_provider_api_keys.pop(normalized_provider_id, None)
+        if provider_deleted:
+            self._runtime_provider_api_keys.pop(provider_id, None)
+            self._runtime_provider_api_keys.pop(normalized_provider_id, None)
+            self._runtime_provider_api_keys.pop(resolved_provider_id, None)
         for cache_key in list(self._custom_clients.keys()):
-            if cache_key.startswith(f"{provider_id}:") or cache_key.startswith(f"{normalized_provider_id}:"):
+            if cache_key in {
+                f"{provider_id}:{selected_model_name}",
+                f"{normalized_provider_id}:{selected_model_name}",
+                f"{resolved_provider_id}:{selected_model_name}",
+            }:
                 self._custom_clients.pop(cache_key, None)
-        return True
+        return ProviderModelDeleteResult(model_deleted=True, provider_deleted=provider_deleted)
 
     def _resolve_with_model(
         self,
@@ -804,6 +887,10 @@ class LLMEndpointRegistry:
         provider_name = str(provider_cfg.get("name") or "").strip()
         if provider_name and provider_name in self._runtime_provider_api_keys:
             return self._runtime_provider_api_keys[provider_name]
+        # Persisted key (written by register_api_provider, survives restarts)
+        persisted = str(provider_cfg.get("api_key") or "").strip()
+        if persisted:
+            return persisted
         env_name = str(provider_cfg.get("api_key_env") or "").strip()
         if not env_name and provider_name:
             env_name = _runtime_provider_api_key_env_name(provider_name)
@@ -914,9 +1001,10 @@ def _dedupe_runtime_providers(providers: list[dict]) -> list[dict]:
         if not isinstance(raw_provider, dict):
             continue
         provider = dict(raw_provider)
-        legacy_api_key = str(provider.pop("api_key", "") or "").strip()
+        legacy_api_key = str(provider.get("api_key", "") or "").strip()
         if not provider.get("api_key_fingerprint") and legacy_api_key:
             provider["api_key_fingerprint"] = _provider_api_fingerprint(legacy_api_key)
+        # Keep api_key in the dict so it can be read back on restart
         name = str(provider.get("name") or "").strip()
         identity = _runtime_provider_identity(provider)
         if name and not provider.get("api_key_env"):

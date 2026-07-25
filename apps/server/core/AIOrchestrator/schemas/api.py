@@ -178,11 +178,22 @@ class ListModelsRsp(BaseModel):
     providers: list[ProviderInfo] = Field(default_factory=list)
 
 
-class RegisterApiProviderReq(BaseModel):
+class DiscoverApiProviderReq(BaseModel):
     provider_name: str = Field(default="custom-api")
     base_url: str
     api_key: str
     adapter: str = Field(default="openai_compatible")
+
+
+class DiscoverApiProviderRsp(BaseModel):
+    code: int = 0
+    message: str = "ok"
+    provider_id: str = ""
+    models: list[ModelInfo] = Field(default_factory=list)
+
+
+class RegisterApiProviderReq(DiscoverApiProviderReq):
+    model_name: str
 
 
 class RegisterApiProviderRsp(BaseModel):
@@ -194,12 +205,15 @@ class RegisterApiProviderRsp(BaseModel):
 
 class DeleteApiProviderReq(BaseModel):
     provider_id: str
+    model_name: str
 
 
 class DeleteApiProviderRsp(BaseModel):
     code: int = 0
     message: str = "ok"
     provider_id: str = ""
+    model_name: str = ""
+    provider_deleted: bool = False
 
 
 class TraceEventModel(BaseModel):

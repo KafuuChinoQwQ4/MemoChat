@@ -22,8 +22,12 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai
                                     "deployment_preference"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AISessionCreateRequestDto>(
     std::array<std::string_view, 3>{"uid", "model_type", "model_name"}));
-static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIRegisterApiProviderRequestDto>(
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIDiscoverApiProviderRequestDto>(
     std::array<std::string_view, 4>{"provider_name", "base_url", "api_key", "adapter"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIRegisterApiProviderRequestDto>(
+    std::array<std::string_view, 5>{"provider_name", "base_url", "api_key", "adapter", "model_name"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIDeleteApiProviderRequestDto>(
+    std::array<std::string_view, 2>{"provider_id", "model_name"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbSearchRequestDto>(
     std::array<std::string_view, 3>{"uid", "query", "top_k"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AITaskCreateRequestDto>(
@@ -39,7 +43,7 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIRegisterApiProviderResponseDto>(
     std::array<std::string_view, 4>{"code", "message", "provider_id", "models"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIDeleteApiProviderResponseDto>(
-    std::array<std::string_view, 3>{"code", "message", "provider_id"}));
+    std::array<std::string_view, 5>{"code", "message", "provider_id", "model_name", "provider_deleted"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbUploadResponseDto>(
     std::array<std::string_view, 4>{"code", "message", "chunks", "kb_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::gate::services::ai::AIKbSearchChunkResponseDto>(
@@ -167,12 +171,25 @@ TEST(AIPublicDtosTest, DecodesSmartRequestDefaults)
 
 TEST(AIPublicDtosTest, DecodesProviderAndKbRequests)
 {
-    const auto provider = memochat::gate::services::ai::AIRegisterApiProviderRequestFromJsonValue(
+    const auto discovery = memochat::gate::services::ai::AIDiscoverApiProviderRequestFromJsonValue(
         Parse(R"({"base_url":"https://api.example","api_key":"key"})"));
+    EXPECT_EQ(discovery.provider_name, "custom-api");
+    EXPECT_EQ(discovery.base_url, "https://api.example");
+    EXPECT_EQ(discovery.api_key, "key");
+    EXPECT_EQ(discovery.adapter, "openai_compatible");
+
+    const auto provider = memochat::gate::services::ai::AIRegisterApiProviderRequestFromJsonValue(
+        Parse(R"({"base_url":"https://api.example","api_key":"key","model_name":"deepseek-v4-pro"})"));
     EXPECT_EQ(provider.provider_name, "custom-api");
     EXPECT_EQ(provider.base_url, "https://api.example");
     EXPECT_EQ(provider.api_key, "key");
     EXPECT_EQ(provider.adapter, "openai_compatible");
+    EXPECT_EQ(provider.model_name, "deepseek-v4-pro");
+
+    const auto deletion = memochat::gate::services::ai::AIDeleteApiProviderRequestFromJsonValue(
+        Parse(R"({"provider_id":"api-deepseek","model_name":"deepseek-v4-pro"})"));
+    EXPECT_EQ(deletion.provider_id, "api-deepseek");
+    EXPECT_EQ(deletion.model_name, "deepseek-v4-pro");
 
     const auto kb_search =
         memochat::gate::services::ai::AIKbSearchRequestFromJsonValue(Parse(R"({"uid":42,"query":"memo","top_k":8})"));
@@ -322,12 +339,16 @@ TEST(AIPublicDtosTest, WritesProviderResponsesWithExistingWireFields)
     delete_response.code = 0;
     delete_response.message = "deleted";
     delete_response.provider_id = "provider-1";
+    delete_response.model_name = "gpt";
+    delete_response.provider_deleted = false;
 
     const memochat::json::JsonValue deleted =
         memochat::gate::services::ai::AIDeleteApiProviderResponseToJsonValue(delete_response);
     EXPECT_EQ(deleted["code"].asInt(), 0);
     EXPECT_EQ(deleted["message"].asString(), "deleted");
     EXPECT_EQ(deleted["provider_id"].asString(), "provider-1");
+    EXPECT_EQ(deleted["model_name"].asString(), "gpt");
+    EXPECT_FALSE(deleted["provider_deleted"].asBool());
 }
 
 TEST(AIPublicDtosTest, WritesKnowledgeBaseResponsesWithExistingWireFields)

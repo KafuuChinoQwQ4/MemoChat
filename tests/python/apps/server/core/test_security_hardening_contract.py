@@ -280,7 +280,7 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("JOIN moments m ON m.moment_id = mc.moment_id", list_comment_likes)
         self.assertIn("AND mc.deleted_at = 0 AND m.deleted_at = 0", list_comment_likes)
 
-    def test_ai_provider_management_requires_admin_secret_at_all_entry_points(self):
+    def test_ai_provider_management_enforces_configured_admin_secret_at_all_entry_points(self):
         gateway_service = read(AIGATEWAY_AI_SERVICE)
         gateway_client = read(AIGATEWAY_AI_CLIENT)
         gateway_config = read(AIGATEWAY_CONFIG)
@@ -321,8 +321,11 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("RequireProviderAdminMetadata", aiserver_impl)
         self.assertIn("context->client_metadata()", aiserver_impl)
         self.assertIn("grpc::StatusCode::PERMISSION_DENIED", aiserver_impl)
+        self.assertIn("if (configured_key.empty() && IsLocalEnvironment())", aiserver_impl)
+        aiserver_discover = function_body(aiserver_impl, "grpc::Status AIServiceImpl::DiscoverApiProvider")
         aiserver_register = function_body(aiserver_impl, "grpc::Status AIServiceImpl::RegisterApiProvider")
         aiserver_delete = function_body(aiserver_impl, "grpc::Status AIServiceImpl::DeleteApiProvider")
+        self.assertLess(aiserver_discover.index("RequireProviderAdminMetadata"), aiserver_discover.index("_core->"))
         self.assertLess(aiserver_register.index("RequireProviderAdminMetadata"), aiserver_register.index("_core->"))
         self.assertLess(aiserver_delete.index("RequireProviderAdminMetadata"), aiserver_delete.index("_core->"))
 
@@ -338,6 +341,16 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("def _require_provider_admin", model_router)
         self.assertIn("hmac.compare_digest", model_router)
         self.assertIn("HTTPException(status_code=403", model_router)
+        provider_admin_guard_start = model_router.index("def _require_provider_admin")
+        provider_admin_guard = model_router[
+            provider_admin_guard_start : model_router.index('@router.get(""', provider_admin_guard_start)
+        ]
+        self.assertIn("if not expected and environment in", provider_admin_guard)
+        self.assertIn('environment in {"local", "dev", "development", "test"}', provider_admin_guard)
+        self.assertLess(provider_admin_guard.index("if not expected"), provider_admin_guard.index("supplied ="))
+        discover_section = model_router[
+            model_router.index("async def discover_api_provider") : model_router.index('@router.post("/api-provider",')
+        ]
         register_section = model_router[
             model_router.index("async def register_api_provider") : model_router.index(
                 '@router.post("/api-provider/delete"'
@@ -345,11 +358,14 @@ class SecurityHardeningContractTests(unittest.TestCase):
         ]
         delete_section = model_router[model_router.index("async def delete_api_provider") :]
         self.assertLess(
+            discover_section.index("_require_provider_admin(request)"), discover_section.index("HarnessContainer")
+        )
+        self.assertLess(
             register_section.index("_require_provider_admin(request)"), register_section.index("HarnessContainer")
         )
         self.assertLess(
             delete_section.index("_require_provider_admin(request)"),
-            delete_section.index("delete_api_provider(req.provider_id)"),
+            delete_section.index("delete_api_provider(req.provider_id, req.model_name)"),
         )
 
     def test_ai_gateway_binds_all_user_scoped_operations_to_authenticated_uid(self):

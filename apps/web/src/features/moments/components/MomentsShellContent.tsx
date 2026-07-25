@@ -220,6 +220,14 @@ interface SourceRect {
   height: number
 }
 
+interface ExpandedMomentState {
+  id: string
+  sourceRect: SourceRect
+  targetRect: SourceRect
+  active: boolean
+  closing: boolean
+}
+
 function readSourceRect(el: HTMLElement | null): SourceRect | null {
   if (!el) return null
   const rect = el.getBoundingClientRect()
@@ -233,14 +241,22 @@ function readSourceRect(el: HTMLElement | null): SourceRect | null {
 }
 
 function targetExpandRect(viewportWidth: number, viewportHeight: number): SourceRect {
-  const maxWidth = Math.min(560, Math.max(320, viewportWidth - 48))
-  const maxHeight = Math.min(720, Math.max(360, viewportHeight - 48))
+  const maxWidth = Math.min(560, Math.max(240, viewportWidth - 32))
+  const maxHeight = Math.min(720, Math.max(280, viewportHeight - 32))
   return {
     width: maxWidth,
     height: maxHeight,
     left: Math.round((viewportWidth - maxWidth) / 2),
     top: Math.round((viewportHeight - maxHeight) / 2),
   }
+}
+
+function inverseExpandTransform(source: SourceRect, target: SourceRect): string {
+  const translateX = source.left - target.left
+  const translateY = source.top - target.top
+  const scaleX = source.width / target.width
+  const scaleY = source.height / target.height
+  return `translate3d(${translateX}px, ${translateY}px, 0) scale(${scaleX}, ${scaleY})`
 }
 
 function formatDuration(durationMs: number): string {
@@ -393,162 +409,11 @@ function MomentMediaBlocks({
   )
 }
 
-function MomentExpandOverlay({
-  moment,
-  sourceRect,
-  onClose,
-}: {
-  moment: MomentItem
-  sourceRect: SourceRect
-  onClose: () => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [closing, setClosing] = useState(false)
-  const panelRef = useRef<HTMLDivElement | null>(null)
-  const target = targetExpandRect(
-    typeof window !== "undefined" ? window.innerWidth : 1200,
-    typeof window !== "undefined" ? window.innerHeight : 800,
-  )
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setExpanded(true))
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose()
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function requestClose() {
-    if (closing) return
-    setClosing(true)
-    setExpanded(false)
-  }
-
-  function handleTransitionEnd(event: ReactTransitionEvent<HTMLDivElement>) {
-    if (event.target !== panelRef.current) return
-    if (!closing) return
-    if (event.propertyName !== "width" && event.propertyName !== "transform" && event.propertyName !== "top") {
-      return
-    }
-    onClose()
-  }
-
-  const active = expanded && !closing
-  const geometry = active ? target : sourceRect
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="动态全文"
-      onClick={requestClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 90,
-        background: active ? "rgba(2, 6, 12, 0.42)" : "rgba(2, 6, 12, 0)",
-        backdropFilter: active ? "blur(8px)" : "blur(0px)",
-        transition: "background 220ms ease, backdrop-filter 220ms ease",
-      }}
-    >
-      <div
-        ref={panelRef}
-        onClick={(event) => event.stopPropagation()}
-        onTransitionEnd={handleTransitionEnd}
-        style={{
-          position: "fixed",
-          top: geometry.top,
-          left: geometry.left,
-          width: geometry.width,
-          height: geometry.height,
-          borderRadius: active ? 18 : 12,
-          overflow: "hidden",
-          boxShadow: active
-            ? "0 24px 64px rgba(0,0,0,0.28), 0 8px 24px rgba(0,0,0,0.16)"
-            : "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)",
-          transition:
-            "top 240ms cubic-bezier(0.2, 0.85, 0.2, 1), left 240ms cubic-bezier(0.2, 0.85, 0.2, 1), width 240ms cubic-bezier(0.2, 0.85, 0.2, 1), height 240ms cubic-bezier(0.2, 0.85, 0.2, 1), border-radius 240ms ease, box-shadow 240ms ease",
-          willChange: "top, left, width, height",
-          zIndex: 91,
-        }}
-      >
-        <GlassSurface
-          elevated
-          style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: "inherit",
-            padding: active ? 18 : 15,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            transition: "padding 240ms ease",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexShrink: 0 }}>
-            <Avatar src={moment.authorIcon} name={moment.authorName} size={active ? 40 : 36} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: active ? 15 : 14, fontWeight: 700 }}>{moment.authorName}</div>
-              <div style={{ fontSize: 12, color: "var(--text-disabled)", marginTop: 2 }}>
-                {formatMessageTime(moment.createdAt)}
-                {moment.location ? ` · ${moment.location}` : ""}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={requestClose}
-              aria-label="关闭"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
-                border: "1px solid var(--divider)",
-                color: "var(--text-secondary)",
-                background: "rgba(255,255,255,0.08)",
-                cursor: "pointer",
-                fontSize: 18,
-              }}
-            >
-              ×
-            </button>
-          </div>
-          <div style={{ overflowY: "auto", paddingRight: 4, minHeight: 0, flex: 1 }}>
-            {moment.content ? (
-              <p
-                style={{
-                  fontSize: active ? 15 : 14,
-                  lineHeight: 1.72,
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                  color: "var(--text-primary)",
-                  margin: 0,
-                }}
-              >
-                {moment.content}
-              </p>
-            ) : null}
-            <MomentMediaBlocks media={moment.media} full />
-          </div>
-        </GlassSurface>
-      </div>
-    </div>
-  )
-}
-
 export function MomentsShellContent() {
   const uid = useSessionStore((s) => s.uid)
   const token = useSessionStore((s) => s.token)
   const queryClient = useQueryClient()
-  const [expandedMoment, setExpandedMoment] = useState<{
-    moment: MomentItem
-    sourceRect: SourceRect
-  } | null>(null)
+  const [expandedMoment, setExpandedMoment] = useState<ExpandedMomentState | null>(null)
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map())
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [commentOpenIds, setCommentOpenIds] = useState<Set<string>>(() => new Set())
@@ -573,6 +438,39 @@ export function MomentsShellContent() {
       return (response.moments ?? []).map(mapMoment)
     },
   })
+
+  useEffect(() => {
+    if (!expandedMoment || expandedMoment.active || expandedMoment.closing) return
+    const expandedId = expandedMoment.id
+    const frame = window.requestAnimationFrame(() => {
+      setExpandedMoment((current) =>
+        current?.id === expandedId && !current.closing
+          ? { ...current, active: true }
+          : current,
+      )
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [expandedMoment])
+
+  useEffect(() => {
+    if (!expandedMoment) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") requestCloseMomentExpand()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [expandedMoment])
+
+  useEffect(() => {
+    if (!expandedMoment?.closing) return
+    const closingId = expandedMoment.id
+    const timeout = window.setTimeout(() => {
+      setExpandedMoment((current) =>
+        current?.id === closingId && current.closing ? null : current,
+      )
+    }, 340)
+    return () => window.clearTimeout(timeout)
+  }, [expandedMoment])
 
   async function publishMoment() {
     const content = draftText.trim()
@@ -629,13 +527,31 @@ export function MomentsShellContent() {
   }
 
   function openMomentExpand(moment: MomentItem) {
+    if (expandedMoment) return
     const sourceRect = readSourceRect(cardRefs.current.get(moment.id) ?? null)
       ?? targetExpandRect(window.innerWidth, window.innerHeight)
-    setExpandedMoment({ moment, sourceRect })
+    setExpandedMoment({
+      id: moment.id,
+      sourceRect,
+      targetRect: targetExpandRect(window.innerWidth, window.innerHeight),
+      active: false,
+      closing: false,
+    })
   }
 
-  function closeMomentExpand() {
-    setExpandedMoment(null)
+  function requestCloseMomentExpand() {
+    setExpandedMoment((current) =>
+      current && !current.closing
+        ? { ...current, active: false, closing: true }
+        : current,
+    )
+  }
+
+  function finishMomentExpand(momentId: string, event: ReactTransitionEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || event.propertyName !== "transform") return
+    setExpandedMoment((current) =>
+      current?.id === momentId && current.closing ? null : current,
+    )
   }
 
   function toggleCommentComposer(momentId: string) {
@@ -762,7 +678,14 @@ export function MomentsShellContent() {
   const items = data ?? []
 
   return (
-    <GlassScrollArea style={{ height: "100%", width: "100%", padding: "18px 14px 22px" }}>
+    <GlassScrollArea
+      style={{
+        height: "100%",
+        width: "100%",
+        padding: "18px 14px 22px",
+        overflowY: expandedMoment ? "hidden" : "auto",
+      }}
+    >
       <div style={{ maxWidth: 1360, margin: "0 auto", width: "100%" }}>
 
         {/* Header */}
@@ -874,7 +797,14 @@ export function MomentsShellContent() {
               width: "100%",
             }}
           >
-            {items.map((item, idx) => (
+            {items.map((item, idx) => {
+              const expansion = expandedMoment?.id === item.id ? expandedMoment : null
+              const isExpanded = expansion !== null
+              const targetRect = expansion?.targetRect
+              const collapsedTransform = expansion
+                ? inverseExpandTransform(expansion.sourceRect, expansion.targetRect)
+                : undefined
+              return (
             <div
               key={item.id}
               ref={(node) => {
@@ -886,23 +816,49 @@ export function MomentsShellContent() {
                 width: "100%",
                 breakInside: "avoid",
                 margin: "0 0 12px",
+                ...(isExpanded ? { height: expansion.sourceRect.height } : {}),
               }}
             >
             <GlassSurface
+              elevated={isExpanded}
+              role={isExpanded ? "dialog" : undefined}
+              aria-modal={isExpanded ? true : undefined}
+              aria-label={isExpanded ? "动态全文" : undefined}
+              onTransitionEnd={(event) => finishMomentExpand(item.id, event)}
               style={{
-                width: "100%",
-                padding: "15px 16px",
-                borderRadius: 12,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)",
-                transition: "transform 160ms ease, box-shadow 160ms ease",
-                animation: `fade-up ${180 + idx * 30}ms cubic-bezier(0.4,0,0.2,1) both`,
+                width: isExpanded && targetRect ? targetRect.width : "100%",
+                height: isExpanded && targetRect ? targetRect.height : undefined,
+                position: isExpanded ? "fixed" : "relative",
+                top: targetRect?.top,
+                left: targetRect?.left,
+                zIndex: isExpanded ? 91 : undefined,
+                padding: isExpanded ? "18px 20px" : "15px 16px",
+                borderRadius: isExpanded ? 16 : 12,
+                overflowY: isExpanded ? "auto" : "hidden",
+                overscrollBehavior: isExpanded ? "contain" : undefined,
+                transformOrigin: "top left",
+                transform: isExpanded
+                  ? expansion.active
+                    ? "translate3d(0, 0, 0) scale(1)"
+                    : collapsedTransform
+                  : undefined,
+                boxShadow: isExpanded
+                  ? "0 24px 64px rgba(0,0,0,0.24), 0 8px 24px rgba(0,0,0,0.14)"
+                  : "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)",
+                transition: "transform 280ms cubic-bezier(0.2, 0.82, 0.2, 1), box-shadow 220ms ease",
+                willChange: "transform",
+                animation: isExpanded
+                  ? "none"
+                  : `fade-up ${180 + idx * 30}ms cubic-bezier(0.4,0,0.2,1) both`,
               }}
               onMouseEnter={(e) => {
+                if (isExpanded) return
                 const el = e.currentTarget as HTMLElement
                 el.style.transform = "translateY(-2px)"
                 el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.09)"
               }}
               onMouseLeave={(e) => {
+                if (isExpanded) return
                 const el = e.currentTarget as HTMLElement
                 el.style.transform = ""
                 el.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.06)"
@@ -917,17 +873,49 @@ export function MomentsShellContent() {
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-disabled)", marginTop: 1 }}>
                     {formatMessageTime(item.createdAt)}
+                    {isExpanded && item.location ? ` · ${item.location}` : ""}
                   </div>
                 </div>
+                {isExpanded ? (
+                  <button
+                    type="button"
+                    onClick={requestCloseMomentExpand}
+                    aria-label="关闭"
+                    style={{
+                      width: 34,
+                      height: 34,
+                      flex: "0 0 34px",
+                      borderRadius: 10,
+                      border: "1px solid var(--divider)",
+                      color: "var(--text-secondary)",
+                      background: "var(--glass-btn-bg)",
+                      cursor: "pointer",
+                      fontSize: 18,
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
               </div>
 
               {/* Content */}
               {item.content ? (
                 <>
-                  <p style={previewTextStyle(item.content)}>
+                  <p
+                    style={isExpanded
+                      ? {
+                          fontSize: 15,
+                          lineHeight: 1.72,
+                          margin: 0,
+                          color: "var(--text-primary)",
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                        }
+                      : previewTextStyle(item.content)}
+                  >
                     {item.content}
                   </p>
-                  {hasTextPreviewOverflow(item.content) ? (
+                  {!isExpanded && hasTextPreviewOverflow(item.content) ? (
                     <button
                       type="button"
                       onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -956,7 +944,8 @@ export function MomentsShellContent() {
 
               <MomentMediaBlocks
                 media={item.media}
-                onOpen={() => openMomentExpand(item)}
+                full={isExpanded}
+                {...(!isExpanded ? { onOpen: () => openMomentExpand(item) } : {})}
               />
 
               {/* Metrics / actions */}
@@ -1069,16 +1058,26 @@ export function MomentsShellContent() {
               ) : null}
             </GlassSurface>
             </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
       {expandedMoment ? (
-        <MomentExpandOverlay
-          moment={expandedMoment.moment}
-          sourceRect={expandedMoment.sourceRect}
-          onClose={closeMomentExpand}
+        <div
+          aria-hidden="true"
+          onClick={requestCloseMomentExpand}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 90,
+            opacity: expandedMoment.active ? 1 : 0,
+            background: "color-mix(in srgb, var(--surface-elevated) 54%, transparent)",
+            backdropFilter: "blur(3px) saturate(1.05)",
+            WebkitBackdropFilter: "blur(3px) saturate(1.05)",
+            transition: "opacity 220ms ease",
+          }}
         />
       ) : null}
     </GlassScrollArea>

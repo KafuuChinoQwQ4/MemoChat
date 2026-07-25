@@ -119,6 +119,11 @@ const char* RegisterApiProviderPath()
     return "/models/api-provider";
 }
 
+const char* DiscoverApiProviderPath()
+{
+    return "/models/api-provider/discover";
+}
+
 const char* DeleteApiProviderPath()
 {
     return "/models/api-provider/delete";

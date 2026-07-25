@@ -67,6 +67,10 @@ QString AgentController::apiProviderStatus() const
 {
     return _api_provider_status;
 }
+QVariantList AgentController::apiProviderCandidates() const
+{
+    return _api_provider_candidates;
+}
 bool AgentController::thinkingEnabled() const
 {
     return _thinking_enabled;

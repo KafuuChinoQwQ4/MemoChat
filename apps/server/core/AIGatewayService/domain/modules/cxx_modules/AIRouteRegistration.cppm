@@ -57,6 +57,11 @@ const char* ModelApiRegisterPath()
     return "/ai/model/api/register";
 }
 
+const char* ModelApiDiscoverPath()
+{
+    return "/ai/model/api/discover";
+}
+
 const char* ModelApiDeletePath()
 {
     return "/ai/model/api/delete";

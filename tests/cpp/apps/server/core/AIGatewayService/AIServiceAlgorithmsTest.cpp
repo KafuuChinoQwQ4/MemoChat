@@ -21,7 +21,10 @@ int DefaultTaskListLimit();
 const char* DefaultModelType();
 bool ShouldRejectEmptyContent(bool content_empty);
 bool ShouldRejectUserAuth(int uid, bool token_empty);
-bool ShouldRejectProviderAdminAuth(bool key_configured, bool supplied_empty, bool token_matches);
+bool ShouldRejectProviderAdminAuth(bool key_configured,
+                                   bool allow_unconfigured,
+                                   bool supplied_empty,
+                                   bool token_matches);
 } // namespace memochat::tests::ai::gateway_service
 
 TEST(AIServiceAlgorithmsTest, ExposesGatewayJsonResponseConstants)
@@ -69,10 +72,11 @@ TEST(AIServiceAlgorithmsTest, RejectsMissingUserAuthInput)
     EXPECT_FALSE(memochat::tests::ai::gateway_service::ShouldRejectUserAuth(42, false));
 }
 
-TEST(AIServiceAlgorithmsTest, RejectsMissingProviderAdminAuthInput)
+TEST(AIServiceAlgorithmsTest, RequiresProviderAdminAuthOnlyWhenConfigured)
 {
-    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(false, false, true));
-    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, true, true));
-    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, false, false));
-    EXPECT_FALSE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, false, true));
+    EXPECT_FALSE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(false, true, true, false));
+    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(false, false, true, false));
+    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, true, true, true));
+    EXPECT_TRUE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, true, false, false));
+    EXPECT_FALSE(memochat::tests::ai::gateway_service::ShouldRejectProviderAdminAuth(true, false, false, true));
 }

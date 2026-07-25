@@ -4,9 +4,9 @@ import { create } from "zustand"
 interface AuthStore {
   loading: boolean
   error: string | null
-  setLoading(v: boolean): void
-  setError(msg: string | null): void
-  reset(): void
+  setLoading: (v: boolean) => void
+  setError: (msg: string | null) => void
+  reset: () => void
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({

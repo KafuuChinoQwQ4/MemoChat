@@ -43,7 +43,7 @@ export function RegisterPage() {
     setLoading(true); setError(null)
     try {
       const res = await api.register({ email, password, code, name })
-      if (res.error === 0) navigate("/login", { replace: true })
+      if (res.error === 0) void navigate("/login", { replace: true })
       else setError("注册失败，请检查验证码")
     } catch { setError("网络错误") } finally { setLoading(false) }
   }
@@ -157,7 +157,7 @@ export function RegisterPage() {
         }}>
           已有账号？{" "}
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => void navigate("/login")}
             style={{
               background: "none",
               border: "none",

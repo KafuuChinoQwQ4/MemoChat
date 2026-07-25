@@ -24,6 +24,7 @@ Loader {
             currentModel: agent ? agent.currentModel : ""
             apiProviderBusy: agent ? agent.apiProviderBusy : false
             apiProviderStatus: agent ? agent.apiProviderStatus : ""
+            apiProviderCandidates: agent ? agent.apiProviderCandidates : []
             gameRooms: agent ? agent.gameRooms : []
             gameTemplates: agent ? agent.gameTemplates : []
             gameTemplatePresets: agent ? agent.gameTemplatePresets : []

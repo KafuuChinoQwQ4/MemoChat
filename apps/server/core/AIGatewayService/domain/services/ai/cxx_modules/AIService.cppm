@@ -97,8 +97,15 @@ bool ShouldRejectUserAuth(int uid, bool token_empty)
     return uid <= 0 || token_empty;
 }
 
-bool ShouldRejectProviderAdminAuth(bool key_configured, bool supplied_empty, bool token_matches)
+bool ShouldRejectProviderAdminAuth(bool key_configured,
+                                   bool allow_unconfigured,
+                                   bool supplied_empty,
+                                   bool token_matches)
 {
-    return !key_configured || supplied_empty || !token_matches;
+    if (!key_configured)
+    {
+        return !allow_unconfigured;
+    }
+    return supplied_empty || !token_matches;
 }
 } // namespace memochat::gate::services::ai::service_modules

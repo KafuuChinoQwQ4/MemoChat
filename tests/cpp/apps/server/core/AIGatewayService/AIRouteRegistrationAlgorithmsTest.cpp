@@ -15,6 +15,7 @@ const char* SessionListPath();
 const char* SessionDeletePath();
 const char* SessionUpdatePath();
 const char* ModelListPath();
+const char* ModelApiDiscoverPath();
 const char* ModelApiRegisterPath();
 const char* ModelApiDeletePath();
 const char* KbUploadPath();
@@ -48,6 +49,7 @@ TEST(AIRouteRegistrationAlgorithmsTest, ExposesAIGatewayRouteRegistrationPaths)
     using memochat::tests::ai::route_registration::MemoryListPath;
     using memochat::tests::ai::route_registration::MemoryPath;
     using memochat::tests::ai::route_registration::ModelApiDeletePath;
+    using memochat::tests::ai::route_registration::ModelApiDiscoverPath;
     using memochat::tests::ai::route_registration::ModelApiRegisterPath;
     using memochat::tests::ai::route_registration::ModelListPath;
     using memochat::tests::ai::route_registration::SessionDeletePath;
@@ -60,7 +62,7 @@ TEST(AIRouteRegistrationAlgorithmsTest, ExposesAIGatewayRouteRegistrationPaths)
     using memochat::tests::ai::route_registration::TaskResumePath;
     using memochat::tests::ai::route_registration::TasksPath;
 
-    constexpr std::array<std::string_view, 21> expected = {
+    constexpr std::array<std::string_view, 22> expected = {
         "/ai/chat",
         "/ai/smart",
         "/ai/history",
@@ -69,6 +71,7 @@ TEST(AIRouteRegistrationAlgorithmsTest, ExposesAIGatewayRouteRegistrationPaths)
         "/ai/session/delete",
         "/ai/session/update",
         "/ai/model/list",
+        "/ai/model/api/discover",
         "/ai/model/api/register",
         "/ai/model/api/delete",
         "/ai/kb/upload",
@@ -83,11 +86,28 @@ TEST(AIRouteRegistrationAlgorithmsTest, ExposesAIGatewayRouteRegistrationPaths)
         "/ai/tasks/cancel",
         "/ai/tasks/resume",
     };
-    const std::array<std::string_view, 21> actual = {
-        ChatPath(),          SmartPath(),         HistoryPath(),   SessionPath(),          SessionListPath(),
-        SessionDeletePath(), SessionUpdatePath(), ModelListPath(), ModelApiRegisterPath(), ModelApiDeletePath(),
-        KbUploadPath(),      KbSearchPath(),      KbListPath(),    KbDeletePath(),         MemoryListPath(),
-        MemoryPath(),        MemoryDeletePath(),  TasksPath(),     TaskDetailPath(),       TaskCancelPath(),
+    const std::array<std::string_view, 22> actual = {
+        ChatPath(),
+        SmartPath(),
+        HistoryPath(),
+        SessionPath(),
+        SessionListPath(),
+        SessionDeletePath(),
+        SessionUpdatePath(),
+        ModelListPath(),
+        ModelApiDiscoverPath(),
+        ModelApiRegisterPath(),
+        ModelApiDeletePath(),
+        KbUploadPath(),
+        KbSearchPath(),
+        KbListPath(),
+        KbDeletePath(),
+        MemoryListPath(),
+        MemoryPath(),
+        MemoryDeletePath(),
+        TasksPath(),
+        TaskDetailPath(),
+        TaskCancelPath(),
         TaskResumePath(),
     };
 

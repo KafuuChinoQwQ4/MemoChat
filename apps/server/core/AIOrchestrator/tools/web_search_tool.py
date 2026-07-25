@@ -1,97 +1,80 @@
-"""
-网络搜索工具
-"""
+"""LLM-friendly public web search powered by Jina Reader Search."""
 
-import asyncio
-import html
-import re
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
+import os
+from urllib.parse import quote
 
+import httpx
 import structlog
 from langchain_core.tools import tool
 
 logger = structlog.get_logger()
 
+_JINA_SEARCH_URL = "https://s.jina.ai"
+_TIMEOUT_SECONDS = 30.0
+_MAX_OUTPUT_CHARS = 24_000
+
 
 class WebSearchTool:
-    """网络搜索工具 — 搜索互联网获取最新信息"""
+    """Search and read public pages in a format prepared for language models."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._api_key = (api_key if api_key is not None else os.getenv("JINA_API_KEY", "")).strip()
+        self._transport = transport
 
     async def _search(self, query: str, max_results: int = 5) -> str:
-        """
-        搜索互联网。
-        输入搜索关键词，返回相关结果摘要。
-        适用于需要实时信息、新闻、版本状态等场景。
-        """
+        clean_query = " ".join(str(query or "").split())
+        if not clean_query:
+            return "搜索失败: 搜索关键词不能为空。"
+        if not self._api_key:
+            return "搜索不可用: 未配置 JINA_API_KEY，请为 AI Orchestrator 配置 Jina Reader API 凭据。"
+
+        result_limit = min(max(int(max_results or 5), 1), 10)
+        url = f"{_JINA_SEARCH_URL}/{quote(clean_query, safe='')}"
+        headers = {
+            "Accept": "text/plain",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+
         try:
-            result_limit = min(max(int(max_results or 5), 1), 10)
-            results = await asyncio.to_thread(self._search_raw_sync, query, result_limit)
-            formatted = self._format_results(results)
-            if not formatted:
-                return "未找到相关结果。"
-            return "\n".join(formatted)
+            async with httpx.AsyncClient(
+                timeout=_TIMEOUT_SECONDS,
+                follow_redirects=True,
+                transport=self._transport,
+            ) as client:
+                response = await client.get(url, params={"count": result_limit}, headers=headers)
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            logger.error("web_search.http_error", status=status, query=clean_query)
+            if status in {401, 403}:
+                return "搜索不可用: JINA_API_KEY 无效、无权限或额度不足，请检查 AI Orchestrator 凭据。"
+            if status == 429:
+                return "搜索失败: Jina Reader Search 请求过于频繁，请稍后重试。"
+            return f"搜索失败: Jina Reader Search 返回 HTTP {status}。"
+        except httpx.TimeoutException:
+            logger.error("web_search.timeout", query=clean_query)
+            return "搜索失败: Jina Reader Search 请求超时。"
+        except httpx.HTTPError as exc:
+            logger.error("web_search.network_error", query=clean_query, error=type(exc).__name__)
+            return "搜索失败: 无法连接 Jina Reader Search。"
 
-        except Exception as e:
-            logger.error("web_search.error", query=query, error=str(e))
-            return f"搜索失败: {str(e)}"
-
-    def _search_raw_sync(self, query: str, max_results: int) -> list[dict]:
-        encoded_query = urllib.parse.urlencode({"format": "rss", "q": query})
-        request = urllib.request.Request(
-            f"https://www.bing.com/search?{encoded_query}",
-            headers={
-                "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
-                "User-Agent": "Mozilla/5.0 MemoChat-AIOrchestrator/1.0",
-            },
-        )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            payload = response.read()
-        return self._parse_rss(payload, max_results)
-
-    def _parse_rss(self, payload: bytes, max_results: int) -> list[dict]:
-        root = ET.fromstring(payload)
-        results: list[dict] = []
-        for item in root.findall("./channel/item"):
-            title = self._node_text(item, "title")
-            href = self._node_text(item, "link")
-            body = self._clean_text(self._node_text(item, "description"))
-            if title or body:
-                results.append({"title": title, "href": href, "body": body})
-            if len(results) >= max_results:
-                break
-        return results
-
-    def _node_text(self, node: ET.Element, child_name: str) -> str:
-        child = node.find(child_name)
-        if child is None or child.text is None:
-            return ""
-        return self._clean_text(child.text)
-
-    def _clean_text(self, value: str) -> str:
-        text = html.unescape(value or "")
-        text = re.sub(r"<[^>]+>", " ", text)
-        return re.sub(r"\s+", " ", text).strip()
-
-    def _format_results(self, results: list[dict]) -> list[str]:
-        formatted: list[str] = []
-        for result in results:
-            title = result.get("title", "")
-            body = result.get("body", "")
-            href = result.get("href", "")
-            if title and body:
-                formatted.append(f"- [{title}]({href}): {body[:200]}")
-            elif title:
-                formatted.append(f"- {title}")
-        return formatted
+        content = response.text.strip()
+        if not content:
+            return "未找到相关结果。"
+        if len(content) > _MAX_OUTPUT_CHARS:
+            return f"{content[:_MAX_OUTPUT_CHARS]}\n\n[搜索结果已截断]"
+        return content
 
     def get_tool(self):
         @tool("web_search")
         async def web_search(query: str, max_results: int = 5) -> str:
             """
-            搜索互联网。
-            输入搜索关键词，返回相关结果摘要。
-            适用于需要实时信息、新闻、版本状态等场景。
+            搜索并读取互联网内容，返回适合 AI 直接引用和总结的 Markdown。
+            适用于最新信息、新闻、版本状态和公开网页资料。
             """
             return await self._search(query, max_results=max_results)
 

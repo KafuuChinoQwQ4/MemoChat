@@ -152,6 +152,7 @@ Item {
                 modelRefreshBusy: agent ? agent.modelRefreshBusy : false
                 apiProviderBusy: agent ? agent.apiProviderBusy : false
                 apiProviderStatus: agent ? agent.apiProviderStatus : ""
+                apiProviderCandidates: agent ? agent.apiProviderCandidates : []
                 loading: agent ? agent.loading : false
                 streaming: agent ? agent.streaming : false
                 errorMsg: agent ? agent.error : ""

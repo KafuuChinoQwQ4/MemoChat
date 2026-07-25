@@ -12,6 +12,26 @@ const char* RegisterApiProviderPath()
     return memochat::ai::route_schema::modules::RegisterApiProviderPath();
 }
 
+const char* DiscoverApiProviderPath()
+{
+    return memochat::ai::route_schema::modules::DiscoverApiProviderPath();
+}
+
+const char* DiscoverApiProviderRouteName()
+{
+    return memochat::ai::route_schema::modules::DiscoverApiProviderRouteName();
+}
+
+const char* DiscoverApiProviderRequestTypeName()
+{
+    return memochat::ai::route_schema::modules::DiscoverApiProviderRequestTypeName();
+}
+
+const char* DiscoverApiProviderResponseTypeName()
+{
+    return memochat::ai::route_schema::modules::DiscoverApiProviderResponseTypeName();
+}
+
 const char* RegisterApiProviderRouteName()
 {
     return memochat::ai::route_schema::modules::RegisterApiProviderRouteName();

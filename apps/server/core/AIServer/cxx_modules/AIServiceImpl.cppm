@@ -80,6 +80,11 @@ const char* RegisterApiProviderSpan()
     return "AIService.RegisterApiProvider";
 }
 
+const char* DiscoverApiProviderSpan()
+{
+    return "AIService.DiscoverApiProvider";
+}
+
 const char* DeleteApiProviderSpan()
 {
     return "AIService.DeleteApiProvider";

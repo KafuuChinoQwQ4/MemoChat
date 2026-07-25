@@ -27,6 +27,8 @@ public:
                              memochat::gate::routing::GateResponse& response);
     bool HandleListModels(const memochat::gate::routing::GateRequest& request,
                           memochat::gate::routing::GateResponse& response);
+    bool HandleDiscoverApiProvider(const memochat::gate::routing::GateRequest& request,
+                                   memochat::gate::routing::GateResponse& response);
     bool HandleRegisterApiProvider(const memochat::gate::routing::GateRequest& request,
                                    memochat::gate::routing::GateResponse& response);
     bool HandleDeleteApiProvider(const memochat::gate::routing::GateRequest& request,

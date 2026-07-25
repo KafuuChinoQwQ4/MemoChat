@@ -159,6 +159,7 @@ AI_EXACT_ROUTES = {
     ("GET", "/ai/session/list"),
     ("POST", "/ai/session/delete"),
     ("GET", "/ai/model/list"),
+    ("POST", "/ai/model/api/discover"),
     ("POST", "/ai/model/api/register"),
     ("POST", "/ai/model/api/delete"),
     ("POST", "/ai/kb/upload"),

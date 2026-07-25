@@ -57,6 +57,11 @@ const char* ModelApiRegisterPath()
     return memochat::ai::route_registration::modules::ModelApiRegisterPath();
 }
 
+const char* ModelApiDiscoverPath()
+{
+    return memochat::ai::route_registration::modules::ModelApiDiscoverPath();
+}
+
 const char* ModelApiDeletePath()
 {
     return memochat::ai::route_registration::modules::ModelApiDeletePath();

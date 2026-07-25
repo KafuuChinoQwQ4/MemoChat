@@ -212,7 +212,9 @@ Rectangle {
                                 delegate: Loader {
                                     id: cardLoader
                                     width: feedView.cardWidth
-                                    height: item ? item.implicitHeight : 0
+                                    // 跟随卡片的动画高度（item.height），而非立即跳变的 implicitHeight
+                                    // 这样 masonry 重排时序与卡片展开动画保持同步
+                                    height: item ? item.height : 0
                                     asynchronous: true
 
                                     required property int index

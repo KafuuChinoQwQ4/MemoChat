@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "qrc:/qml/components"
 import "../runtime/PetControlRuntime.js" as PetControlRuntime
 
 ColumnLayout {
@@ -12,12 +13,14 @@ ColumnLayout {
     property string currentModel: ""
     property string apiProviderStatus: ""
     property bool apiProviderBusy: false
+    property var apiProviderCandidates: []
     property bool modelRefreshBusy: false
     property bool agentAvailable: false
     property color accentColor: "#74b2ba"
     property color borderColor: "#ead6e1"
 
-    signal registerRequested(string providerName, string baseUrl, string apiKey)
+    signal discoverRequested(string providerName, string baseUrl, string apiKey)
+    signal registerRequested(string modelName)
     signal refreshRequested()
     signal modelSelected(string modelType, string modelName)
 
@@ -44,25 +47,46 @@ ColumnLayout {
         }
     }
 
-    ProviderTextField {
+    GlassTextField {
         id: apiProviderNameField
         Layout.fillWidth: true
+        Layout.preferredHeight: 34
         placeholderText: "名称，例如 gpt"
         text: "gpt"
+        textPixelSize: 12
+        textHorizontalAlignment: TextInput.AlignLeft
+        fillColor: Qt.rgba(1, 1, 1, 0.55)
+        strokeColor: Qt.rgba(0.84, 0.74, 0.82, 0.45)
+        focusStrokeColor: Qt.rgba(0.45, 0.70, 0.73, 0.80)
+        cornerRadius: 8
     }
 
-    ProviderTextField {
+    GlassTextField {
         id: apiBaseUrlField
         Layout.fillWidth: true
+        Layout.preferredHeight: 34
         placeholderText: "API 地址，例如 https://api.openai.com/v1"
         text: "https://api.openai.com/v1"
+        textPixelSize: 12
+        textHorizontalAlignment: TextInput.AlignLeft
+        fillColor: Qt.rgba(1, 1, 1, 0.55)
+        strokeColor: Qt.rgba(0.84, 0.74, 0.82, 0.45)
+        focusStrokeColor: Qt.rgba(0.45, 0.70, 0.73, 0.80)
+        cornerRadius: 8
     }
 
-    ProviderTextField {
+    GlassTextField {
         id: apiKeyField
         Layout.fillWidth: true
+        Layout.preferredHeight: 34
         placeholderText: "API Key"
         echoMode: TextInput.Password
+        textPixelSize: 12
+        textHorizontalAlignment: TextInput.AlignLeft
+        fillColor: Qt.rgba(1, 1, 1, 0.55)
+        strokeColor: Qt.rgba(0.84, 0.74, 0.82, 0.45)
+        focusStrokeColor: Qt.rgba(0.45, 0.70, 0.73, 0.80)
+        cornerRadius: 8
     }
 
     RowLayout {
@@ -77,13 +101,55 @@ ColumnLayout {
             elide: Text.ElideRight
         }
 
-        ProviderButton {
+        GlassButton {
             Layout.preferredWidth: 82
-            text: root.apiProviderBusy ? "解析中" : "接入"
+            Layout.preferredHeight: 32
+            text: root.apiProviderBusy ? "检测中" : "检测模型"
+            textPixelSize: 12
+            textColor: enabled ? "#4b3042" : "#a997a3"
+            cornerRadius: 8
+            normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+            hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+            pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+            disabledColor: Qt.rgba(0, 0, 0, 0.04)
+            enableScaleFeedback: false
             enabled: root.agentAvailable && !root.apiProviderBusy
-            onClicked: root.registerRequested(apiProviderNameField.text,
+            onClicked: root.discoverRequested(apiProviderNameField.text,
                                               apiBaseUrlField.text,
                                               apiKeyField.text)
+        }
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+        visible: root.apiProviderCandidates.length > 0
+
+        ComboBox {
+            id: apiCandidateModelBox
+            Layout.fillWidth: true
+            Layout.preferredHeight: 32
+            model: root.apiProviderCandidates
+            textRole: "display_name"
+            enabled: !root.apiProviderBusy
+        }
+
+        GlassButton {
+            Layout.preferredWidth: 104
+            Layout.preferredHeight: 32
+            text: "接入所选"
+            textPixelSize: 12
+            textColor: enabled ? "#4b3042" : "#a997a3"
+            cornerRadius: 8
+            normalColor: Qt.rgba(0.83, 0.93, 0.89, 0.58)
+            hoverColor: Qt.rgba(0.72, 0.88, 0.80, 0.72)
+            pressedColor: Qt.rgba(0.62, 0.80, 0.70, 0.86)
+            enabled: root.agentAvailable && !root.apiProviderBusy
+                     && apiCandidateModelBox.currentIndex >= 0
+            onClicked: {
+                const candidate = root.apiProviderCandidates[apiCandidateModelBox.currentIndex] || {}
+                root.registerRequested(candidate.model_name || "")
+            }
         }
     }
 
@@ -99,9 +165,18 @@ ColumnLayout {
             elide: Text.ElideRight
         }
 
-        ProviderButton {
+        GlassButton {
             Layout.preferredWidth: 82
+            Layout.preferredHeight: 32
             text: root.modelRefreshBusy ? "刷新中" : "刷新"
+            textPixelSize: 12
+            textColor: enabled ? "#4b3042" : "#a997a3"
+            cornerRadius: 8
+            normalColor: Qt.rgba(0.91, 0.95, 0.95, 0.50)
+            hoverColor: Qt.rgba(0.83, 0.93, 0.94, 0.72)
+            pressedColor: Qt.rgba(0.72, 0.87, 0.89, 0.88)
+            disabledColor: Qt.rgba(0, 0, 0, 0.04)
+            enableScaleFeedback: false
             enabled: root.agentAvailable && !root.modelRefreshBusy
             onClicked: root.refreshRequested()
         }
@@ -169,38 +244,4 @@ ColumnLayout {
         }
     }
 
-    component ProviderTextField: TextField {
-        id: field
-        Layout.preferredHeight: 32
-        font.pixelSize: 12
-        selectByMouse: true
-        color: "#2d2630"
-        placeholderTextColor: "#8f7c88"
-        background: Rectangle {
-            radius: 8
-            antialiasing: true
-            color: "#ffffff"
-            border.color: field.activeFocus ? root.accentColor : "#dcc8d4"
-        }
-    }
-
-    component ProviderButton: Button {
-        id: button
-        font.pixelSize: 12
-        padding: 8
-        background: Rectangle {
-            radius: 8
-            antialiasing: true
-            color: button.down ? "#d6f0ed" : button.hovered ? "#e8f6f4" : "#fffafd"
-            border.color: button.enabled ? root.borderColor : "#eadfe6"
-        }
-        contentItem: Label {
-            text: button.text
-            color: button.enabled ? "#4b3042" : "#a997a3"
-            font: button.font
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-    }
 }

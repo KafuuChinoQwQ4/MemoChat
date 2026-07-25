@@ -13,6 +13,13 @@ std::vector<memochat::gate::routing::RouteSchemaDescriptor> AIRouteModule::Route
     namespace modules = memochat::ai::route_schema::modules;
 
     return {
+        MakeRouteSchema<memochat::gate::services::ai::AIDiscoverApiProviderRequestDto,
+                        memochat::gate::services::ai::AIDiscoverApiProviderResponseDto>(
+            modules::PostMethod(),
+            modules::DiscoverApiProviderPath(),
+            modules::DiscoverApiProviderRouteName(),
+            modules::DiscoverApiProviderRequestTypeName(),
+            modules::DiscoverApiProviderResponseTypeName()),
         MakeRouteSchema<memochat::gate::services::ai::AIRegisterApiProviderRequestDto,
                         memochat::gate::services::ai::AIRegisterApiProviderResponseDto>(
             modules::PostMethod(),

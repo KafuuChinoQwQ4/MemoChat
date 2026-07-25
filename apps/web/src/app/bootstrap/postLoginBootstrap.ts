@@ -12,6 +12,7 @@ import { useEntityStore } from "@/core/entities/entityStore"
 import { normalizePublicUserId } from "@/core/entities/displayIds"
 import { ReqId } from "@/core/network/opcodes/reqIds"
 import { ErrorCodes } from "@/core/network/opcodes/errorCodes"
+import { clearMediaAuthCache } from "@/shared/media/mediaAuthCache"
 import { runtimeConfig } from "@/core/config/runtimeConfig"
 import { getGateway } from "@/shared/gateway/ClientGateway"
 import { logger } from "@/core/common/logger"
@@ -128,6 +129,7 @@ export async function postLoginBootstrap(creds: LoginCredentials): Promise<void>
       import("@/core/entities/resetSession"),
       import("@/features/chat/store/chatStore"),
     ])
+    clearMediaAuthCache()
     await resetEntitySession()
     useChatStore.getState().reset()
     useSessionStore.getState().clearSession()
