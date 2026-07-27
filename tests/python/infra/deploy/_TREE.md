@@ -13,6 +13,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `test_local_envoy_security_contract.py` | 校验本地 Envoy 传输安全、HSTS 与认证限流配置 |
+| `test_observability_log_boundary.py` | 校验 OTel 只采集日志目录且排除凭据与业务数据 |
 | `test_secret_externalization_contract.py` | 校验本地部署、AI 栈与服务配置中的密钥外置化契约 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->
