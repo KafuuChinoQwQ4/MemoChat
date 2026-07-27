@@ -62,6 +62,11 @@ const char* ChapterPagesPath()
     return "/api/r18/chapter/pages";
 }
 
+const char* VideoResolvePath()
+{
+    return "/api/r18/video/resolve";
+}
+
 const char* FavoriteTogglePath()
 {
     return "/api/r18/favorite/toggle";
@@ -135,5 +140,25 @@ const char* AccountClearPath()
 const char* CheckinPath()
 {
     return "/api/r18/checkin";
+}
+
+const char* BrowserImportStartPath()
+{
+    return "/api/r18/account/browser-import/start";
+}
+
+const char* BrowserImportCompletePath()
+{
+    return "/api/r18/account/browser-import/complete";
+}
+
+const char* BrowserImportStatusPath()
+{
+    return "/api/r18/account/browser-import/status";
+}
+
+const char* SessionImportPath()
+{
+    return "/api/r18/account/session/import";
 }
 } // namespace memochat::r18::route_registration::modules

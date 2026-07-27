@@ -113,6 +113,11 @@ bool ShouldUseFallbackEpisode(bool has_no_episodes)
     return has_no_episodes;
 }
 
+int NormalizeEpisodeOrder(long long upstream_order, int fallback_order)
+{
+    return upstream_order > 0 && upstream_order <= 1000000 ? static_cast<int>(upstream_order) : fallback_order;
+}
+
 const char* ImageReferer()
 {
     return "https://manhuabika.com/";

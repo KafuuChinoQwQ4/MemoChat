@@ -45,6 +45,7 @@ bool HttpGetBounded(const std::string& url,
                     HttpResult* out,
                     std::string* error,
                     int timeout_seconds = 20);
+std::uint64_t MaxImageBytes();
 bool HttpPost(const std::string& url,
               const std::vector<std::pair<std::string, std::string>>& headers,
               const std::string& body,

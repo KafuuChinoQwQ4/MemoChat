@@ -12,7 +12,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `R18RouteModule.cpp` | R18 路由模块实现 |
+| `R18RouteModule.cpp` | R18 路由模块实现，含受保护的 Hanime1 视频解析 POST 路由 |
 | `R18RouteModule.h` | R18 路由模块声明 |
 | `R18RouteSchemas.cpp` | R18 稳定 action 路由只读 schema descriptor 列表 |
 

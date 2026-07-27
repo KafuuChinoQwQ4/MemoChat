@@ -82,6 +82,26 @@ int BadGatewayHttpStatus()
     return memochat::r18::service::modules::BadGatewayHttpStatus();
 }
 
+int ServiceUnavailableHttpStatus()
+{
+    return memochat::r18::service::modules::ServiceUnavailableHttpStatus();
+}
+
+int MaxConcurrentImageRequests()
+{
+    return memochat::r18::service::modules::MaxConcurrentImageRequests();
+}
+
+bool ShouldAdmitImageFetch(int active_requests)
+{
+    return memochat::r18::service::modules::ShouldAdmitImageFetch(active_requests);
+}
+
+const char* ImageBusyMessage()
+{
+    return memochat::r18::service::modules::ImageBusyMessage();
+}
+
 const char* GetJsonContentType()
 {
     return memochat::r18::service::modules::GetJsonContentType();

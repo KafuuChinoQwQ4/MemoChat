@@ -102,6 +102,11 @@ bool ShouldUseDefaultCachedImageContentType(bool content_type_empty)
     return memochat::r18::adapter_utils::modules::ShouldUseDefaultCachedImageContentType(content_type_empty);
 }
 
+unsigned long long MaxImageBytes()
+{
+    return memochat::r18::adapter_utils::modules::MaxImageBytes();
+}
+
 unsigned char Base64InvalidMarker()
 {
     return memochat::r18::adapter_utils::modules::Base64InvalidMarker();

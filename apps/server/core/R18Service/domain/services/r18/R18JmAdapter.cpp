@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <turbojpeg.h>
+#include <webp/decode.h>
 
 import memochat.r18.jm_adapter_algorithms;
 
@@ -609,6 +610,39 @@ bool DecodeImageToRgb(const std::string& body,
         return false;
     }
 
+    const auto* data = reinterpret_cast<const unsigned char*>(body.data());
+    const bool jpeg_magic = body.size() >= 2 && data[0] == 0xFF && data[1] == 0xD8;
+    const bool webp_magic =
+        body.size() >= 12 && std::memcmp(data, "RIFF", 4) == 0 && std::memcmp(data + 8, "WEBP", 4) == 0;
+    if (!jm_adapter::modules::IsSupportedScrambledImage(jpeg_magic, webp_magic))
+    {
+        SetError(error, "unsupported JM image format");
+        return false;
+    }
+
+    if (webp_magic)
+    {
+        int width = 0;
+        int height = 0;
+        if (WebPGetInfo(data, body.size(), &width, &height) == 0 || width <= 0 || height <= 0 ||
+            static_cast<unsigned long long>(width) >
+                jm_adapter::modules::MaxDecodedImagePixels() / static_cast<unsigned long long>(height))
+        {
+            SetError(error, "invalid or oversized WebP dimensions");
+            return false;
+        }
+        std::vector<unsigned char> rgb(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u);
+        if (WebPDecodeRGBInto(data, body.size(), rgb.data(), rgb.size(), width * 3) == nullptr)
+        {
+            SetError(error, "WebP decode failed");
+            return false;
+        }
+        *width_out = width;
+        *height_out = height;
+        *rgb_out = std::move(rgb);
+        return true;
+    }
+
     tjhandle handle = tjInitDecompress();
     if (handle == nullptr)
     {
@@ -620,7 +654,6 @@ bool DecodeImageToRgb(const std::string& body,
     int height = 0;
     int subsamp = 0;
     int colorspace = 0;
-    const auto* data = reinterpret_cast<const unsigned char*>(body.data());
     if (tjDecompressHeader3(handle,
                             data,
                             static_cast<unsigned long>(body.size()),
@@ -634,9 +667,11 @@ bool DecodeImageToRgb(const std::string& body,
         tjDestroy(handle);
         return false;
     }
-    if (width <= 0 || height <= 0)
+    if (width <= 0 || height <= 0 ||
+        static_cast<unsigned long long>(width) >
+            jm_adapter::modules::MaxDecodedImagePixels() / static_cast<unsigned long long>(height))
     {
-        SetError(error, "invalid jpeg dimensions");
+        SetError(error, "invalid or oversized JPEG dimensions");
         tjDestroy(handle);
         return false;
     }
@@ -802,15 +837,6 @@ bool MaybeUnscrambleJmImage(const std::string& image_url,
     if (strip_count <= 1)
         return true;
 
-    // JM currently serves chapter photos as JPEG. Do not leak a still-scrambled
-    // body if the upstream format changes unexpectedly.
-    if (payload->body.size() < 3 || static_cast<unsigned char>(payload->body[0]) != 0xFF ||
-        static_cast<unsigned char>(payload->body[1]) != 0xD8)
-    {
-        SetError(error, "JM scrambled photo is not JPEG");
-        return false;
-    }
-
     int width = 0;
     int height = 0;
     std::vector<unsigned char> rgb;
@@ -872,13 +898,18 @@ JmFetchImage(const std::filesystem::path& cache_root, const std::string& image_u
         {"X-Requested-With", jm_adapter::modules::PackageName()},
     };
     detail::HttpResult result;
-    if (!detail::HttpGet(image_url, headers, &result, &error, jm_adapter::modules::ImageTimeoutSeconds()))
+    if (!detail::HttpGetBounded(image_url,
+                                headers,
+                                detail::MaxImageBytes(),
+                                &result,
+                                &error,
+                                jm_adapter::modules::ImageTimeoutSeconds()))
     {
-        return detail::PlaceholderImage("JMComic image timeout", error);
+        return detail::FailedImage("JMComic image fetch failed: " + error);
     }
     if (result.status < 200 || result.status >= 300 || result.body.empty())
     {
-        return detail::PlaceholderImage("JMComic image unavailable", "HTTP " + std::to_string(result.status));
+        return detail::FailedImage("JMComic image unavailable: HTTP " + std::to_string(result.status));
     }
     R18ImagePayload payload;
     payload.content_type = jm_adapter::modules::ShouldUseDefaultImageContentType(result.content_type.empty())
@@ -890,8 +921,7 @@ JmFetchImage(const std::filesystem::path& cache_root, const std::string& image_u
     std::string unscramble_error;
     if (!MaybeUnscrambleJmImage(image_url, scramble_id, &payload, &unscramble_error))
     {
-        // Prefer a readable placeholder over serving scrambled strips.
-        return detail::PlaceholderImage("JMComic image unscramble failed", unscramble_error);
+        return detail::FailedImage("JMComic image unscramble failed: " + unscramble_error);
     }
 
     detail::WriteCachedImage(cache_root, cache_key, payload);

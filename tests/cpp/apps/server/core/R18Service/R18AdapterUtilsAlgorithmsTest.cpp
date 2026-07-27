@@ -25,6 +25,7 @@ const char* DefaultCachedImageContentType();
 bool ShouldReadCachedImageBody(bool body_file_open);
 bool HasCachedImageBody(bool body_empty);
 bool ShouldUseDefaultCachedImageContentType(bool content_type_empty);
+unsigned long long MaxImageBytes();
 unsigned char Base64InvalidMarker();
 bool ShouldSkipBase64Whitespace(unsigned char ch);
 bool IsBase64Padding(unsigned char ch);
@@ -85,6 +86,7 @@ TEST(R18AdapterUtilsAlgorithmsTest, ExposesXmlAndPayloadDefaults)
     EXPECT_TRUE(HasCachedImageBody(false));
     EXPECT_TRUE(ShouldUseDefaultCachedImageContentType(true));
     EXPECT_FALSE(ShouldUseDefaultCachedImageContentType(false));
+    EXPECT_EQ(MaxImageBytes(), 16u * 1024u * 1024u);
 }
 
 TEST(R18AdapterUtilsAlgorithmsTest, ExposesBase64PrimitiveGuards)

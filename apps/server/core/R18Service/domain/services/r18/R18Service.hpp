@@ -31,6 +31,8 @@ public:
                            memochat::gate::routing::GateResponse& response);
     bool HandleChapterPages(const memochat::gate::routing::GateRequest& request,
                             memochat::gate::routing::GateResponse& response);
+    bool HandleVideoResolve(const memochat::gate::routing::GateRequest& request,
+                            memochat::gate::routing::GateResponse& response);
     bool HandleFavoriteToggle(const memochat::gate::routing::GateRequest& request,
                               memochat::gate::routing::GateResponse& response);
     bool HandleLibrary(const memochat::gate::routing::GateRequest& request,
@@ -61,6 +63,14 @@ public:
                             memochat::gate::routing::GateResponse& response);
     bool HandleCheckin(const memochat::gate::routing::GateRequest& request,
                        memochat::gate::routing::GateResponse& response);
+    bool HandleBrowserImportStart(const memochat::gate::routing::GateRequest& request,
+                                  memochat::gate::routing::GateResponse& response);
+    bool HandleBrowserImportComplete(const memochat::gate::routing::GateRequest& request,
+                                     memochat::gate::routing::GateResponse& response);
+    bool HandleBrowserImportStatus(const memochat::gate::routing::GateRequest& request,
+                                   memochat::gate::routing::GateResponse& response);
+    bool HandleSessionImport(const memochat::gate::routing::GateRequest& request,
+                             memochat::gate::routing::GateResponse& response);
 
 private:
     R18Service() = default;

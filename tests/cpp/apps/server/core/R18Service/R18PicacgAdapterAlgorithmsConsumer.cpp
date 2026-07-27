@@ -102,6 +102,11 @@ bool ShouldUseFallbackEpisode(bool has_no_episodes)
     return memochat::r18::picacg_adapter::modules::ShouldUseFallbackEpisode(has_no_episodes);
 }
 
+int NormalizeEpisodeOrder(long long upstream_order, int fallback_order)
+{
+    return memochat::r18::picacg_adapter::modules::NormalizeEpisodeOrder(upstream_order, fallback_order);
+}
+
 const char* ImageReferer()
 {
     return memochat::r18::picacg_adapter::modules::ImageReferer();

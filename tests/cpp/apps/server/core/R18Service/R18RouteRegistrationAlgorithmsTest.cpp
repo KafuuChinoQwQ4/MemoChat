@@ -15,6 +15,7 @@ const char* SourceDeletePath();
 const char* SearchPath();
 const char* ComicDetailPath();
 const char* ChapterPagesPath();
+const char* VideoResolvePath();
 const char* FavoriteTogglePath();
 const char* HistoryUpdatePath();
 const char* HistoryPath();
@@ -49,8 +50,9 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
     using memochat::tests::r18::route_registration::SourceEnablePath;
     using memochat::tests::r18::route_registration::SourceImportPath;
     using memochat::tests::r18::route_registration::SourcesPath;
+    using memochat::tests::r18::route_registration::VideoResolvePath;
 
-    constexpr std::array<std::string_view, 16> expected = {
+    constexpr std::array<std::string_view, 17> expected = {
         "/api/r18/sources",
         "/api/r18/source/import",
         "/api/r18/source/enable",
@@ -59,6 +61,7 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
         "/api/r18/search",
         "/api/r18/comic/detail",
         "/api/r18/chapter/pages",
+        "/api/r18/video/resolve",
         "/api/r18/favorite/toggle",
         "/api/r18/history/update",
         "/api/r18/history",
@@ -68,7 +71,7 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
         "/api/r18/account/login",
         "/api/r18/account/clear",
     };
-    const std::array<std::string_view, 16> actual = {
+    const std::array<std::string_view, 17> actual = {
         SourcesPath(),
         SourceImportPath(),
         SourceEnablePath(),
@@ -77,6 +80,7 @@ TEST(R18RouteRegistrationAlgorithmsTest, ExposesR18GatewayRouteRegistrationPaths
         SearchPath(),
         ComicDetailPath(),
         ChapterPagesPath(),
+        VideoResolvePath(),
         FavoriteTogglePath(),
         HistoryUpdatePath(),
         HistoryPath(),

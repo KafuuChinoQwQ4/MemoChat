@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MemoChat E-Hentai Auth</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      margin: 0;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0 0 12px 0;
+      font-weight: 600;
+    }
+    .status {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .status-idle {
+      background: #f0f0f0;
+      color: #666;
+    }
+    .status-active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .status-success {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+    .status-error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .info {
+      font-size: 12px;
+      color: #666;
+      line-height: 1.5;
+    }
+    .instructions {
+      margin-top: 12px;
+      padding: 12px;
+      background: #fafafa;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .instructions h2 {
+      font-size: 13px;
+      margin: 0 0 8px 0;
+      font-weight: 600;
+    }
+    .instructions ol {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MemoChat E-Hentai Authentication</h1>
+
+  <div id="status" class="status status-idle">
+    <div id="status-text">Idle - waiting for MemoChat</div>
+  </div>
+
+  <div class="info">
+    This extension helps MemoChat securely access your E-Hentai account without storing your password.
+  </div>
+
+  <div class="instructions">
+    <h2>How to use:</h2>
+    <ol>
+      <li>Open MemoChat web application (http://localhost:* or http://127.0.0.1:*)</li>
+      <li>Navigate to R18 Sources → E-Hentai account settings</li>
+      <li>Click "网页登录" (Web Login)</li>
+      <li>This extension will open the official E-Hentai forum login page</li>
+      <li>Enter your credentials on the official page (your password never leaves E-Hentai)</li>
+      <li>After login, the extension captures your session cookies and sends them to MemoChat</li>
+    </ol>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

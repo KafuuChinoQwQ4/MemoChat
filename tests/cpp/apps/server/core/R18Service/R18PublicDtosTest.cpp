@@ -17,6 +17,8 @@ static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ComicDetai
     std::array<std::string_view, 2>{"source_id", "comic_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18ChapterPagesRequestDto>(
     std::array<std::string_view, 2>{"source_id", "chapter_id"}));
+static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18VideoResolveRequestDto>(
+    std::array<std::string_view, 2>{"source_id", "chapter_id"}));
 static_assert(memochat::reflection::FieldNamesEqual<memochat::r18::R18FavoriteToggleRequestDto>(
     std::array<std::string_view,
                8>{"source_id", "comic_id", "favorited", "title", "cover", "author", "subtitle", "folder_ids"}));
@@ -78,6 +80,27 @@ TEST(R18PublicDtosTest, DecodesDetailAndPagesRequests)
         memochat::r18::R18ChapterPagesRequestFromJsonValue(Parse(R"({"source_id":"s","chapter_id":"ch"})"));
     EXPECT_EQ(pages.source_id, "s");
     EXPECT_EQ(pages.chapter_id, "ch");
+}
+
+TEST(R18PublicDtosTest, DecodesVideoResolveRequestWithRequiredFields)
+{
+    memochat::r18::R18VideoResolveRequestDto request;
+    std::string error;
+
+    ASSERT_TRUE(memochat::r18::DecodeR18VideoResolveRequest(R"({"source_id":"hanime1.official","chapter_id":"407339"})",
+                                                            &request,
+                                                            &error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(request.source_id, "hanime1.official");
+    EXPECT_EQ(request.chapter_id, "407339");
+
+    error.clear();
+    EXPECT_FALSE(memochat::r18::DecodeR18VideoResolveRequest(R"({"chapter_id":"407339"})", &request, &error));
+    EXPECT_EQ(error, "source_id is required");
+
+    error.clear();
+    EXPECT_FALSE(memochat::r18::DecodeR18VideoResolveRequest(R"({"source_id":"hanime1.official"})", &request, &error));
+    EXPECT_EQ(error, "chapter_id is required");
 }
 
 TEST(R18PublicDtosTest, DecodesFavoriteAndHistoryRequestsWithDefaults)

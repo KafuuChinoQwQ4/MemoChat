@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -95,7 +96,7 @@ bool FetchHtml(const SiteConfig& site,
                std::string* error)
 {
     HttpResult response;
-    if (!HttpGet(url, BaseHeaders(site, session_cookie), &response, error, 15))
+    if (!HttpGetBounded(url, BaseHeaders(site, session_cookie), MaxImageBytes(), &response, error, 15))
         return false;
     if (response.status < 200 || response.status >= 300)
     {
@@ -383,6 +384,8 @@ bool DetailImpl(const SiteConfig& site,
     }
 
     static const std::regex title_re(R"re(<h1 id="gn">([\s\S]*?)</h1>)re", std::regex::icase);
+    static const std::regex cover_background_re(R"re(id="gd1"[\s\S]*?url\((?:"|')?(https?://[^"')\s]+))re",
+                                                std::regex::icase);
     static const std::regex cover_re(R"re(id="gd1"[\s\S]*?(?:data-src|src)="(https?://[^"]+)")re", std::regex::icase);
     static const std::regex desc_re(R"re(<div id="gdd">([\s\S]*?)</div>\s*<div id="gdr">)re", std::regex::icase);
 
@@ -392,7 +395,7 @@ bool DetailImpl(const SiteConfig& site,
         title = StripTags(m_title[1].str());
     std::string cover;
     std::smatch m_cover;
-    if (std::regex_search(html, m_cover, cover_re))
+    if (std::regex_search(html, m_cover, cover_background_re) || std::regex_search(html, m_cover, cover_re))
         cover = m_cover[1].str();
     std::string description;
     std::smatch m_desc;
@@ -450,9 +453,8 @@ bool PagesImpl(const SiteConfig& site,
     // Page image links: absolute or host-relative on either domain.
     static const std::regex page_re(R"re(href="((?:https?://(?:e-hentai|exhentai)\.org)?/s/[0-9a-f]+/\d+-\d+)")re",
                                     std::regex::icase);
-    static const std::regex img_re(R"re(id="img"[^>]+src="(https?://[^"]+)")re", std::regex::icase);
-
     int index = 1;
+    std::unordered_set<std::string> seen_page_urls;
     for (int page = 0; page < 20; ++page)
     {
         const std::string url = std::string(site.origin) + "/g/" + gid + "/" + token + "/?p=" + std::to_string(page);
@@ -467,29 +469,25 @@ bool PagesImpl(const SiteConfig& site,
 
         std::sregex_iterator it(html.begin(), html.end(), page_re);
         std::sregex_iterator end;
-        int found_on_page = 0;
+        int added_on_page = 0;
         for (; it != end; ++it)
         {
             std::string page_url = (*it)[1].str();
             if (page_url.rfind("http", 0) != 0)
                 page_url = std::string(site.origin) + page_url;
-            std::string page_html;
-            if (!FetchHtml(site, page_url, session_cookie, &page_html, error))
-                continue;
-            std::smatch m_img;
-            if (!std::regex_search(page_html, m_img, img_re))
+            if (!seen_page_urls.insert(page_url).second)
                 continue;
             JsonValue page_value;
             page_value["index"] = index;
             page_value["image_id"] = chapter_id + "-p" + std::to_string(index);
-            page_value["url"] = ImageProxyUrl(site.source_id, m_img[1].str());
+            page_value["url"] = ImageProxyUrl(site.source_id, page_url);
             json::glaze_append(result["pages"], page_value);
             ++index;
-            ++found_on_page;
+            ++added_on_page;
             if (index > 200)
                 break;
         }
-        if (found_on_page == 0 || index > 200)
+        if (added_on_page == 0 || index > 200)
             break;
     }
 
@@ -503,28 +501,64 @@ R18ImagePayload FetchImageImpl(const SiteConfig& site,
                                const std::string& session_cookie)
 {
     std::string error;
-    ParsedUrl parsed;
-    if (!ParseUrl(image_url, &parsed, &error))
-        return PlaceholderImage(std::string(site.label) + " image error", error);
-    const bool host_ok =
-        parsed.host.find("ehgt.org") != std::string::npos || parsed.host.find("e-hentai.org") != std::string::npos ||
-        parsed.host.find("exhentai.org") != std::string::npos || parsed.host.find("hath.network") != std::string::npos;
-    if (parsed.scheme != "https" || !host_ok)
-        return PlaceholderImage(std::string(site.label) + " image error", "image host not allowed");
+    const auto exact_or_subdomain = [](const std::string& host, const std::string& domain)
+    {
+        return host == domain || (host.size() > domain.size() && host.ends_with("." + domain));
+    };
+    const auto image_host_allowed = [&](const std::string& host)
+    {
+        return exact_or_subdomain(host, "ehgt.org") || exact_or_subdomain(host, "hath.network");
+    };
+
+    ParsedUrl requested;
+    if (!ParseUrl(image_url, &requested, &error))
+        return FailedImage(std::string(site.label) + " image error: " + error);
+    const bool page_url =
+        (requested.host == "e-hentai.org" || requested.host == "exhentai.org") && requested.target.rfind("/s/", 0) == 0;
+    if (requested.scheme != "https" || (!page_url && !image_host_allowed(requested.host)))
+        return FailedImage(std::string(site.label) + " image host not allowed");
 
     std::string cache_key;
     if (!Md5Hex(image_url, &cache_key, &error))
-        return PlaceholderImage(std::string(site.label) + " image error", error);
+        return FailedImage(std::string(site.label) + " image error: " + error);
     R18ImagePayload cached;
     if (ReadCachedImage(cache_root, cache_key, &cached))
         return cached;
 
+    std::string resolved_image_url = image_url;
+    if (page_url)
+    {
+        HttpResult page_response;
+        if (!HttpGetBounded(image_url,
+                            BaseHeaders(site, session_cookie),
+                            MaxImageBytes(),
+                            &page_response,
+                            &error,
+                            15) ||
+            page_response.status < 200 || page_response.status >= 300)
+        {
+            return FailedImage(std::string(site.label) + " image page failed: " + error);
+        }
+        static const std::regex img_re(R"re(id="img"[^>]+src="(https?://[^"]+)")re", std::regex::icase);
+        std::smatch match;
+        if (!std::regex_search(page_response.body, match, img_re))
+            return FailedImage(std::string(site.label) + " image URL missing from page");
+        resolved_image_url = HtmlUnescape(match[1].str());
+        ParsedUrl resolved;
+        if (!ParseUrl(resolved_image_url, &resolved, &error) || resolved.scheme != "https" ||
+            !image_host_allowed(resolved.host))
+        {
+            return FailedImage(std::string(site.label) + " resolved image host not allowed");
+        }
+    }
+
     HttpResult response;
-    if (!HttpGet(image_url, BaseHeaders(site, session_cookie), &response, &error, 15))
-        return PlaceholderImage(std::string(site.label) + " image error", error);
+    if (!HttpGetBounded(resolved_image_url, BaseHeaders(site, session_cookie), MaxImageBytes(), &response, &error, 15))
+        return FailedImage(std::string(site.label) + " image error: " + error);
     if (response.status < 200 || response.status >= 300 || response.body.empty())
-        return PlaceholderImage(std::string(site.label) + " image unavailable",
-                                "HTTP " + std::to_string(response.status));
+        return FailedImage(std::string(site.label) + " image unavailable: HTTP " + std::to_string(response.status));
+    if (!response.content_type.starts_with("image/"))
+        return FailedImage(std::string(site.label) + " upstream did not return an image");
 
     R18ImagePayload payload;
     payload.content_type = response.content_type.empty() ? "image/jpeg" : response.content_type;

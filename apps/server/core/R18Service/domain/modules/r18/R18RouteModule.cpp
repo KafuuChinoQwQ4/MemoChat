@@ -84,6 +84,13 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
         });
     registry.Register(
         modules::PostMethod(),
+        modules::VideoResolvePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleVideoResolve(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
         modules::FavoriteTogglePath(),
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
@@ -186,6 +193,34 @@ void R18RouteModule::RegisterRoutes(memochat::gate::routing::RouteRegistry& regi
         [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
         {
             return memochat::gate::services::r18::R18Service::Instance().HandleCheckin(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::BrowserImportStartPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleBrowserImportStart(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::BrowserImportCompletePath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleBrowserImportComplete(request, response);
+        });
+    registry.Register(
+        modules::GetMethod(),
+        modules::BrowserImportStatusPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleBrowserImportStatus(request, response);
+        });
+    registry.Register(
+        modules::PostMethod(),
+        modules::SessionImportPath(),
+        [](const memochat::gate::routing::GateRequest& request, memochat::gate::routing::GateResponse& response)
+        {
+            return memochat::gate::services::r18::R18Service::Instance().HandleSessionImport(request, response);
         });
 }
 

@@ -30,8 +30,9 @@ class R18GateHeaderSecurityContractTests(unittest.TestCase):
         source_service = read(R18_SERVICE / "R18SourceService.cpp")
 
         self.assertIn("R18SourceRecordToPublicJsonValue(rec)", service)
-        self.assertIn("R18SourceRecordToPublicJsonValue(it->second)", source_service)
-        self.assertIn("R18SourceRecordToPublicJsonValue(source)", source_service)
+        self.assertIn("R18SourceRecordToPublicJsonValue(public_record)", source_service)
+        self.assertIn("PublicSourceRecord(it->second, uid)", source_service)
+        self.assertIn("PublicSourceRecord(source, uid)", source_service)
 
     def test_picacg_image_fetch_validates_origin_addresses_and_payload_before_network_or_cache(self):
         picacg = read(R18_SERVICE / "R18PicacgAdapter.cpp")

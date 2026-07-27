@@ -24,12 +24,20 @@ add_library(GateR18Core STATIC
     domain/services/r18/R18NhentaiAdapter.hpp
     domain/services/r18/R18EhentaiAdapter.cpp
     domain/services/r18/R18EhentaiAdapter.hpp
+    domain/services/r18/R18Hanime1Adapter.cpp
+    domain/services/r18/R18Hanime1Adapter.hpp
+    domain/services/r18/R18HanimeoneAdapter.cpp
+    domain/services/r18/R18HanimeoneAdapter.hpp
     domain/services/r18/R18SourceCredentialStore.cpp
     domain/services/r18/R18SourceCredentialStore.hpp
     domain/services/r18/R18LibraryStore.cpp
     domain/services/r18/R18LibraryStore.hpp
     domain/services/r18/R18SourceService.cpp
     domain/services/r18/R18SourceService.hpp
+    domain/services/r18/R18BrowserImportService.cpp
+    domain/services/r18/R18BrowserImportService.hpp
+    domain/services/r18/R18EhentaiSessionService.cpp
+    domain/services/r18/R18EhentaiSessionService.hpp
 )
 memochat_configure_gate_core_lib(GateR18Core)
 target_include_directories(GateR18Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/domain/services)
@@ -39,6 +47,12 @@ if(MEMOCHAT_TURBOJPEG_LIB)
     target_link_libraries(GateR18Core PUBLIC ${MEMOCHAT_TURBOJPEG_LIB})
 else()
     message(FATAL_ERROR "libturbojpeg is required for JM image unscrambling")
+endif()
+find_library(MEMOCHAT_WEBP_LIB webp)
+if(MEMOCHAT_WEBP_LIB)
+    target_link_libraries(GateR18Core PUBLIC ${MEMOCHAT_WEBP_LIB})
+else()
+    message(FATAL_ERROR "libwebp is required for JM WebP image unscrambling")
 endif()
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     memochat_enable_gnu_modules(GateR18Core

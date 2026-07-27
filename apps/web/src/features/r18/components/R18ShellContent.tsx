@@ -1,5 +1,5 @@
 /** R18ShellContent — source switcher + search + chapter reader */
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { useSessionStore } from "@/core/session/sessionStore"
 import {
@@ -11,13 +11,18 @@ import {
   type R18Source,
 } from "@/features/r18/api/r18Api"
 import { getGateway } from "@/shared/gateway/ClientGateway"
-import { useMediaUrl } from "@/shared/hooks/useMediaUrl"
+import { useMediaUrl, useMediaUrlState } from "@/shared/hooks/useMediaUrl"
 import { GlassButton } from "@/shared/ui/glass/GlassButton"
 import { GlassScrollArea } from "@/shared/ui/glass/GlassScrollArea"
 import { GlassSurface } from "@/shared/ui/glass/GlassSurface"
 import { GlassTextField } from "@/shared/ui/glass/GlassTextField"
 import { Spinner } from "@/shared/ui/primitives/Spinner"
 import styles from "./R18ShellContent.module.css"
+import { R18EhentaiLoginPanel } from "./R18EhentaiLoginPanel"
+import { NHENTAI_COOKIE_FIELDS, HANIME1_COOKIE_FIELDS, HANIMEONE_COOKIE_FIELDS } from "./R18CookieFieldLoginPanel"
+import { R18AccountOrCookieLoginPanel } from "./R18AccountOrCookieLoginPanel"
+import { R18PasswordField } from "./R18PasswordField"
+import { R18VideoPlayerOverlay } from "./R18VideoPlayerOverlay"
 import { accountInteractionKind, isActionableSource } from "./r18SourceAvailability"
 import { defaultSortForSource, filterTagOptions, sourceFilterConfig } from "./r18SourceFilters"
 import {
@@ -100,6 +105,12 @@ function humanizeR18Error(message?: string | null): string {
   }
   if (text === "JM username/password required") {
     return "请填写禁漫账号和密码"
+  }
+  if (text.includes("nhentai") && text.includes("cookie")) {
+    return "nHentai Cookie 无效，请重新获取 sessionid / csrftoken"
+  }
+  if (text.includes("hanime1") && (text.includes("cookie") || text.includes("token"))) {
+    return "hanime1 Cookie 无效，请重新获取 remember_token"
   }
   if (text === "source is disabled") {
     return "当前内容源已禁用"
@@ -233,8 +244,8 @@ function ChapterListOverlay({
   const chaptersQuery = useQuery({
     queryKey: ["r18", "chapters", sourceId, comic.comic_id],
     enabled: Boolean(sourceId && comic.comic_id),
-    queryFn: async () => {
-      return api.listChapters(sourceId, comic.comic_id ?? "")
+    queryFn: async ({ signal }) => {
+      return api.listChapters(sourceId, comic.comic_id ?? "", signal)
     },
   })
 
@@ -275,7 +286,7 @@ function ChapterListOverlay({
           )}
           {chaptersQuery.error && (
             <div style={{ padding: 20, color: "var(--color-badge)", fontSize: 13, textAlign: "center" }}>
-              {chaptersQuery.error instanceof Error ? chaptersQuery.error.message : "加载失败"}
+              {humanizeR18Error(chaptersQuery.error instanceof Error ? chaptersQuery.error.message : "加载失败")}
             </div>
           )}
           {!chaptersQuery.isLoading && !chaptersQuery.error && (chaptersQuery.data ?? []).length === 0 && (
@@ -303,9 +314,19 @@ function ChapterListOverlay({
 
 // ─── Image reader overlay ─────────────────────────────────────────────────
 
-function ReaderPage({ url }: { url: string }) {
-  const loaded = useMediaUrl(url)
-  if (!loaded) return (
+export function ReaderPage({ url }: { url: string }) {
+  const media = useMediaUrlState(url)
+  if (media.error) return (
+    <div className={styles.readerPagePlaceholder ?? ""} role="alert">
+      <div style={{ display: "grid", justifyItems: "center", gap: 10, color: "var(--text-secondary)" }}>
+        <span>图片加载失败</span>
+        <button type="button" onClick={media.retry} className={styles.readerBackButton ?? ""}>
+          重试
+        </button>
+      </div>
+    </div>
+  )
+  if (media.isLoading || !media.url) return (
     <div className={styles.readerPagePlaceholder ?? ""}>
       <Spinner size={22} />
     </div>
@@ -313,7 +334,7 @@ function ReaderPage({ url }: { url: string }) {
   return (
     <div className={styles.readerPageFrame ?? ""}>
       <img
-        src={loaded}
+        src={media.url}
         alt=""
         loading="lazy"
         decoding="async"
@@ -341,8 +362,8 @@ function ReaderOverlay({
   const imagesQuery = useQuery({
     queryKey: ["r18", "images", sourceId, comic.comic_id, chapterId],
     enabled: Boolean(sourceId && comic.comic_id && chapterId),
-    queryFn: async () => {
-      return api.listPageUrls(sourceId, chapterId)
+    queryFn: async ({ signal }) => {
+      return api.listPageUrls(sourceId, chapterId, signal)
     },
   })
 
@@ -378,7 +399,7 @@ function ReaderOverlay({
           )}
           {imagesQuery.error && (
             <div style={{ padding: 40, color: "var(--color-badge)", fontSize: 14, textAlign: "center" }}>
-              {imagesQuery.error instanceof Error ? imagesQuery.error.message : "加载失败"}
+              {humanizeR18Error(imagesQuery.error instanceof Error ? imagesQuery.error.message : "加载失败")}
             </div>
           )}
           {(imagesQuery.data ?? []).map((url, idx) => (
@@ -738,6 +759,9 @@ function AccountManagerPanel({
   onLogin,
   onClear,
   onClose,
+  onEhentaiBrowserImportStart,
+  onEhentaiBrowserImportStatus,
+  onEhentaiCookieImport,
 }: {
   accounts: R18ManagedAccount[]
   busySourceId: string | null
@@ -747,6 +771,9 @@ function AccountManagerPanel({
   onLogin: (sourceId: string) => void
   onClear: (sourceId: string) => void
   onClose: () => void
+  onEhentaiBrowserImportStart: (sourceId: string) => Promise<{ importId: string; ticket: string; expiresAt: number }>
+  onEhentaiBrowserImportStatus: (importId: string) => Promise<{ status: string; message?: string }>
+  onEhentaiCookieImport: (sourceId: string, cookieStr: string) => Promise<void>
 }) {
   const dialogRef = useDialogAccessibility(onClose)
   return (
@@ -789,6 +816,7 @@ function AccountManagerPanel({
               const interaction = accountInteractionKind(account)
               const needsAccount = interaction === "required-account"
               const optionalCookie = interaction === "optional-cookie"
+              const optionalAccountOrCookie = interaction === "optional-account-or-cookie"
               const requiredEhentaiAuth = interaction === "required-ehentai-auth"
               const supportsCredentials = interaction !== "none"
               const loggedIn = isAccountLoggedIn(account)
@@ -838,13 +866,6 @@ function AccountManagerPanel({
                           {humanizeR18Error(account.message)}
                         </div>
                       )}
-                      {requiredEhentaiAuth && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
-                          ExHentai 为 E-Hentai 内网/会员源，必须使用同一 E-Hentai 账号。
-                          支持三种方式：① 账密登入 ② 粘贴 Cookie（含 ipb_member_id / ipb_pass_hash / igneous）
-                          ③ 网页登入后粘贴 Cookie。
-                        </div>
-                      )}
                     </div>
                     <span style={{
                       flexShrink: 0,
@@ -867,55 +888,98 @@ function AccountManagerPanel({
                   </div>
 
                   {supportsCredentials ? (
+                    optionalAccountOrCookie && (sourceId === "nhentai.official") ? (
+                      <R18AccountOrCookieLoginPanel
+                        sourceId={sourceId}
+                        sourceName="nHentai"
+                        cookieFields={NHENTAI_COOKIE_FIELDS}
+                        cookieHelpText="在浏览器中登录 nhentai.net，按 F12 → Application → Cookies → nhentai.net，复制 refresh_token 的值粘贴到下方。"
+                        loginHint="服务端代为发起登录，自动获取 refresh_token（因 Cloudflare 保护，成功率不稳定，推荐用 Cookie 登录）。"
+                        loggedIn={loggedIn}
+                        {...(account.has_session  !== undefined ? { hasSession:  account.has_session  } : {})}
+                        {...(account.has_password !== undefined ? { hasPassword: account.has_password } : {})}
+                        busy={busySourceId === sourceId}
+                        draft={draft}
+                        onDraftChange={(field, value) => onDraftChange(sourceId, field, value)}
+                        onSave={() => onSave(sourceId)}
+                        onLogin={() => onLogin(sourceId)}
+                        onClear={() => onClear(sourceId)}
+                        onImportCookieHeader={async (sid, cookieHeader) => {
+                          await onEhentaiCookieImport(sid, cookieHeader)
+                        }}
+                      />
+                    ) : optionalAccountOrCookie && (sourceId === "hanime1.official") ? (
+                      <R18AccountOrCookieLoginPanel
+                        sourceId={sourceId}
+                        sourceName="hanime1.me"
+                        cookieFields={HANIME1_COOKIE_FIELDS}
+                        cookieHelpText="在浏览器登录 hanime1.me 后获取 remember_token Cookie。"
+                        loginHint="服务端代为登录，自动获取授权 Cookie。"
+                        loggedIn={loggedIn}
+                        {...(account.has_session  !== undefined ? { hasSession:  account.has_session  } : {})}
+                        {...(account.has_password !== undefined ? { hasPassword: account.has_password } : {})}
+                        busy={busySourceId === sourceId}
+                        draft={draft}
+                        onDraftChange={(field, value) => onDraftChange(sourceId, field, value)}
+                        onSave={() => onSave(sourceId)}
+                        onLogin={() => onLogin(sourceId)}
+                        onClear={() => onClear(sourceId)}
+                        onImportCookieHeader={async (sid, cookieHeader) => {
+                          await onEhentaiCookieImport(sid, cookieHeader)
+                        }}
+                      />
+                    ) : optionalAccountOrCookie && (sourceId === "hanimeone.official") ? (
+                      <R18AccountOrCookieLoginPanel
+                        sourceId={sourceId}
+                        sourceName="hanimeone.me"
+                        cookieFields={HANIMEONE_COOKIE_FIELDS}
+                        cookieHelpText="hanimeone.me 与 hanime1.me 同一账号体系，共享 remember_token。"
+                        loginHint="与 hanime1.me 共享同一 Cookie（remember_token）。"
+                        loggedIn={loggedIn}
+                        {...(account.has_session  !== undefined ? { hasSession:  account.has_session  } : {})}
+                        {...(account.has_password !== undefined ? { hasPassword: account.has_password } : {})}
+                        busy={busySourceId === sourceId}
+                        draft={draft}
+                        onDraftChange={(field, value) => onDraftChange(sourceId, field, value)}
+                        onSave={() => onSave(sourceId)}
+                        onLogin={() => onLogin(sourceId)}
+                        onClear={() => onClear(sourceId)}
+                        onImportCookieHeader={async (sid, cookieHeader) => {
+                          await onEhentaiCookieImport(sid, cookieHeader)
+                        }}
+                      />
+                    ) : (requiredEhentaiAuth || optionalCookie) ? (
+                      <R18EhentaiLoginPanel
+                        sourceId={sourceId}
+                        optional={optionalCookie}
+                        loggedIn={loggedIn}
+                        {...(account.username ? { loggedInUsername: account.username } : {})}
+                        busy={busySourceId === sourceId}
+                        draft={draft}
+                        {...(account.has_password !== undefined ? { hasPassword: account.has_password } : {})}
+                        {...(account.has_session  !== undefined ? { hasSession:  account.has_session  } : {})}
+                        onDraftChange={(field, value) => onDraftChange(sourceId, field, value)}
+                        onSave={() => onSave(sourceId)}
+                        onLogin={() => onLogin(sourceId)}
+                        onClear={() => onClear(sourceId)}
+                        onStartBrowserImport={onEhentaiBrowserImportStart}
+                        onPollImportStatus={onEhentaiBrowserImportStatus}
+                        onImportCookiePaste={onEhentaiCookieImport}
+                      />
+                    ) : (
                     <>
                       <GlassTextField
                         value={draft.username}
                         onChange={(e) => onDraftChange(sourceId, "username", e.target.value)}
-                        placeholder={
-                          optionalCookie
-                            ? "备注名（可选）"
-                            : requiredEhentaiAuth
-                              ? "E-Hentai 账号 / 邮箱（账密登入）"
-                              : "账号 / 邮箱"
-                        }
+                        placeholder="账号 / 邮箱"
                         autoComplete="username"
                       />
-                      <GlassTextField
-                        type="password"
+                      <R18PasswordField
                         value={draft.password}
                         onChange={(e) => onDraftChange(sourceId, "password", e.target.value)}
-                        placeholder={
-                          optionalCookie
-                            ? "可选 Cookie（ipb_member_id=...; ipb_pass_hash=...）"
-                            : requiredEhentaiAuth
-                              ? "密码 或 完整 Cookie（ipb_member_id=...; igneous=...）"
-                              : (account.has_password ? "密码（留空则保留已保存密码）" : "密码")
-                        }
+                        placeholder={account.has_password ? "密码（留空则保留已保存密码）" : "密码"}
                         autoComplete="current-password"
                       />
-                      {requiredEhentaiAuth && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                          <a
-                            href="https://forums.e-hentai.org/index.php?act=Login"
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            style={{ fontSize: 12, color: "var(--text-primary)", textDecoration: "underline" }}
-                          >
-                            网页登入 E-Hentai 论坛
-                          </a>
-                          <a
-                            href="https://exhentai.org/"
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            style={{ fontSize: 12, color: "var(--text-secondary)", textDecoration: "underline" }}
-                          >
-                            打开 ExHentai 校验权限
-                          </a>
-                          <span style={{ fontSize: 11, color: "var(--text-disabled)" }}>
-                            登录后从浏览器复制 Cookie 粘贴到上方密码框
-                          </span>
-                        </div>
-                      )}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         <GlassButton
                           variant="primary"
@@ -923,7 +987,7 @@ function AccountManagerPanel({
                           onClick={() => onSave(sourceId)}
                           style={{ fontSize: 12 }}
                         >
-                          {busy ? "处理中…" : requiredEhentaiAuth ? "保存并验证" : "保存并登录"}
+                          {busy ? "处理中…" : "保存并登录"}
                         </GlassButton>
                         <GlassButton
                           disabled={busy || (!account.has_password && !draft.password && !account.has_session)}
@@ -941,6 +1005,7 @@ function AccountManagerPanel({
                         </GlassButton>
                       </div>
                     </>
+                    )
                   ) : (
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                       此源无需账号密码，可在左侧直接选择后搜索浏览。
@@ -987,6 +1052,12 @@ export function R18ShellContent() {
     chapterId: string
     chapterTitle: string
   } | null>(null)
+  const [videoState, setVideoState] = useState<{
+    comic: R18ComicItem
+    sourceId: string
+    chapterId: string
+    chapterTitle: string
+  } | null>(null)
   const [accountPanelOpen, setAccountPanelOpen] = useState(false)
   const [accountDrafts, setAccountDrafts] = useState<Record<string, { username: string; password: string }>>({})
   const [accountBusySourceId, setAccountBusySourceId] = useState<string | null>(null)
@@ -1001,6 +1072,10 @@ export function R18ShellContent() {
 
   const authReady = uid !== null && token !== null
   const api = useMemo(() => createR18Api(getGateway().http), [])
+  const resolveVideo = useCallback(
+    (sourceId: string, chapterId: string, signal: AbortSignal) => api.resolveVideo(sourceId, chapterId, signal),
+    [api],
+  )
 
   const accessQuery = useQuery({
     queryKey: ["r18", "access", uid],
@@ -1281,6 +1356,24 @@ export function R18ShellContent() {
     }
   }
 
+  function parseCookieString(cookieStr: string) {
+    const parts = cookieStr.split(";").map((s) => s.trim()).filter(Boolean)
+    const result: Record<string, string> = {}
+    for (const part of parts) {
+      const eq = part.indexOf("=")
+      if (eq < 1) continue
+      const key = part.slice(0, eq).trim()
+      const val = part.slice(eq + 1).trim()
+      if (key) result[key] = val
+    }
+    return {
+      ipb_member_id: result["ipb_member_id"] ?? "",
+      ipb_pass_hash: result["ipb_pass_hash"] ?? "",
+      igneous: result["igneous"] ?? "",
+      sk: result["sk"] ?? "",
+    }
+  }
+
   async function refreshLibrary() {
     await libraryQuery.refetch()
   }
@@ -1434,12 +1527,24 @@ export function R18ShellContent() {
     )
   }
 
-  // ── Reader overlay (full-screen) ────────────────────────────────
+  // ── Media overlays (full-screen) ───────────────────────────────
+  if (videoState) {
+    return (
+      <R18VideoPlayerOverlay
+        sourceId={videoState.sourceId}
+        chapterId={videoState.chapterId}
+        title={`${videoState.comic.title || "未命名"} · ${videoState.chapterTitle}`}
+        resolveVideo={resolveVideo}
+        onClose={() => setVideoState(null)}
+      />
+    )
+  }
+
   if (readerState) {
     return (
       <ReaderOverlay
         comic={readerState.comic}
-        sourceId={selectedSource?.id ?? ""}
+        sourceId={readerState.comic.source_id ?? selectedSource?.id ?? ""}
         chapterId={readerState.chapterId}
         chapterTitle={readerState.chapterTitle}
         onClose={() => setReaderState(null)}
@@ -1878,6 +1983,29 @@ export function R18ShellContent() {
           onLogin={(sourceId) => { void loginAccount(sourceId) }}
           onClear={(sourceId) => { void clearAccount(sourceId) }}
           onClose={() => setAccountPanelOpen(false)}
+          onEhentaiBrowserImportStart={async (sourceId) => {
+            const response = await api.startBrowserImport(sourceId)
+            return {
+              importId: response.import_id,
+              ticket: response.ticket,
+              expiresAt: response.expires_at_ms,
+            }
+          }}
+          onEhentaiBrowserImportStatus={async (importId) => {
+            const response = await api.getBrowserImportStatus(importId)
+            return response
+          }}
+          onEhentaiCookieImport={async (sourceId, cookieStr) => {
+            const isEhentai = sourceId === "ehentai.official" || sourceId === "exhentai.official"
+            if (isEhentai) {
+              const parsed = parseCookieString(cookieStr)
+              await api.importSession({ sourceId, ...parsed })
+            } else {
+              // For nhentai, hanime1 etc: cookieStr is already pre-assembled "name=value; …"
+              await api.importSession({ sourceId, cookie_header: cookieStr })
+            }
+            await refreshAccountViews()
+          }}
         />
       )}
 
@@ -1925,9 +2053,20 @@ export function R18ShellContent() {
       {comicForChapters && (
         <ChapterListOverlay
           comic={comicForChapters}
-          sourceId={selectedSource?.id ?? ""}
+          sourceId={comicForChapters.source_id ?? selectedSource?.id ?? ""}
           onClose={() => setComicForChapters(null)}
           onSelectChapter={(chapterId, chapterTitle) => {
+            const sourceId = comicForChapters.source_id ?? selectedSource?.id ?? ""
+            if (sourceId === "hanime1.official") {
+              setVideoState({
+                comic: comicForChapters,
+                sourceId,
+                chapterId,
+                chapterTitle,
+              })
+              setComicForChapters(null)
+              return
+            }
             setReaderState({ comic: comicForChapters, chapterId, chapterTitle })
             setComicForChapters(null)
           }}

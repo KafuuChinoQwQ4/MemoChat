@@ -1,6 +1,6 @@
 # R18Service/ 目录树
 
-> 测试 R18Service 内容源核心逻辑，覆盖 adapter 工具算法、官方 JM adapter 算法、source record DTO 编解码等行为。
+> 测试 R18Service 内容源核心逻辑，覆盖 adapter 工具算法、官方内容源解析、公开 DTO、路由与 source record 编解码等行为。
 
 ## 文件
 
@@ -10,6 +10,7 @@
 | `main.cpp` | GTest 测试入口（main 函数） |
 | `R18AdapterUtilsAlgorithmsConsumer.cpp` | 直接 import R18 adapter utils module，向测试暴露 URL、编码、缓存和 Base64 primitive helper |
 | `R18AdapterUtilsAlgorithmsTest.cpp` | 验证 R18 adapter utils module 导出的默认值、编码/转义和缓存/Base64 guard |
+| `R18Hanime1AdapterTest.cpp` | 验证 Hanime1 签名 MP4 播放源解析、排序、有效期与精确 allowlist 拒绝边界 |
 | `R18JmAdapterAlgorithmsConsumer.cpp` | 直接 import R18 JM adapter module，向测试暴露源标识、API 默认值、分页和图片 guard |
 | `R18JmAdapterAlgorithmsTest.cpp` | 验证 R18 JM adapter module 导出的官方源默认值、host 轮换、payload/page 和图片 guard |
 | `R18PicacgAdapterAlgorithmsConsumer.cpp` | 直接 import R18 Picacg adapter module，向测试暴露源/API 默认值、环境凭据和图片 guard |
