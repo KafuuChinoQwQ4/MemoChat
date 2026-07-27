@@ -10,6 +10,7 @@ vcpkg_installed/
 vcpkg/
 .cache/
 .qt/
+.ai/
 
 # Local runtime data
 logs/

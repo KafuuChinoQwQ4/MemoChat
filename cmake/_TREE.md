@@ -7,6 +7,8 @@
 | 子目录 | 作用概括 |
 | --- | --- |
 | [`package-redirects/`](package-redirects/_TREE.md) | 第三方包 config 查找重定向 |
+| [`vcpkg-overlay-ports/`](vcpkg-overlay-ports/_TREE.md) | 发行构建使用的第三方 port 可复现修补 |
+| [`vcpkg-triplets/`](vcpkg-triplets/_TREE.md) | 可复现 Linux 发行依赖的 vcpkg overlay triplet |
 
 ## 文件
 

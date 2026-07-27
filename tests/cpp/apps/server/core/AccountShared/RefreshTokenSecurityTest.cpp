@@ -62,14 +62,16 @@ TEST(RefreshTokenSecurityTest, VerifierHashRequiresServerPepper)
 
 TEST(RefreshTokenSecurityTest, VerifierHashChangesWhenPepperChanges)
 {
+    const std::string firstPepper(32, 'a');
+    const std::string secondPepper(32, 'b');
     std::string first;
     std::string second;
     {
-        ScopedEnvVar pepper("MEMOCHAT_AUTH_REFRESH_PEPPER", "0123456789abcdef0123456789abcdef");
+        ScopedEnvVar pepper("MEMOCHAT_AUTH_REFRESH_PEPPER", firstPepper.c_str());
         ASSERT_TRUE(memochat::auth::HashRefreshTokenVerifier("0123456789abcdef", first));
     }
     {
-        ScopedEnvVar pepper("MEMOCHAT_AUTH_REFRESH_PEPPER", "abcdef0123456789abcdef0123456789");
+        ScopedEnvVar pepper("MEMOCHAT_AUTH_REFRESH_PEPPER", secondPepper.c_str());
         ASSERT_TRUE(memochat::auth::HashRefreshTokenVerifier("0123456789abcdef", second));
     }
 

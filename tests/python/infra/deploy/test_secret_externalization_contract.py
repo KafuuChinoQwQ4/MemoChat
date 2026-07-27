@@ -155,7 +155,6 @@ class SecretExternalizationContractTests(unittest.TestCase):
                 "127.0.0.1:9400:9400",
             },
             "livekit": {
-                "127.0.0.1:6379:6379",
                 "127.0.0.1:7880:7880",
                 "127.0.0.1:7881:7881/udp",
                 "127.0.0.1:3478:3478",

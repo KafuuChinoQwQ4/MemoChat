@@ -125,7 +125,8 @@ def test_r18_account_policy_schema_is_migrated_before_gateway_rollout() -> None:
     assert "-f /migrations/009_memo_account_schema.sql" in jobs
     assert "-f /migrations/013_r18_access_policy.sql" in jobs
     assert "-v ON_ERROR_STOP=1" in jobs
-    assert ".postgres = true, .redis = true" in entrypoint
+    assert "PostgresReadinessProbe()" in entrypoint
+    assert "RedisReadinessProbe()" in entrypoint
 
 
 def test_account_focused_services_do_not_restore_rabbit_cache_invalidation() -> None:

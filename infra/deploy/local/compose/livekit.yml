@@ -1,37 +1,27 @@
-version: "3.9"
-
 services:
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--requirepass", "${MEMOCHAT_LIVEKIT_REDIS_PASSWORD:-123456}"]
-    ports:
-      - "127.0.0.1:6379:6379"
-
-  livekit:
-    image: livekit/livekit-server:latest
-    command:
-      - --dev
-      - --bind
-      - 0.0.0.0
+  memochat-livekit:
+    image: livekit/livekit-server@sha256:2c6869d2d5ff6c9c0166f47be1c92dad6928bfecfa5e4060a6ece48db8accfa3
+    container_name: memochat-livekit
+    profiles:
+      - calls
+    restart: unless-stopped
+    command: []
     environment:
-      LIVEKIT_KEYS: "${MEMOCHAT_LIVEKIT_API_KEY:-devkey}: ${MEMOCHAT_LIVEKIT_API_SECRET:-secret}"
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses:
+          - 0.0.0.0
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: false
+        keys:
+          ${MEMOCHAT_LIVEKIT_API_KEY:-}: ${MEMOCHAT_LIVEKIT_API_SECRET:-}
     ports:
-      - "127.0.0.1:7880:7880"
-      - "127.0.0.1:7881:7881/udp"
-    depends_on:
-      - redis
-
-  coturn:
-    image: coturn/coturn:latest
-    command:
-      - -n
-      - --log-file=stdout
-      - --realm=memochat.local
-      - --user=${MEMOCHAT_TURN_USER:-memochat}:${MEMOCHAT_TURN_PASSWORD:-123456}
-      - --external-ip=127.0.0.1
-      - --listening-port=3478
-      - --min-port=49160
-      - --max-port=49200
-    ports:
-      - "127.0.0.1:3478:3478"
-      - "127.0.0.1:49160-49200:49160-49200/udp"
+      - "127.0.0.1:7880:7880/tcp"
+      - "127.0.0.1:7881:7881/tcp"
+      - "127.0.0.1:7882:7882/udp"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

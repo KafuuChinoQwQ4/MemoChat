@@ -2,6 +2,180 @@
 
 This folder holds the local Docker dependencies and init payloads used by MemoChat on Arch Linux. Docker Desktop/Windows usage is legacy fallback only.
 
+## Release-mode C++ backend
+
+`compose/backend-services.yml` adds the 11 core and 2 optional supported C++
+runtime targets to the base infrastructure stack. It is a release overlay, not
+a development-default file: core credentials and credentials for each selected
+profile are required, and public INI files are mounted read-only. HTTP plus the
+client chat TCP/QUIC transports are published
+only on `127.0.0.1` (`80`, `8443/tcp`, `8443/udp`, and `8190/udp`); other C++ business
+ports stay private. Exposing any of them to a LAN or the Internet requires an
+explicit operator-owned override and TLS policy.
+
+The overlay shares the Envoy network namespace with the C++ services. This
+keeps the existing Envoy upstream ports stable while resolving
+`host.docker.internal` to the private loopback inside that namespace. Databases
+and queues remain reachable by their service names on `memochat_default`.
+
+### 1. Build images
+
+Use the server-only release preset and the fresh bundle workflow documented in
+[`../images/README.md`](../images/README.md). Each image is built from one
+`<TARGET>/{bin,lib,MANIFEST.txt,SHA256SUMS}` directory. Run
+`tools/scripts/release/verify_release_tree.sh` before any Docker build.
+
+### 2. Provision private runtime values
+
+Create a private mode-0600 env file from `.env.release.example`. Replace every
+base `REPLACE_WITH_*` value and every value belonging to a profile you enable;
+inactive profile placeholders may remain or be removed. Never pass the example
+directly to Compose or bypass the preflight script for `config`/`up`. Generate
+independent random values, for example:
+
+```bash
+openssl rand -hex 32
+```
+
+Generate `MEMOCHAT_AUTH_REFRESH_PEPPER` independently from the JWT and chat
+HMAC secrets. Production refresh-token hashing requires at least 32 bytes; the
+hex command above produces a 64-character value representing 32 random bytes.
+
+`MEMOCHAT_BACKEND_CONFIG_ROOT` is the absolute path to
+`apps/server/core`. `MEMOCHAT_TLS_CERT_FILE` and `MEMOCHAT_TLS_KEY_FILE` are
+absolute host paths to the ChatServer certificate and private key. The key is a
+read-only runtime mount and is not part of an image. Keep the private key owned
+by the deployment user with mode `0400` or `0600`; configuration and certificate
+mounts must be regular files and must not be group- or world-writable.
+
+The desktop package never contains the TLS private key. When the local Envoy
+certificate is signed by a private CA, pass that public CA explicitly while
+packaging the client:
+
+```bash
+tools/scripts/release/package_linux_client.sh \
+  --binary build-linux-client-release-gcc16/bin/MemoChatQml \
+  --config build-linux-client-release-gcc16/bin/config.ini \
+  --ca-cert /absolute/path/to/local-ca.crt \
+  --output-dir artifacts/release
+```
+
+The packager validates a single PEM X.509 certificate and writes its relative
+path into the packaged `config.ini`. Without `--ca-cert`, the client uses the
+system trust store; `MEMOCHAT_CLIENT_CA_FILE` can override the public CA path at
+launch without rebuilding the package.
+
+Create the writable Media upload and Envoy log directories before `up`.
+Create the R18 directory only when enabling `--profile r18`; Compose deliberately
+refuses to create these paths as root. They are mutable runtime state, not
+release content:
+
+```bash
+install -d -m 0700 -o 10001 -g 10001 \
+  /data/docker-data/memochat/media/uploads \
+  /data/docker-data/memochat/envoy/logs
+install -d -m 0700 -o 10001 -g 10001 \
+  /data/docker-data/memochat/r18  # only with --profile r18
+```
+
+Use the configured `MEMOCHAT_DOCKER_DATA_ROOT` instead of `/data/docker-data/memochat`
+when the private env file selects another data root. The container entrypoint
+uses `umask 077`; credential and upload/session files default to owner-only.
+
+The release wrapper provisions Postgres schemas, isolated least-privilege
+databases/roles, the Mongo application user/collections, MinIO buckets, and the
+MinIO media account. The jobs are idempotent and use only values from the
+validated private env file. They also migrate legacy main-database rows into an
+empty split database and synchronize identity sequences. Run provisioning
+explicitly when preparing a host:
+
+```bash
+RELEASE_ENV=/absolute/private/path/memochat-release.env
+tools/scripts/release/run_release_compose.sh \
+  --env-file "${RELEASE_ENV}" provision
+```
+
+`up` runs the same provisioning step before it starts business services. Mongo
+and MinIO application credentials are generated independently from their root
+credentials and injected only at runtime.
+
+### 3. Validate and start
+
+From the repository root, with the private env file outside source control:
+
+```bash
+RELEASE_ENV=/absolute/private/path/memochat-release.env
+tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" check
+tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" config
+tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" up
+```
+
+`run_release_compose.sh` is the only supported release validation/start entry.
+Before Docker is invoked it requires the private env file to be a current-user-
+owned regular file with mode `0600`; rejects unknown/duplicate variables,
+interpolation, command syntax, placeholders, common weak values, short or reused
+secrets; and checks the 11 core INI mounts plus selected profile mounts, the TLS
+certificate, and private key.
+It also clears all ambient `MEMOCHAT_*` variables so an exported shell value
+cannot override or extend the values that were validated from the private file. The
+`check` action performs only these local checks and does not contact Docker;
+`config` additionally executes Compose's fixed base, release-overlay, and
+LiveKit `config --quiet` check.
+
+The default profile starts the core messaging services without requiring
+credentials or mutable paths for optional service groups. Add `--profile calls`
+for CallGateway, its Postgres database, and local LiveKit, or `--profile r18`
+for the R18 gateway. Add `--profile observability` for the InfluxDB/Grafana
+credentials and observability services. Each selected profile is validated
+fail-closed before Docker runs. This
+C++ backend release does not include AIOrchestrator, Ollama, Qdrant, or Neo4j,
+so `AIGatewayServer` and `AIServer` are intentionally absent from the release
+Compose model and the wrapper rejects an `ai` profile instead of starting a
+known-incomplete stack.
+
+The bundled LiveKit profile is loopback-only and intended for one-host local
+deployment. Internet-facing calls require a separately reviewed LiveKit
+deployment with trusted TLS, public IP/firewall configuration, and TURN where
+the target network requires it; do not publish the local profile directly.
+
+The release overlay limits OTel Collector access to its configuration and the
+Envoy log directory; it does not mount source or build trees. cAdvisor's
+privileged host mounts are disabled by default. Add `--profile observability`
+before the release `up` action only when container-level host metrics are
+needed:
+
+```bash
+tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" \
+  --profile observability up
+```
+
+### 4. Health checks and stop
+
+```bash
+docker compose --env-file "${RELEASE_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/backend-services.yml ps
+
+docker compose --env-file "${RELEASE_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/backend-services.yml \
+  exec memochat-envoy-gateway sh -ec \
+  'wget -qO- http://127.0.0.1:8101/healthz && wget -qO- http://127.0.0.1:8102/healthz'
+
+curl -fsS http://127.0.0.1/health
+
+docker compose --env-file "${RELEASE_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/backend-services.yml \
+  down
+```
+
+Registration email, password hashes, chat records, uploaded objects, and all
+other account data live in the configured database/object-store volumes under
+`MEMOCHAT_DOCKER_DATA_ROOT`; they are never copied into the C++ images. The
+email address in the desktop settings is likewise runtime user state, not a
+release artifact.
+
 ## Compose Files
 
 - `docker-compose.yml`
@@ -17,8 +191,8 @@ This folder holds the local Docker dependencies and init payloads used by MemoCh
   - RabbitMQ AMQP `5672`
   - RabbitMQ management `15672`
 - `compose/livekit.yml`
-  - LiveKit `7880`
-  - TURN `3478`
+  - loopback-only LiveKit signaling `7880`, RTC/TCP `7881`, and RTC/UDP `7882`
+  - enabled only by the `calls` profile; no bundled public TURN service
 - `compose/envoy-lb.yml`
   - containerized Gate/Chat cluster variant with Envoy LB `80` (HTTP), `8090-8091` (TCP Stream)
   - do not use this fragment with the default Windows-process local runtime because ChatServer ports would collide
@@ -81,9 +255,11 @@ The init scripts under `init/` will recreate the required schemas and seed objec
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-docker exec memochat-redis redis-cli -a 123456 ping
+docker exec memochat-redis redis-cli -a "${MEMOCHAT_REDIS_PASSWORD:?}" ping
 docker exec memochat-postgres psql -U memochat -d memo_pg -c "select 1;"
-docker exec memochat-mongo mongosh -u root -p 123456 --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"
+docker exec memochat-mongo mongosh -u "${MEMOCHAT_MONGO_ROOT_USERNAME:?}" \
+  -p "${MEMOCHAT_MONGO_ROOT_PASSWORD:?}" --authenticationDatabase admin \
+  --quiet --eval "db.adminCommand({ ping: 1 })"
 docker exec memochat-rabbitmq rabbitmq-diagnostics -q ping
 docker exec memochat-redpanda rpk cluster info --brokers 127.0.0.1:19092
 curl -fsS http://127.0.0.1/health
