@@ -53,6 +53,10 @@ AppChatConnectionPolicy::AppChatConnectionDecision
 AppChatConnectionPolicy::evaluateLoginTcpFallback(const AppChatConnectionSnapshot& snapshot)
 {
     AppChatConnectionDecision decision;
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    Q_UNUSED(snapshot);
+    return decision;
+#else
     if (snapshot.loginTcpFallbackAttempted || !snapshot.isLoginPage || !snapshot.busy || snapshot.uid <= 0 ||
         invalidChatTicket(snapshot))
     {
@@ -69,6 +73,7 @@ AppChatConnectionPolicy::evaluateLoginTcpFallback(const AppChatConnectionSnapsho
     decision.selectedEndpoint = tcpEndpoint;
     decision.serverInfo = buildServerInfo(snapshot, tcpEndpoint, ChatTransportKind::Tcp, ChatTransportKind::Tcp);
     return decision;
+#endif
 }
 
 AppChatConnectionPolicy::AppChatConnectionDecision
@@ -81,18 +86,27 @@ AppChatConnectionPolicy::evaluateReconnect(const AppChatConnectionSnapshot& snap
         return decision;
     }
 
+    ChatEndpoint selectedEndpoint;
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    constexpr ChatTransportKind preferredTransport = ChatTransportKind::Quic;
+    if (!findEndpoint(snapshot.endpoints, ChatTransportKind::Quic, selectedEndpoint))
+    {
+        return decision;
+    }
+    constexpr ChatTransportKind fallbackTransport = ChatTransportKind::Quic;
+#else
     const ChatTransportKind preferredTransport =
         hasEndpointKind(snapshot.endpoints, ChatTransportKind::Quic) ? ChatTransportKind::Quic : ChatTransportKind::Tcp;
-
-    ChatEndpoint selectedEndpoint;
     if (!findEndpoint(snapshot.endpoints, preferredTransport, selectedEndpoint) &&
         !findEndpoint(snapshot.endpoints, ChatTransportKind::Tcp, selectedEndpoint))
     {
         return decision;
     }
+    constexpr ChatTransportKind fallbackTransport = ChatTransportKind::Tcp;
+#endif
 
     decision.allowed = true;
     decision.selectedEndpoint = selectedEndpoint;
-    decision.serverInfo = buildServerInfo(snapshot, selectedEndpoint, preferredTransport, ChatTransportKind::Tcp);
+    decision.serverInfo = buildServerInfo(snapshot, selectedEndpoint, preferredTransport, fallbackTransport);
     return decision;
 }

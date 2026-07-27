@@ -1,6 +1,5 @@
 #include "Live2DCoreRenderer.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -64,16 +63,6 @@ struct StraightColor
     qreal alpha = 0.0;
 };
 
-QString clientSourcePath(const QString& relativePath)
-{
-#ifdef MEMOCHAT_QML_SOURCE_DIR
-    const QString root = QString::fromUtf8(MEMOCHAT_QML_SOURCE_DIR);
-#else
-    const QString root = QCoreApplication::applicationDirPath();
-#endif
-    return QDir(root).absoluteFilePath(relativePath);
-}
-
 QStringList coreLibraryCandidates()
 {
     QStringList candidates;
@@ -85,17 +74,6 @@ QStringList coreLibraryCandidates()
         candidates << QDir(envRoot).absoluteFilePath(QStringLiteral("Core/lib/linux/x86_64/libLive2DCubismCore.so"));
     }
 
-#ifdef MEMOCHAT_LIVE2D_SDK_ROOT
-    const QString cmakeRoot = QString::fromUtf8(MEMOCHAT_LIVE2D_SDK_ROOT);
-    if (!cmakeRoot.isEmpty())
-    {
-        candidates << QDir(cmakeRoot).absoluteFilePath(QStringLiteral("Core/dll/linux/x86_64/libLive2DCubismCore.so"));
-        candidates << QDir(cmakeRoot).absoluteFilePath(QStringLiteral("Core/lib/linux/x86_64/libLive2DCubismCore.so"));
-    }
-#endif
-
-    candidates << QStringLiteral("/data/third_party/live2d/CubismSdkForNative-current/Core/dll/linux/x86_64/libLive2DCubismCore.so");
-    candidates << QStringLiteral("/data/third_party/live2d/CubismSdkForNative-5-r.5/Core/dll/linux/x86_64/libLive2DCubismCore.so");
     candidates << QStringLiteral("Live2DCubismCore");
     candidates << QStringLiteral("libLive2DCubismCore.so");
     return candidates;

@@ -19,15 +19,15 @@
 | `ChatMessageDispatcherGroupPayload.h` | 群组消息载荷处理声明 |
 | `ChatMessageDispatcherPrivate.cpp` | 私聊类消息分发处理 |
 | `ChatMessageDispatcherSystem.cpp` | 系统类消息分发处理 |
-| `HttpMgrRequestUtils.cpp` | HTTP 请求工具实现 |
+| `HttpMgrRequestUtils.cpp` | HTTP 请求工具实现（TLS 配置与 Release 明文请求拒绝） |
 | `HttpMgrRequestUtils.h` | HTTP 请求工具声明 |
 | `IChatTransport.h` | 聊天传输抽象接口 |
 | `QuicChatTransport.cpp` | QUIC 聊天传输实现 |
 | `QuicChatTransport.h` | QUIC 聊天传输声明 |
 | `QuicChatTransportMsquic.cpp` | 基于 MsQuic 的 QUIC 传输实现 |
-| `TelemetryUtils.cpp` | 遥测/埋点工具实现，包含 HTTP span URL 脱敏 |
-| `TelemetryUtils.h` | 遥测/埋点工具声明，提供 HTTP span URL 脱敏接口 |
-| `httpmgr.cpp` | HTTP 管理器实现（请求发起与回调） |
+| `TelemetryUtils.cpp` | 默认关闭的遥测/埋点实现；发行版启用时强制 HTTPS、证书校验和 span URL 脱敏 |
+| `TelemetryUtils.h` | opt-in 遥测/埋点声明，提供 HTTP span URL 脱敏接口 |
+| `httpmgr.cpp` | HTTP 管理器实现（请求安全前置校验、发起与回调） |
 | `httpmgr.h` | HTTP 管理器声明 |
 | `tcpmgr.cpp` | TCP 长连接管理器实现 |
 | `tcpmgr.h` | TCP 长连接管理器声明 |

@@ -1,7 +1,10 @@
 #include "TelemetryUtils.h"
 
+#include "HttpMgrRequestUtils.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -104,12 +107,29 @@ ClientTelemetryConfig loadClientTelemetryConfig()
 {
     ClientTelemetryConfig cfg;
     QSettings settings(appConfigPath(), QSettings::IniFormat);
-    cfg.enabled = settings.value("Telemetry/Enabled", true).toBool();
+    cfg.enabled = settings.value("Telemetry/Enabled", cfg.enabled).toBool();
     cfg.endpoint = settings.value("Telemetry/OtlpEndpoint", cfg.endpoint).toString().trimmed();
     cfg.protocol = settings.value("Telemetry/Protocol", cfg.protocol).toString().trimmed().toLower();
-    cfg.exportLogs = settings.value("Telemetry/ExportLogs", true).toBool();
-    cfg.exportTraces = settings.value("Telemetry/ExportTraces", true).toBool();
-    cfg.exportMetrics = settings.value("Telemetry/ExportMetrics", false).toBool();
+    cfg.exportLogs = settings.value("Telemetry/ExportLogs", cfg.exportLogs).toBool();
+    cfg.exportTraces = settings.value("Telemetry/ExportTraces", cfg.exportTraces).toBool();
+    cfg.exportMetrics = settings.value("Telemetry/ExportMetrics", cfg.exportMetrics).toBool();
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    if (cfg.enabled)
+    {
+        const QUrl endpoint(cfg.endpoint);
+        const bool validHttpsEndpoint =
+            endpoint.isValid() && endpoint.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0 &&
+                                                            !endpoint.host().isEmpty() &&
+                                                            endpoint.userName().isEmpty() &&
+                                                            endpoint.password().isEmpty();
+        if (!validHttpsEndpoint)
+        {
+            qWarning() << "Distributable client disabled telemetry because its endpoint is not valid HTTPS";
+            cfg.enabled = false;
+            cfg.endpoint.clear();
+        }
+    }
+#endif
     cfg.serviceName = settings.value("Telemetry/ServiceName").toString().trimmed();
     if (cfg.serviceName.isEmpty())
     {
@@ -245,6 +265,10 @@ void exportZipkinSpan(const QString& name,
 
     QNetworkRequest request(QUrl(cfg.endpoint));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!configureSecureNetworkRequest(request))
+    {
+        return;
+    }
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
 
     if (qApp && QThread::currentThread() != qApp->thread())
