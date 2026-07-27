@@ -24,8 +24,10 @@ struct R18SourceCredential
     int64_t updated_at_ms = 0;
 };
 
-// Per-MemoChat-user credential vault for external comic sources.
-// Stored under data/r18/credentials/<uid>.json (local runtime data, not shared).
+// Per-MemoChat-user credential vault for external comic sources. Stored as
+// owner-only AES-256-GCM envelopes under data/r18/credentials/<uid>.json. The
+// directory is a mounted data boundary and must never be copied into images or
+// release bundles.
 class R18SourceCredentialStore
 {
 public:
@@ -67,14 +69,17 @@ private:
 
     std::filesystem::path ResolveRoot() const;
     std::filesystem::path PathForUid(int uid) const;
-    void EnsureRootLocked();
-    void LoadUidLocked(int uid);
-    void SaveUidLocked(int uid);
+    bool EnsureRootLocked(std::string* error);
+    bool BackingFileMatchesLoadedSnapshotLocked(int uid, std::string* error) const;
+    bool LoadUidLocked(int uid, std::string* error);
+    bool SaveUidLocked(int uid, std::string* error);
+    bool SaveUidOrReloadLocked(int uid, std::string* error);
     memochat::json::JsonValue ToPublicJson(const R18SourceCredential& cred) const;
 
     mutable std::mutex mu_;
     std::filesystem::path root_;
     std::unordered_map<int, std::unordered_map<std::string, R18SourceCredential>> by_uid_;
+    std::unordered_map<int, std::optional<std::string>> loaded_envelopes_;
 };
 
 } // namespace memochat::r18
