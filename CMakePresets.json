@@ -63,6 +63,65 @@
         "MEMOCHAT_ENABLE_LWS_WEBTRANSPORT_PROVIDER": "ON",
         "VCPKG_MANIFEST_FEATURES": "server;webtransport-provider"
       }
+    },
+    {
+      "name": "linux-client-release-gcc16",
+      "displayName": "Linux GCC16: Client Release",
+      "inherits": "linux-full-gcc16",
+      "binaryDir": "${sourceDir}/build-linux-client-release-gcc16",
+      "environment": {
+        "VCPKG_MAX_CONCURRENCY": "2",
+        "CMAKE_BUILD_PARALLEL_LEVEL": "1"
+      },
+      "cacheVariables": {
+        "BUILD_CLIENT": "ON",
+        "BUILD_SERVER": "OFF",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "OFF",
+        "MEMOCHAT_AUTO_FORMAT": "OFF",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
+        "MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD": "ON",
+        "MEMOCHAT_ENABLE_CPP26_REFLECTION": "OFF",
+        "MEMOCHAT_ENABLE_GNU_MODULES": "OFF",
+        "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "OFF",
+        "MEMOCHAT_LIVE2D_SDK_ROOT": "",
+        "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -ffile-prefix-map=${sourceDir}=/usr/src/memochat -fmacro-prefix-map=${sourceDir}=/usr/src/memochat -ffile-prefix-map=$env{VCPKG_ROOT}=/usr/src/vcpkg -fmacro-prefix-map=$env{VCPKG_ROOT}=/usr/src/vcpkg",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/vcpkg-overlay-ports",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-memochat-release",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON",
+        "VCPKG_MANIFEST_FEATURES": "",
+        "VCPKG_INSTALLED_DIR": "$env{VCPKG_ROOT}/installed-memochat-gcc16-client-release"
+      }
+    },
+    {
+      "name": "linux-server-release-gcc16",
+      "displayName": "Linux GCC16: Server Release",
+      "inherits": "linux-full-gcc16",
+      "binaryDir": "${sourceDir}/build-linux-server-release-gcc16",
+      "environment": {
+        "VCPKG_MAX_CONCURRENCY": "2",
+        "CMAKE_BUILD_PARALLEL_LEVEL": "1"
+      },
+      "cacheVariables": {
+        "BUILD_CLIENT": "OFF",
+        "BUILD_SERVER": "ON",
+        "BUILD_OPS": "OFF",
+        "BUILD_TESTS": "OFF",
+        "MEMOCHAT_AUTO_FORMAT": "OFF",
+        "MEMOCHAT_AUTO_DEPLOY_RUNTIME": "OFF",
+        "MEMOCHAT_ENABLE_CPP26_REFLECTION": "OFF",
+        "MEMOCHAT_ENABLE_GNU_MODULES": "ON",
+        "MEMOCHAT_ENABLE_LIVE2D_NATIVE": "OFF",
+        "MEMOCHAT_LIVE2D_SDK_ROOT": "",
+        "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -ffile-prefix-map=${sourceDir}=/usr/src/memochat -fmacro-prefix-map=${sourceDir}=/usr/src/memochat -ffile-prefix-map=$env{VCPKG_ROOT}=/usr/src/vcpkg -fmacro-prefix-map=$env{VCPKG_ROOT}=/usr/src/vcpkg",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/vcpkg-overlay-ports",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-memochat-release",
+        "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "OFF",
+        "VCPKG_MANIFEST_FEATURES": "server",
+        "VCPKG_INSTALLED_DIR": "$env{VCPKG_ROOT}/installed-memochat-gcc16-server-release"
+      }
     }
   ],
   "buildPresets": [
@@ -77,6 +136,21 @@
       "displayName": "Build Linux Full + WebTransport Provider",
       "configurePreset": "linux-full-gcc16-webtransport-provider",
       "jobs": 12
+    },
+    {
+      "name": "linux-client-release-gcc16",
+      "displayName": "Build Linux Client Release",
+      "configurePreset": "linux-client-release-gcc16",
+      "targets": [
+        "MemoChatQml"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "linux-server-release-gcc16",
+      "displayName": "Build Linux Server Release",
+      "configurePreset": "linux-server-release-gcc16",
+      "jobs": 1
     }
   ],
   "testPresets": [

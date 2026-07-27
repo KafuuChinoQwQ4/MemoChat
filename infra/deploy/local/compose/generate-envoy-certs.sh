@@ -1,13 +1,18 @@
 #!/bin/sh
 set -eu
 
+umask 077
+
 OUT_DIR="${1:-/certs}"
 CERT_FILE="${OUT_DIR}/servercert.pem"
 KEY_FILE="${OUT_DIR}/serverkey.pem"
 
 mkdir -p "${OUT_DIR}"
+chmod 700 "${OUT_DIR}"
 
 if [ -s "${CERT_FILE}" ] && [ -s "${KEY_FILE}" ]; then
+  chmod 644 "${CERT_FILE}"
+  chmod 600 "${KEY_FILE}"
   exit 0
 fi
 
@@ -24,4 +29,5 @@ openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
 openssl rsa -in "${tmpdir}/serverkey.pem" -out "${KEY_FILE}"
 mv "${tmpdir}/servercert.pem" "${CERT_FILE}"
 
-chmod 644 "${CERT_FILE}" "${KEY_FILE}"
+chmod 644 "${CERT_FILE}"
+chmod 600 "${KEY_FILE}"

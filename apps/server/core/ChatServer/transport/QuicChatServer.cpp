@@ -352,6 +352,15 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
     const bool pfx_file_exists = !pfx_file.empty() && std::filesystem::exists(pfx_file, pfx_file_error);
     if (!cred_loaded && pfx_file_exists && !pfx_file_error)
     {
+        if (pfx_password.empty())
+        {
+            if (error)
+            {
+                *error = "quic_pfx_password_required";
+            }
+            shutdownHandles();
+            return false;
+        }
         std::ifstream pfx_stream(pfx_file, std::ios::binary);
         if (pfx_stream)
         {
@@ -360,11 +369,10 @@ bool QuicChatServer::Impl::ensureInitialized(QuicChatServer* owner, std::string*
             pfx_stream.close();
             if (!pfx_data.empty())
             {
-                std::string pwd = pfx_password.empty() ? "memochat" : pfx_password;
                 QUIC_CERTIFICATE_PKCS12 pkcs12{};
                 pkcs12.Asn1Blob = pfx_data.data();
                 pkcs12.Asn1BlobLength = static_cast<uint32_t>(pfx_data.size());
-                pkcs12.PrivateKeyPassword = const_cast<char*>(pwd.c_str());
+                pkcs12.PrivateKeyPassword = const_cast<char*>(pfx_password.c_str());
                 QUIC_CREDENTIAL_CONFIG cred{};
                 cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_PKCS12;
                 cred.Flags = QUIC_CREDENTIAL_FLAG_NONE;

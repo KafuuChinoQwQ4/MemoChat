@@ -16,6 +16,7 @@
 | [`infra-init/`](infra-init/_TREE.md) | 基础设施（Kafka/RabbitMQ 等）初始化脚本 |
 | [`loadtest-accounts/`](loadtest-accounts/_TREE.md) | 压测账号准备与媒体迁移脚本 |
 | [`pet/`](pet/_TREE.md) | 桌宠 GPT-SoVITS 语音/视觉脚本 |
+| [`release/`](release/_TREE.md) | Linux 客户端与 C++ 后端发布构建、打包、镜像及制品安全扫描脚本 |
 | [`status/`](status/_TREE.md) | 服务启停与运行时拓扑/冒烟脚本 |
 | [`verify/`](verify/_TREE.md) | 登录/注册/验证码端到端验证脚本 |
 | [`windows/`](windows/_TREE.md) | Windows 平台运行/基准/进程脚本 |

@@ -1,60 +1,54 @@
-# overlays/nghttp2/portfile.cmake
-# Build nghttp2 as a static library from the pre-downloaded tarball.
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO nghttp2/nghttp2
+    REF "v${VERSION}"
+    SHA512 95af9926dfd2454dff52ea4ba2b6708548a9add0f48e14d3d843982609168d79dabf2958076e5761fac6d00c5b1f4d0fe5d9d1694c1e07c92a4ce3cdf0023ef6
+    HEAD_REF master
+)
 
-set(VCPKG_DOWNLOADS_DIR "$ENV{VCPKG_DOWNLOADS}")
-if(NOT VCPKG_DOWNLOADS_DIR)
-    if(DEFINED DOWNLOADS)
-        set(VCPKG_DOWNLOADS_DIR "${DOWNLOADS}")
-    else()
-        set(VCPKG_DOWNLOADS_DIR "${CURRENT_BUILDTREES_DIR}/downloads")
-    endif()
-endif()
-set(TARBALL "${VCPKG_DOWNLOADS_DIR}/nghttp2-nghttp2-v1.68.0.tar.gz")
+string(COMPARE EQUAL "${VCPKG_CRT_LINKAGE}" "static" ENABLE_STATIC_CRT)
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" ENABLE_STATIC_LIB)
 
-if(NOT EXISTS "${TARBALL}")
-    message(FATAL_ERROR "nghttp2 tarball not found at ${TARBALL}")
-endif()
-
-message(STATUS "Using nghttp2 tarball: ${TARBALL}")
-
-# Remove any stale extraction marker so vcpkg re-extracts
-file(REMOVE "${CURRENT_BUILDTREES_DIR}/src/nghttp2-nghttp2-v1.68.0.tar.gz.extracted")
-
-# Extract the archive — vcpkg_extract_source_archive sets SOURCE_PATH
-vcpkg_extract_source_archive(OUT_SOURCE_PATH ARCHIVE "${TARBALL}")
-message(STATUS "nghttp2 source extracted to: ${OUT_SOURCE_PATH}")
-
-# Configure the C library only. The GitHub release tarball does not include
-# all third-party sources needed by nghttp2's tools targets.
-vcpkg_configure_cmake(
-    SOURCE_PATH "${OUT_SOURCE_PATH}"
-    GENERATOR Ninja
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DENABLE_LIB_ONLY=ON
-        -DENABLE_EXAMPLES=OFF
-        -DENABLE_FAILMALLOC=OFF
-        -DENABLE_HPACK_TOOLS=OFF
-        -DENABLE_APP=OFF
+        -DENABLE_DOC=OFF
         -DBUILD_TESTING=OFF
-        -DBUILD_SHARED_LIBS=OFF
-        -DBUILD_STATIC_LIBS=ON
+        "-DENABLE_STATIC_CRT=${ENABLE_STATIC_CRT}"
+        "-DBUILD_STATIC_LIBS=${ENABLE_STATIC_LIB}"
+        -DCMAKE_DISABLE_FIND_PACKAGE_Python3=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Libngtcp2=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Libngtcp2_crypto_quictls=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Libnghttp3=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Systemd=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Jansson=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Libevent=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_LibXml2=ON
+        -DCMAKE_DISABLE_FIND_PACKAGE_Jemalloc=ON
     MAYBE_UNUSED_VARIABLES
-        BUILD_SHARED_LIBS
-        BUILD_STATIC_LIBS
+        CMAKE_DISABLE_FIND_PACKAGE_Libngtcp2_crypto_quictls
+        ENABLE_STATIC_CRT
+)
+vcpkg_cmake_install()
+vcpkg_copy_pdbs()
+vcpkg_fixup_pkgconfig()
+
+file(REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+    "${CURRENT_PACKAGES_DIR}/share/doc"
+    "${CURRENT_PACKAGES_DIR}/debug/lib/cmake"
+    "${CURRENT_PACKAGES_DIR}/lib/cmake"
 )
 
-# Build and install the library
-vcpkg_install_cmake()
+if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
+    file(APPEND "${CURRENT_PACKAGES_DIR}/include/nghttp2/nghttp2ver.h" [[
+#ifndef NGHTTP2_STATICLIB
+#  define NGHTTP2_STATICLIB
+#endif
+]])
+endif()
 
-# Install copyright file (required by vcpkg policy).
-# Use CURRENT_PORT_DIR which vcpkg sets to the port's root directory.
-file(INSTALL "${CURRENT_PORT_DIR}/COPYING"
-     DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}"
-     RENAME copyright)
-
-# Fix up CMake targets
-# nghttp2's CMake exports to lib/cmake/nghttp2
-vcpkg_fixup_cmake_targets(
-    TARGET_PATH "share/nghttp2"
-    CONFIG_PATH "lib/cmake/nghttp2"
-)
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

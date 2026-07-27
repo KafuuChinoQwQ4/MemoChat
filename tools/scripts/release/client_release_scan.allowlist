@@ -1,0 +1,3 @@
+# Third-party Qt WebEngine UI label. This path may skip only the generic text
+# credential-assignment checks; all mandatory release guards still apply.
+qml/QtWebEngine/ControlsDelegates/AuthenticationDialog.qml

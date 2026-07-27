@@ -6,7 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `ci.yml` | CI 工作流：PR/推送时构建与测试 |
-| `cd.yml` | CD 工作流：CI 通过后触发部署 |
+| `ci.yml` | Linux 发布 CI：锁定外部 Action、执行安全门禁，并以 archive/bundle 内容绑定的不可变 SHA/版本标签发布 GHCR 镜像和 GitHub Release |
+| `cd.yml` | 制品推广 CD：使用锁定的外部 Action，校验 CI digest 清单后为 GHCR 镜像推广 dev/stable 标签 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->
