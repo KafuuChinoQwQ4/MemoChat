@@ -90,10 +90,10 @@ ScrollView {
             rowSpacing: 14
             Repeater {
                 model: [
-                    { title: "CPU", key: "cpu_percent_avg" },
-                    { title: "QPS", key: "qps_avg" },
-                    { title: "Error Rate", key: "error_rate_avg" },
-                    { title: "Latency P95", key: "latency_p95_ms_avg" }
+                    { title: "CPU", metricField: "cpu_percent_avg" },
+                    { title: "QPS", metricField: "qps_avg" },
+                    { title: "Error Rate", metricField: "error_rate_avg" },
+                    { title: "Latency P95", metricField: "latency_p95_ms_avg" }
                 ]
                 delegate: Rectangle {
                     Layout.fillWidth: true
@@ -117,7 +117,7 @@ ScrollView {
                         }
                         Connections {
                             target: root.opsApi
-                            function onServiceTrendChanged() { root.fill(series, axisX, root.rows(root.opsApi.serviceTrend.items), modelData.key) }
+                            function onServiceTrendChanged() { root.fill(series, axisX, root.rows(root.opsApi.serviceTrend.items), modelData.metricField) }
                         }
                     }
                 }
