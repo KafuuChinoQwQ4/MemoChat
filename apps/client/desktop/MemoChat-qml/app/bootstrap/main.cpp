@@ -11,6 +11,14 @@
 #include "MainRuntimeConfig.h"
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 
+#if defined(__ELF__) && MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+namespace
+{
+[[gnu::used, gnu::section(".note.memochat.release")]] const char kMemoChatReleasePolicy[] =
+    "MEMOCHAT_RELEASE_POLICY:v1;distributable=1;live2d_native=0;restricted_assets=0";
+}
+#endif
+
 int main(int argc, char* argv[])
 {
     QCoreApplication::setApplicationName(QStringLiteral("MemoChatQml"));
@@ -36,7 +44,10 @@ int main(int argc, char* argv[])
     app.setQuitOnLastWindowClosed(false);
     app.setWindowIcon(QIcon(QStringLiteral(":/app/icon.ico")));
 
-    configureGateUrlPrefixes(configPathForAppPath(QCoreApplication::applicationDirPath()));
+    if (!configureGateUrlPrefixes(configPathForAppPath(QCoreApplication::applicationDirPath())))
+    {
+        return -1;
+    }
     registerMemoChatQmlTypes();
 
     AppComposition composition;

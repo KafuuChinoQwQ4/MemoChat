@@ -2,6 +2,7 @@
 #define PETASSETSETTINGSPRIVATE_H
 
 #include <QDir>
+#include <QCoreApplication>
 #include <QMetaType>
 #include <QString>
 #include <QUrl>
@@ -15,11 +16,8 @@ constexpr int kLanguageOptionCount = 6;
 
 inline QString clientSourcePath(const QString& relativePath)
 {
-#ifdef MEMOCHAT_QML_SOURCE_DIR
-    const QString root = QString::fromUtf8(MEMOCHAT_QML_SOURCE_DIR);
-#else
-    const QString root = QDir::currentPath();
-#endif
+    const QString configuredRoot = qEnvironmentVariable("MEMOCHAT_QML_SOURCE_DIR").trimmed();
+    const QString root = configuredRoot.isEmpty() ? QCoreApplication::applicationDirPath() : configuredRoot;
     return QDir(root).absoluteFilePath(relativePath);
 }
 

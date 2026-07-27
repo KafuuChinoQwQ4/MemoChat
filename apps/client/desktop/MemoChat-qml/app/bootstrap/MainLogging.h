@@ -5,6 +5,7 @@
 
 class QString;
 
+QString redactSensitiveLogMessage(const QString& message);
 void loadRuntimeLogConfig(const QString& configPath, const QString& appPath);
 void fileMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg);
 

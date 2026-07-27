@@ -8,8 +8,6 @@
 #include <QDir>
 #include <QNetworkRequest>
 #include <QSettings>
-#include <QSslConfiguration>
-#include <QSslSocket>
 #include <QString>
 #include <QUrl>
 #include <QtGlobal>
@@ -44,20 +42,11 @@ inline QUrl agentApiUrl(const QString& path)
 inline void configureAgentLocalGateRequest(QNetworkRequest& request)
 {
     const QUrl url = request.url();
-    const QString scheme = url.scheme().toLower();
     applyBearerAccessTokenHeader(request);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
     request.setTransferTimeout(10000);
 #endif
-    if (scheme == QLatin1String("https"))
-    {
-        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        request.setSslConfiguration(sslConfig);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
-#endif
-    }
+    configureSecureNetworkRequest(request);
 }
 
 #endif // AGENTNETWORKREQUESTUTILS_H

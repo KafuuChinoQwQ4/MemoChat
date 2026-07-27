@@ -244,11 +244,7 @@ QString frameworkShaderPath(const std::string& filePath)
         return requested;
     }
 
-#ifdef MEMOCHAT_LIVE2D_FRAMEWORK_INCLUDE_DIR
-    const QString frameworkRoot = QString::fromUtf8(MEMOCHAT_LIVE2D_FRAMEWORK_INCLUDE_DIR);
-#else
-    const QString frameworkRoot;
-#endif
+    const QString sdkRoot = qEnvironmentVariable("MEMOCHAT_LIVE2D_SDK_ROOT").trimmed();
 
     QString shaderName = requested;
     if (shaderName.startsWith(QStringLiteral("FrameworkShaders/")))
@@ -257,11 +253,12 @@ QString frameworkShaderPath(const std::string& filePath)
     }
 
     QStringList candidates;
-    if (!frameworkRoot.isEmpty())
+    if (!sdkRoot.isEmpty())
     {
-        candidates << QDir(frameworkRoot)
-                          .absoluteFilePath(QStringLiteral("Rendering/OpenGL/Shaders/Standard/%1").arg(shaderName));
-        candidates << QDir(frameworkRoot).absoluteFilePath(requested);
+        const QDir frameworkSource(QDir(sdkRoot).absoluteFilePath(QStringLiteral("Framework/src")));
+        candidates << frameworkSource.absoluteFilePath(
+            QStringLiteral("Rendering/OpenGL/Shaders/Standard/%1").arg(shaderName));
+        candidates << frameworkSource.absoluteFilePath(requested);
     }
     candidates << QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(requested);
     candidates << QDir::current().absoluteFilePath(requested);

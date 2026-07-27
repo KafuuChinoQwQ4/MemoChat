@@ -8,11 +8,11 @@
 
 struct ClientTelemetryConfig
 {
-    bool enabled = true;
-    QString endpoint = QStringLiteral("http://127.0.0.1:9411/api/v2/spans");
+    bool enabled = false;
+    QString endpoint;
     QString protocol = QStringLiteral("zipkin-json");
-    bool exportLogs = true;
-    bool exportTraces = true;
+    bool exportLogs = false;
+    bool exportTraces = false;
     bool exportMetrics = false;
     QString serviceName;
     QString serviceNamespace = QStringLiteral("memochat");

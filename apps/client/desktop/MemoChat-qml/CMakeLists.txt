@@ -25,16 +25,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MEMOCHAT_ENABLE_LIVE2D_NATIVE "Enable opt-in Live2D Cubism Native integration for MemoChatQml" OFF)
+option(MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD "Build MemoChatQml without developer-only runtime paths" OFF)
 set(MEMOCHAT_LIVE2D_SDK_ROOT "" CACHE PATH "Local Live2D Cubism SDK root used when MEMOCHAT_ENABLE_LIVE2D_NATIVE is ON")
 file(TO_CMAKE_PATH "${MEMOCHAT_LIVE2D_SDK_ROOT}" MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED)
 set(MEMOCHAT_LIVE2D_NATIVE_AVAILABLE OFF)
 
 if(MEMOCHAT_ENABLE_LIVE2D_NATIVE)
+    if(MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD)
+        message(FATAL_ERROR
+            "Distributable client builds must set MEMOCHAT_ENABLE_LIVE2D_NATIVE=OFF because "
+            "the Live2D Cubism SDK is not part of the redistributable runtime allowlist.")
+    endif()
     if(NOT MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED)
         message(FATAL_ERROR
             "MEMOCHAT_ENABLE_LIVE2D_NATIVE is ON, but MEMOCHAT_LIVE2D_SDK_ROOT is empty. "
-            "Install/extract the Live2D Cubism SDK for Native outside the repo, for example "
-            "/data/third_party/live2d/CubismSdkForNative-current, then configure with "
+            "Install/extract the Live2D Cubism SDK for Native outside the repo, then configure with "
             "-DMEMOCHAT_LIVE2D_SDK_ROOT=/path/to/CubismSdkForNative.")
     endif()
     set(Live2DCubism_ROOT "${MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED}" CACHE PATH
@@ -71,6 +76,14 @@ include(features/sources.cmake)
 include(shared/sources.cmake)
 include(live2d/sources.cmake)
 include(resources/resources.cmake)
+
+if(MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD)
+    include(cmake/ValidateClientReleaseResources.cmake)
+    memochat_validate_client_release_resources(
+        CLIENT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}"
+        MANIFESTS ${MEMOCHAT_QML_RESOURCES}
+    )
+endif()
 
 set_source_files_properties(
     ${MEMOCHAT_QML_CORE_DIR}/media/imagecropperlabel.h
@@ -115,6 +128,12 @@ set_target_properties(MemoChatQml PROPERTIES
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
+if(UNIX AND MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD)
+    set_target_properties(MemoChatQml PROPERTIES
+        SKIP_BUILD_RPATH TRUE
+        INSTALL_RPATH "\$ORIGIN/lib"
+    )
+endif()
 add_dependencies(MemoChatQml MemoChatQml_RuntimeTS)
 
 target_include_directories(MemoChatQml PRIVATE
@@ -190,11 +209,9 @@ target_include_directories(MemoChatQml PRIVATE
 
 target_compile_definitions(MemoChatQml PRIVATE
     MEMOCHAT_ENABLE_LIVE2D_NATIVE=$<BOOL:${MEMOCHAT_ENABLE_LIVE2D_NATIVE}>
-    MEMOCHAT_LIVE2D_SDK_ROOT="${MEMOCHAT_LIVE2D_SDK_ROOT_NORMALIZED}"
     MEMOCHAT_LIVE2D_CUBISM_FOUND=$<BOOL:${MEMOCHAT_LIVE2D_NATIVE_AVAILABLE}>
-    MEMOCHAT_LIVE2D_CORE_INCLUDE_DIR="${Live2DCubism_CORE_INCLUDE_DIR}"
-    MEMOCHAT_LIVE2D_FRAMEWORK_INCLUDE_DIR="${Live2DCubism_FRAMEWORK_INCLUDE_DIR}"
-    MEMOCHAT_QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD=$<BOOL:${MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD}>
+    $<$<BOOL:${MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD}>:QT_NO_DEBUG_OUTPUT>
 )
 
 if(MEMOCHAT_ENABLE_LIVE2D_NATIVE AND Live2DCubism_FOUND)

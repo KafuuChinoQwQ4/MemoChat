@@ -97,12 +97,18 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
     server_info.LoginTicket = obj.value("login_ticket").toString();
     server_info.RefreshToken = obj.value("refresh_token").toString();
     server_info.ProtocolVersion = obj.value("protocol_version").toInt(3);
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    server_info.PreferredTransport = ChatTransportKind::Quic;
+    server_info.FallbackTransport = ChatTransportKind::Quic;
+#else
     server_info.PreferredTransport = parseTransportKind(obj.value("preferred_transport").toString());
     server_info.FallbackTransport = parseTransportKind(obj.value("fallback_transport").toString());
+#endif
     server_info.ConnectTimeoutMs = kDefaultChatConnectTimeoutMs;
     server_info.BackupDialDelayMs = kDefaultBackupDialDelayMs;
     server_info.TotalLoginTimeoutMs = kDefaultChatLoginTimeoutMs;
     const QJsonArray endpointArray = obj.value("chat_endpoints").toArray();
+    bool hasSecureChatEndpoint = false;
     for (const auto& endpointValue : endpointArray)
     {
         const QJsonObject endpointObj = endpointValue.toObject();
@@ -111,6 +117,12 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
         {
             continue;
         }
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+        if (*endpointTransport != ChatTransportKind::Quic)
+        {
+            continue;
+        }
+#endif
         ChatEndpoint endpoint;
         endpoint.transport = *endpointTransport;
         endpoint.host = endpointObj.value("host").toString();
@@ -120,11 +132,18 @@ void SessionAuthCoordinator::onLoginHttpFinished(ReqId id, QString res, ErrorCod
         if (!endpoint.host.trimmed().isEmpty() && !endpoint.port.trimmed().isEmpty())
         {
             server_info.Endpoints.push_back(endpoint);
+            hasSecureChatEndpoint = hasSecureChatEndpoint || endpoint.transport == ChatTransportKind::Quic;
         }
     }
     // login_ticket and refresh_token are legacy fields that may be absent on
     // Bearer-only server responses; only require the access token and endpoints.
-    if (server_info.Uid <= 0 || server_info.Token.trimmed().isEmpty() || server_info.Endpoints.isEmpty())
+    bool invalidServerResponse =
+        server_info.Uid <= 0 || server_info.Token.trimmed().isEmpty() || server_info.Endpoints.isEmpty();
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    invalidServerResponse =
+        invalidServerResponse || server_info.LoginTicket.trimmed().isEmpty() || !hasSecureChatEndpoint;
+#endif
+    if (invalidServerResponse)
     {
         _port.setIgnoreNextLoginDisconnect(false);
         _port.setBusy(false);

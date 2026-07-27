@@ -65,7 +65,7 @@ void MomentsController::onLikeRsp(ReqId id, const QString& res, ErrorCodes err)
     {
         return;
     }
-    qDebug() << "[MomentsController] onLikeRsp err=" << err << "res=" << res;
+    qDebug() << "[MomentsController] onLikeRsp err=" << err << "response_chars=" << res.size();
 
     auto firstInFlightMoment = [this]() -> qint64
     {

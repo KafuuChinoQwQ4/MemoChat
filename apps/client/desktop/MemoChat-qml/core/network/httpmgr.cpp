@@ -20,6 +20,11 @@ void HttpMgr::clearConnectionCache()
 void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString& module)
 {
     QVector<QUrl> urls = gateProtocolFallbackUrls(url);
+    if (urls.isEmpty())
+    {
+        emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+        return;
+    }
     const QUrl first = urls.takeFirst();
     postHttpReqInternal(first, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, urls, true);
 }
@@ -27,6 +32,11 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
 void HttpMgr::PostAnonymousHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, const QString& module)
 {
     QVector<QUrl> urls = gateProtocolFallbackUrls(url);
+    if (urls.isEmpty())
+    {
+        emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+        return;
+    }
     const QUrl first = urls.takeFirst();
     postHttpReqInternal(first, QJsonDocument(json).toJson(QJsonDocument::Compact), req_id, mod, module, urls, false);
 }
@@ -34,6 +44,11 @@ void HttpMgr::PostAnonymousHttpReq(QUrl url, QJsonObject json, ReqId req_id, Mod
 void HttpMgr::GetHttpReq(QUrl url, ReqId req_id, Modules mod, const QString& module)
 {
     QVector<QUrl> urls = gateProtocolFallbackUrls(url);
+    if (urls.isEmpty())
+    {
+        emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+        return;
+    }
     const QUrl first = urls.takeFirst();
     getHttpReqInternal(first, req_id, mod, module, urls);
 }
@@ -49,11 +64,19 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
     QNetworkRequest request(url);
     if (withAuth)
     {
-        prepareJsonRequest(request, data);
+        if (!prepareJsonRequest(request, data))
+        {
+            emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+            return;
+        }
     }
     else
     {
-        prepareUnauthenticatedJsonRequest(request, data);
+        if (!prepareUnauthenticatedJsonRequest(request, data))
+        {
+            emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+            return;
+        }
     }
 
     QString traceId;
@@ -67,13 +90,6 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
     auto self = shared_from_this();
     const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
     QNetworkReply* reply = _manager.post(request, data);
-    // VerifyNone on the SSL config suppresses socket-level verification, but
-    // QNetworkAccessManager still aborts on self-signed cert errors unless we
-    // explicitly opt out at the reply level too.
-    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
-    {
-        reply->ignoreSslErrors();
-    }
 
     QTimer* timeoutTimer = new QTimer(reply);
     timeoutTimer->setSingleShot(true);
@@ -104,6 +120,7 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
          startAtMs,
          module,
          data,
+         withAuth,
          fallbackUrls]() mutable
         {
             timeoutTimer->stop();
@@ -128,7 +145,7 @@ void HttpMgr::postHttpReqInternal(const QUrl& url,
                     const QUrl fb = fallbackUrls.takeFirst();
                     qWarning() << "Retrying gate HTTP POST using fallback endpoint:" << fb.toString();
                     reply->deleteLater();
-                    self->postHttpReqInternal(fb, data, req_id, mod, module, fallbackUrls);
+                    self->postHttpReqInternal(fb, data, req_id, mod, module, fallbackUrls, withAuth);
                     return;
                 }
 
@@ -166,7 +183,11 @@ void HttpMgr::getHttpReqInternal(const QUrl& url,
                                  QVector<QUrl> fallbackUrls)
 {
     QNetworkRequest request(url);
-    prepareGetRequest(request);
+    if (!prepareGetRequest(request))
+    {
+        emit sig_http_finish(req_id, "", ErrorCodes::ERR_NETWORK, mod);
+        return;
+    }
 
     QString traceId;
     QString requestId;
@@ -179,10 +200,6 @@ void HttpMgr::getHttpReqInternal(const QUrl& url,
     auto self = shared_from_this();
     const qint64 startAtMs = QDateTime::currentMSecsSinceEpoch();
     QNetworkReply* reply = _manager.get(request);
-    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
-    {
-        reply->ignoreSslErrors();
-    }
 
     QTimer* timeoutTimer = new QTimer(reply);
     timeoutTimer->setSingleShot(true);

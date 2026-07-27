@@ -1,5 +1,6 @@
 #include "MediaUploadServicePrivate.h"
 
+#include "HttpMgrRequestUtils.h"
 #include "TelemetryUtils.h"
 
 #include <QDateTime>
@@ -8,8 +9,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QSslConfiguration>
-#include <QSslSocket>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -18,12 +17,8 @@ namespace MediaUploadServicePrivate
 
 void configureSslIfNeeded(QNetworkRequest* request, const QUrl& url)
 {
-    if (url.scheme().toLower() == "https")
-    {
-        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        request->setSslConfiguration(sslConfig);
-    }
+    Q_UNUSED(url);
+    configureSecureNetworkRequest(*request);
 }
 
 void setBearerAccessToken(QNetworkRequest& request, const QString& accessToken)

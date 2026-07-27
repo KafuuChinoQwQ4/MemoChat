@@ -44,7 +44,7 @@ void ChatMessageDispatcher::registerContactHandlers()
                      [this](ReqId id, int len, QByteArray data)
                      {
                          Q_UNUSED(len);
-                         qDebug() << "handle id is " << id << " data is " << data;
+                         qDebug() << "user search response. req id:" << id << "bytes:" << data.size();
 
                          QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
                          if (jsonDoc.isNull())
@@ -73,7 +73,7 @@ void ChatMessageDispatcher::registerContactHandlers()
                      [this](ReqId id, int len, QByteArray data)
                      {
                          Q_UNUSED(len);
-                         qDebug() << "handle id is " << id << " data is " << data;
+                         qDebug() << "friend request notification. req id:" << id << "bytes:" << data.size();
 
                          QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
                          if (jsonDoc.isNull())
@@ -102,7 +102,7 @@ void ChatMessageDispatcher::registerContactHandlers()
                      [this](ReqId id, int len, QByteArray data)
                      {
                          Q_UNUSED(len);
-                         qDebug() << "handle id is " << id << " data is " << data;
+                         qDebug() << "friend authorization notification. req id:" << id << "bytes:" << data.size();
 
                          QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
                          if (jsonDoc.isNull())
@@ -137,7 +137,7 @@ void ChatMessageDispatcher::registerContactHandlers()
                      [this](ReqId id, int len, QByteArray data)
                      {
                          Q_UNUSED(len);
-                         qDebug() << "handle id is " << id << " data is " << data;
+                         qDebug() << "friend authorization response. req id:" << id << "bytes:" << data.size();
 
                          QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
                          if (jsonDoc.isNull())
