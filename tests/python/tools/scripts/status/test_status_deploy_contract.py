@@ -206,6 +206,8 @@ class StatusDeployContractTests(unittest.TestCase):
             self.assertIn(token, source)
 
         self.assertIn("set -Eeuo pipefail", source)
+        self.assertIn("umask 077", source)
+        self.assertLess(source.index("umask 077"), source.index('LOG_DIR="'))
         self.assertLess(source.index('if [[ "$AUTO_DEPLOY" -ne 0 ]]; then'), source.index("local missing=0"))
 
     def test_linux_runtime_scripts_generate_and_share_ai_internal_key_for_local_launches(self):
