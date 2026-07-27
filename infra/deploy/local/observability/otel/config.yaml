@@ -9,8 +9,14 @@ receivers:
     endpoint: 0.0.0.0:9411
   filelog:
     include:
-      - /workspace/Memo_ops/runtime/**/*.json
-      - /workspace/build/bin/**/*.json
+      - /workspace/Memo_ops/runtime/artifacts/logs/**/*.json
+      - /workspace/Memo_ops/runtime/services/*/logs/*.json
+      - /workspace/build/bin/**/logs/*.json
+    exclude:
+      - /workspace/**/data/**
+      - /workspace/**/credentials/**
+      - /workspace/**/cookies/**
+      - /workspace/**/sessions/**
     start_at: end
     operators:
       - type: json_parser
