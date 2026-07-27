@@ -114,19 +114,21 @@ def _redact_known_secrets(text: str) -> str:
 
 
 def _run_mongosh(script: str) -> Any:
+    stdin_script = f"const db = connect({json.dumps(_mongo_uri())});\nconsole.log({script});\n"
     cmd = [
         "docker",
         "exec",
         "-i",
         CONTAINER,
         "mongosh",
-        _mongo_uri(),
+        "--nodb",
         "--quiet",
-        "--eval",
-        script,
+        "--file",
+        "/dev/stdin",
     ]
     proc = subprocess.run(
         cmd,
+        input=stdin_script,
         text=True,
         capture_output=True,
         timeout=TIMEOUT_SECONDS,

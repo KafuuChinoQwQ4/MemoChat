@@ -1,6 +1,9 @@
+import importlib.util
+import os
 import re
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.python.support.paths import repo_root
 
@@ -59,6 +62,31 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
 
         self.assertNotIn("mongodb://memochat_app:123456@127.0.0.1:27017/memochat", text)
         self.assertNotIn('MONGO_URI = "mongodb://', text)
+
+    def test_mongodb_mcp_keeps_uri_out_of_process_arguments(self):
+        module_path = TOOLS / "mcps/user-mongodb/user_mongodb_mcp_server.py"
+        spec = importlib.util.spec_from_file_location("user_mongodb_mcp_server", module_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        sentinel_uri = "mongodb://fixture-user:fixture-password-0123456789@127.0.0.1:27017/memochat"
+        completed = mock.Mock(returncode=0, stdout='{"ok":true}\n', stderr="")
+        with (
+            mock.patch.dict(os.environ, {"MEMOCHAT_MONGO_URI": sentinel_uri}, clear=False),
+            mock.patch.object(module.subprocess, "run", return_value=completed) as run_mock,
+        ):
+            self.assertEqual(module._run_mongosh("JSON.stringify({ok: true})"), {"ok": True})
+
+        command = run_mock.call_args.args[0]
+        options = run_mock.call_args.kwargs
+        self.assertNotIn(sentinel_uri, "\n".join(command))
+        self.assertIn("--nodb", command)
+        self.assertIn("--file", command)
+        self.assertIn("/dev/stdin", command)
+        self.assertNotIn("--eval", command)
+        self.assertIn(sentinel_uri, options["input"])
 
     def test_neo4j_mcp_reads_password_from_environment(self):
         text = read(TOOLS / "mcps/user-neo4j/user_neo4j_mcp_server.py")
