@@ -28,6 +28,11 @@ std::string Trim(std::string value)
     return value;
 }
 
+bool IsEhentaiFamily(const std::string& source_id)
+{
+    return source_id == "ehentai.official" || source_id == "exhentai.official";
+}
+
 } // namespace
 
 R18SourceCredentialStore& R18SourceCredentialStore::Instance()
@@ -180,6 +185,7 @@ bool R18SourceCredentialStore::UpsertLogin(int uid,
             *error = "source_id is required";
         return false;
     }
+
     std::lock_guard<std::mutex> lock(mu_);
     LoadUidLocked(uid);
     auto& cred = by_uid_[uid][sid];
@@ -236,6 +242,73 @@ bool R18SourceCredentialStore::UpdateSession(int uid,
         cred.session_token = session_token;
     if (!session_cookie.empty())
         cred.session_cookie = session_cookie;
+    cred.status = status.empty() ? "authenticated" : status;
+    cred.message = message;
+    cred.updated_at_ms = NowMs();
+    SaveUidLocked(uid);
+    return true;
+}
+
+bool R18SourceCredentialStore::ImportEhentaiSession(int uid,
+                                                    const std::string& source_id,
+                                                    const std::string& session_cookie,
+                                                    const std::string& status,
+                                                    const std::string& message,
+                                                    std::string* error)
+{
+    const auto sid = Trim(source_id);
+    if (sid.empty())
+    {
+        if (error)
+            *error = "source_id is required";
+        return false;
+    }
+
+    // Only allow E-Hentai family sources
+    if (!IsEhentaiFamily(sid))
+    {
+        if (error)
+            *error = "not_ehentai_source";
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mu_);
+    LoadUidLocked(uid);
+    auto& cred = by_uid_[uid][sid];
+    cred.source_id = sid;
+    // Clear username/password, store only session cookie
+    cred.username.clear();
+    cred.password.clear();
+    cred.session_token.clear();
+    cred.session_cookie = session_cookie;
+    cred.status = status.empty() ? "authenticated" : status;
+    cred.message = message;
+    cred.updated_at_ms = NowMs();
+    SaveUidLocked(uid);
+    return true;
+}
+
+bool R18SourceCredentialStore::ImportCookieSession(int uid,
+                                                   const std::string& source_id,
+                                                   const std::string& session_cookie,
+                                                   const std::string& status,
+                                                   const std::string& message,
+                                                   std::string* error)
+{
+    const auto sid = Trim(source_id);
+    if (sid.empty())
+    {
+        if (error)
+            *error = "source_id is required";
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mu_);
+    LoadUidLocked(uid);
+    auto& cred = by_uid_[uid][sid];
+    cred.source_id = sid;
+    cred.session_token.clear();
+    cred.session_cookie = session_cookie;
     cred.status = status.empty() ? "authenticated" : status;
     cred.message = message;
     cred.updated_at_ms = NowMs();

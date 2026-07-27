@@ -89,6 +89,27 @@ class R18SourcePaginationContractTests(unittest.TestCase):
         self.assertIn("if (IsBuiltinSourceId(normalized_id))", delete_body)
         self.assertIn("auto it = sources_.find(normalized_id);", delete_body)
 
+    def test_hanimeone_chapter_range_is_parsed_without_exceptions_and_bounded(self):
+        source = read(R18_SERVICE_DIR / "R18HanimeoneAdapter.cpp")
+        detail_body = source.split("bool HanimeoneDetail", 1)[1].split(
+            "bool HanimeonePages",
+            1,
+        )[0]
+        pages_body = source.split("bool HanimeonePages", 1)[1].split(
+            "R18ImagePayload HanimeoneFootImage",
+            1,
+        )[0]
+
+        self.assertNotIn("std::stoi", source)
+        self.assertIn("std::from_chars", source)
+        self.assertIn("kMaxTotalPages", source)
+        self.assertIn("ParseTotalPageCount", source)
+        self.assertIn("std::clamp(total_pages, 1, kMaxTotalPages)", detail_body)
+        self.assertIn("ParsePageNumber", pages_body)
+        self.assertIn("kPageChunkSize", pages_body)
+        self.assertIn("end_page - start_page + 1 > kPageChunkSize", pages_body)
+        self.assertIn("invalid hanimeone chapter range", pages_body)
+
 
 if __name__ == "__main__":
     unittest.main()

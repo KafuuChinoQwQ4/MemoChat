@@ -292,6 +292,10 @@ Item {
     }
 
     function openChapter(sourceId, chapterId) {
+        if (sourceId === "hanime1.official") {
+            Qt.openUrlExternally("https://hanime1.me/watch?v=" + encodeURIComponent(root.currentComicId()))
+            return
+        }
         root.activeChapterId = chapterId
         root.readerChromeVisible = true
         root.viewMode = 3

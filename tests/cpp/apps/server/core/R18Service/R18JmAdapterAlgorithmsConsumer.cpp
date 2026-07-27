@@ -47,6 +47,16 @@ int MaxConcurrentImageFetches()
     return memochat::r18::jm_adapter::modules::MaxConcurrentImageFetches();
 }
 
+unsigned long long MaxDecodedImagePixels()
+{
+    return memochat::r18::jm_adapter::modules::MaxDecodedImagePixels();
+}
+
+bool IsSupportedScrambledImage(bool jpeg_magic, bool webp_magic)
+{
+    return memochat::r18::jm_adapter::modules::IsSupportedScrambledImage(jpeg_magic, webp_magic);
+}
+
 int SearchPageSize()
 {
     return memochat::r18::jm_adapter::modules::SearchPageSize();

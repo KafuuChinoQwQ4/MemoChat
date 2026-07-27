@@ -22,13 +22,15 @@
 | `R18NhentaiAdapter.hpp` | nHentai 官方源适配接口声明 |
 | `R18EhentaiAdapter.cpp` | e-hentai / exhentai 官方源分类（f_cats）/ 附加 tag 搜索、详情、论坛账密登录与 Cookie 校验实现 |
 | `R18EhentaiAdapter.hpp` | e-hentai / exhentai 官方源适配接口声明 |
-| `R18PublicDtos.cpp` | R18 公开接口请求 DTO 的兼容解析实现 |
-| `R18PublicDtos.hpp` | R18 公开接口请求 DTO 声明 |
-| `R18Service.cpp` | R18 业务服务实现；全局源变更要求 Bearer 与独立 source-admin key，并转发 JM 图片反打乱元数据 |
-| `R18Service.hpp` | R18 业务服务声明 |
+| `R18Hanime1Adapter.cpp` | Hanime1 官方源搜索、详情、章节封面及短期签名视频源严格解析实现 |
+| `R18Hanime1Adapter.hpp` | Hanime1 官方源适配与短期视频描述符解析接口声明 |
+| `R18PublicDtos.cpp` | R18 公开接口请求 DTO 解析及视频解析必填字段校验实现 |
+| `R18PublicDtos.hpp` | R18 公开接口请求 DTO（含视频解析请求）声明 |
+| `R18Service.cpp` | R18 业务服务实现；全局源变更要求 Bearer 与独立 source-admin key，并为视频解析复用 Bearer/R18 门禁与禁缓存响应 |
+| `R18Service.hpp` | R18 业务服务及视频解析处理器声明 |
 | `R18SourceRecordCodec.cpp` | R18 内容源记录持久化编解码及隐藏内部路径的公开 DTO 实现 |
 | `R18SourceRecordCodec.hpp` | R18 内容源记录 JSON DTO 声明 |
-| `R18SourceService.cpp` | 有界 JavaScript 源暂存、导入大小合同、全局源状态持久化、启用状态调度保护及 JM 图片元数据转发实现 |
-| `R18SourceService.hpp` | R18 内容源接入服务、跨 target 导入大小及 JM 图片元数据接口声明 |
+| `R18SourceService.cpp` | 有界 JavaScript 源暂存、全局源状态持久化、启用状态调度保护及 Hanime1 用户级视频解析分发实现 |
+| `R18SourceService.hpp` | R18 内容源接入服务、图片获取及用户级视频解析接口声明 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

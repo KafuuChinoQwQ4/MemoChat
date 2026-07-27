@@ -388,6 +388,11 @@ public:
 
     // Eval: run a Lua script atomically. Returns integer result or -1 on error.
     int64_t Eval(const std::string& script, const std::vector<std::string>& keys, const std::vector<std::string>& args);
+    // EvalString: run a Lua script atomically and return its bulk string result.
+    bool EvalString(const std::string& script,
+                    const std::vector<std::string>& keys,
+                    const std::vector<std::string>& args,
+                    std::string& value);
 
     // Pipeline operations for reduced RTT
     // MGET: fetch multiple keys in one round-trip (returns map of key->value)

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <charconv>
 #include <cstdio>
 #include <iomanip>
 #include <sstream>
@@ -47,6 +48,25 @@ void SetError(std::string* error, std::string message)
     {
         *error = std::move(message);
     }
+}
+
+bool ParseEpisodeOrder(const std::string& chapter_id, int* order, std::string* error)
+{
+    if (order == nullptr)
+        return false;
+    std::string_view value(chapter_id);
+    const auto sep = value.find(':');
+    if (sep != std::string_view::npos)
+        value.remove_prefix(sep + 1);
+    long long parsed = 0;
+    const auto [end, parse_error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+    if (parse_error != std::errc{} || end != value.data() + value.size() || parsed <= 0 || parsed > 1000000)
+    {
+        SetError(error, "invalid Picacg episode order");
+        return false;
+    }
+    *order = static_cast<int>(parsed);
+    return true;
 }
 
 bool ConfigureTlsPeerVerification(ssl::context& ctx,
@@ -588,7 +608,7 @@ bool PicacgDetail(const std::string& comic_id, json::JsonValue* out, std::string
         return false;
     }
     const json::JsonValue episodes = json::glaze_get(json::glaze_get(episodes_data, "eps"), "docs");
-    int order = 1;
+    int fallback_order = 1;
     if (const auto* values = json::glaze_get_array(episodes))
     {
         for (const auto& episode : *values)
@@ -596,19 +616,24 @@ bool PicacgDetail(const std::string& comic_id, json::JsonValue* out, std::string
             json::JsonValue chapter;
             chapter["source_id"] = picacg_adapter::modules::SourceId();
             chapter["comic_id"] = comic_id;
-            chapter["chapter_id"] = detail::FieldString(json::JsonValue(episode), "_id", std::to_string(order));
-            chapter["title"] =
-                detail::FieldString(json::JsonValue(episode), "title", "Episode " + std::to_string(order));
-            chapter["order"] = order++;
+            const json::JsonValue episode_json(episode);
+            const int episode_order =
+                picacg_adapter::modules::NormalizeEpisodeOrder(detail::FieldInt(episode_json, "order", fallback_order),
+                                                               fallback_order);
+            chapter["chapter_id"] = comic_id + ":" + std::to_string(episode_order);
+            chapter["title"] = detail::FieldString(episode_json, "title", "Episode " + std::to_string(episode_order));
+            chapter["order"] = episode_order;
+            ++fallback_order;
             json::glaze_append(result["chapters"], chapter);
         }
     }
-    if (picacg_adapter::modules::ShouldUseFallbackEpisode(order == picacg_adapter::modules::DefaultEpisodeOrder()))
+    if (picacg_adapter::modules::ShouldUseFallbackEpisode(fallback_order ==
+                                                          picacg_adapter::modules::DefaultEpisodeOrder()))
     {
         json::JsonValue chapter;
         chapter["source_id"] = picacg_adapter::modules::SourceId();
         chapter["comic_id"] = comic_id;
-        chapter["chapter_id"] = comic_id + "-1";
+        chapter["chapter_id"] = comic_id + ":1";
         chapter["title"] = picacg_adapter::modules::DefaultEpisodeTitle();
         chapter["order"] = picacg_adapter::modules::DefaultEpisodeOrder();
         json::glaze_append(result["chapters"], chapter);
@@ -624,7 +649,10 @@ bool PicacgPages(const std::string& comic_id, const std::string& chapter_id, jso
         SetError(error, "Picacg pages output pointer is null");
         return false;
     }
-    const std::string path = "/comics/" + comic_id + "/order/1/pages?page=1";
+    int episode_order = 0;
+    if (!ParseEpisodeOrder(chapter_id, &episode_order, error))
+        return false;
+    const std::string path = "/comics/" + comic_id + "/order/" + std::to_string(episode_order) + "/pages?page=1";
     json::JsonValue data;
     if (!PicacgApiGet(path, "", &data, error))
     {
@@ -954,7 +982,7 @@ bool PicacgDetailWithToken(const std::string& comic_id,
     JsonValue episodes_data;
     if (!PicacgApiGet("/comics/" + comic_id + "/eps?page=1", token, &episodes_data, error))
         return false;
-    int order = picacg_adapter::modules::DefaultEpisodeOrder();
+    int fallback_order = picacg_adapter::modules::DefaultEpisodeOrder();
     const JsonValue eps = json::glaze_get(episodes_data, "eps");
     const JsonValue docs = json::glaze_get(eps, "docs");
     if (const auto* values = json::glaze_get_array(docs))
@@ -963,16 +991,19 @@ bool PicacgDetailWithToken(const std::string& comic_id,
         {
             JsonValue chapter;
             const JsonValue epj(ep);
-            const std::string ep_id = FieldString(epj, "_id", std::to_string(order));
+            const int episode_order =
+                picacg_adapter::modules::NormalizeEpisodeOrder(FieldInt(epj, "order", fallback_order), fallback_order);
             chapter["source_id"] = picacg_adapter::modules::SourceId();
             chapter["comic_id"] = comic_id;
-            chapter["chapter_id"] = comic_id + ":" + ep_id;
-            chapter["title"] = FieldString(epj, "title", "Episode " + std::to_string(order));
-            chapter["order"] = order++;
+            chapter["chapter_id"] = comic_id + ":" + std::to_string(episode_order);
+            chapter["title"] = FieldString(epj, "title", "Episode " + std::to_string(episode_order));
+            chapter["order"] = episode_order;
+            ++fallback_order;
             json::glaze_append(result["chapters"], chapter);
         }
     }
-    if (picacg_adapter::modules::ShouldUseFallbackEpisode(order == picacg_adapter::modules::DefaultEpisodeOrder()))
+    if (picacg_adapter::modules::ShouldUseFallbackEpisode(fallback_order ==
+                                                          picacg_adapter::modules::DefaultEpisodeOrder()))
     {
         JsonValue chapter;
         chapter["source_id"] = picacg_adapter::modules::SourceId();
@@ -997,11 +1028,10 @@ bool PicacgPagesWithToken(const std::string& comic_id,
         SetError(error, "Picacg pages output pointer is null");
         return false;
     }
-    std::string ep = chapter_id;
-    const auto sep = chapter_id.find(':');
-    if (sep != std::string::npos)
-        ep = chapter_id.substr(sep + 1);
-    const std::string path = "/comics/" + comic_id + "/order/" + ep + "/pages?page=1";
+    int episode_order = 0;
+    if (!ParseEpisodeOrder(chapter_id, &episode_order, error))
+        return false;
+    const std::string path = "/comics/" + comic_id + "/order/" + std::to_string(episode_order) + "/pages?page=1";
     JsonValue data;
     if (!PicacgApiGet(path, token, &data, error))
         return false;

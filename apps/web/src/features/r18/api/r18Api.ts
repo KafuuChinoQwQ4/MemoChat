@@ -67,6 +67,20 @@ export interface R18Chapter {
   order?: number
 }
 
+export interface R18VideoSource {
+  url: string
+  mime_type: "video/mp4"
+  quality: number
+}
+
+export interface R18VideoPlayback {
+  source_id: string
+  chapter_id: string
+  poster?: string
+  expires_at_ms: number
+  sources: R18VideoSource[]
+}
+
 interface R18Page {
   index?: number
   image_id?: string
@@ -98,6 +112,35 @@ export interface R18LibraryItem {
   favorited?: boolean
   favorited_at_ms?: number
   updated_at_ms?: number
+}
+
+export interface R18BrowserImportStartResponse {
+  import_id: string
+  ticket: string
+  expires_at_ms: number
+}
+
+export interface R18BrowserImportStatusResponse {
+  status: "pending" | "authenticated" | "failed" | "expired"
+  message?: string
+}
+
+export interface R18SessionImportInput {
+  sourceId: string
+  // E-Hentai / ExHentai specific fields (used when sourceId is ehentai/exhentai)
+  ipb_member_id?: string
+  ipb_pass_hash?: string
+  igneous?: string
+  sk?: string
+  // Generic cookie_header for other sources (nhentai, hanime1, …)
+  cookie_header?: string
+}
+
+export interface R18SessionImportResponse {
+  success: boolean
+  message?: string
+  ehentai_access: boolean
+  exhentai_access: boolean
 }
 
 export interface R18LibraryPayload {
@@ -163,22 +206,68 @@ export function createR18Api(http: HttpClient) {
       return unwrap(response, "R18 search")
     },
 
-    async listChapters(sourceId: string, comicId: string): Promise<R18Chapter[]> {
-      const response = await http.post<R18Envelope<{ chapters?: R18Chapter[] }>>(ENDPOINTS.r18ComicDetail, {
+    async listChapters(sourceId: string, comicId: string, signal?: AbortSignal): Promise<R18Chapter[]> {
+      const body = {
         source_id: sourceId,
         comic_id: comicId,
-      })
-      return unwrap(response, "R18 comic detail").chapters ?? []
+      }
+      const response = signal
+        ? await http.post<R18Envelope<{
+            title?: string
+            description?: string
+            error_message?: string
+            chapters?: R18Chapter[]
+          }>>(ENDPOINTS.r18ComicDetail, body, { signal })
+        : await http.post<R18Envelope<{
+            title?: string
+            description?: string
+            error_message?: string
+            chapters?: R18Chapter[]
+          }>>(ENDPOINTS.r18ComicDetail, body)
+      const detail = unwrap(response, "R18 comic detail")
+      const errorMessage = detail.error_message?.trim()
+        || ((detail.title === "官方源请求失败" || detail.title === "内容源请求失败")
+          ? detail.description?.trim()
+          : "")
+      if (errorMessage) throw new Error(errorMessage)
+      return detail.chapters ?? []
     },
 
-    async listPageUrls(sourceId: string, chapterId: string): Promise<string[]> {
-      const response = await http.post<R18Envelope<{ pages?: R18Page[] }>>(ENDPOINTS.r18ChapterPages, {
+    async listPageUrls(sourceId: string, chapterId: string, signal?: AbortSignal): Promise<string[]> {
+      const body = {
         source_id: sourceId,
         chapter_id: chapterId,
-      })
-      return (unwrap(response, "R18 chapter pages").pages ?? [])
+      }
+      const response = signal
+        ? await http.post<R18Envelope<{ pages?: R18Page[]; error_message?: string }>>(
+            ENDPOINTS.r18ChapterPages,
+            body,
+            { signal },
+          )
+        : await http.post<R18Envelope<{ pages?: R18Page[]; error_message?: string }>>(
+            ENDPOINTS.r18ChapterPages,
+            body,
+          )
+      const pages = unwrap(response, "R18 chapter pages")
+      if (pages.error_message?.trim()) throw new Error(pages.error_message.trim())
+      return (pages.pages ?? [])
         .map((page) => page.url?.trim() ?? "")
         .filter(Boolean)
+    },
+
+    async resolveVideo(
+      sourceId: string,
+      chapterId: string,
+      signal?: AbortSignal,
+    ): Promise<R18VideoPlayback> {
+      const body = {
+        source_id: sourceId,
+        chapter_id: chapterId,
+      }
+      const response = signal
+        ? await http.post<R18Envelope<R18VideoPlayback>>(ENDPOINTS.r18VideoResolve, body, { signal })
+        : await http.post<R18Envelope<R18VideoPlayback>>(ENDPOINTS.r18VideoResolve, body)
+      return unwrap(response, "R18 video resolve")
     },
 
     async listAccounts(): Promise<R18AccountsPayload> {
@@ -209,6 +298,45 @@ export function createR18Api(http: HttpClient) {
         source_id: sourceId,
       })
       return unwrap(response, "R18 account clear")
+    },
+
+    async startBrowserImport(sourceId: string): Promise<R18BrowserImportStartResponse> {
+      const response = await http.post<R18Envelope<R18BrowserImportStartResponse>>(
+        ENDPOINTS.r18AccountBrowserImportStart,
+        { source_id: sourceId, client_kind: "web_extension" },
+      )
+      return unwrap(response, "R18 browser import start")
+    },
+
+    async getBrowserImportStatus(importId: string): Promise<R18BrowserImportStatusResponse> {
+      const response = await http.get<R18Envelope<R18BrowserImportStatusResponse>>(
+        `${ENDPOINTS.r18AccountBrowserImportStatus}?import_id=${encodeURIComponent(importId)}`,
+      )
+      return unwrap(response, "R18 browser import status")
+    },
+
+    async importSession(input: R18SessionImportInput): Promise<R18SessionImportResponse> {
+      const isEhentai = input.sourceId === "ehentai.official" || input.sourceId === "exhentai.official"
+      const response = await http.post<R18Envelope<R18SessionImportResponse>>(
+        ENDPOINTS.r18AccountSessionImport,
+        isEhentai
+          ? {
+              source_id: input.sourceId,
+              cookies: {
+                ipb_member_id: input.ipb_member_id ?? "",
+                ipb_pass_hash: input.ipb_pass_hash ?? "",
+                igneous: input.igneous ?? "",
+                sk: input.sk ?? "",
+              },
+            }
+          : {
+              source_id: input.sourceId,
+              cookie_header: input.cookie_header ?? "",
+            },
+      )
+      const imported = unwrap(response, "R18 session import")
+      if (!imported.success) throw new Error(imported.message?.trim() || "Session import failed")
+      return imported
     },
 
     async checkin(sourceId: string = "jm.official"): Promise<R18CheckinResult> {

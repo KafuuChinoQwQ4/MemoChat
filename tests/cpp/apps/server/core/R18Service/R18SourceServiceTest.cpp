@@ -163,14 +163,15 @@ TEST(R18SourceServiceTest, AccountManagerSavesAndListsWithoutExposingSecrets)
     const auto accounts = service.ListAccounts(777);
     const auto managed = accounts["managed"];
     ASSERT_TRUE(managed.is_array());
-    EXPECT_EQ(managed.size(), 4U);
+    EXPECT_EQ(managed.size(), 7U);
     bool found = false;
     for (std::size_t i = 0; i < managed.size(); ++i)
     {
         const auto item = managed[static_cast<int>(i)];
         const auto source_id = memochat::json::glaze_safe_get<std::string>(item, "source_id", "");
         EXPECT_TRUE(source_id == "jm.official" || source_id == "picacg.official" || source_id == "ehentai.official" ||
-                    source_id == "exhentai.official");
+                    source_id == "exhentai.official" || source_id == "nhentai.official" ||
+                    source_id == "hanime1.official" || source_id == "hanimeone.official");
         if (source_id != "ehentai.official")
             continue;
         found = true;

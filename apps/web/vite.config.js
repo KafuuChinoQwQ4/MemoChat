@@ -7,6 +7,7 @@ const contentSecurityPolicy = [
     "style-src 'self' 'unsafe-inline'",
     "connect-src 'self' ws: wss: http: https:",
     "img-src 'self' data: blob: https:",
+    "media-src 'self' https://vdownload.hembed.com",
     "font-src 'self' data:",
     "worker-src 'self' blob:",
     "frame-ancestors 'none'",
@@ -15,7 +16,7 @@ const securityHeaders = {
     "Content-Security-Policy": contentSecurityPolicy,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 // https://vitejs.dev/config/

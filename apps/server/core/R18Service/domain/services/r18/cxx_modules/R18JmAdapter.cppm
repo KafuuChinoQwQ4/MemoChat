@@ -48,6 +48,16 @@ int MaxConcurrentImageFetches()
     return 8;
 }
 
+unsigned long long MaxDecodedImagePixels()
+{
+    return 16ULL * 1024ULL * 1024ULL;
+}
+
+bool IsSupportedScrambledImage(bool jpeg_magic, bool webp_magic)
+{
+    return jpeg_magic || webp_magic;
+}
+
 int SearchPageSize()
 {
     return 40;

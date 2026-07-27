@@ -616,6 +616,11 @@ bool HttpGetBounded(const std::string& url,
     return HttpGetImpl(url, headers, max_body_bytes, out, error, timeout_seconds);
 }
 
+std::uint64_t MaxImageBytes()
+{
+    return adapter_utils::modules::MaxImageBytes();
+}
+
 bool HttpPost(const std::string& url,
               const std::vector<std::pair<std::string, std::string>>& headers,
               const std::string& body,
@@ -942,6 +947,10 @@ bool ReadCachedImage(const std::filesystem::path& cache_root, const std::string&
 {
     const auto body_path = cache_root / (cache_key + ".bin");
     const auto meta_path = cache_root / (cache_key + ".meta");
+    std::error_code size_error;
+    const auto body_size = std::filesystem::file_size(body_path, size_error);
+    if (size_error || body_size == 0 || body_size > MaxImageBytes())
+        return false;
     std::ifstream body_in(body_path, std::ios::binary);
     if (!adapter_utils::modules::ShouldReadCachedImageBody(body_in.is_open()))
         return false;

@@ -28,6 +28,7 @@ const char* SearchInvalidJsonMessage();
 const char* DefaultEpisodeTitle();
 int DefaultEpisodeOrder();
 bool ShouldUseFallbackEpisode(bool has_no_episodes);
+int NormalizeEpisodeOrder(long long upstream_order, int fallback_order);
 const char* ImageReferer();
 const char* AllowedImageHostsConfigSection();
 const char* AllowedImageHostsConfigKey();
@@ -121,6 +122,9 @@ TEST(R18PicacgAdapterAlgorithmsTest, ExposesEpisodeFallbackDefaults)
     EXPECT_EQ(DefaultEpisodeOrder(), 1);
     EXPECT_TRUE(ShouldUseFallbackEpisode(true));
     EXPECT_FALSE(ShouldUseFallbackEpisode(false));
+    EXPECT_EQ(NormalizeEpisodeOrder(7, 1), 7);
+    EXPECT_EQ(NormalizeEpisodeOrder(0, 3), 3);
+    EXPECT_EQ(NormalizeEpisodeOrder(-1, 4), 4);
 }
 
 TEST(R18PicacgAdapterAlgorithmsTest, ExposesImageFetchGuards)

@@ -6,9 +6,10 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `R18ShellContent.module.css` | R18 页面窄屏布局、筛选条与主题适配弹层（章节/账号/阅读器）样式。 |
-| `R18ShellContent.test.ts` | 锁定可操作源过滤与账号管理交互类型。 |
-| `R18ShellContent.tsx` | R18 页面源码，提供服务端成人授权 gate、只读内容源、搜索/筛选、列表触底无限加载、主题适配章节/账号弹层、阅读器与可访问 dialog 生命周期。 |
+| `R18ShellContent.module.css` | R18 页面窄屏布局、筛选条与主题适配弹层（章节/账号/图片阅读器/视频播放器）样式。 |
+| `R18ShellContent.test.ts` | 锁定可操作源、图片失败态、Hanime1 站内播放交互与 Web 媒体安全策略。 |
+| `R18ShellContent.tsx` | R18 页面源码，提供成人授权 gate、内容源搜索/筛选、无限加载、章节/账号弹层及图片/视频阅读入口。 |
+| `R18VideoPlayerOverlay.tsx` | Hanime1 全屏站内播放器，负责临时地址解析、原生播放、画质切换与错误兜底。 |
 | `r18SourceAvailability.ts` | 统一判断源是否可操作以及账号管理交互类型。 |
 | `r18SearchPagination.ts` | 漫画源列表无限滚动：按上游单页加载、触底判定、分页去重合并。 |
 | `r18SearchPagination.test.ts` | 锁定上游单页无限滚动启发式与去重合并。 |

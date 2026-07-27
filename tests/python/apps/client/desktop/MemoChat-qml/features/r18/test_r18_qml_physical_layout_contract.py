@@ -77,6 +77,12 @@ class R18QmlPhysicalLayoutContractTests(unittest.TestCase):
         self.assertIn("Button {", shell)
         self.assertIn("import QtQuick.Controls 2.15", shell)
 
+    def test_hanime1_video_chapter_opens_the_watch_page(self):
+        shell = read(FEATURE_VIEW / "R18ShellPane.qml")
+
+        self.assertIn('sourceId === "hanime1.official"', shell)
+        self.assertIn('Qt.openUrlExternally("https://hanime1.me/watch?v="', shell)
+
 
 if __name__ == "__main__":
     unittest.main()

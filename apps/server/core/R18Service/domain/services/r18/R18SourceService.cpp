@@ -2,6 +2,8 @@
 
 #include "r18/R18AdapterUtils.hpp"
 #include "r18/R18EhentaiAdapter.hpp"
+#include "r18/R18Hanime1Adapter.hpp"
+#include "r18/R18HanimeoneAdapter.hpp"
 #include "r18/R18JmAdapter.hpp"
 #include "r18/R18NhentaiAdapter.hpp"
 #include "r18/R18PicacgAdapter.hpp"
@@ -29,13 +31,14 @@ const char* const kMockSourceId = source_service::modules::MockSourceId();
 bool IsBuiltinSourceId(const std::string& id)
 {
     return id == kMockSourceId || id == kJmSourceId || id == kPicacgSourceId || id == kNhentaiSourceId ||
-           id == kEhentaiSourceId || id == kExhentaiSourceId;
+           id == kEhentaiSourceId || id == kExhentaiSourceId || id == kHanime1SourceId || id == kHanimeoneSourceId;
 }
 
 bool IsOfficialBuiltinSourceId(const std::string& source_id)
 {
     return source_id == kJmSourceId || source_id == kPicacgSourceId || source_id == kNhentaiSourceId ||
-           source_id == kEhentaiSourceId || source_id == kExhentaiSourceId;
+           source_id == kEhentaiSourceId || source_id == kExhentaiSourceId || source_id == kHanime1SourceId ||
+           source_id == kHanimeoneSourceId;
 }
 
 bool SourceNeedsAccount(const std::string& source_id)
@@ -52,7 +55,13 @@ bool IsEhentaiFamily(const std::string& source_id)
 
 bool SourceSupportsDirectAccess(const std::string& source_id)
 {
-    return source_id == kJmSourceId || source_id == kNhentaiSourceId || source_id == kMockSourceId;
+    return source_id == kJmSourceId || source_id == kNhentaiSourceId || source_id == kHanime1SourceId ||
+           source_id == kHanimeoneSourceId || source_id == kMockSourceId;
+}
+
+bool SourceHasOptionalCookieLogin(const std::string& source_id)
+{
+    return source_id == kNhentaiSourceId || source_id == kHanime1SourceId || source_id == kEhentaiSourceId;
 }
 
 std::string FailureTitleForSource(const std::string& source_id)
@@ -178,6 +187,39 @@ void ApplyRuntimeSourceAvailability(R18SourceRecord& rec, int uid = 0)
             rec.enabled = false;
             rec.status = source_service::modules::AuthRequiredStatus();
             rec.message = "exhentai requires e-hentai login (account / cookie / web)";
+        }
+        return;
+    }
+    if (rec.id == kHanime1SourceId)
+    {
+        // hanime1.me — direct access; cookie login is optional for member-only content.
+        rec.enabled = true;
+        auto cred = R18SourceCredentialStore::Instance().Get(uid, rec.id);
+        if (cred && !cred->session_cookie.empty())
+        {
+            rec.status = source_service::modules::OkStatus();
+            rec.message = "cookie configured";
+        }
+        else
+        {
+            rec.status = source_service::modules::DirectAccessStatus();
+            rec.message = "direct access; optional cookie for member content";
+        }
+        return;
+    }
+    if (rec.id == kHanimeoneSourceId)
+    {
+        rec.enabled = true;
+        auto cred = R18SourceCredentialStore::Instance().Get(uid, rec.id);
+        if (cred && !cred->session_cookie.empty())
+        {
+            rec.status = source_service::modules::OkStatus();
+            rec.message = "cookie configured";
+        }
+        else
+        {
+            rec.status = source_service::modules::DirectAccessStatus();
+            rec.message = "direct access; optional cookie for member content";
         }
         return;
     }
@@ -364,6 +406,8 @@ void R18SourceService::InstallBuiltinSourcesLocked()
     install(kNhentaiSourceId, "nHentai", source_service::modules::NhentaiSourceVersion());
     install(kEhentaiSourceId, "e-hentai", source_service::modules::EhentaiSourceVersion());
     install(kExhentaiSourceId, "exhentai", source_service::modules::ExhentaiSourceVersion());
+    install(kHanime1SourceId, "hanime1", "1.0");
+    install(kHanimeoneSourceId, "hanimeone 漫畫", "1.0");
 }
 
 json::JsonValue R18SourceService::ListSources()
@@ -391,11 +435,13 @@ json::JsonValue R18SourceService::ListSourcesForUser(int uid)
     append_source(kNhentaiSourceId);
     append_source(kEhentaiSourceId);
     append_source(kExhentaiSourceId);
+    append_source(kHanime1SourceId);
+    append_source(kHanimeoneSourceId);
     for (const auto& [id, source] : sources_)
     {
         if (id != kJmSourceId && id != kPicacgSourceId && id != kNhentaiSourceId && id != kEhentaiSourceId &&
-            id != kExhentaiSourceId && id != kMockSourceId && source.enabled &&
-            source.status != source_service::modules::StagedJsStatus())
+            id != kExhentaiSourceId && id != kHanime1SourceId && id != kHanimeoneSourceId && id != kMockSourceId &&
+            source.enabled && source.status != source_service::modules::StagedJsStatus())
         {
             json::glaze_append(arr, PublicSourceRecord(source, uid));
         }
@@ -441,9 +487,12 @@ json::JsonValue R18SourceService::ListAccounts(int uid)
     append_managed(kJmSourceId, "禁漫天堂", false, true);
     if (PicacgSigningConfigured())
         append_managed(kPicacgSourceId, "哔咔漫画", true, false);
+    append_managed(kNhentaiSourceId, "nHentai", false, true);  // optional cookie login
     append_managed(kEhentaiSourceId, "e-hentai", false, true); // cookie optional
     // exhentai is bound to the same e-hentai account; requires login.
     append_managed(kExhentaiSourceId, "exhentai", true, false);
+    append_managed(kHanime1SourceId, "hanime1.me (視頻)", false, true);     // optional cookie login
+    append_managed(kHanimeoneSourceId, "hanimeone.me (漫畫)", false, true); // optional cookie login
     data["managed"] = managed;
     return data;
 }
@@ -461,7 +510,8 @@ bool R18SourceService::SaveAccount(int uid,
     if (!R18SourceCredentialStore::Instance().UpsertLogin(uid, source_id, username, password, error))
         return false;
     // Auto-login when credentials are present and source supports/needs remote auth.
-    if (SourceNeedsAccount(source_id) || IsEhentaiFamily(source_id) || source_id == kJmSourceId)
+    if (SourceNeedsAccount(source_id) || IsEhentaiFamily(source_id) || source_id == kJmSourceId ||
+        source_id == kNhentaiSourceId || source_id == kHanime1SourceId || source_id == kHanimeoneSourceId)
     {
         std::string login_error;
         if (!LoginAccount(uid, source_id, &login_error) && error != nullptr && error->empty())
@@ -622,6 +672,52 @@ bool R18SourceService::LoginAccount(int uid, const std::string& source_id, std::
         }
         return R18SourceCredentialStore::Instance()
             .UpdateSession(uid, source_id, jm_uid, "", "authenticated", "login ok", error);
+    }
+    if (source_id == kNhentaiSourceId)
+    {
+        // Optional: skip remote login when no credentials provided.
+        if (cred->username.empty() || cred->password.empty())
+        {
+            return R18SourceCredentialStore::Instance()
+                .UpdateSession(uid, source_id, "", "", "authenticated", "direct access (no account)", error);
+        }
+        std::string session_cookie;
+        std::string login_error;
+        if (!NhentaiLogin(cred->username, cred->password, &session_cookie, &login_error))
+        {
+            R18SourceCredentialStore::Instance().MarkError(uid, source_id, login_error, nullptr);
+            if (error)
+                *error = login_error;
+            return false;
+        }
+        return R18SourceCredentialStore::Instance()
+            .ImportCookieSession(uid, source_id, session_cookie, "authenticated", "login ok", error);
+    }
+    if (source_id == kHanime1SourceId)
+    {
+        if (cred->username.empty() || cred->password.empty())
+        {
+            return R18SourceCredentialStore::Instance()
+                .UpdateSession(uid, source_id, "", "", "authenticated", "direct access (no account)", error);
+        }
+        std::string session_cookie;
+        std::string login_error;
+        if (!Hanime1Login(cred->username, cred->password, &session_cookie, &login_error))
+        {
+            R18SourceCredentialStore::Instance().MarkError(uid, source_id, login_error, nullptr);
+            if (error)
+                *error = login_error;
+            return false;
+        }
+        return R18SourceCredentialStore::Instance()
+            .ImportCookieSession(uid, source_id, session_cookie, "authenticated", "login ok", error);
+    }
+    if (source_id == kHanimeoneSourceId)
+    {
+        // hanimeone.me shares the same Cloudflare protection; direct server login is blocked.
+        // Cookie import is done via the session-import endpoint.
+        return R18SourceCredentialStore::Instance()
+            .UpdateSession(uid, source_id, "", "", "authenticated", "direct access (no account)", error);
     }
     // Direct-access sources: mark configured, no remote login.
     return R18SourceCredentialStore::Instance()
@@ -877,13 +973,29 @@ json::JsonValue R18SourceService::SearchForUser(int uid,
                             : PicacgSearchWithToken(keyword, normalized_page, sort, tag, token, &result, &error);
         if (ok)
             return result;
+        // 401 → token expired; re-login once and retry.
+        if (error.find("401") != std::string::npos && !token.empty())
+        {
+            std::string relogin_error;
+            if (LoginAccount(uid, source_id, &relogin_error))
+            {
+                const std::string new_token = SessionTokenFor(uid, source_id);
+                if (!new_token.empty() && new_token != token)
+                {
+                    result = json::JsonValue{json::object_t{}};
+                    error.clear();
+                    if (PicacgSearchWithToken(keyword, normalized_page, sort, tag, new_token, &result, &error))
+                        return result;
+                }
+            }
+        }
         return ErrorData(kPicacgSourceId, error);
     }
     if (source_id == kNhentaiSourceId)
     {
         json::JsonValue result;
         std::string error;
-        if (NhentaiSearch(keyword, normalized_page, sort, tag, &result, &error))
+        if (NhentaiSearch(keyword, normalized_page, sort, tag, &result, &error, SessionCookieFor(uid, source_id)))
             return result;
         return ErrorData(kNhentaiSourceId, error);
     }
@@ -902,6 +1014,22 @@ json::JsonValue R18SourceService::SearchForUser(int uid,
         if (ExhentaiSearch(keyword, normalized_page, sort, tag, SessionCookieFor(uid, source_id), &result, &error))
             return result;
         return ErrorData(kExhentaiSourceId, error);
+    }
+    if (source_id == kHanime1SourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (Hanime1Search(keyword, normalized_page, sort, tag, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        return ErrorData(kHanime1SourceId, error);
+    }
+    if (source_id == kHanimeoneSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (HanimeoneSearch(keyword, normalized_page, sort, tag, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        return ErrorData(kHanimeoneSourceId, error);
     }
 
     json::JsonValue data;
@@ -963,6 +1091,22 @@ json::JsonValue R18SourceService::DetailForUser(int uid, const std::string& sour
                                       : PicacgDetailWithToken(comic_id, token, &result, &error);
         if (ok)
             return result;
+        // 401 → token expired; re-login once and retry.
+        if (error.find("401") != std::string::npos && !token.empty())
+        {
+            std::string relogin_error;
+            if (LoginAccount(uid, source_id, &relogin_error))
+            {
+                const std::string new_token = SessionTokenFor(uid, source_id);
+                if (!new_token.empty() && new_token != token)
+                {
+                    result = json::JsonValue{json::object_t{}};
+                    error.clear();
+                    if (PicacgDetailWithToken(comic_id, new_token, &result, &error))
+                        return result;
+                }
+            }
+        }
         json::JsonValue data;
         data["source_id"] = kPicacgSourceId;
         data["comic_id"] = comic_id;
@@ -976,7 +1120,7 @@ json::JsonValue R18SourceService::DetailForUser(int uid, const std::string& sour
     {
         json::JsonValue result;
         std::string error;
-        if (NhentaiDetail(comic_id, &result, &error))
+        if (NhentaiDetail(comic_id, &result, &error, SessionCookieFor(uid, source_id)))
             return result;
         json::JsonValue data;
         data["source_id"] = kNhentaiSourceId;
@@ -1017,7 +1161,36 @@ json::JsonValue R18SourceService::DetailForUser(int uid, const std::string& sour
         data["chapters"] = json::JsonValue{json::array_t{}};
         return data;
     }
-
+    if (source_id == kHanime1SourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (Hanime1Detail(comic_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kHanime1SourceId;
+        data["comic_id"] = comic_id;
+        data["title"] = FailureTitleForSource(kHanime1SourceId);
+        data["description"] = error;
+        data["cover"] = "";
+        data["chapters"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
+    if (source_id == kHanimeoneSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (HanimeoneDetail(comic_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kHanimeoneSourceId;
+        data["comic_id"] = comic_id;
+        data["title"] = FailureTitleForSource(kHanimeoneSourceId);
+        data["description"] = error;
+        data["cover"] = "";
+        data["chapters"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
     const auto source = SourceSnapshot(source_id);
     json::JsonValue data;
     data["source_id"] = source_id;
@@ -1077,6 +1250,22 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
                                       : PicacgPagesWithToken(comic_id, chapter_id, token, &result, &error);
         if (ok)
             return result;
+        // 401 → token expired; re-login once and retry.
+        if (error.find("401") != std::string::npos && !token.empty())
+        {
+            std::string relogin_error;
+            if (LoginAccount(uid, source_id, &relogin_error))
+            {
+                const std::string new_token = SessionTokenFor(uid, source_id);
+                if (!new_token.empty() && new_token != token)
+                {
+                    result = json::JsonValue{json::object_t{}};
+                    error.clear();
+                    if (PicacgPagesWithToken(comic_id, chapter_id, new_token, &result, &error))
+                        return result;
+                }
+            }
+        }
         json::JsonValue data;
         data["source_id"] = kPicacgSourceId;
         data["chapter_id"] = chapter_id;
@@ -1088,7 +1277,7 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
     {
         json::JsonValue result;
         std::string error;
-        if (NhentaiPages(chapter_id, &result, &error))
+        if (NhentaiPages(chapter_id, &result, &error, SessionCookieFor(uid, source_id)))
             return result;
         json::JsonValue data;
         data["source_id"] = kNhentaiSourceId;
@@ -1123,6 +1312,32 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
         data["pages"] = json::JsonValue{json::array_t{}};
         return data;
     }
+    if (source_id == kHanime1SourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (Hanime1Pages(chapter_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kHanime1SourceId;
+        data["chapter_id"] = chapter_id;
+        data["error_message"] = error;
+        data["pages"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
+    if (source_id == kHanimeoneSourceId)
+    {
+        json::JsonValue result;
+        std::string error;
+        if (HanimeonePages(chapter_id, SessionCookieFor(uid, source_id), &result, &error))
+            return result;
+        json::JsonValue data;
+        data["source_id"] = kHanimeoneSourceId;
+        data["chapter_id"] = chapter_id;
+        data["error_message"] = error;
+        data["pages"] = json::JsonValue{json::array_t{}};
+        return data;
+    }
 
     json::JsonValue data;
     data["source_id"] = source_id;
@@ -1138,6 +1353,29 @@ json::JsonValue R18SourceService::PagesForUser(int uid, const std::string& sourc
         json::glaze_append(data["pages"], page);
     }
     return data;
+}
+
+bool R18SourceService::ResolveVideoForUser(int uid,
+                                           const std::string& source_id,
+                                           const std::string& chapter_id,
+                                           json::JsonValue* out,
+                                           std::string* error)
+{
+    if (out == nullptr)
+    {
+        if (error != nullptr)
+            *error = "output pointer is null";
+        return false;
+    }
+    if (source_id != kHanime1SourceId)
+    {
+        if (error != nullptr)
+            *error = "unsupported R18 video source";
+        return false;
+    }
+    if (!CanDispatchSourceForUser(uid, source_id, error))
+        return false;
+    return Hanime1ResolveVideo(chapter_id, SessionCookieFor(uid, source_id), out, error);
 }
 
 R18ImagePayload
@@ -1160,11 +1398,15 @@ R18ImagePayload R18SourceService::FetchImageForUser(int uid,
     if (source_id == kPicacgSourceId && !image_url.empty())
         return PicacgFetchImage(image_cache_root_, image_url);
     if (source_id == kNhentaiSourceId && !image_url.empty())
-        return NhentaiFetchImage(image_cache_root_, image_url);
+        return NhentaiFetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
     if (source_id == kEhentaiSourceId && !image_url.empty())
         return EhentaiFetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
     if (source_id == kExhentaiSourceId && !image_url.empty())
         return ExhentaiFetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
+    if (source_id == kHanime1SourceId && !image_url.empty())
+        return Hanime1FetchImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
+    if (source_id == kHanimeoneSourceId && !image_url.empty())
+        return HanimeoneFootImage(image_cache_root_, image_url, SessionCookieFor(uid, source_id));
     return detail::PlaceholderImage("R18 Source Image", "preview");
 }
 

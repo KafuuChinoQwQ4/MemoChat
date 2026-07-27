@@ -47,6 +47,19 @@ public:
                        const std::string& status,
                        const std::string& message,
                        std::string* error);
+    bool ImportEhentaiSession(int uid,
+                              const std::string& source_id,
+                              const std::string& session_cookie,
+                              const std::string& status,
+                              const std::string& message,
+                              std::string* error);
+    // Generic cookie import for any source (nhentai, hanime1, etc.).
+    bool ImportCookieSession(int uid,
+                             const std::string& source_id,
+                             const std::string& session_cookie,
+                             const std::string& status,
+                             const std::string& message,
+                             std::string* error);
     bool MarkError(int uid, const std::string& source_id, const std::string& message, std::string* error);
 
 private:

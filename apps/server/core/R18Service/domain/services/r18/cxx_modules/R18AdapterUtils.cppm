@@ -125,6 +125,11 @@ bool ShouldUseDefaultCachedImageContentType(bool content_type_empty)
     return content_type_empty;
 }
 
+unsigned long long MaxImageBytes()
+{
+    return 16ULL * 1024ULL * 1024ULL;
+}
+
 unsigned char Base64InvalidMarker()
 {
     return static_cast<unsigned char>(255);

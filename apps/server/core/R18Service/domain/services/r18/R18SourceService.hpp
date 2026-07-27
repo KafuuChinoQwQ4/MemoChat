@@ -76,6 +76,11 @@ public:
     memochat::json::JsonValue DetailForUser(int uid, const std::string& source_id, const std::string& comic_id);
     memochat::json::JsonValue Pages(const std::string& source_id, const std::string& chapter_id);
     memochat::json::JsonValue PagesForUser(int uid, const std::string& source_id, const std::string& chapter_id);
+    bool ResolveVideoForUser(int uid,
+                             const std::string& source_id,
+                             const std::string& chapter_id,
+                             memochat::json::JsonValue* out,
+                             std::string* error);
     R18ImagePayload
     FetchImage(const std::string& source_id, const std::string& image_url, long long jm_scramble_id = 0);
     R18ImagePayload FetchImageForUser(int uid,

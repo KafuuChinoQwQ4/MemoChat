@@ -1,0 +1,17 @@
+{
+  "name": "memochat-ehentai-auth",
+  "version": "1.0.0",
+  "description": "MemoChat E-Hentai browser authentication extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && node build.js",
+    "type-check": "tsc --noEmit",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.5"
+  }
+}

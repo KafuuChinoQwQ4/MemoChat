@@ -21,5 +21,7 @@
         <file alias="features/r18/view/R18SourceManagerPane.qml">../view/R18SourceManagerPane.qml</file>
         <file alias="features/r18/view/R18StatusBanner.qml">../view/R18StatusBanner.qml</file>
         <file alias="features/r18/view/R18TagPane.qml">../view/R18TagPane.qml</file>
+        <file alias="features/r18/view/R18EhentaiWebLoginDialog.qml">../view/R18EhentaiWebLoginDialog.qml</file>
+        <file alias="features/r18/view/R18CookieLoginDialog.qml">../view/R18CookieLoginDialog.qml</file>
     </qresource>
 </RCC>

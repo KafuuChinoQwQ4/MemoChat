@@ -164,22 +164,25 @@ JsonValue TagArray(const JsonValue& tags)
     return MakeTags(names);
 }
 
-std::vector<std::pair<std::string, std::string>> NhentaiBrowserHeaders()
+std::vector<std::pair<std::string, std::string>> NhentaiBrowserHeaders(const std::string& session_cookie = {})
 {
-    return {
+    std::vector<std::pair<std::string, std::string>> headers = {
         {"Accept", "application/json,text/html;q=0.9,*/*;q=0.8"},
         {"User-Agent",
          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 "
          "Safari/537.36"},
         {"Referer", "https://nhentai.net/"},
     };
+    if (!session_cookie.empty())
+        headers.push_back({"Cookie", session_cookie});
+    return headers;
 }
 
-bool NhentaiGetJson(const std::string& path, JsonValue* out, std::string* error)
+bool NhentaiGetJson(const std::string& path, JsonValue* out, std::string* error, const std::string& session_cookie = {})
 {
     const std::string url = "https://nhentai.net" + path;
     HttpResult response;
-    if (!HttpGet(url, NhentaiBrowserHeaders(), &response, error, 12))
+    if (!HttpGet(url, NhentaiBrowserHeaders(session_cookie), &response, error, 12))
         return false;
     if (response.status < 200 || response.status >= 300)
     {
@@ -278,7 +281,8 @@ bool NhentaiSearch(const std::string& keyword,
                    const std::string& sort,
                    const std::string& tag,
                    json::JsonValue* out,
-                   std::string* error)
+                   std::string* error,
+                   const std::string& session_cookie)
 {
     if (out == nullptr)
     {
@@ -339,7 +343,7 @@ bool NhentaiSearch(const std::string& keyword,
     if (query.empty() && resolved_sort.empty())
     {
         const std::string path = "/api/v2/galleries?page=" + std::to_string(normalized_page);
-        if (!NhentaiGetJson(path, &root, error))
+        if (!NhentaiGetJson(path, &root, error, session_cookie))
             return false;
     }
     else
@@ -348,7 +352,7 @@ bool NhentaiSearch(const std::string& keyword,
                            "&page=" + std::to_string(normalized_page);
         if (!resolved_sort.empty())
             path += "&sort=" + UrlEncode(resolved_sort);
-        if (!NhentaiGetJson(path, &root, error))
+        if (!NhentaiGetJson(path, &root, error, session_cookie))
             return false;
     }
 
@@ -370,7 +374,10 @@ bool NhentaiSearch(const std::string& keyword,
     return true;
 }
 
-bool NhentaiDetail(const std::string& comic_id, json::JsonValue* out, std::string* error)
+bool NhentaiDetail(const std::string& comic_id,
+                   json::JsonValue* out,
+                   std::string* error,
+                   const std::string& session_cookie)
 {
     if (out == nullptr)
     {
@@ -378,7 +385,7 @@ bool NhentaiDetail(const std::string& comic_id, json::JsonValue* out, std::strin
         return false;
     }
     JsonValue gallery;
-    if (!NhentaiGetJson("/api/v2/galleries/" + UrlEncode(comic_id), &gallery, error))
+    if (!NhentaiGetJson("/api/v2/galleries/" + UrlEncode(comic_id), &gallery, error, session_cookie))
         return false;
 
     JsonValue result = ComicItemFromDetail(gallery);
@@ -395,7 +402,10 @@ bool NhentaiDetail(const std::string& comic_id, json::JsonValue* out, std::strin
     return true;
 }
 
-bool NhentaiPages(const std::string& chapter_id, json::JsonValue* out, std::string* error)
+bool NhentaiPages(const std::string& chapter_id,
+                  json::JsonValue* out,
+                  std::string* error,
+                  const std::string& session_cookie)
 {
     if (out == nullptr)
     {
@@ -403,7 +413,7 @@ bool NhentaiPages(const std::string& chapter_id, json::JsonValue* out, std::stri
         return false;
     }
     JsonValue gallery;
-    if (!NhentaiGetJson("/api/v2/galleries/" + UrlEncode(chapter_id), &gallery, error))
+    if (!NhentaiGetJson("/api/v2/galleries/" + UrlEncode(chapter_id), &gallery, error, session_cookie))
         return false;
 
     JsonValue result;
@@ -432,38 +442,168 @@ bool NhentaiPages(const std::string& chapter_id, json::JsonValue* out, std::stri
     return true;
 }
 
-R18ImagePayload NhentaiFetchImage(const std::filesystem::path& cache_root, const std::string& image_url)
+R18ImagePayload NhentaiFetchImage(const std::filesystem::path& cache_root,
+                                  const std::string& image_url,
+                                  const std::string& session_cookie)
 {
     std::string error;
     ParsedUrl parsed;
     if (!ParseUrl(image_url, &parsed, &error))
-        return PlaceholderImage("nHentai image error", error);
+        return FailedImage("nHentai image error: " + error);
     if (parsed.scheme != "https" || !HostAllowed(parsed.host))
-        return PlaceholderImage("nHentai image error", "image host not allowed");
+        return FailedImage("nHentai image host not allowed");
 
     std::string cache_key;
     if (!Md5Hex(image_url, &cache_key, &error))
-        return PlaceholderImage("nHentai image error", error);
+        return FailedImage("nHentai image error: " + error);
     R18ImagePayload cached;
     if (ReadCachedImage(cache_root, cache_key, &cached))
         return cached;
 
-    const std::vector<std::pair<std::string, std::string>> headers = {
+    std::vector<std::pair<std::string, std::string>> headers = {
         {"Accept", "image/avif,image/webp,image/*,*/*;q=0.8"},
         {"User-Agent", "Mozilla/5.0 (compatible; MemoChatR18/1.0)"},
         {"Referer", "https://nhentai.net/"},
     };
+    if (!session_cookie.empty())
+        headers.push_back({"Cookie", session_cookie});
+
     HttpResult response;
-    if (!HttpGet(image_url, headers, &response, &error, 15))
-        return PlaceholderImage("nHentai image error", error);
+    if (!HttpGetBounded(image_url, headers, MaxImageBytes(), &response, &error, 15))
+        return FailedImage("nHentai image error: " + error);
     if (response.status < 200 || response.status >= 300 || response.body.empty())
-        return PlaceholderImage("nHentai image unavailable", "HTTP " + std::to_string(response.status));
+        return FailedImage("nHentai image unavailable: HTTP " + std::to_string(response.status));
+    if (!response.content_type.starts_with("image/"))
+        return FailedImage("nHentai upstream did not return an image");
 
     R18ImagePayload payload;
     payload.content_type = response.content_type.empty() ? "image/webp" : response.content_type;
     payload.body = std::move(response.body);
     WriteCachedImage(cache_root, cache_key, payload);
     return payload;
+}
+
+// ─── Username/password login ──────────────────────────────────────────────────
+
+namespace
+{
+
+// Extract a named cookie value from a Set-Cookie header list.
+std::string ExtractCookieValue(const std::vector<std::string>& set_cookies, const std::string& name)
+{
+    for (const auto& sc : set_cookies)
+    {
+        // Format: "name=value; Path=/; ..."
+        if (sc.rfind(name + "=", 0) == 0)
+        {
+            const std::size_t start = name.size() + 1;
+            const std::size_t end = sc.find(';', start);
+            return end == std::string::npos ? sc.substr(start) : sc.substr(start, end - start);
+        }
+    }
+    return {};
+}
+
+// Extract csrfmiddlewaretoken from HTML form body.
+std::string ExtractCsrfToken(const std::string& html)
+{
+    // <input type='hidden' name='csrfmiddlewaretoken' value='...'
+    const std::string needle = "csrfmiddlewaretoken' value='";
+    auto pos = html.find(needle);
+    if (pos == std::string::npos)
+    {
+        // Try double-quote variant.
+        const std::string needle2 = "csrfmiddlewaretoken\" value=\"";
+        pos = html.find(needle2);
+        if (pos == std::string::npos)
+            return {};
+        const std::size_t start = pos + needle2.size();
+        const std::size_t end = html.find('"', start);
+        return end == std::string::npos ? html.substr(start) : html.substr(start, end - start);
+    }
+    const std::size_t start = pos + needle.size();
+    const std::size_t end = html.find('\'', start);
+    return end == std::string::npos ? html.substr(start) : html.substr(start, end - start);
+}
+
+} // namespace
+
+bool NhentaiLogin(const std::string& username,
+                  const std::string& password,
+                  std::string* session_cookie_out,
+                  std::string* error)
+{
+    // Step 1: GET login page to obtain csrftoken cookie and form token.
+    const std::string login_url = "https://nhentai.net/login/";
+    const std::vector<std::pair<std::string, std::string>> get_headers = {
+        {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+        {"User-Agent",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+         "Chrome/124.0.0.0 Safari/537.36"},
+    };
+    HttpResult get_resp;
+    if (!HttpGet(login_url, get_headers, &get_resp, error, 15))
+        return false;
+    if (get_resp.status < 200 || get_resp.status >= 400)
+    {
+        SetError(error, "nhentai login page HTTP " + std::to_string(get_resp.status));
+        return false;
+    }
+
+    const std::string csrftoken_cookie = ExtractCookieValue(get_resp.set_cookies, "csrftoken");
+    const std::string csrftoken_form = ExtractCsrfToken(get_resp.body);
+    const std::string csrf = csrftoken_form.empty() ? csrftoken_cookie : csrftoken_form;
+
+    // nhentai.net is behind Cloudflare; a server-side request typically receives a JS
+    // challenge page instead of the real login form. Detect this early.
+    const bool has_cf = get_resp.body.find("cloudflare") != std::string::npos ||
+                        get_resp.body.find("cf-mitigated") != std::string::npos ||
+                        get_resp.body.find("Just a moment") != std::string::npos ||
+                        get_resp.body.find("challenge-platform") != std::string::npos;
+
+    if (csrf.empty() || has_cf)
+    {
+        SetError(error,
+                 "nhentai 受 Cloudflare 保护，服务端无法直接登录。"
+                 "请切换到「Cookie 登录」选项卡：在浏览器中登录 nhentai.net，"
+                 "按 F12 → Application → Cookies，复制 sessionid 的值粘贴进去。");
+        return false;
+    }
+
+    // Step 2: POST credentials.
+    const std::string cookie_hdr = csrftoken_cookie.empty() ? "" : "csrftoken=" + csrftoken_cookie;
+    const std::vector<std::pair<std::string, std::string>> post_headers = {
+        {"Accept", "text/html,application/xhtml+xml,*/*;q=0.8"},
+        {"Content-Type", "application/x-www-form-urlencoded"},
+        {"User-Agent",
+         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+         "Chrome/124.0.0.0 Safari/537.36"},
+        {"Referer", login_url},
+        {"Cookie", cookie_hdr},
+    };
+    const std::string body = "username_or_email=" + UrlEncode(username) + "&password=" + UrlEncode(password) +
+                             "&csrfmiddlewaretoken=" + UrlEncode(csrf) + "&next=%2F";
+    HttpResult post_resp;
+    if (!HttpPost(login_url, post_headers, body, &post_resp, error, 15))
+        return false;
+
+    // Successful login: 302 redirect; response carries Set-Cookie: sessionid=…
+    const std::string sessionid = ExtractCookieValue(post_resp.set_cookies, "sessionid");
+    if (sessionid.empty())
+    {
+        SetError(error,
+                 "nhentai 账密登录失败：用户名或密码错误，或请求被拦截。"
+                 "如问题持续，请改用「Cookie 登录」选项卡手动粘贴 sessionid。");
+        return false;
+    }
+
+    std::string result = "sessionid=" + sessionid;
+    if (!csrftoken_cookie.empty())
+        result += "; csrftoken=" + csrftoken_cookie;
+
+    if (session_cookie_out)
+        *session_cookie_out = std::move(result);
+    return true;
 }
 
 } // namespace memochat::r18

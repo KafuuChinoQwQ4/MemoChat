@@ -136,6 +136,14 @@ R18ChapterPagesRequestDto R18ChapterPagesRequestFromJsonValue(const memochat::js
     return request;
 }
 
+R18VideoResolveRequestDto R18VideoResolveRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    R18VideoResolveRequestDto request;
+    request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
+    request.chapter_id = memochat::json::glaze_safe_get<std::string>(root, "chapter_id", "");
+    return request;
+}
+
 R18FavoriteToggleRequestDto R18FavoriteToggleRequestFromJsonValue(const memochat::json::JsonValue& root)
 {
     R18FavoriteToggleRequestDto request;
@@ -184,6 +192,67 @@ R18HistoryUpdateRequestDto R18HistoryUpdateRequestFromJsonValue(const memochat::
     return request;
 }
 
+R18BrowserImportStartRequestDto R18BrowserImportStartRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    R18BrowserImportStartRequestDto request;
+    request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
+    request.client_kind = memochat::json::glaze_safe_get<std::string>(root, "client_kind", "");
+    return request;
+}
+
+R18BrowserImportCompleteRequestDto R18BrowserImportCompleteRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    R18BrowserImportCompleteRequestDto request;
+    request.ticket = memochat::json::glaze_safe_get<std::string>(root, "ticket", "");
+
+    // Accept either structured cookies object or flat fields
+    const auto cookies = memochat::json::glaze_get(root, "cookies");
+    if (cookies.isObject())
+    {
+        request.ipb_member_id = memochat::json::glaze_safe_get<std::string>(cookies, "ipb_member_id", "");
+        request.ipb_pass_hash = memochat::json::glaze_safe_get<std::string>(cookies, "ipb_pass_hash", "");
+        request.igneous = memochat::json::glaze_safe_get<std::string>(cookies, "igneous", "");
+        request.sk = memochat::json::glaze_safe_get<std::string>(cookies, "sk", "");
+    }
+    else
+    {
+        request.ipb_member_id = memochat::json::glaze_safe_get<std::string>(root, "ipb_member_id", "");
+        request.ipb_pass_hash = memochat::json::glaze_safe_get<std::string>(root, "ipb_pass_hash", "");
+        request.igneous = memochat::json::glaze_safe_get<std::string>(root, "igneous", "");
+        request.sk = memochat::json::glaze_safe_get<std::string>(root, "sk", "");
+    }
+    return request;
+}
+
+R18SessionImportRequestDto R18SessionImportRequestFromJsonValue(const memochat::json::JsonValue& root)
+{
+    R18SessionImportRequestDto request;
+    request.source_id = memochat::json::glaze_safe_get<std::string>(root, "source_id", "");
+
+    // Accept either structured cookies object or flat fields.
+    const auto cookies = memochat::json::glaze_get(root, "cookies");
+    if (cookies.isObject())
+    {
+        request.ipb_member_id = memochat::json::glaze_safe_get<std::string>(cookies, "ipb_member_id", "");
+        request.ipb_pass_hash = memochat::json::glaze_safe_get<std::string>(cookies, "ipb_pass_hash", "");
+        request.igneous = memochat::json::glaze_safe_get<std::string>(cookies, "igneous", "");
+        request.sk = memochat::json::glaze_safe_get<std::string>(cookies, "sk", "");
+        // Generic cookie_header field for non-ehentai sources.
+        request.cookie_header = memochat::json::glaze_safe_get<std::string>(cookies, "cookie_header", "");
+    }
+    else
+    {
+        request.ipb_member_id = memochat::json::glaze_safe_get<std::string>(root, "ipb_member_id", "");
+        request.ipb_pass_hash = memochat::json::glaze_safe_get<std::string>(root, "ipb_pass_hash", "");
+        request.igneous = memochat::json::glaze_safe_get<std::string>(root, "igneous", "");
+        request.sk = memochat::json::glaze_safe_get<std::string>(root, "sk", "");
+    }
+    // Top-level cookie_header field (used by nhentai / hanime1 clients).
+    if (request.cookie_header.empty())
+        request.cookie_header = memochat::json::glaze_safe_get<std::string>(root, "cookie_header", "");
+    return request;
+}
+
 bool DecodeR18SourceToggleRequest(std::string_view body, R18SourceToggleRequestDto* out, std::string* error_out)
 {
     return DecodeR18PublicRequest(body, out, error_out, R18SourceToggleRequestFromJsonValue);
@@ -204,6 +273,25 @@ bool DecodeR18ChapterPagesRequest(std::string_view body, R18ChapterPagesRequestD
     return DecodeR18PublicRequest(body, out, error_out, R18ChapterPagesRequestFromJsonValue);
 }
 
+bool DecodeR18VideoResolveRequest(std::string_view body, R18VideoResolveRequestDto* out, std::string* error_out)
+{
+    if (!DecodeR18PublicRequest(body, out, error_out, R18VideoResolveRequestFromJsonValue))
+        return false;
+    if (out->source_id.empty())
+    {
+        if (error_out != nullptr)
+            *error_out = "source_id is required";
+        return false;
+    }
+    if (out->chapter_id.empty())
+    {
+        if (error_out != nullptr)
+            *error_out = "chapter_id is required";
+        return false;
+    }
+    return true;
+}
+
 bool DecodeR18FavoriteToggleRequest(std::string_view body, R18FavoriteToggleRequestDto* out, std::string* error_out)
 {
     return DecodeR18PublicRequest(body, out, error_out, R18FavoriteToggleRequestFromJsonValue);
@@ -212,6 +300,25 @@ bool DecodeR18FavoriteToggleRequest(std::string_view body, R18FavoriteToggleRequ
 bool DecodeR18HistoryUpdateRequest(std::string_view body, R18HistoryUpdateRequestDto* out, std::string* error_out)
 {
     return DecodeR18PublicRequest(body, out, error_out, R18HistoryUpdateRequestFromJsonValue);
+}
+
+bool DecodeR18BrowserImportStartRequest(std::string_view body,
+                                        R18BrowserImportStartRequestDto* out,
+                                        std::string* error_out)
+{
+    return DecodeR18PublicRequest(body, out, error_out, R18BrowserImportStartRequestFromJsonValue);
+}
+
+bool DecodeR18BrowserImportCompleteRequest(std::string_view body,
+                                           R18BrowserImportCompleteRequestDto* out,
+                                           std::string* error_out)
+{
+    return DecodeR18PublicRequest(body, out, error_out, R18BrowserImportCompleteRequestFromJsonValue);
+}
+
+bool DecodeR18SessionImportRequest(std::string_view body, R18SessionImportRequestDto* out, std::string* error_out)
+{
+    return DecodeR18PublicRequest(body, out, error_out, R18SessionImportRequestFromJsonValue);
 }
 
 memochat::json::JsonValue R18SourceToggleResponseToJsonValue(const R18SourceToggleResponseDto& response)
@@ -225,6 +332,22 @@ memochat::json::JsonValue R18FavoriteToggleResponseToJsonValue(const R18Favorite
 }
 
 memochat::json::JsonValue R18HistoryUpdateResponseToJsonValue(const R18HistoryUpdateResponseDto& response)
+{
+    return TypedJsonToJsonValue(response);
+}
+
+memochat::json::JsonValue R18BrowserImportStartResponseToJsonValue(const R18BrowserImportStartResponseDto& response)
+{
+    return TypedJsonToJsonValue(response);
+}
+
+memochat::json::JsonValue
+R18BrowserImportCompleteResponseToJsonValue(const R18BrowserImportCompleteResponseDto& response)
+{
+    return TypedJsonToJsonValue(response);
+}
+
+memochat::json::JsonValue R18SessionImportResponseToJsonValue(const R18SessionImportResponseDto& response)
 {
     return TypedJsonToJsonValue(response);
 }

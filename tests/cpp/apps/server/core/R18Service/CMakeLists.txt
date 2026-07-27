@@ -57,6 +57,25 @@ add_dependencies(gtest_tests r18service_public_dtos_gtest)
 
 gtest_discover_tests(r18service_public_dtos_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(r18service_hanime1_adapter_gtest
+    main.cpp
+    R18Hanime1AdapterTest.cpp
+)
+
+target_link_libraries(r18service_hanime1_adapter_gtest PRIVATE
+    GTest_TestLib
+    GateR18Core
+    memochat_server_deps
+)
+
+target_include_directories(r18service_hanime1_adapter_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/R18Service/domain/services
+)
+
+add_dependencies(gtest_tests r18service_hanime1_adapter_gtest)
+
+gtest_discover_tests(r18service_hanime1_adapter_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 add_executable(r18service_route_schema_gtest
     ${CMAKE_SOURCE_DIR}/apps/server/core/R18Service/domain/modules/r18/R18RouteSchemas.cpp
     main.cpp

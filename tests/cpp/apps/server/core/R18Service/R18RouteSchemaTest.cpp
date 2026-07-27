@@ -63,6 +63,11 @@ const char* ExpectedR18RouteSchemaSnapshot()
            "  - source_id\n"
            "  - comic_id\n"
            "  - favorited\n"
+           "  - title\n"
+           "  - cover\n"
+           "  - author\n"
+           "  - subtitle\n"
+           "  - folder_ids\n"
            "response: R18FavoriteToggleResponseDto\n"
            "  - source_id\n"
            "  - comic_id\n"
@@ -127,7 +132,8 @@ TEST(R18RouteSchemaTest, BuildsFieldInventoriesFromR18Dtos)
     ExpectFields(schemas[1].request, {"source_id"});
     ExpectFields(schemas[1].response, {"source_id", "enabled"});
 
-    ExpectFields(schemas[2].request, {"source_id", "comic_id", "favorited"});
+    ExpectFields(schemas[2].request,
+                 {"source_id", "comic_id", "favorited", "title", "cover", "author", "subtitle", "folder_ids"});
     ExpectFields(schemas[2].response, {"source_id", "comic_id", "favorited"});
 
     ExpectFields(schemas[3].request, {"source_id", "comic_id", "chapter_id", "page_index"});

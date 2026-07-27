@@ -8,10 +8,14 @@
 #include "r18/R18SourceRecordCodec.hpp"
 #include "r18/R18SourceService.hpp"
 #include "r18/R18LibraryStore.hpp"
+#include "r18/R18BrowserImportService.hpp"
+#include "r18/R18EhentaiSessionService.hpp"
+#include "r18/R18SourceCredentialStore.hpp"
 #include "services/account/AccountPersistence.hpp"
 #include "support/BearerAccessAuth.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -35,6 +39,42 @@ enum class R18AccessDecision
     Allowed,
     Denied,
     Unavailable,
+};
+
+std::atomic<int>& ActiveImageFetches()
+{
+    static std::atomic<int> active{0};
+    return active;
+}
+
+class ImageFetchSlot
+{
+public:
+    bool TryAcquire()
+    {
+        int active = ActiveImageFetches().load(std::memory_order_relaxed);
+        while (memochat::r18::service::modules::ShouldAdmitImageFetch(active))
+        {
+            if (ActiveImageFetches().compare_exchange_weak(active,
+                                                           active + 1,
+                                                           std::memory_order_acquire,
+                                                           std::memory_order_relaxed))
+            {
+                acquired_ = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    ~ImageFetchSlot()
+    {
+        if (acquired_)
+            ActiveImageFetches().fetch_sub(1, std::memory_order_release);
+    }
+
+private:
+    bool acquired_ = false;
 };
 
 std::string QueryParam(const memochat::gate::routing::GateRequest& request,
@@ -545,6 +585,38 @@ bool R18Service::HandleChapterPages(const memochat::gate::routing::GateRequest& 
         });
 }
 
+bool R18Service::HandleVideoResolve(const memochat::gate::routing::GateRequest& request,
+                                    memochat::gate::routing::GateResponse& response)
+{
+    const bool handled = HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            memochat::r18::R18VideoResolveRequestDto body;
+            std::string error;
+            if (!memochat::r18::DecodeR18VideoResolveRequest(memochat::json::glaze_stringify(src), &body, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error;
+                return true;
+            }
+
+            JsonValue data;
+            if (!memochat::r18::R18SourceService::Instance()
+                     .ResolveVideoForUser(uid, body.source_id, body.chapter_id, &data, &error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = error;
+                return true;
+            }
+            WriteOk(root, data);
+            return true;
+        });
+    response.headers["Cache-Control"] = "no-store";
+    return handled;
+}
+
 bool R18Service::HandleFavoriteToggle(const memochat::gate::routing::GateRequest& request,
                                       memochat::gate::routing::GateResponse& response)
 {
@@ -817,6 +889,17 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
         if (end != scramble_id_text.c_str() && end != nullptr && *end == '\0' && parsed > 0 && parsed <= 1000000000LL)
             scramble_id = parsed;
     }
+
+    ImageFetchSlot slot;
+    if (!slot.TryAcquire())
+    {
+        response.status = memochat::r18::service::modules::ServiceUnavailableHttpStatus();
+        response.content_type = memochat::r18::service::modules::PlainTextContentType();
+        response.body = memochat::r18::service::modules::ImageBusyMessage();
+        response.headers["Cache-Control"] = "no-store";
+        response.headers["Retry-After"] = "1";
+        return true;
+    }
     auto payload =
         memochat::r18::R18SourceService::Instance().FetchImageForUser(uid, source_id, image_url, scramble_id);
     if (!payload.ok)
@@ -824,6 +907,7 @@ bool R18Service::HandleImage(const memochat::gate::routing::GateRequest& request
         response.status = memochat::r18::service::modules::BadGatewayHttpStatus();
         response.content_type = memochat::r18::service::modules::PlainTextContentType();
         response.body = std::string(memochat::r18::service::modules::ImageFetchFailedPrefix()) + payload.error;
+        response.headers["Cache-Control"] = "no-store";
         return true;
     }
     response.status = memochat::r18::service::modules::SuccessHttpStatus();
@@ -966,6 +1050,337 @@ bool R18Service::HandleCheckin(const memochat::gate::routing::GateRequest& reque
                 return true;
             }
             WriteOk(root, result);
+            return true;
+        });
+}
+
+bool R18Service::HandleBrowserImportStart(const memochat::gate::routing::GateRequest& request,
+                                          memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            memochat::r18::R18BrowserImportStartRequestDto req;
+            std::string decode_error;
+            const std::string body_str = memochat::json::glaze_stringify(src);
+            if (!memochat::r18::DecodeR18BrowserImportStartRequest(body_str, &req, &decode_error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = decode_error.empty() ? "invalid request" : decode_error;
+                return true;
+            }
+
+            auto result =
+                memochat::r18::R18BrowserImportService::Instance().StartImport(uid, req.source_id, req.client_kind);
+
+            if (!result.ok)
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = result.error.empty() ? "failed to start import" : result.error;
+                return true;
+            }
+
+            memochat::r18::R18BrowserImportStartResponseDto response_dto;
+            response_dto.import_id = result.import_id;
+            response_dto.ticket = result.ticket;
+            response_dto.expires_at_ms = result.expires_at_ms;
+
+            WriteOk(root, memochat::r18::R18BrowserImportStartResponseToJsonValue(response_dto));
+            return true;
+        });
+}
+
+bool R18Service::HandleBrowserImportComplete(const memochat::gate::routing::GateRequest& request,
+                                             memochat::gate::routing::GateResponse& response)
+{
+    // This endpoint is capability-authenticated (no JWT required)
+    JsonValue root;
+    memochat::r18::R18BrowserImportCompleteRequestDto req;
+    std::string decode_error;
+    if (!memochat::r18::DecodeR18BrowserImportCompleteRequest(request.body, &req, &decode_error))
+    {
+        root["error"] = ErrorCodes::Error_Json;
+        root["message"] = decode_error.empty() ? "invalid request" : decode_error;
+        WritePostJson(response, root);
+        response.status = 400;
+        return true;
+    }
+
+    memochat::r18::EhentaiSessionCookies cookies;
+    cookies.ipb_member_id = req.ipb_member_id;
+    cookies.ipb_pass_hash = req.ipb_pass_hash;
+    cookies.igneous = req.igneous;
+    cookies.sk = req.sk;
+
+    auto complete_result = memochat::r18::R18BrowserImportService::Instance().CompleteImport(req.ticket, cookies);
+
+    if (!complete_result.ok)
+    {
+        memochat::r18::R18BrowserImportCompleteResponseDto response_dto;
+        response_dto.success = false;
+        response_dto.message = complete_result.error.empty() ? "import failed" : complete_result.error;
+        WriteOk(root, memochat::r18::R18BrowserImportCompleteResponseToJsonValue(response_dto));
+        WritePostJson(response, root);
+        response.status = 400;
+        return true;
+    }
+
+    // Validate session with E-Hentai upstream
+    auto validation = memochat::r18::R18EhentaiSessionService::Instance().ValidateSession(cookies);
+
+    if (!validation.ok)
+    {
+        memochat::r18::R18BrowserImportService::Instance().SetStatus(
+            complete_result.uid,
+            complete_result.import_id,
+            memochat::r18::BrowserImportStatus::Failed,
+            validation.error.empty() ? "session validation failed" : validation.error);
+        memochat::r18::R18BrowserImportCompleteResponseDto response_dto;
+        response_dto.success = false;
+        response_dto.message = validation.error.empty() ? "session validation failed" : validation.error;
+        WriteOk(root, memochat::r18::R18BrowserImportCompleteResponseToJsonValue(response_dto));
+        WritePostJson(response, root);
+        response.status = 400;
+        return true;
+    }
+    if (complete_result.source_id == "exhentai.official" && !validation.exhentai_access)
+    {
+        memochat::r18::R18BrowserImportService::Instance().SetStatus(
+            complete_result.uid,
+            complete_result.import_id,
+            memochat::r18::BrowserImportStatus::Failed,
+            "ExHentai access was not granted by the imported session");
+        memochat::r18::R18BrowserImportCompleteResponseDto response_dto;
+        response_dto.success = false;
+        response_dto.message = "ExHentai access was not granted by the imported session";
+        WriteOk(root, memochat::r18::R18BrowserImportCompleteResponseToJsonValue(response_dto));
+        WritePostJson(response, root);
+        response.status = 400;
+        return true;
+    }
+
+    // Import session for both ehentai.official and exhentai.official
+    std::string error;
+    bool imported_ehentai = false;
+    bool imported_exhentai = false;
+
+    if (validation.ehentai_access)
+    {
+        imported_ehentai = memochat::r18::R18SourceCredentialStore::Instance().ImportEhentaiSession(
+            complete_result.uid,
+            "ehentai.official",
+            validation.normalized_cookie_header,
+            "authenticated",
+            "Browser import successful",
+            &error);
+    }
+
+    if (validation.exhentai_access)
+    {
+        imported_exhentai = memochat::r18::R18SourceCredentialStore::Instance().ImportEhentaiSession(
+            complete_result.uid,
+            "exhentai.official",
+            validation.normalized_cookie_header,
+            "authenticated",
+            "Browser import successful (ExHentai access)",
+            &error);
+    }
+
+    memochat::r18::R18BrowserImportCompleteResponseDto response_dto;
+    response_dto.success = imported_ehentai || imported_exhentai;
+    response_dto.message = response_dto.success ? "Session imported successfully" : error;
+    memochat::r18::R18BrowserImportService::Instance().SetStatus(complete_result.uid,
+                                                                 complete_result.import_id,
+                                                                 response_dto.success
+                                                                     ? memochat::r18::BrowserImportStatus::Authenticated
+                                                                     : memochat::r18::BrowserImportStatus::Failed,
+                                                                 response_dto.success ? "" : response_dto.message);
+
+    WriteOk(root, memochat::r18::R18BrowserImportCompleteResponseToJsonValue(response_dto));
+    WritePostJson(response, root);
+    return true;
+}
+
+bool R18Service::HandleBrowserImportStatus(const memochat::gate::routing::GateRequest& request,
+                                           memochat::gate::routing::GateResponse& response)
+{
+    JsonValue root;
+    int uid = 0;
+    if (!RequireBearerAuth(request, root, uid))
+    {
+        WriteGetJson(response, root);
+        response.status = memochat::r18::service::modules::UnauthorizedHttpStatus();
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+
+    if (const auto access = RequireR18Access(uid, root); access != R18AccessDecision::Allowed)
+    {
+        WriteGetJson(response, root);
+        response.status = AccessFailureStatus(access);
+        response.headers["Cache-Control"] = "no-store";
+        return true;
+    }
+
+    const std::string import_id = QueryParam(request, "import_id", "");
+    if (import_id.empty())
+    {
+        root["error"] = ErrorCodes::Error_Json;
+        root["message"] = "import_id is required";
+        WriteGetJson(response, root);
+        response.status = 400;
+        return true;
+    }
+
+    auto status_result = memochat::r18::R18BrowserImportService::Instance().GetStatus(uid, import_id);
+
+    if (!status_result.ok)
+    {
+        root["error"] = ErrorCodes::Error_Json;
+        root["message"] = status_result.error.empty() ? "status check failed" : status_result.error;
+        WriteGetJson(response, root);
+        response.status = 404;
+        return true;
+    }
+
+    JsonValue data;
+    switch (status_result.status)
+    {
+        case memochat::r18::BrowserImportStatus::Pending:
+            data["status"] = "pending";
+            break;
+        case memochat::r18::BrowserImportStatus::Authenticated:
+            data["status"] = "authenticated";
+            break;
+        case memochat::r18::BrowserImportStatus::Failed:
+            data["status"] = "failed";
+            break;
+        case memochat::r18::BrowserImportStatus::Expired:
+            data["status"] = "expired";
+            break;
+    }
+    data["message"] = status_result.message;
+
+    WriteOk(root, data);
+    WriteGetJson(response, root);
+    response.headers["Cache-Control"] = "no-store";
+    return true;
+}
+
+bool R18Service::HandleSessionImport(const memochat::gate::routing::GateRequest& request,
+                                     memochat::gate::routing::GateResponse& response)
+{
+    return HandleJsonRequest(
+        request,
+        response,
+        [](const JsonValue& src, JsonValue& root, const std::string&, int uid)
+        {
+            memochat::r18::R18SessionImportRequestDto req;
+            std::string decode_error;
+            const std::string body_str = memochat::json::glaze_stringify(src);
+            if (!memochat::r18::DecodeR18SessionImportRequest(body_str, &req, &decode_error))
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = decode_error.empty() ? "invalid request" : decode_error;
+                return true;
+            }
+
+            const bool is_ehentai_family = req.source_id == "ehentai.official" || req.source_id == "exhentai.official";
+
+            // ── E-Hentai / ExHentai: validate with upstream before storing ──────────
+            if (is_ehentai_family)
+            {
+                memochat::r18::EhentaiSessionCookies cookies;
+                cookies.ipb_member_id = req.ipb_member_id;
+                cookies.ipb_pass_hash = req.ipb_pass_hash;
+                cookies.igneous = req.igneous;
+                cookies.sk = req.sk;
+
+                auto validation = memochat::r18::R18EhentaiSessionService::Instance().ValidateSession(cookies);
+
+                if (!validation.ok)
+                {
+                    memochat::r18::R18SessionImportResponseDto response_dto;
+                    response_dto.success = false;
+                    response_dto.message = validation.error.empty() ? "session validation failed" : validation.error;
+                    WriteOk(root, memochat::r18::R18SessionImportResponseToJsonValue(response_dto));
+                    return true;
+                }
+                if (req.source_id == "exhentai.official" && !validation.exhentai_access)
+                {
+                    memochat::r18::R18SessionImportResponseDto response_dto;
+                    response_dto.success = false;
+                    response_dto.message = "ExHentai access was not granted by the imported session";
+                    response_dto.ehentai_access = validation.ehentai_access;
+                    response_dto.exhentai_access = false;
+                    WriteOk(root, memochat::r18::R18SessionImportResponseToJsonValue(response_dto));
+                    return true;
+                }
+
+                std::string error;
+                bool imported_ehentai = false;
+                bool imported_exhentai = false;
+
+                if (validation.ehentai_access)
+                {
+                    imported_ehentai = memochat::r18::R18SourceCredentialStore::Instance().ImportEhentaiSession(
+                        uid,
+                        "ehentai.official",
+                        validation.normalized_cookie_header,
+                        "authenticated",
+                        "Session import successful",
+                        &error);
+                }
+
+                if (validation.exhentai_access)
+                {
+                    imported_exhentai = memochat::r18::R18SourceCredentialStore::Instance().ImportEhentaiSession(
+                        uid,
+                        "exhentai.official",
+                        validation.normalized_cookie_header,
+                        "authenticated",
+                        "Session import successful (ExHentai access)",
+                        &error);
+                }
+
+                memochat::r18::R18SessionImportResponseDto response_dto;
+                response_dto.success = req.source_id == "exhentai.official" ? imported_exhentai : imported_ehentai;
+                response_dto.message = response_dto.success ? "Session imported successfully" : error;
+                response_dto.ehentai_access = validation.ehentai_access;
+                response_dto.exhentai_access = validation.exhentai_access;
+
+                WriteOk(root, memochat::r18::R18SessionImportResponseToJsonValue(response_dto));
+                return true;
+            }
+
+            // ── Generic cookie import (nhentai, hanime1, …) ──────────────────────────
+            // cookie_header is a pre-formatted "name=value; name2=value2" string.
+            const std::string& cookie = req.cookie_header;
+            if (cookie.empty())
+            {
+                root["error"] = ErrorCodes::Error_Json;
+                root["message"] = "cookie_header is required for this source";
+                return true;
+            }
+
+            std::string error;
+            const bool ok =
+                memochat::r18::R18SourceCredentialStore::Instance().ImportCookieSession(uid,
+                                                                                        req.source_id,
+                                                                                        cookie,
+                                                                                        "authenticated",
+                                                                                        "Cookie import successful",
+                                                                                        &error);
+
+            memochat::r18::R18SessionImportResponseDto response_dto;
+            response_dto.success = ok;
+            response_dto.message = ok ? "Cookie imported successfully" : error;
+            response_dto.ehentai_access = false;
+            response_dto.exhentai_access = false;
+
+            WriteOk(root, memochat::r18::R18SessionImportResponseToJsonValue(response_dto));
             return true;
         });
 }

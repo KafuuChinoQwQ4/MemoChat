@@ -7,6 +7,8 @@
 #include "PetController.h"
 #include "PetModel.h"
 #include "PetSpeechSynthesizer.h"
+#include "R18CookieLoginController.h"
+#include "R18WebLoginController.h"
 #include "ShellViewModel.h"
 
 #include <QtQml>
@@ -21,4 +23,6 @@ void registerMemoChatQmlTypes()
     qmlRegisterType<PetAssetSettings>("MemoChat", 1, 0, "PetAssetSettings");
     qmlRegisterType<Live2DAsset>("MemoChat", 1, 0, "Live2DAsset");
     qmlRegisterType<Live2DRenderItem>("MemoChat", 1, 0, "Live2DRenderItem");
+    qmlRegisterType<R18WebLoginController>("MemoChat", 1, 0, "R18WebLoginController");
+    qmlRegisterType<R18CookieLoginController>("MemoChat", 1, 0, "R18CookieLoginController");
 }

@@ -82,6 +82,26 @@ int BadGatewayHttpStatus()
     return 502;
 }
 
+int ServiceUnavailableHttpStatus()
+{
+    return 503;
+}
+
+int MaxConcurrentImageRequests()
+{
+    return 4;
+}
+
+bool ShouldAdmitImageFetch(int active_requests)
+{
+    return active_requests >= 0 && active_requests < MaxConcurrentImageRequests();
+}
+
+const char* ImageBusyMessage()
+{
+    return "image service busy; retry shortly";
+}
+
 const char* GetJsonContentType()
 {
     return "text/json";

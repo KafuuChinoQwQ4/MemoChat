@@ -14,6 +14,8 @@ const char* UserAgent();
 int ApiTimeoutSeconds();
 int ImageTimeoutSeconds();
 int MaxConcurrentImageFetches();
+unsigned long long MaxDecodedImagePixels();
+bool IsSupportedScrambledImage(bool jpeg_magic, bool webp_magic);
 int SearchPageSize();
 int ScrambleIdThreshold();
 int ScrambleFixedTenThreshold();
@@ -55,6 +57,7 @@ TEST(R18JmAdapterAlgorithmsTest, ExposesStableIdentityAndRuntimeDefaults)
     EXPECT_EQ(ApiTimeoutSeconds(), 6);
     EXPECT_EQ(ImageTimeoutSeconds(), 5);
     EXPECT_EQ(MaxConcurrentImageFetches(), 8);
+    EXPECT_EQ(MaxDecodedImagePixels(), 16u * 1024u * 1024u);
     EXPECT_EQ(SearchPageSize(), 40);
 }
 
@@ -115,6 +118,9 @@ TEST(R18JmAdapterAlgorithmsTest, ExposesChapterAndImageGuards)
     EXPECT_TRUE(ShouldUseDefaultImageContentType(true));
     EXPECT_FALSE(ShouldUseDefaultImageContentType(false));
     EXPECT_STREQ(DefaultImageContentType(), "image/jpeg");
+    EXPECT_TRUE(IsSupportedScrambledImage(true, false));
+    EXPECT_TRUE(IsSupportedScrambledImage(false, true));
+    EXPECT_FALSE(IsSupportedScrambledImage(false, false));
 }
 
 TEST(R18JmAdapterAlgorithmsTest, NormalizesSourceNativeSearchSort)

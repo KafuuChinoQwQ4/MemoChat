@@ -391,6 +391,29 @@ const EHENTAI_TAGS: R18FilterOption[] = [
   { id: "male:dilf", label: "male:dilf" },
 ]
 
+// ─── hanime1.me ─────────────────────────────────────────────────────────────
+// sort: hanime1 query parameter sort=最新上傳|最多觀看|最高評分
+// genre: genre= query parameter (matches site nav)
+
+const HANIME1_SORTS: R18FilterOption[] = [
+  { id: "最新上傳", label: "最新上傳" },
+  { id: "最多觀看", label: "最多觀看" },
+  { id: "最高評分", label: "最高評分" },
+]
+
+const HANIME1_TAGS: R18FilterOption[] = [
+  { id: "",             label: "全部" },
+  { id: "裏番",         label: "裏番" },
+  { id: "泡麵番",       label: "泡麵番" },
+  { id: "Motion Anime", label: "Motion Anime" },
+  { id: "3DCG",         label: "3DCG" },
+  { id: "2.5D",         label: "2.5D" },
+  { id: "2D動畫",       label: "2D動畫" },
+  { id: "AI生成",       label: "AI生成" },
+  { id: "MMD",          label: "MMD" },
+  { id: "Cosplay",      label: "Cosplay" },
+]
+
 const DEFAULT_FILTER: R18SourceFilterConfig = {
   sorts: [{ id: "", label: "默认排序" }],
   tags: [{ id: "", label: "全部" }],
@@ -428,6 +451,18 @@ const BY_SOURCE: Record<string, R18SourceFilterConfig> = {
     sorts: EHENTAI_SORTS,
     tags: EHENTAI_TAGS,
     tagPlaceholder: "附加 namespace:tag，例如 language:chinese",
+    allowCustomTag: true,
+  },
+  "hanime1.official": {
+    sorts: HANIME1_SORTS,
+    tags: HANIME1_TAGS,
+    tagPlaceholder: "输入 tag，例如 巨乳、无码、3D动画",
+    allowCustomTag: true,
+  },
+  "hanimeone.official": {
+    sorts: [{ id: "", label: "默认" }],
+    tags: [{ id: "", label: "全部" }],
+    tagPlaceholder: "输入 tag 筛选",
     allowCustomTag: true,
   },
 }

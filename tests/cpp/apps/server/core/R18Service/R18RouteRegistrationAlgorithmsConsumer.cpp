@@ -52,6 +52,11 @@ const char* ChapterPagesPath()
     return memochat::r18::route_registration::modules::ChapterPagesPath();
 }
 
+const char* VideoResolvePath()
+{
+    return memochat::r18::route_registration::modules::VideoResolvePath();
+}
+
 const char* FavoriteTogglePath()
 {
     return memochat::r18::route_registration::modules::FavoriteTogglePath();

@@ -662,3 +662,47 @@ RedisMgr::Eval(const std::string& script, const std::vector<std::string>& keys, 
     returnConnection(connect);
     return result;
 }
+
+bool RedisMgr::EvalString(const std::string& script,
+                          const std::vector<std::string>& keys,
+                          const std::vector<std::string>& args,
+                          std::string& value)
+{
+    value.clear();
+    auto connect = getRawConnection();
+    if (connect == nullptr)
+        return false;
+
+    std::vector<const char*> argv;
+    std::vector<size_t> argvlen;
+    argv.reserve(3 + keys.size() + args.size());
+    argvlen.reserve(3 + keys.size() + args.size());
+    argv.push_back("EVAL");
+    argvlen.push_back(4);
+    argv.push_back(script.c_str());
+    argvlen.push_back(script.size());
+    std::string numkeys = std::to_string(keys.size());
+    argv.push_back(numkeys.c_str());
+    argvlen.push_back(numkeys.size());
+    for (const auto& key : keys)
+    {
+        argv.push_back(key.c_str());
+        argvlen.push_back(key.size());
+    }
+    for (const auto& arg : args)
+    {
+        argv.push_back(arg.c_str());
+        argvlen.push_back(arg.size());
+    }
+
+    auto* reply =
+        static_cast<redisReply*>(redisCommandArgv(connect, static_cast<int>(argv.size()), argv.data(), argvlen.data()));
+    const bool ok =
+        reply != nullptr && redis_mgr_modules::IsReplyType(reply->type, REDIS_REPLY_STRING) && reply->str != nullptr;
+    if (ok)
+        value.assign(reply->str, reply->len);
+    if (reply != nullptr)
+        freeReplyObject(reply);
+    returnConnection(connect);
+    return ok;
+}
