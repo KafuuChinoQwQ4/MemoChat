@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import json
 import os
@@ -432,6 +433,128 @@ class LLMProviderDedupeTests(unittest.IsolatedAsyncioTestCase):
                         if endpoint.provider_id == first.provider_id
                     ]
                 self.assertEqual(len(restarted_endpoints), 1)
+            finally:
+                os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
+                _clear_service_stubs()
+                sys.modules.pop("harness.llm.service", None)
+
+    async def test_legacy_runtime_provider_key_is_atomically_migrated_on_registry_startup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            provider_file = Path(tmpdir) / "api_providers.json"
+            legacy_key = "legacy-provider-key-for-migration"
+            provider_file.write_text(
+                json.dumps(
+                    {
+                        "providers": [
+                            {
+                                "name": "api-legacy",
+                                "adapter": "openai_compatible",
+                                "deployment": "external_api",
+                                "base_url": "https://api.example.test",
+                                "api_key": legacy_key,
+                                "models": [{"name": "legacy-model"}],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider_file.chmod(0o644)
+            os.environ["MEMOCHAT_API_PROVIDERS_FILE"] = str(provider_file)
+            _install_service_stubs()
+
+            try:
+                import harness.llm.service as service
+
+                service = importlib.reload(service)
+                with (
+                    patch.object(service.os, "replace", wraps=service.os.replace) as atomic_replace,
+                    patch.object(service.os, "fsync", wraps=service.os.fsync) as durable_sync,
+                ):
+                    service.LLMEndpointRegistry()
+
+                atomic_replace.assert_called_once()
+                self.assertEqual(durable_sync.call_count, 2)
+                migrated_text = provider_file.read_text(encoding="utf-8")
+                migrated_provider = json.loads(migrated_text)["providers"][0]
+                self.assertNotIn(legacy_key, migrated_text)
+                self.assertNotIn("api_key", migrated_provider)
+                self.assertEqual(
+                    migrated_provider["api_key_fingerprint"],
+                    service._provider_api_fingerprint(legacy_key),
+                )
+                self.assertEqual(
+                    migrated_provider["api_key_env"],
+                    "MEMOCHAT_AI_PROVIDER_API_LEGACY_API_KEY",
+                )
+                self.assertEqual(provider_file.stat().st_mode & 0o777, 0o600)
+                self.assertFalse(list(provider_file.parent.glob(f".{provider_file.name}.*.tmp")))
+            finally:
+                os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
+                _clear_service_stubs()
+                sys.modules.pop("harness.llm.service", None)
+
+    async def test_legacy_runtime_provider_migration_failure_is_atomic_and_secret_safe(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            provider_file = Path(tmpdir) / "api_providers.json"
+            legacy_key = "legacy-provider-key-that-must-not-leak"
+            provider_file.write_text(
+                json.dumps(
+                    {
+                        "providers": [
+                            {
+                                "name": "api-legacy",
+                                "adapter": "openai_compatible",
+                                "base_url": "https://api.example.test",
+                                "api_key": legacy_key,
+                                "models": [],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_digest = hashlib.sha256(provider_file.read_bytes()).digest()
+            os.environ["MEMOCHAT_API_PROVIDERS_FILE"] = str(provider_file)
+            _install_service_stubs()
+
+            try:
+                import harness.llm.service as service
+
+                service = importlib.reload(service)
+                with (
+                    patch.object(
+                        service.os,
+                        "replace",
+                        side_effect=PermissionError(f"cannot replace file containing {legacy_key}"),
+                    ),
+                    self.assertRaisesRegex(RuntimeError, "runtime provider credential migration failed") as raised,
+                ):
+                    service.LLMEndpointRegistry()
+
+                self.assertNotIn(legacy_key, str(raised.exception))
+                self.assertEqual(hashlib.sha256(provider_file.read_bytes()).digest(), original_digest)
+                self.assertIn("api_key", json.loads(provider_file.read_text(encoding="utf-8"))["providers"][0])
+                self.assertFalse(list(provider_file.parent.glob(f".{provider_file.name}.*.tmp")))
+            finally:
+                os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
+                _clear_service_stubs()
+                sys.modules.pop("harness.llm.service", None)
+
+    async def test_runtime_provider_startup_ignores_non_list_provider_payload(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            provider_file = Path(tmpdir) / "api_providers.json"
+            provider_file.write_text(json.dumps({"providers": None}), encoding="utf-8")
+            os.environ["MEMOCHAT_API_PROVIDERS_FILE"] = str(provider_file)
+            _install_service_stubs()
+
+            try:
+                import harness.llm.service as service
+
+                service = importlib.reload(service)
+                registry = service.LLMEndpointRegistry()
+
+                self.assertEqual(registry._load_runtime_providers(), [])
             finally:
                 os.environ.pop("MEMOCHAT_API_PROVIDERS_FILE", None)
                 _clear_service_stubs()
