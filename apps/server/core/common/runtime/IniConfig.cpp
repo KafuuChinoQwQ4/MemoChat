@@ -115,6 +115,35 @@ bool LoadIniFile(const std::string& path, std::map<std::string, IniSection>& con
     return true;
 }
 
+bool IsSecretLikeConfigField(const std::string& section, const std::string& key)
+{
+    std::string field;
+    field.reserve(section.size() + key.size() + 1);
+    field.append(section);
+    field.push_back('.');
+    field.append(key);
+    std::transform(field.begin(),
+                   field.end(),
+                   field.begin(),
+                   [](unsigned char ch)
+                   {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+
+    constexpr const char* sensitive_tokens[] = {
+        "password",      "passwd",      "secret",  "token",   "cookie",  "session",   "credential", "privatekey",
+        "private_key",   "private-key", "apikey",  "api_key", "api-key", "accesskey", "access_key", "access-key",
+        "authorization", "bearer",      "signing", "hmac",    "jwt",     "ticket"};
+    for (const char* token : sensitive_tokens)
+    {
+        if (field.find(token) != std::string::npos)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 std::string IniSection::BuildEnvKey(const std::string& section, const std::string& key)
@@ -279,7 +308,9 @@ void IniConfig::StopEtcdWatch()
 
 void IniConfig::OnEtcdConfigChange(const std::string& section, const std::string& key, const std::string& value)
 {
-    std::cout << "[IniConfig] Config changed: [" << section << "] " << key << " = " << value << std::endl;
+    const bool sensitive = IsSecretLikeConfigField(section, key);
+    std::cout << "[IniConfig] Config changed: [" << section << "] " << (sensitive ? "<sensitive-key>" : key)
+              << " value_redacted=true sensitive=" << std::boolalpha << sensitive << std::noboolalpha << std::endl;
     _config[section].values[key] = value;
 }
 

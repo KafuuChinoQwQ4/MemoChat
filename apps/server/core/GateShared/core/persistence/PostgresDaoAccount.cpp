@@ -116,7 +116,7 @@ int PostgresDao::RegUserTransaction(const std::string& name,
             TransactionOk("RegUserTransaction", txn);
             return -1;
         }
-        std::cout << "email " << email << " exists" << std::endl;
+        std::cout << "RegUserTransaction account already exists" << std::endl;
         return 0;
     }
 
@@ -524,7 +524,7 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
                                       email);
     if (!TransactionOk("CheckPwd", txn) || rows.empty())
     {
-        std::cout << "CheckPwd user not found for email " << email << std::endl;
+        std::cout << "CheckPwd account lookup failed" << std::endl;
         return false;
     }
 
@@ -587,7 +587,7 @@ void PostgresDao::WarmupAuthQueries()
     pqxx::read_transaction txn(*con->_con);
     txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
                     "FROM \"user\" WHERE email = $1 LIMIT 1",
-                    "__memochat_warmup__@invalid.local");
+                    "__memochat_query_warmup__");
     if (!TransactionOk("WarmupAuthQueries", txn) || !txn.commit())
     {
         TransactionOk("WarmupAuthQueries", txn);
@@ -763,7 +763,7 @@ bool PostgresDao::TestProcedure(const std::string& email, int& uid, std::string&
     const auto rows = txn.exec_params("SELECT uid, name FROM " + PgTable("user") + " WHERE email = $1 LIMIT 1", email);
     if (!TransactionOk("TestProcedure", txn) || rows.empty())
     {
-        std::cout << "TestProcedure user not found for email " << email << std::endl;
+        std::cout << "TestProcedure account lookup failed" << std::endl;
         return false;
     }
     uid = rows[0]["uid"].as<int>();

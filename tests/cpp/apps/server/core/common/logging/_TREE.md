@@ -8,7 +8,7 @@
 | --- | --- |
 | `CMakeLists.txt` | 注册该测试目标的 CMake 配置 |
 | `GrpcTraceAlgorithmsConsumer.cpp` | 测试侧导入 gRPC 链路追踪算法模块并暴露 metadata 注入/绑定 helper 给 GTest 断言。 |
-| `JsonLoggerTest.cpp` | 验证 JSON 日志器的字段与格式 |
+| `JsonLoggerTest.cpp` | 验证 JSON 日志器的字段、格式及敏感 email/token key 脱敏边界 |
 | `LogConfigAlgorithmsConsumer.cpp` | 测试侧导入日志配置算法模块并暴露 bool token/clamp/校验 helper 给 GTest 断言。 |
 | `LogConfigAlgorithmsTest.cpp` | 固定日志配置 bool 词表、max_files/max_size_mb 回退与 rotate/level 校验默认值行为。 |
 | `LoggerAlgorithmsConsumer.cpp` | 测试侧导入日志器算法模块并暴露默认目录与顶层字段 helper 给 GTest 断言。 |

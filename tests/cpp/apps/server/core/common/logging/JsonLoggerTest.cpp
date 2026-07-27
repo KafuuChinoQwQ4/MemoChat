@@ -396,13 +396,23 @@ TEST(JsonLoggerTest, Redaction_UsesModuleBackedSensitiveKeyPolicy)
     EXPECT_TRUE(IsSensitiveKey("set-cookie"));
     EXPECT_TRUE(IsSensitiveKey("provider_token"));
     EXPECT_TRUE(IsSensitiveKey("Email"));
+    EXPECT_TRUE(IsSensitiveKey("requested_email"));
+    EXPECT_TRUE(IsSensitiveKey("db_email"));
+    EXPECT_TRUE(IsSensitiveKey("to_email"));
+    EXPECT_TRUE(IsSensitiveKey("recovery-email"));
     EXPECT_TRUE(IsSensitiveKey("verify_code"));
+    EXPECT_FALSE(IsSensitiveKey("email_status"));
+    EXPECT_FALSE(IsSensitiveKey("email_count"));
+    EXPECT_FALSE(IsSensitiveKey("to"));
     EXPECT_FALSE(IsSensitiveKey("display_name"));
 
     EXPECT_EQ(RedactValue("token", "12345678", true), "****");
     EXPECT_EQ(RedactValue("token", "123456789", true), "1234...6789");
     EXPECT_EQ(RedactValue("email", "a@example.com", true), "a***@example.com");
     EXPECT_EQ(RedactValue("email", "alice@example.com", true), "al***@example.com");
+    EXPECT_EQ(RedactValue("requested_email", "alice@example.com", true), "al***@example.com");
+    EXPECT_EQ(RedactValue("db_email", "a@example.com", true), "a***@example.com");
+    EXPECT_EQ(RedactValue("to_email", "bob@example.com", true), "bo***@example.com");
     EXPECT_EQ(RedactValue("password", "secret", true), "****");
     EXPECT_EQ(RedactValue("login_ticket", "ticket-value-1234", true), "tick...1234");
     EXPECT_EQ(RedactValue("api_key", "secret", true), "****");

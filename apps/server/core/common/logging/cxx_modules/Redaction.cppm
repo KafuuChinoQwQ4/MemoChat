@@ -88,7 +88,8 @@ bool ContainsAsciiLiteral(const char* data, unsigned long long size, const char*
 
 int ClassifyLowerSensitiveKey(const char* key, unsigned long long size)
 {
-    if (EqualsAsciiLiteral(key, size, "email"))
+    if (EqualsAsciiLiteral(key, size, "email") || EndsWithAsciiLiteral(key, size, "_email") ||
+        EndsWithAsciiLiteral(key, size, "-email"))
     {
         return kSensitiveEmail;
     }
