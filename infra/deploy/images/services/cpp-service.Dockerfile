@@ -38,6 +38,8 @@ LABEL io.memochat.base.reference="${RUNTIME_IMAGE}" \
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+RUN install -d -o root -g root -m 0755 /etc/ssl /etc/ssl/certs
+
 COPY --from=apt_ca_bootstrap --chmod=0644 \
     /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
@@ -79,6 +81,11 @@ RUN --mount=type=secret,id=memochat_builder_ca,required=false,mode=0444 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 memochat \
  && useradd --uid 10001 --gid memochat --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin memochat \
+ && test "$(stat -c '%a' /etc/ssl)" = 755 \
+ && test "$(stat -c '%a' /etc/ssl/certs)" = 755 \
+ && test "$(stat -c '%a' /etc/ssl/certs/ca-certificates.crt)" = 644 \
+ && setpriv --reuid=10001 --regid=10001 --clear-groups \
+      /usr/bin/test -r /etc/ssl/certs/ca-certificates.crt \
  && install -d -o memochat -g memochat -m 0750 /app/bin /app/lib /run/memochat
 
 ARG TARGET=ChatServer
