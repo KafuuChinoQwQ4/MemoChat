@@ -1,5 +1,6 @@
 #pragma once
 #include "data.hpp"
+#include "PostgresHealthMonitor.hpp"
 
 #include <memory>
 #include <string>
@@ -12,6 +13,7 @@ public:
     PostgresDao();
     ~PostgresDao();
     bool Ready() const noexcept;
+    bool CheckHealth() const noexcept;
     const std::string& startupError() const noexcept;
     // Account auth write/verify (RegUser/CheckEmail/UpdatePwd/CheckPwd) was removed
     // from ChatServer — those belong to the account bounded context only. ChatServer
@@ -151,8 +153,8 @@ public:
 
 private:
     bool WarmupRelationBootstrapQueries();
-    bool EnsureChatEventOutboxSchema();
-    bool EnsureChatMessageIdempotencySchema();
+    bool ValidateChatEventOutboxSchema();
+    bool ValidateChatMessageIdempotencySchema();
     bool GetGroupPermissionBits(const int64_t& group_id, const int& uid, int64_t& out_bits);
     bool HasGroupPermission(const int64_t& group_id, const int& uid, int64_t required_bits);
     std::string GenerateGroupCode();
@@ -163,4 +165,5 @@ private:
     std::string account_connection_string_;
     bool ready_ = false;
     std::string startup_error_;
+    memochat::chat::persistence::PostgresHealthMonitor health_monitor_;
 };

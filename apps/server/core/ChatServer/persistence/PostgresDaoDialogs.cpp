@@ -18,9 +18,6 @@ namespace postgres_dao_dialogs_modules = memochat::chat::persistence::postgres_d
 
 namespace
 {
-constexpr int64_t kMessageIdempotencySchemaLock = 0x4D43484944000001LL;
-constexpr int64_t kEventOutboxSchemaLock = 0x4D43484F55540001LL;
-
 bool IsValidGroupCode(const std::string& group_code)
 {
     const int length = static_cast<int>(group_code.size());
@@ -629,102 +626,64 @@ std::string PostgresDao::GenerateGroupCode()
     return SnowflakeUtil::formatPublicId(SnowflakeUtil::getInstance().nextId(), 'g');
 }
 
-bool PostgresDao::EnsureChatMessageIdempotencySchema()
+bool PostgresDao::ValidateChatMessageIdempotencySchema()
 {
     pqxx::connection conn(postgres_connection_string_);
-    pqxx::work txn(conn);
+    pqxx::read_transaction txn(conn);
     if (!conn.is_open() || !txn.ok())
     {
         const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
+        std::cerr << "ValidateChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
         return false;
     }
-    const auto schema_lock = txn.exec_params("SELECT pg_advisory_xact_lock($1)", kMessageIdempotencySchemaLock);
-    if (!schema_lock.ok())
+    const auto schema = txn.exec("SELECT "
+                                 "to_regclass('memo.uk_chat_private_msg_msg_id') IS NOT NULL, "
+                                 "to_regclass('memo.uk_chat_group_msg_group_msg_id') IS NOT NULL");
+    if (!schema.ok())
     {
-        const auto& postgres_error = schema_lock.error_message();
-        std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
+        const auto& postgres_error = schema.error_message();
+        std::cerr << "ValidateChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
         return false;
     }
-    txn.exec0("CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_private_msg_msg_id ON chat_private_msg(msg_id)");
-    if (!txn.ok())
+    if (schema.empty() || !schema[0][0].as<bool>() || !schema[0][1].as<bool>())
     {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    txn.exec0("CREATE UNIQUE INDEX IF NOT EXISTS uk_chat_group_msg_group_msg_id ON chat_group_msg(group_id, msg_id)");
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    if (!txn.commit())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatMessageIdempotencySchema PostgreSQL error: " << postgres_error << std::endl;
+        std::cerr << "ValidateChatMessageIdempotencySchema PostgreSQL error: required indexes are missing" << std::endl;
         return false;
     }
     return true;
 }
 
-bool PostgresDao::EnsureChatEventOutboxSchema()
+bool PostgresDao::ValidateChatEventOutboxSchema()
 {
     pqxx::connection conn(postgres_connection_string_);
-    pqxx::work txn(conn);
+    pqxx::read_transaction txn(conn);
     if (!conn.is_open() || !txn.ok())
     {
         const auto& postgres_error = conn.is_open() ? txn.error_message() : conn.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
+        std::cerr << "ValidateChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
         return false;
     }
-    const auto schema_lock = txn.exec_params("SELECT pg_advisory_xact_lock($1)", kEventOutboxSchemaLock);
-    if (!schema_lock.ok())
+    const auto columns = txn.exec("SELECT id, event_id, topic, partition_key, payload_json, status, retry_count, "
+                                  "next_retry_at, created_at, published_at, last_error "
+                                  "FROM memo.chat_event_outbox WHERE FALSE");
+    if (!columns.ok())
     {
-        const auto& postgres_error = schema_lock.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
+        const auto& postgres_error = columns.error_message();
+        std::cerr << "ValidateChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
         return false;
     }
-    txn.exec0("CREATE TABLE IF NOT EXISTS chat_event_outbox ("
-              "id BIGSERIAL PRIMARY KEY,"
-              "event_id VARCHAR(64) NOT NULL,"
-              "topic VARCHAR(128) NOT NULL,"
-              "partition_key VARCHAR(128) NOT NULL,"
-              "payload_json JSONB NOT NULL,"
-              "status SMALLINT NOT NULL DEFAULT 0,"
-              "retry_count INT NOT NULL DEFAULT 0,"
-              "next_retry_at BIGINT NOT NULL DEFAULT 0,"
-              "created_at BIGINT NOT NULL,"
-              "published_at BIGINT NULL,"
-              "last_error TEXT NOT NULL DEFAULT '',"
-              "CONSTRAINT uq_chat_event_outbox_event_id UNIQUE(event_id)"
-              ")");
-    if (!txn.ok())
+    const auto indexes = txn.exec("SELECT "
+                                  "to_regclass('memo.idx_chat_event_outbox_status_retry') IS NOT NULL, "
+                                  "to_regclass('memo.idx_chat_event_outbox_topic_status') IS NOT NULL");
+    if (!indexes.ok())
     {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
+        const auto& postgres_error = indexes.error_message();
+        std::cerr << "ValidateChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
         return false;
     }
-    txn.exec0("CREATE INDEX IF NOT EXISTS idx_chat_event_outbox_status_retry ON chat_event_outbox(status, "
-              "next_retry_at, id)");
-    if (!txn.ok())
+    if (indexes.empty() || !indexes[0][0].as<bool>() || !indexes[0][1].as<bool>())
     {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    txn.exec0("CREATE INDEX IF NOT EXISTS idx_chat_event_outbox_topic_status ON chat_event_outbox(topic, status, id)");
-    if (!txn.ok())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
-        return false;
-    }
-    if (!txn.commit())
-    {
-        const auto& postgres_error = txn.error_message();
-        std::cerr << "EnsureChatEventOutboxSchema PostgreSQL error: " << postgres_error << std::endl;
+        std::cerr << "ValidateChatEventOutboxSchema PostgreSQL error: required indexes are missing" << std::endl;
         return false;
     }
     return true;

@@ -13,7 +13,7 @@
 | `MongoMgr.cppm` | MongoMgr DAO 转发表面数量契约算法 module。 |
 | `OnlineRouteStore.cppm` | Redis 在线路由 uid、server-name、session 和 online-set guard 决策算法 module。 |
 | `Outbox.cppm` | Chat outbox retry 次数、backoff 和终止重试决策算法 module。 |
-| `PostgresDao.cppm` | PostgresDao 连接配置段回退与默认值决策算法 module。 |
+| `PostgresDao.cppm` | PostgresDao 连接配置段回退、默认值与连接/语句/TCP/本地 deadline 健康探针常量算法 module。 |
 | `PostgresDaoDialogs.cppm` | PostgresDao 会话列表、read-state、dialog meta 和群申请分页 guard 决策算法 module。 |
 | `PostgresDaoGroupMessages.cppm` | PostgresDao 群消息保存、编辑、撤回、历史分页和查找 guard 决策算法 module。 |
 | `PostgresDaoGroups.cppm` | PostgresDao 群管理创建、申请、角色、权限和生命周期 guard 决策算法 module。 |

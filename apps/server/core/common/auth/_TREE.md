@@ -12,6 +12,7 @@
 | `JwtAccessToken.hpp` | JWT access token claim 结构与签发/验签接口 |
 | `PasswordHasher.cpp` | libsodium 密码哈希、验证与 rehash 判定实现 |
 | `PasswordHasher.hpp` | 密码哈希深模块接口 |
+| `RelationGrpcAuth.hpp` | 关系服务内部 gRPC token 注入、强度校验与常量时间认证 |
 | `RefreshToken.cpp` | refresh token 生成、拆分、哈希与常量时间验证实现 |
 | `RefreshToken.hpp` | refresh token 深模块接口 |
 

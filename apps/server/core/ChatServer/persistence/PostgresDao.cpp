@@ -6,12 +6,23 @@
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
 #include <iostream>
+#include <memory>
 #include <unordered_set>
 #include <unordered_map>
 #include <random>
 #include <limits>
 #include <sstream>
+#include <string_view>
+#include <thread>
+#include <utility>
+
+#ifndef _WIN32
+#include <poll.h>
+#endif
 
 import memochat.chat.postgres_dao_algorithms;
 
@@ -19,7 +30,15 @@ namespace postgres_dao_modules = memochat::chat::persistence::postgres_dao::modu
 
 namespace
 {
-std::string BuildPostgresConnectionStringFor(const std::string& section, const std::string& fallback_section)
+enum class PostgresConnectionPurpose
+{
+    Application,
+    HealthProbe,
+};
+
+std::string BuildPostgresConnectionStringFor(const std::string& section,
+                                             const std::string& fallback_section,
+                                             PostgresConnectionPurpose purpose = PostgresConnectionPurpose::Application)
 {
     auto& cfg = ConfigMgr::Inst();
     std::string sec = section;
@@ -40,25 +59,230 @@ std::string BuildPostgresConnectionStringFor(const std::string& section, const s
     const auto sslmode = cfg[sec]["SslMode"];
     const auto* selected_sslmode = postgres_dao_modules::SelectSslMode(sslmode.empty(), sslmode.c_str());
     const auto* selected_schema = postgres_dao_modules::SelectSchema(schema.empty(), schema.c_str());
-    return "host=" + host + " port=" + port + " user=" + user + " password=" + pwd + " dbname=" + database +
-           " sslmode=" + selected_sslmode + " options=-csearch_path=" + selected_schema + ",public";
+    std::string connection_string = "host=" + host + " port=" + port + " user=" + user + " password=" + pwd +
+                                    " dbname=" + database + " sslmode=" + selected_sslmode +
+                                    " connect_timeout=" + std::to_string(postgres_dao_modules::ConnectTimeoutSeconds());
+    if (purpose == PostgresConnectionPurpose::HealthProbe)
+    {
+        return connection_string +
+               " tcp_user_timeout=" + std::to_string(postgres_dao_modules::TcpUserTimeoutMilliseconds()) +
+               " options='" + postgres_dao_modules::HealthProbeSessionOptions() + "'";
+    }
+    return connection_string + " options=-csearch_path=" + selected_schema + ",public";
 }
 
 std::string BuildPostgresConnectionString()
 {
     return BuildPostgresConnectionStringFor("Postgres", "");
 }
+
+struct PgConnectionDeleter
+{
+    void operator()(PGconn* connection) const noexcept
+    {
+        if (connection != nullptr)
+        {
+            PQfinish(connection);
+        }
+    }
+};
+
+struct PgResultDeleter
+{
+    void operator()(PGresult* result) const noexcept
+    {
+        if (result != nullptr)
+        {
+            PQclear(result);
+        }
+    }
+};
+
+using PgConnection = std::unique_ptr<PGconn, PgConnectionDeleter>;
+using PgResult = std::unique_ptr<PGresult, PgResultDeleter>;
+
+struct SocketReadiness
+{
+    bool ready = false;
+    bool readable = false;
+    bool writable = false;
+};
+
+SocketReadiness WaitForPostgresSocket(PGconn* connection,
+                                      bool want_read,
+                                      bool want_write,
+                                      std::chrono::steady_clock::time_point deadline) noexcept
+{
+    const int socket = PQsocket(connection);
+    if (socket < 0)
+    {
+        return {};
+    }
+
+#ifdef _WIN32
+    if (std::chrono::steady_clock::now() >= deadline)
+    {
+        return {};
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    return SocketReadiness{.ready = true, .readable = want_read, .writable = want_write};
+#else
+    while (true)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+        {
+            return {};
+        }
+        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        const int timeout_milliseconds = static_cast<int>(std::max<int64_t>(1, remaining.count()));
+        pollfd descriptor{.fd = socket,
+                          .events = static_cast<short>((want_read ? POLLIN : 0) | (want_write ? POLLOUT : 0)),
+                          .revents = 0};
+        const int result = ::poll(&descriptor, 1, timeout_milliseconds);
+        if (result == 0)
+        {
+            return {};
+        }
+        if (result < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            return {};
+        }
+        if ((descriptor.revents & (POLLERR | POLLNVAL)) != 0)
+        {
+            return {};
+        }
+        return SocketReadiness{.ready = true,
+                               .readable = (descriptor.revents & (POLLIN | POLLHUP)) != 0,
+                               .writable = (descriptor.revents & POLLOUT) != 0};
+    }
+#endif
+}
+
+PgConnection ConnectPostgresForProbe(std::string_view connection_string) noexcept
+{
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(postgres_dao_modules::ConnectTimeoutSeconds());
+    const std::string owned_connection_string(connection_string);
+    PgConnection connection(PQconnectStart(owned_connection_string.c_str()));
+    if (!connection || PQstatus(connection.get()) == CONNECTION_BAD)
+    {
+        return {};
+    }
+
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const auto state = PQconnectPoll(connection.get());
+        if (state == PGRES_POLLING_OK)
+        {
+            if (PQsetnonblocking(connection.get(), 1) != 0)
+            {
+                return {};
+            }
+            return connection;
+        }
+        if (state == PGRES_POLLING_FAILED)
+        {
+            return {};
+        }
+        if (state == PGRES_POLLING_ACTIVE)
+        {
+            continue;
+        }
+
+        const bool want_read = state == PGRES_POLLING_READING;
+        const bool want_write = state == PGRES_POLLING_WRITING;
+        if (!WaitForPostgresSocket(connection.get(), want_read, want_write, deadline).ready)
+        {
+            return {};
+        }
+    }
+    return {};
+}
+
+bool RunPostgresProbeQuery(PGconn* connection) noexcept
+{
+    if (PQsendQuery(connection, "SELECT 1") != 1)
+    {
+        return false;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(postgres_dao_modules::HealthProbeDeadlineMilliseconds());
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const int flush = PQflush(connection);
+        if (flush < 0)
+        {
+            return false;
+        }
+        if (flush == 0 && PQisBusy(connection) == 0)
+        {
+            break;
+        }
+
+        const auto readiness = WaitForPostgresSocket(connection, true, flush == 1, deadline);
+        if (!readiness.ready)
+        {
+            return false;
+        }
+        if (readiness.readable && PQconsumeInput(connection) != 1)
+        {
+            return false;
+        }
+    }
+    bool saw_result = false;
+    bool healthy = false;
+    while (true)
+    {
+        while (PQisBusy(connection) != 0)
+        {
+            const auto readiness = WaitForPostgresSocket(connection, true, false, deadline);
+            if (!readiness.ready || !readiness.readable || PQconsumeInput(connection) != 1)
+            {
+                return false;
+            }
+        }
+
+        PGresult* raw_result = PQgetResult(connection);
+        if (raw_result == nullptr)
+        {
+            return saw_result && healthy;
+        }
+        PgResult result(raw_result);
+        const bool current_healthy = PQresultStatus(result.get()) == PGRES_TUPLES_OK && PQntuples(result.get()) == 1 &&
+                                     PQnfields(result.get()) == 1 && PQgetisnull(result.get(), 0, 0) == 0 &&
+                                     std::strcmp(PQgetvalue(result.get(), 0, 0), "1") == 0;
+        healthy = !saw_result && current_healthy;
+        saw_result = true;
+    }
+}
+
+bool ProbePostgresConnection(void*, std::string_view connection_string) noexcept
+{
+    auto connection = ConnectPostgresForProbe(connection_string);
+    return connection && RunPostgresProbeQuery(connection.get());
+}
 } // namespace
 PostgresDao::PostgresDao()
 {
     postgres_connection_string_ = BuildPostgresConnectionString();
+    auto postgres_health_connection_string =
+        BuildPostgresConnectionStringFor("Postgres", "", PostgresConnectionPurpose::HealthProbe);
     // Account-data (user/user_id) connection. Defaults to the same [Postgres]
     // database when [AccountPostgres] is absent, so behavior is unchanged until
     // the memo_account split config is set (gateserver split Phase 2b). When set,
     // only the user/user_id queries follow this string; chat tables stay on
     // [Postgres]. This is the DB-per-service seam for the account aggregate.
     account_connection_string_ = BuildPostgresConnectionStringFor("AccountPostgres", "Postgres");
-    if (postgres_connection_string_.empty() || account_connection_string_.empty())
+    auto account_health_connection_string =
+        BuildPostgresConnectionStringFor("AccountPostgres", "Postgres", PostgresConnectionPurpose::HealthProbe);
+    if (postgres_connection_string_.empty() || account_connection_string_.empty() ||
+        postgres_health_connection_string.empty() || account_health_connection_string.empty())
     {
         startup_error_ = "missing PostgreSQL configuration for ChatServer";
         std::cerr << startup_error_ << std::endl;
@@ -101,14 +325,14 @@ PostgresDao::PostgresDao()
         }
     }
 
-    if (!EnsureChatMessageIdempotencySchema())
+    if (!ValidateChatMessageIdempotencySchema())
     {
-        startup_error_ = "ChatServer PostgreSQL idempotency schema initialization failed";
+        startup_error_ = "ChatServer PostgreSQL idempotency schema validation failed";
         return;
     }
-    if (!EnsureChatEventOutboxSchema())
+    if (!ValidateChatEventOutboxSchema())
     {
-        startup_error_ = "ChatServer PostgreSQL outbox schema initialization failed";
+        startup_error_ = "ChatServer PostgreSQL outbox schema validation failed";
         return;
     }
     if (!WarmupRelationBootstrapQueries())
@@ -119,14 +343,39 @@ PostgresDao::PostgresDao()
         }
         return;
     }
+
+    std::string monitor_error;
+    if (!health_monitor_.Start(std::move(postgres_health_connection_string),
+                               std::move(account_health_connection_string),
+                               memochat::chat::persistence::PostgresHealthProbe{.function = &ProbePostgresConnection},
+                               std::chrono::milliseconds(postgres_dao_modules::HealthProbeIntervalMilliseconds()),
+                               true,
+                               &monitor_error))
+    {
+        startup_error_ = monitor_error;
+        std::cerr << startup_error_ << std::endl;
+        return;
+    }
     ready_ = true;
 }
 
-PostgresDao::~PostgresDao() = default;
+PostgresDao::~PostgresDao()
+{
+    std::string monitor_error;
+    if (!health_monitor_.Stop(&monitor_error))
+    {
+        std::cerr << "PostgreSQL health monitor join failed: " << monitor_error << std::endl;
+    }
+}
 
 bool PostgresDao::Ready() const noexcept
 {
     return ready_;
+}
+
+bool PostgresDao::CheckHealth() const noexcept
+{
+    return health_monitor_.Healthy();
 }
 
 const std::string& PostgresDao::startupError() const noexcept

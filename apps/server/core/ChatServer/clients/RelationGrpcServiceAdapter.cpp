@@ -6,19 +6,22 @@ import memochat.chat.relation_grpc_service_adapter_algorithms;
 
 namespace relation_service_adapter_modules = memochat::chat::relation_grpc_service_adapter::modules;
 
-static_assert(relation_service_adapter_modules::RelationQueryForwardCount() == 2U);
+static_assert(relation_service_adapter_modules::RelationQueryForwardCount() == 3U);
 static_assert(relation_service_adapter_modules::RelationCommandForwardCount() == 8U);
-static_assert(relation_service_adapter_modules::TotalRelationForwardCount() == 10U);
+static_assert(relation_service_adapter_modules::TotalRelationForwardCount() == 11U);
 static_assert(relation_service_adapter_modules::UsesDefaultRelationAdapterTimeout(2000LL));
 
-RelationGrpcServiceAdapter::RelationGrpcServiceAdapter(const std::string& endpoint, std::chrono::milliseconds timeout)
-    : _client(endpoint, timeout)
+RelationGrpcServiceAdapter::RelationGrpcServiceAdapter(const std::string& endpoint,
+                                                       std::string auth_token,
+                                                       std::chrono::milliseconds timeout)
+    : _client(endpoint, std::move(auth_token), timeout)
 {
 }
 
 RelationGrpcServiceAdapter::RelationGrpcServiceAdapter(std::shared_ptr<grpc::Channel> channel,
+                                                       std::string auth_token,
                                                        std::chrono::milliseconds timeout)
-    : _client(std::move(channel), timeout)
+    : _client(std::move(channel), std::move(auth_token), timeout)
 {
 }
 
@@ -30,6 +33,11 @@ void RelationGrpcServiceAdapter::AppendRelationBootstrapJson(int uid, memochat::
 void RelationGrpcServiceAdapter::BuildDialogListJson(int uid, memochat::json::JsonValue& out)
 {
     _client.BuildDialogListJson(uid, out);
+}
+
+bool RelationGrpcServiceAdapter::AreUsersFriends(int uid, int peer_uid)
+{
+    return _client.AreUsersFriends(uid, peer_uid);
 }
 
 RelationCommandResult RelationGrpcServiceAdapter::SearchUser(const RelationCommandRequest& request)

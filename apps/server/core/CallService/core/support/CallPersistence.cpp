@@ -1,6 +1,19 @@
 #include "CallPersistence.hpp"
 
+#include "CallRelationClient.hpp"
+#include "ConfigMgr.hpp"
 #include "PostgresMgr.hpp"
+
+namespace
+{
+memochat::gate::services::call::CallRelationClient& RelationClient()
+{
+    static memochat::gate::services::call::CallRelationClient client(
+        ConfigMgr::Inst()["RelationQueryService"]["Endpoint"],
+        ConfigMgr::Inst()["RelationQueryService"]["CallAuthToken"]);
+    return client;
+}
+} // namespace
 
 CallPersistence& CallPersistence::Instance()
 {
@@ -10,7 +23,7 @@ CallPersistence& CallPersistence::Instance()
 
 bool CallPersistence::AreUsersMutualFriends(int uid, int peer_uid) const
 {
-    return PostgresMgr::GetInstance()->IsFriend(uid, peer_uid) && PostgresMgr::GetInstance()->IsFriend(peer_uid, uid);
+    return RelationClient().AreUsersFriends(uid, peer_uid);
 }
 
 bool CallPersistence::LoadUserProfile(int uid, CallUserProfile& profile) const

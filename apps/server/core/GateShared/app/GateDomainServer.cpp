@@ -15,6 +15,7 @@
 #include "GateGlobals.hpp"
 #include "GateWorkerPool.hpp"
 #include "LogicSystem.hpp"
+#include "modules/health/HealthRouteModule.hpp"
 #include "SnowflakeUtil.hpp"
 #include "AsioIOServicePool.hpp"
 #include "auth/AuthSecret.hpp"
@@ -255,6 +256,11 @@ int RunGateDomainServer(GateDomainRouteRegistrar registrar,
         return 1;
     }
 
+    memochat::gate::modules::health::HealthRouteModule::SetReadinessCheck(
+        [readiness_probes](std::string* error)
+        {
+            return CheckGateDomainReadiness(readiness_probes, error);
+        });
     LogicSystem::GetInstance(); // build registry with the selected profile
 
     net::io_context ioc{static_cast<int>(num_threads)};

@@ -19,3 +19,8 @@ std::string RelationQueryServiceConfig::RelationQueryServiceEndpoint() const
 {
     return ConfigMgr::Inst().GetValue("RelationQueryService", "Endpoint");
 }
+
+std::string RelationQueryServiceConfig::RelationQueryServiceChatAuthToken() const
+{
+    return ConfigMgr::Inst().GetValue("RelationQueryService", "ChatAuthToken");
+}

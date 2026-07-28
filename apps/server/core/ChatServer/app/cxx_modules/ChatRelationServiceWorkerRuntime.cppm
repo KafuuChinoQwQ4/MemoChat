@@ -93,6 +93,11 @@ bool IsKafkaBackend(const char* data, unsigned long long size)
     return EqualsAscii(data, size, "kafka", 5);
 }
 
+bool ShouldFailClosedForUnavailableBackend(bool release_mode, bool configured_backend, bool build_available)
+{
+    return release_mode && configured_backend && !build_available;
+}
+
 const char* EventBusUnavailableError()
 {
     return "event_bus_unavailable";
@@ -116,5 +121,15 @@ const char* KafkaUnavailableLogEvent()
 const char* KafkaUnavailableLogMessage()
 {
     return "kafka async event bus unavailable in this build, falling back to redis";
+}
+
+const char* RabbitMqUnavailableReleaseError()
+{
+    return "rabbitmq task bus is required in release mode but unavailable in this build";
+}
+
+const char* KafkaUnavailableReleaseError()
+{
+    return "kafka async event bus is required in release mode but unavailable in this build";
 }
 } // namespace memochat::chat::relation_service_worker::modules

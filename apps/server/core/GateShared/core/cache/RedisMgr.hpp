@@ -15,48 +15,31 @@ class RedisConPool
 {
 public:
     RedisConPool(size_t poolSize, const char* host, int port, const char* pwd)
-        : poolSize_(poolSize)
+        : b_stop_(false)
+        , poolSize_(poolSize)
         , host_(host == nullptr ? "" : host)
-        , port_(port)
-        , b_stop_(false)
         , pwd_(pwd == nullptr ? "" : pwd)
-        , counter_(0)
-        , fail_count_(0)
+        , port_(port)
     {
         for (size_t i = 0; i < poolSize_; ++i)
         {
-            auto* context = redisConnect(host, port);
-            if (context == nullptr || context->err != 0)
+            auto* context = ConnectAuthenticated(false);
+            if (context != nullptr)
             {
-                if (context != nullptr)
-                {
-                    redisFree(context);
-                }
-                continue;
+                connections_.push(context);
+                ++connection_count_;
             }
-
-            auto reply = (redisReply*) redisCommand(context, "AUTH %s", pwd_.c_str());
-            if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
-            {
-                std::cout << "redis auth failed" << std::endl;
-                if (reply != nullptr)
-                {
-                    freeReplyObject(reply);
-                }
-                redisFree(context);
-                continue;
-            }
-
-            freeReplyObject(reply);
-            std::cout << "redis auth success" << std::endl;
-            connections_.push(context);
         }
+        health_context_ = ConnectAuthenticated(true);
 
         if (connections_.empty())
         {
             startup_error_ = "redis pool has no usable connections";
             return;
         }
+
+        ready_ = true;
+        healthy_.store(true, std::memory_order_release);
 
         std::string thread_error;
         if (!check_thread_.Start(
@@ -67,7 +50,7 @@ public:
                         {
                             std::unique_lock<std::mutex> lock(mutex_);
                             if (cond_.wait_for(lock,
-                                               std::chrono::seconds(1),
+                                               kHealthCheckInterval,
                                                [this]
                                                {
                                                    return b_stop_.load(std::memory_order_acquire);
@@ -76,20 +59,16 @@ public:
                                 break;
                             }
                         }
-                        counter_++;
-                        if (counter_ >= 60)
-                        {
-                            checkThreadPro();
-                            counter_ = 0;
-                        }
+                        CheckAndRepairConnections();
                     }
                 },
                 &thread_error))
         {
+            ready_ = false;
+            healthy_.store(false, std::memory_order_release);
             startup_error_ = "redis pool checker init failed: " + thread_error;
             return;
         }
-        ready_ = true;
     }
 
     [[nodiscard]] bool Ready() const noexcept
@@ -100,6 +79,11 @@ public:
     [[nodiscard]] const std::string& StartupError() const noexcept
     {
         return startup_error_;
+    }
+
+    [[nodiscard]] bool Healthy() const noexcept
+    {
+        return ready_ && healthy_.load(std::memory_order_acquire);
     }
 
     ~RedisConPool()
@@ -117,6 +101,12 @@ public:
             redisFree(context);
             connections_.pop();
         }
+        connection_count_ = 0;
+        if (health_context_ != nullptr)
+        {
+            redisFree(health_context_);
+            health_context_ = nullptr;
+        }
     }
 
     redisContext* getConnection()
@@ -125,14 +115,15 @@ public:
         cond_.wait(lock,
                    [this]
                    {
-                       if (b_stop_ || !ready_)
+                       if (b_stop_.load(std::memory_order_acquire) || !ready_ ||
+                           !healthy_.load(std::memory_order_acquire))
                        {
                            return true;
                        }
                        return !connections_.empty();
                    });
 
-        if (b_stop_ || !ready_)
+        if (b_stop_.load(std::memory_order_acquire) || !ready_ || !healthy_.load(std::memory_order_acquire))
         {
             return nullptr;
         }
@@ -144,7 +135,7 @@ public:
     redisContext* getConNonBlock()
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        if (b_stop_ || !ready_)
+        if (b_stop_.load(std::memory_order_acquire) || !ready_)
         {
             return nullptr;
         }
@@ -161,10 +152,23 @@ public:
 
     void returnConnection(redisContext* context)
     {
+        if (context == nullptr)
+        {
+            return;
+        }
+        if (context->err != 0)
+        {
+            returnBrokenConnection(context);
+            return;
+        }
         std::lock_guard<std::mutex> lock(mutex_);
-        if (b_stop_)
+        if (b_stop_.load(std::memory_order_acquire))
         {
             redisFree(context);
+            if (connection_count_ > 0)
+            {
+                --connection_count_;
+            }
             return;
         }
         connections_.push(context);
@@ -173,15 +177,21 @@ public:
 
     void returnBrokenConnection(redisContext* context)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (b_stop_)
+        if (context == nullptr)
         {
-            redisFree(context);
             return;
         }
+        std::lock_guard<std::mutex> lock(mutex_);
         redisFree(context);
-        --poolSize_;
-        cond_.notify_one();
+        if (connection_count_ > 0)
+        {
+            --connection_count_;
+        }
+        if (connection_count_ == 0)
+        {
+            healthy_.store(false, std::memory_order_release);
+        }
+        cond_.notify_all();
     }
 
     void Close()
@@ -190,6 +200,7 @@ public:
         {
             return;
         }
+        healthy_.store(false, std::memory_order_release);
         cond_.notify_all();
         if (check_thread_.Joinable())
         {
@@ -202,161 +213,181 @@ public:
     }
 
 private:
-    bool reconnect()
+    static constexpr std::chrono::seconds kHealthCheckInterval{5};
+    static constexpr long kRedisIoTimeoutSeconds = 1;
+
+    static bool SetIoTimeout(redisContext* context, bool bounded)
     {
-        auto context = redisConnect(host_.c_str(), port_);
+        const timeval timeout{.tv_sec = bounded ? kRedisIoTimeoutSeconds : 0, .tv_usec = 0};
+        return redisSetTimeout(context, timeout) == REDIS_OK;
+    }
+
+    redisContext* ConnectAuthenticated(bool keep_io_timeout) const
+    {
+        const timeval timeout{.tv_sec = kRedisIoTimeoutSeconds, .tv_usec = 0};
+        auto* context = redisConnectWithTimeout(host_.c_str(), port_, timeout);
         if (context == nullptr || context->err != 0)
         {
             if (context != nullptr)
             {
                 redisFree(context);
             }
-            return false;
+            return nullptr;
         }
 
-        auto reply = (redisReply*) redisCommand(context, "AUTH %s", pwd_.c_str());
-        if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+        if (!SetIoTimeout(context, true))
         {
-            std::cout << "redis auth failed" << std::endl;
-
-            if (reply != nullptr)
-            {
-                freeReplyObject(reply);
-            }
             redisFree(context);
-            return false;
+            return nullptr;
         }
 
-        freeReplyObject(reply);
-        std::cout << "redis auth success" << std::endl;
-        returnConnection(context);
-        return true;
-    }
-
-    void checkThreadPro()
-    {
-        size_t pool_size;
+        if (!pwd_.empty())
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            pool_size = connections_.size();
-        }
-
-        for (int i = 0; i < pool_size && !b_stop_; ++i)
-        {
-            auto* context = getConNonBlock();
-            if (context == nullptr)
-            {
-                break;
-            }
-
-            redisReply* reply = (redisReply*) redisCommand(context, "PING");
-
-            if (context->err)
-            {
-                std::cout << "Connection error: " << context->err << std::endl;
-                if (reply)
-                {
-                    freeReplyObject(reply);
-                }
-                redisFree(context);
-                fail_count_++;
-                continue;
-            }
-
-            if (!reply || reply->type == REDIS_REPLY_ERROR)
-            {
-                std::cout << "reply is null, redis ping failed: " << std::endl;
-                if (reply)
-                {
-                    freeReplyObject(reply);
-                }
-                redisFree(context);
-                fail_count_++;
-                continue;
-            }
-
-            freeReplyObject(reply);
-            returnConnection(context);
-        }
-
-        while (fail_count_ > 0)
-        {
-            auto res = reconnect();
-            if (res)
-            {
-                fail_count_--;
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-
-    void checkThread()
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (b_stop_)
-        {
-            return;
-        }
-        auto pool_size = connections_.size();
-        for (int i = 0; i < pool_size && !b_stop_; i++)
-        {
-            auto* context = connections_.front();
-            connections_.pop();
-            auto reply = (redisReply*) redisCommand(context, "PING");
-            if (reply != nullptr && context->err == 0 && reply->type != REDIS_REPLY_ERROR)
-            {
-                freeReplyObject(reply);
-                connections_.push(context);
-                continue;
-            }
-            if (reply != nullptr)
-            {
-                freeReplyObject(reply);
-            }
-            std::cout << "Error keeping Redis connection alive" << std::endl;
-            redisFree(context);
-            context = redisConnect(host_.c_str(), port_);
-            if (context == nullptr || context->err != 0)
-            {
-                if (context != nullptr)
-                {
-                    redisFree(context);
-                }
-                continue;
-            }
-
-            reply = (redisReply*) redisCommand(context, "AUTH %s", pwd_.c_str());
+            auto* reply = static_cast<redisReply*>(redisCommand(context, "AUTH %s", pwd_.c_str()));
             if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
             {
-                std::cout << "redis auth failed" << std::endl;
                 if (reply != nullptr)
                 {
                     freeReplyObject(reply);
                 }
                 redisFree(context);
-                continue;
+                return nullptr;
             }
-
             freeReplyObject(reply);
-            std::cout << "redis auth success" << std::endl;
-            connections_.push(context);
         }
+
+        if (!keep_io_timeout && !SetIoTimeout(context, false))
+        {
+            redisFree(context);
+            return nullptr;
+        }
+
+        return context;
     }
+
+    static bool Ping(redisContext* context, bool restore_unbounded_timeout)
+    {
+        if (context == nullptr || (restore_unbounded_timeout && !SetIoTimeout(context, true)))
+        {
+            return false;
+        }
+
+        auto* reply = static_cast<redisReply*>(redisCommand(context, "PING"));
+        const bool healthy = reply != nullptr && context->err == 0 && reply->type != REDIS_REPLY_ERROR;
+        if (reply != nullptr)
+        {
+            freeReplyObject(reply);
+        }
+        if (!healthy)
+        {
+            return false;
+        }
+        return !restore_unbounded_timeout || SetIoTimeout(context, false);
+    }
+
+    bool CheckHealthConnection()
+    {
+        if (health_context_ == nullptr)
+        {
+            health_context_ = ConnectAuthenticated(true);
+        }
+        if (Ping(health_context_, false))
+        {
+            return true;
+        }
+        if (health_context_ != nullptr)
+        {
+            redisFree(health_context_);
+            health_context_ = nullptr;
+        }
+        return false;
+    }
+
+    bool CheckOnePoolConnection(bool& checked)
+    {
+        checked = false;
+        auto* context = getConNonBlock();
+        if (context == nullptr)
+        {
+            return false;
+        }
+        checked = true;
+        if (Ping(context, true))
+        {
+            returnConnection(context);
+            return true;
+        }
+
+        returnBrokenConnection(context);
+        return false;
+    }
+
+    void RepairOneConnection()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (connection_count_ >= poolSize_)
+            {
+                return;
+            }
+        }
+
+        auto* context = ConnectAuthenticated(false);
+        if (context == nullptr)
+        {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (b_stop_.load(std::memory_order_acquire) || connection_count_ >= poolSize_)
+        {
+            redisFree(context);
+            return;
+        }
+        connections_.push(context);
+        ++connection_count_;
+    }
+
+    void CheckAndRepairConnections()
+    {
+        bool dependency_healthy = CheckHealthConnection();
+        bool pool_connection_checked = false;
+        const bool sampled_pool_healthy = CheckOnePoolConnection(pool_connection_checked);
+
+        // If the reserved health connection cannot reconnect because Redis is
+        // at its client limit, a verified business-pool connection still proves
+        // that this process can serve Redis-backed requests.
+        dependency_healthy = dependency_healthy || (pool_connection_checked && sampled_pool_healthy);
+        if (!dependency_healthy)
+        {
+            healthy_.store(false, std::memory_order_release);
+            cond_.notify_all();
+            return;
+        }
+
+        RepairOneConnection();
+        bool pool_usable = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pool_usable = connection_count_ > 0;
+        }
+        healthy_.store(pool_usable, std::memory_order_release);
+        cond_.notify_all();
+    }
+
     std::atomic<bool> b_stop_;
     size_t poolSize_;
     std::string host_;
     std::string pwd_;
     int port_;
     std::queue<redisContext*> connections_;
-    std::atomic<int> fail_count_;
+    redisContext* health_context_ = nullptr;
+    size_t connection_count_ = 0;
     std::mutex mutex_;
     std::condition_variable cond_;
     memochat::runtime::ExplicitThread check_thread_;
-    int counter_;
     bool ready_ = false;
+    std::atomic<bool> healthy_{false};
     std::string startup_error_;
 };
 
@@ -369,6 +400,7 @@ class RedisMgr
 public:
     ~RedisMgr();
     [[nodiscard]] bool Ready() const noexcept;
+    [[nodiscard]] bool Healthy() const noexcept;
     [[nodiscard]] const std::string& StartupError() const noexcept;
     bool Get(const std::string& key, std::string& value);
     bool Set(const std::string& key, const std::string& value);

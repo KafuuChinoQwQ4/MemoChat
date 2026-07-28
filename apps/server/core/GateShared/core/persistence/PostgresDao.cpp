@@ -130,7 +130,12 @@ PostgresDao::PostgresDao()
         return;
     }
     account_connection_string_ = BuildAccountConnectionString();
-    WarmupAuthQueries();
+    const bool auth_queries_ready = WarmupAuthQueries();
+    if (!account_connection_string_.empty() && !auth_queries_ready)
+    {
+        startup_error_ = "account postgres warmup failed";
+        return;
+    }
     ready_ = true;
 }
 
@@ -188,6 +193,35 @@ bool PostgresDao::UpdateUserProfile(int uid, const std::string& nick, const std:
 
 bool PostgresDao::GetCallUserProfile(int uid, CallUserProfile& profile)
 {
+    const auto load_profile = [uid, &profile](pqxx::connection& connection)
+    {
+        if (!connection.is_open())
+        {
+            return false;
+        }
+        pqxx::read_transaction txn(connection);
+        const auto rows =
+            txn.exec_params("SELECT uid, user_id, name, nick, icon FROM \"user\" WHERE uid = $1 LIMIT 1", uid);
+        if (!TransactionOk("GetCallUserProfile", txn) || rows.empty())
+        {
+            return false;
+        }
+
+        const auto& row = rows[0];
+        profile.uid = row["uid"].as<int>();
+        profile.user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
+        profile.name = row["name"].is_null() ? "" : row["name"].c_str();
+        profile.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
+        profile.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
+        return TransactionOk("GetCallUserProfile", txn);
+    };
+
+    if (!account_connection_string_.empty())
+    {
+        pqxx::connection account_connection(account_connection_string_);
+        return load_profile(account_connection);
+    }
+
     auto con = pool_->getConnection();
     if (con == nullptr)
     {
@@ -200,41 +234,7 @@ bool PostgresDao::GetCallUserProfile(int uid, CallUserProfile& profile)
             pool_->returnConnection(std::move(con));
         });
 
-    pqxx::read_transaction txn(*con->_con);
-    const auto rows =
-        txn.exec_params("SELECT uid, user_id, name, nick, icon FROM \"user\" WHERE uid = $1 LIMIT 1", uid);
-    if (!TransactionOk("GetCallUserProfile", txn) || rows.empty())
-    {
-        return false;
-    }
-
-    const auto& row = rows[0];
-    profile.uid = row["uid"].as<int>();
-    profile.user_id = row["user_id"].is_null() ? "" : row["user_id"].c_str();
-    profile.name = row["name"].is_null() ? "" : row["name"].c_str();
-    profile.nick = row["nick"].is_null() ? "" : row["nick"].c_str();
-    profile.icon = row["icon"].is_null() ? "" : row["icon"].c_str();
-    return TransactionOk("GetCallUserProfile", txn);
-}
-
-bool PostgresDao::IsFriend(int uid, int peer_uid)
-{
-    auto con = pool_->getConnection();
-    if (con == nullptr)
-    {
-        return false;
-    }
-
-    Defer defer(
-        [this, &con]()
-        {
-            pool_->returnConnection(std::move(con));
-        });
-
-    pqxx::read_transaction txn(*con->_con);
-    const auto rows =
-        txn.exec_params("SELECT 1 FROM friend WHERE self_id = $1 AND friend_id = $2 LIMIT 1", uid, peer_uid);
-    return TransactionOk("IsFriend", txn) && !rows.empty();
+    return load_profile(*con->_con);
 }
 
 bool PostgresDao::UpsertCallSession(const CallSessionInfo& session)
@@ -680,20 +680,17 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid,
 					OR m.uid = $1
 					OR (
 						m.visibility = 1
-						AND (
-							EXISTS (
-								SELECT 1
-								FROM friend f
-								WHERE ((f.self_id = m.uid AND f.friend_id = $1)
-									OR (f.self_id = $1 AND f.friend_id = m.uid))
-							)
-							OR EXISTS (
-								SELECT 1
-								FROM friend_apply fa
-								WHERE fa.status = 1
-								  AND ((fa.from_uid = m.uid AND fa.to_uid = $1)
-									OR (fa.from_uid = $1 AND fa.to_uid = m.uid))
-							)
+							AND (
+								EXISTS (
+									SELECT 1
+									FROM friend f
+									WHERE f.self_id = m.uid AND f.friend_id = $1
+								)
+								AND EXISTS (
+									SELECT 1
+									FROM friend f
+									WHERE f.self_id = $1 AND f.friend_id = m.uid
+								)
 						)
 					)
 				  )
@@ -718,20 +715,17 @@ bool PostgresDao::GetMomentsFeed(int viewer_uid,
 					OR m.uid = $1
 					OR (
 						m.visibility = 1
-						AND (
-							EXISTS (
-								SELECT 1
-								FROM friend f
-								WHERE ((f.self_id = m.uid AND f.friend_id = $1)
-									OR (f.self_id = $1 AND f.friend_id = m.uid))
-							)
-							OR EXISTS (
-								SELECT 1
-								FROM friend_apply fa
-								WHERE fa.status = 1
-								  AND ((fa.from_uid = m.uid AND fa.to_uid = $1)
-									OR (fa.from_uid = $1 AND fa.to_uid = m.uid))
-							)
+							AND (
+								EXISTS (
+									SELECT 1
+									FROM friend f
+									WHERE f.self_id = m.uid AND f.friend_id = $1
+								)
+								AND EXISTS (
+									SELECT 1
+									FROM friend f
+									WHERE f.self_id = $1 AND f.friend_id = m.uid
+								)
 						)
 					)
 				  )
@@ -911,19 +905,16 @@ bool PostgresDao::CanViewMoment(int viewer_uid, const MomentInfo& moment)
         });
 
     pqxx::read_transaction txn(*con->_con);
-    const auto rows =
-        txn.exec_params("SELECT 1 "
-                        "WHERE EXISTS ("
-                        "    SELECT 1 FROM friend f "
-                        "    WHERE ((f.self_id = $1 AND f.friend_id = $2) OR (f.self_id = $2 AND f.friend_id = $1))"
-                        ") "
-                        "OR EXISTS ("
-                        "    SELECT 1 FROM friend_apply fa "
-                        "    WHERE fa.status = 1 "
-                        "      AND ((fa.from_uid = $1 AND fa.to_uid = $2) OR (fa.from_uid = $2 AND fa.to_uid = $1))"
-                        ")",
-                        viewer_uid,
-                        moment.uid);
+    const auto rows = txn.exec_params("SELECT 1 "
+                                      "WHERE EXISTS ("
+                                      "    SELECT 1 FROM friend f "
+                                      "    WHERE f.self_id = $1 AND f.friend_id = $2"
+                                      ") AND EXISTS ("
+                                      "    SELECT 1 FROM friend f "
+                                      "    WHERE f.self_id = $2 AND f.friend_id = $1"
+                                      ")",
+                                      viewer_uid,
+                                      moment.uid);
     return TransactionOk("CanViewMoment", txn) && !rows.empty();
 }
 

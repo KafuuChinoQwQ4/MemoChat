@@ -2,6 +2,7 @@
 
 #include "ChatRelationService.hpp"
 #include "RelationGrpcServiceAdapter.hpp"
+#include "auth/RelationGrpcAuth.hpp"
 #include "logging/Logger.hpp"
 
 import memochat.chat.service_factory_algorithms;
@@ -39,6 +40,7 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
     if (memochat::chat::factory::modules::IsRemoteBackend(backend.data(), backend.size()))
     {
         const auto endpoint = relation_service_config.RelationServiceEndpoint();
+        const auto auth_token = relation_service_config.RelationServiceAuthToken();
         if (endpoint.empty())
         {
             const std::string message = "Relation service remote endpoint is empty: " + backend;
@@ -49,15 +51,24 @@ std::unique_ptr<IRelationService> CreateRelationService(const IRelationServiceCo
             memolog::LogError("chat.relation_service.endpoint_missing", message, {{"configured_backend", backend}});
             return nullptr;
         }
-        return std::make_unique<RelationGrpcServiceAdapter>(endpoint);
+        if (!memochat::auth::IsStrongRelationGrpcAuthToken(auth_token))
+        {
+            const std::string message = "Relation service auth token must be at least 32 printable ASCII bytes";
+            if (error != nullptr)
+            {
+                *error = message;
+            }
+            memolog::LogError("chat.relation_service.auth_token_invalid", message, {{"configured_backend", backend}});
+            return nullptr;
+        }
+        return std::make_unique<RelationGrpcServiceAdapter>(endpoint, auth_token);
     }
 
-    memolog::LogWarn("chat.relation_service.unsupported_backend",
-                     "relation service backend is not implemented yet, fallback to inprocess",
-                     {{"configured_backend", backend}, {"fallback_backend", "inprocess"}});
-    return CreateInProcessRelationService(relation_repository,
-                                          relation_bootstrap_cache,
-                                          delivery_gateway,
-                                          task_publisher,
-                                          event_publisher);
+    const std::string message = "Unsupported relation service backend: " + backend;
+    if (error != nullptr)
+    {
+        *error = message;
+    }
+    memolog::LogError("chat.relation_service.unsupported_backend", message, {{"configured_backend", backend}});
+    return nullptr;
 }

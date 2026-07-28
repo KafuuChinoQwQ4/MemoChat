@@ -1,4 +1,6 @@
 #include "CacheReadinessProbes.hpp"
+#include "CallRelationClient.hpp"
+#include "ConfigMgr.hpp"
 #include "GateDomainServer.hpp"
 #include "GateRouteProfileRegistrar.hpp"
 #include "PersistenceReadinessProbes.hpp"
@@ -8,13 +10,16 @@
 // (Postgres) + Redis call:* keys + LiveKit token issuance. It starts by default after Envoy cut-over.
 int main()
 {
-    return RunGateDomainServer(
-        memochat::gate::profiles::RegisterCall,
-        "CallGatewayServer",
-        "CallGateway",
-        /*default_port=*/8097,
-        /*init_aws=*/false,
-        {},
-        {},
-        {memochat::gate::persistence::PostgresReadinessProbe(), memochat::gate::cache::RedisReadinessProbe()});
+    return RunGateDomainServer(memochat::gate::profiles::RegisterCall,
+                               "CallGatewayServer",
+                               "CallGateway",
+                               /*default_port=*/8097,
+                               /*init_aws=*/false,
+                               {},
+                               {},
+                               {memochat::gate::persistence::PostgresReadinessProbe(),
+                                memochat::gate::cache::RedisReadinessProbe(),
+                                memochat::gate::services::call::CallRelationReadinessProbe(
+                                    ConfigMgr::Inst()["RelationQueryService"]["Endpoint"],
+                                    ConfigMgr::Inst()["RelationQueryService"]["CallAuthToken"])});
 }

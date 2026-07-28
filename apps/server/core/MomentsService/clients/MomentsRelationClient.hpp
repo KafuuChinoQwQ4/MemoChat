@@ -1,5 +1,8 @@
 #pragma once
 
+#include "runtime/GateReadinessProbe.hpp"
+
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -12,26 +15,32 @@
 namespace memochat::gate::services::moments
 {
 
+GateReadinessProbe MomentsRelationReadinessProbe(std::string endpoint,
+                                                 std::string auth_token,
+                                                 std::chrono::milliseconds timeout = std::chrono::milliseconds(500));
+
 class MomentsRelationClient
 {
 public:
     // endpoint e.g. "127.0.0.1:50090". A lazily-created channel/stub is built on
     // first use so construction never blocks startup.
-    explicit MomentsRelationClient(std::string endpoint);
+    explicit MomentsRelationClient(std::string endpoint, std::string auth_token);
 
     // Returns the subset of author_uids that are visible to viewer_uid under the
-    // friends-only rule (bidirectional friend OR accepted friend_apply). On any
-    // transport/parse error returns an empty vector (fail-closed: friends-only
-    // posts from unverifiable authors are hidden rather than leaked).
+    // friends-only rule (both current directional friend rows must exist). On
+    // any transport/parse error returns an empty vector (fail-closed:
+    // friends-only posts from unverifiable authors are hidden rather than
+    // leaked). Historical accepted applications do not grant access.
     std::vector<int> FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids);
 
     bool Enabled() const
     {
-        return !_endpoint.empty();
+        return !_endpoint.empty() && !_auth_token.empty();
     }
 
 private:
     std::string _endpoint;
+    std::string _auth_token;
 };
 
 } // namespace memochat::gate::services::moments
