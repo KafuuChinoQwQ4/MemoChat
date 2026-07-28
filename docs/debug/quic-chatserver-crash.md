@@ -109,8 +109,8 @@ python tools/scripts/dev/runtime_smoke_full_chat.py \
   --gate-url https://127.0.0.1:8443 \
   --insecure-tls \
   --timeout 8 \
-  --minio-access-key memochat_admin \
-  --minio-secret-key 'MinioPass2026!'
+  --minio-access-key "$MEMOCHAT_MINIO_ACCESSKEY" \
+  --minio-secret-key "$MEMOCHAT_MINIO_SECRETKEY"
 ```
 
 成功标准：

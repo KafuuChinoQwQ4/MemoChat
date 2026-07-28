@@ -23,7 +23,7 @@
 | `smoke_relation_query_grpc_runtime.sh` | Relation 查询服务 gRPC 运行时冒烟 |
 | `smoke_relation_service_grpc_runtime.sh` | Relation 服务 gRPC 运行时冒烟 |
 | `start-all-services.bat` | 启动全部服务（批处理） |
-| `start-all-services.sh` | 启动全部服务（shell，默认部署当前 build、同步 AI 内部认证、owner-only 运行文件并透传 transport 门禁） |
+| `start-all-services.sh` | 启动全部服务（shell，默认部署当前 build、同步 AI 内部认证、强制环境注入 MinIO 凭据、owner-only 运行文件并透传 transport 门禁） |
 | `start-local-k8s.ps1` | 启动本地 k8s 集群 |
 | `start-memochat-qml-wslg.sh` | 在 WSLg 下启动 MemoChat QML 客户端 |
 | `status-local-k8s.ps1` | 查看本地 k8s 状态 |

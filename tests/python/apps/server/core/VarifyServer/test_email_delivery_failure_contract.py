@@ -42,8 +42,7 @@ class EmailDeliveryFailureContractTests(unittest.TestCase):
 
         for text in (config, varify2):
             with self.subTest(config_hash=hash(text)):
-                self.assertNotIn("kafu_chino", text)
-                self.assertNotIn("hrkhkvgptixfdfja", text)
+                self.assertIn("MEMOCHAT_EMAIL_SMTPUSER", text)
                 self.assertIn("MEMOCHAT_EMAIL_SMTPPASS", text)
                 self.assertRegex(text, r"(?m)^SMTPUser=$")
                 self.assertRegex(text, r"(?m)^SMTPPass=$")

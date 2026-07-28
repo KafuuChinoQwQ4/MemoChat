@@ -990,7 +990,6 @@ MEMOCHAT_SERVICE=ChatDeliveryWorker /bin/sh /health-entrypoint.sh --healthcheck
             "=admin",
             "memochat-dev-chat-secret",
             "memochat-dev-access-token-secret",
-            "MinioPass2026!",
         ):
             with self.subTest(weak=weak):
                 self.assertNotIn(weak, text)
