@@ -345,9 +345,14 @@ export_minio_runtime_credentials() {
         MINIO_ROOT_PASSWORD \
         MINIO_SECRET_KEY || true)"
 
-    # Local compose defaults. Production deployments should provide explicit env/config values.
-    access_key="${access_key:-memochat_admin}"
-    secret_key="${secret_key:-MinioPass2026!}"
+    if [[ -z "$access_key" || -z "$secret_key" ]]; then
+        echo "[FAIL] MinIO credentials are required; set MEMOCHAT_MINIO_ACCESSKEY and MEMOCHAT_MINIO_SECRETKEY" >&2
+        return 1
+    fi
+    if (( ${#access_key} < 3 || ${#secret_key} < 8 )); then
+        echo "[FAIL] MinIO credentials do not meet the minimum length requirements" >&2
+        return 1
+    fi
 
     export MINIO_ACCESS_KEY="$access_key"
     export MINIO_SECRET_KEY="$secret_key"
@@ -356,7 +361,9 @@ export_minio_runtime_credentials() {
 }
 
 ensure_ai_internal_api_key
-export_minio_runtime_credentials
+if is_truthy "$START_DOCKER_DEPS" || is_truthy "$START_MEDIAGATEWAY"; then
+    export_minio_runtime_credentials
+fi
 
 wait_for_minio() {
     local waited=0

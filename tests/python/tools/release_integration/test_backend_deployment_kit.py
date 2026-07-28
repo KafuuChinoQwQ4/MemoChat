@@ -149,7 +149,7 @@ class BackendDeploymentKitTests(unittest.TestCase):
                         )
 
             base_compose = output.joinpath("infra/deploy/local/docker-compose.yml").read_text(encoding="utf-8")
-            for weak_value in ("123456", "MinioPass2026!", "adminadmin", "my-super-secret-admin-token"):
+            for weak_value in ("123456", "adminadmin", "my-super-secret-admin-token"):
                 with self.subTest(weak_value=weak_value):
                     self.assertNotIn(weak_value, base_compose)
 

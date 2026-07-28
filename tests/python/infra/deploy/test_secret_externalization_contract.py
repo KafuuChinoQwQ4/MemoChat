@@ -56,31 +56,35 @@ class SecretExternalizationContractTests(unittest.TestCase):
         ]
         for text in varify_configs:
             with self.subTest(kind="varify"):
-                self.assertNotIn("kafu_chino", text)
-                self.assertNotIn("hrkhkvgptixfdfja", text)
+                self.assertIn("MEMOCHAT_EMAIL_SMTPUSER", text)
                 self.assertIn("MEMOCHAT_EMAIL_SMTPPASS", text)
                 self.assertRegex(text, r"(?m)^SMTPUser=$")
                 self.assertRegex(text, r"(?m)^SMTPPass=$")
 
         media = read(SERVER_CORE / "MediaService/mediagateway.ini")
-        self.assertNotIn("MinioPass2026!", media)
-        self.assertNotIn("AccessKey=memochat_admin", media)
+        self.assertIn("MEMOCHAT_MINIO_ACCESSKEY", media)
         self.assertIn("MEMOCHAT_MINIO_SECRETKEY", media)
         self.assertRegex(media, r"(?m)^AccessKey=$")
         self.assertRegex(media, r"(?m)^SecretKey=$")
 
         call = read(SERVER_CORE / "CallService/callgateway.ini")
-        self.assertNotIn("ApiKey=devkey", call)
-        self.assertNotIn("ApiSecret=secret", call)
+        self.assertIn("MEMOCHAT_CALL_APIKEY", call)
         self.assertIn("MEMOCHAT_CALL_APISECRET", call)
         self.assertRegex(call, r"(?m)^ApiKey=$")
         self.assertRegex(call, r"(?m)^ApiSecret=$")
 
         picacg_module = read(SERVER_CORE / "R18Service/domain/services/r18/cxx_modules/R18PicacgAdapter.cppm")
-        self.assertNotIn("C69BAF41DA5ABD1FFEDC6D2FEA56B", picacg_module)
-        self.assertNotIn("RK/P.RM4", picacg_module)
-        self.assertIn("MEMOCHAT_R18_PICACG_API_KEY", picacg_module)
-        self.assertIn("MEMOCHAT_R18_PICACG_HMAC_KEY", picacg_module)
+        for function_name, environment_name in (
+            ("ApiKey", "MEMOCHAT_R18_PICACG_API_KEY"),
+            ("HmacKey", "MEMOCHAT_R18_PICACG_HMAC_KEY"),
+        ):
+            with self.subTest(function_name=function_name):
+                self.assertRegex(
+                    picacg_module,
+                    rf'const char\* {function_name}\(\)\s*\{{\s*'
+                    rf'const char\* value = std::getenv\("{environment_name}"\);\s*'
+                    r'return value == nullptr \? "" : value;\s*\}',
+                )
 
     def test_local_compose_credentials_are_env_substitutable(self):
         files = {
