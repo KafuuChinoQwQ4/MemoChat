@@ -240,6 +240,12 @@ tools/scripts/release/build_backend_images.sh \
   --tag local
 ```
 
+If the in-image package transaction needs an operator-managed CA, pass that
+PEM bundle explicitly with `--builder-ca /absolute/path/to/ca-bundle.pem`.
+BuildKit mounts it only for that APT transaction; the bundle is not copied into
+the image. This option does not configure the BuildKit daemon's own trust store:
+the daemon must already trust the TLS chain used by the earlier remote `ADD`.
+
 The public env template already selects `memochat/*:local`. The release wrapper
 checks the complete local image set before its `up` action, so a missing image
 fails before database provisioning. To use published registry images instead,
