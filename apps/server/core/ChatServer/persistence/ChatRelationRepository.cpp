@@ -10,6 +10,11 @@ namespace
 namespace relation_repository_modules = memochat::chat::persistence::relation_repository::modules;
 } // namespace
 
+bool ChatRelationRepository::CheckHealth(std::string* error)
+{
+    return PostgresMgr::GetInstance()->CheckHealth(error);
+}
+
 bool ChatRelationRepository::GetUidByUserId(const std::string& user_id, int& uid)
 {
     // Account identity resolution goes through the isolation seam (finding #3).

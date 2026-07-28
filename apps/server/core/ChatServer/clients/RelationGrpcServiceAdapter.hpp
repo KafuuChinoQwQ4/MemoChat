@@ -13,12 +13,15 @@ class RelationGrpcServiceAdapter final : public IRelationService
 {
 public:
     explicit RelationGrpcServiceAdapter(const std::string& endpoint,
+                                        std::string auth_token,
                                         std::chrono::milliseconds timeout = std::chrono::seconds(2));
     explicit RelationGrpcServiceAdapter(std::shared_ptr<grpc::Channel> channel,
+                                        std::string auth_token,
                                         std::chrono::milliseconds timeout = std::chrono::seconds(2));
 
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override;
     void BuildDialogListJson(int uid, memochat::json::JsonValue& out) override;
+    bool AreUsersFriends(int uid, int peer_uid) override;
 
     RelationCommandResult SearchUser(const RelationCommandRequest& request) override;
     RelationCommandResult AddFriendApply(const RelationCommandRequest& request) override;

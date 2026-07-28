@@ -14,6 +14,7 @@ public:
     ~PostgresMgr();
     bool Ready();
     const std::string& startupError() const noexcept;
+    bool CheckHealth(std::string* error);
     // Account auth write/verify methods removed — see PostgresDao.hpp.
     bool AddFriendApply(const int& from, const int& to);
     bool AuthFriendApply(const int& from, const int& to);

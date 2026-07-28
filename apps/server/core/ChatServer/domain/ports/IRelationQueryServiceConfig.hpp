@@ -9,4 +9,5 @@ public:
 
     virtual std::string RelationQueryServiceBackend() const = 0;
     virtual std::string RelationQueryServiceEndpoint() const = 0;
+    virtual std::string RelationQueryServiceChatAuthToken() const = 0;
 };

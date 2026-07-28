@@ -34,12 +34,15 @@ public:
     };
 
     explicit RelationGrpcClient(const std::string& endpoint,
+                                std::string auth_token,
                                 std::chrono::milliseconds timeout = std::chrono::seconds(2));
     explicit RelationGrpcClient(std::shared_ptr<grpc::Channel> channel,
+                                std::string auth_token,
                                 std::chrono::milliseconds timeout = std::chrono::seconds(2));
 
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override;
     void BuildDialogListJson(int uid, memochat::json::JsonValue& out) override;
+    bool AreUsersFriends(int uid, int peer_uid);
 
     RelationCommandResult SearchUser(const RelationCommandRequest& request) override;
     RelationCommandResult AddFriendApply(const RelationCommandRequest& request) override;
@@ -55,5 +58,6 @@ private:
     RelationCommandResult CallCommand(CommandRpc rpc, const RelationCommandRequest& request);
 
     std::unique_ptr<chatinternal::ChatRelationInternalService::Stub> _stub;
+    std::string _auth_token;
     std::chrono::milliseconds _timeout;
 };

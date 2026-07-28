@@ -12,13 +12,13 @@ GateReadinessProbe RedisReadinessProbe()
         .check = [](std::string* error) -> bool
         {
             const auto redis = RedisMgr::GetInstance();
-            if (redis->Ready())
+            if (redis->Healthy())
             {
                 return true;
             }
             if (error != nullptr)
             {
-                *error = redis->StartupError();
+                *error = redis->Ready() ? "redis dependency is unavailable" : redis->StartupError();
             }
             return false;
         },

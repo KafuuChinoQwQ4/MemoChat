@@ -1,5 +1,6 @@
 #include "RelationGrpcClient.hpp"
 
+#include "auth/RelationGrpcAuth.hpp"
 #include "const.hpp"
 #include "logging/GrpcTrace.hpp"
 
@@ -70,13 +71,20 @@ chatinternal::JsonPayloadRequest BuildGrpcCommandRequest(const RelationCommandRe
 }
 } // namespace
 
-RelationGrpcClient::RelationGrpcClient(const std::string& endpoint, std::chrono::milliseconds timeout)
-    : RelationGrpcClient(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()), timeout)
+RelationGrpcClient::RelationGrpcClient(const std::string& endpoint,
+                                       std::string auth_token,
+                                       std::chrono::milliseconds timeout)
+    : RelationGrpcClient(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()),
+                         std::move(auth_token),
+                         timeout)
 {
 }
 
-RelationGrpcClient::RelationGrpcClient(std::shared_ptr<grpc::Channel> channel, std::chrono::milliseconds timeout)
-    : _timeout(timeout)
+RelationGrpcClient::RelationGrpcClient(std::shared_ptr<grpc::Channel> channel,
+                                       std::string auth_token,
+                                       std::chrono::milliseconds timeout)
+    : _auth_token(std::move(auth_token))
+    , _timeout(timeout)
 {
     if (channel)
     {
@@ -92,6 +100,26 @@ void RelationGrpcClient::AppendRelationBootstrapJson(int uid, memochat::json::Js
 void RelationGrpcClient::BuildDialogListJson(int uid, memochat::json::JsonValue& out)
 {
     CallQuery(QueryRpc::BuildDialogList, uid, out);
+}
+
+bool RelationGrpcClient::AreUsersFriends(int uid, int peer_uid)
+{
+    if (!_stub || uid <= 0 || peer_uid <= 0 || uid == peer_uid)
+    {
+        return false;
+    }
+
+    chatinternal::FriendshipRequest request;
+    request.set_uid(uid);
+    request.set_peer_uid(peer_uid);
+    chatinternal::FriendshipResponse response;
+    grpc::ClientContext context;
+    memolog::InjectGrpcTraceMetadata(context);
+    memochat::auth::InjectRelationGrpcAuth(context, _auth_token);
+    context.set_deadline(std::chrono::system_clock::now() + _timeout);
+
+    const grpc::Status status = _stub->CheckFriendship(&context, request, &response);
+    return status.ok() && response.are_friends();
 }
 
 RelationCommandResult RelationGrpcClient::SearchUser(const RelationCommandRequest& request)
@@ -149,6 +177,7 @@ void RelationGrpcClient::CallQuery(QueryRpc rpc, int uid, memochat::json::JsonVa
     chatinternal::BootstrapResponse response;
     grpc::ClientContext context;
     memolog::InjectGrpcTraceMetadata(context);
+    memochat::auth::InjectRelationGrpcAuth(context, _auth_token);
     context.set_deadline(std::chrono::system_clock::now() + _timeout);
 
     grpc::Status status;
@@ -187,6 +216,7 @@ RelationCommandResult RelationGrpcClient::CallCommand(CommandRpc rpc, const Rela
     chatinternal::JsonPayloadResponse response;
     grpc::ClientContext context;
     memolog::InjectGrpcTraceMetadata(context);
+    memochat::auth::InjectRelationGrpcAuth(context, _auth_token);
     context.set_deadline(std::chrono::system_clock::now() + _timeout);
 
     grpc::Status status;

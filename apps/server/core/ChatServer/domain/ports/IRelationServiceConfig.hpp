@@ -9,4 +9,5 @@ public:
 
     virtual std::string RelationServiceBackend() const = 0;
     virtual std::string RelationServiceEndpoint() const = 0;
+    virtual std::string RelationServiceAuthToken() const = 0;
 };

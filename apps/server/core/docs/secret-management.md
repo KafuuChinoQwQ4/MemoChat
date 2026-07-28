@@ -38,6 +38,10 @@ secret manager 和集群 Secret 中。
 不得设置该开关。此防呆已接入 `AuthLoginSupport`(Account/Register/Login 系)与
 `ChatSessionConfig`(ChatServer)的密钥读取点。
 
+远程 relation-query 调用默认失败关闭。`MEMOCHAT_RELATION_QUERY_ALLOW_INPROCESS_FALLBACK=1`
+只允许显式的开发恢复场景，并且在 `MEMOCHAT_RELEASE_MODE=1` 时强制失效；release Compose、
+Helm 与 CI 环境不得设置该开关。
+
 ## Refresh Token Pepper
 
 Refresh token verifier 和 metadata hash 使用 keyed BLAKE2b。生产必须通过
@@ -63,6 +67,10 @@ MEMOCHAT_AUTHTOKEN_JWTSECRET
 | 登录票据签名 | `[ChatAuth] HmacSecret` | `MEMOCHAT_CHATAUTH_HMACSECRET` |
 | HTTP JWT access token 签名 | `[AuthToken] JwtSecret` | `MEMOCHAT_AUTHTOKEN_JWTSECRET` |
 | Refresh token keyed hash pepper | 进程环境 | `MEMOCHAT_AUTH_REFRESH_PEPPER` |
+| Relation 写服务 Chat 调用认证 | `[RelationService] AuthToken` | `MEMOCHAT_RELATIONSERVICE_AUTHTOKEN` |
+| Relation 查询 Chat 调用认证 | `[RelationQueryService] ChatAuthToken` | `MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN` |
+| Relation 查询 Call 调用认证 | `[RelationQueryService] CallAuthToken` | `MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN` |
+| Relation 查询 Moments 调用认证 | `[RelationQueryService] MomentsAuthToken` | `MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN` |
 | Varify SMTP 用户 | `[Email] SMTPUser` | `MEMOCHAT_EMAIL_SMTPUSER` |
 | Varify SMTP 授权码 | `[Email] SMTPPass` | `MEMOCHAT_EMAIL_SMTPPASS` |
 | Varify SMTP 发件人 | `[Email] From` | `MEMOCHAT_EMAIL_FROM` |
@@ -88,6 +96,20 @@ MEMOCHAT_AUTHTOKEN_JWTSECRET
 | MongoDB 工具 URI/密码 | 开发工具进程环境 | `MEMOCHAT_MONGODB_URI` / `MEMOCHAT_MONGO_APP_PASSWORD` |
 | Neo4j MCP 密码 | 开发工具进程环境 | `MEMOCHAT_NEO4J_PASSWORD` / `MEMOCHAT_AI_NEO4J__PASSWORD` |
 | Phase2 服务库角色密码 | 本地迁移脚本进程环境 | `MEMOCHAT_PHASE2_SERVICE_ROLE_PASSWORD` / `MEMOCHAT_ACCOUNT_DB_ROLE_PASSWORD` |
+
+Relation gRPC token 必须使用四把独立、至少 32 字节的可打印 ASCII 随机值。部署入口使用
+`MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN`、`MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN`、
+`MEMOCHAT_RELATION_CALL_AUTH_TOKEN` 和 `MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN` 接收运维侧
+secret，再按上表映射到各进程的 INI 覆盖变量。command token 只注入 ChatServer 和关系写
+worker；Chat query token 只注入 ChatServer 和查询服务；Call 与 Moments token 只能注入
+各自 gateway 和查询服务。查询容器不得获得 command token，写 worker 也不得获得任一 query
+token。
+
+Kubernetes 的业务数据库凭据也按服务角色隔离：`postgres-password` 仅供迁移 Job、AI
+等仍需管理员连接的组件使用；Chat、Media、Moments、Call、Account Pod 分别使用
+`postgres-chat-password`、`postgres-media-password`、`postgres-moments-password`、
+`postgres-call-password`、`postgres-account-password`。这些值来自 External Secrets 的
+同名属性，不能让业务 Pod 回退到管理员密码。
 
 ## SMTP
 

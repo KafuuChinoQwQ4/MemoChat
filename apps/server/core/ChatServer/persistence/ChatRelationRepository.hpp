@@ -5,6 +5,7 @@
 class ChatRelationRepository : public IRelationRepository
 {
 public:
+    bool CheckHealth(std::string* error) override;
     bool GetUidByUserId(const std::string& user_id, int& uid) override;
     std::shared_ptr<UserInfo> GetUserByUid(int uid) override;
     bool RefreshDialogsForOwner(int owner_uid) override;

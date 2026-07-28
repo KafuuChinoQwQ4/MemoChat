@@ -72,6 +72,7 @@ set(CHATSERVER_PERSISTENCE_SOURCES
     persistence/PostgresDaoGroups.cpp
     persistence/PostgresDaoPrivateMessages.cpp
     persistence/PostgresDaoUsers.cpp
+    persistence/PostgresHealthMonitor.cpp
     persistence/PostgresMgr.cpp
     persistence/OnlineRouteSessionSupport.cpp
     persistence/RedisRelationBootstrapCache.cpp

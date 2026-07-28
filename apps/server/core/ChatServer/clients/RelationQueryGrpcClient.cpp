@@ -1,5 +1,6 @@
 #include "RelationQueryGrpcClient.hpp"
 
+#include "auth/RelationGrpcAuth.hpp"
 #include "const.hpp"
 #include "logging/GrpcTrace.hpp"
 
@@ -44,14 +45,20 @@ void MergePayload(memochat::json::JsonValue& out, const std::string& payload_jso
 }
 } // namespace
 
-RelationQueryGrpcClient::RelationQueryGrpcClient(const std::string& endpoint, std::chrono::milliseconds timeout)
-    : RelationQueryGrpcClient(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()), timeout)
+RelationQueryGrpcClient::RelationQueryGrpcClient(const std::string& endpoint,
+                                                 std::string auth_token,
+                                                 std::chrono::milliseconds timeout)
+    : RelationQueryGrpcClient(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()),
+                              std::move(auth_token),
+                              timeout)
 {
 }
 
 RelationQueryGrpcClient::RelationQueryGrpcClient(std::shared_ptr<grpc::Channel> channel,
+                                                 std::string auth_token,
                                                  std::chrono::milliseconds timeout)
-    : _timeout(timeout)
+    : _auth_token(std::move(auth_token))
+    , _timeout(timeout)
 {
     if (channel)
     {
@@ -88,6 +95,7 @@ void RelationQueryGrpcClient::Call(QueryRpc rpc, int uid, memochat::json::JsonVa
     chatinternal::BootstrapResponse response;
     grpc::ClientContext context;
     memolog::InjectGrpcTraceMetadata(context);
+    memochat::auth::InjectRelationGrpcAuth(context, _auth_token);
     context.set_deadline(std::chrono::system_clock::now() + _timeout);
 
     grpc::Status status;

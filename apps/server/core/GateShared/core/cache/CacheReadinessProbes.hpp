@@ -10,9 +10,8 @@
 namespace memochat::gate::cache
 {
 
-// Probe reporting whether the process-wide RedisMgr singleton opened its
-// connection pool from config. Named "Redis" so startup errors read identically
-// to the previous inline check ("Redis: <error>").
+// Probe reporting the cached result of RedisMgr's bounded background dependency
+// check. Named "Redis" so errors retain the existing "Redis: <error>" shape.
 GateReadinessProbe RedisReadinessProbe();
 
 } // namespace memochat::gate::cache

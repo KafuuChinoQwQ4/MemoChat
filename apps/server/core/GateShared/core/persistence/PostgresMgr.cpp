@@ -115,11 +115,6 @@ bool PostgresMgr::GetCallUserProfile(int uid, CallUserProfile& profile)
     return _dao.GetCallUserProfile(uid, profile);
 }
 
-bool PostgresMgr::IsFriend(int uid, int peer_uid)
-{
-    return _dao.IsFriend(uid, peer_uid);
-}
-
 bool PostgresMgr::UpsertCallSession(const CallSessionInfo& session)
 {
     return _dao.UpsertCallSession(session);

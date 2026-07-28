@@ -570,12 +570,47 @@ std::string PostgresDao::GetUserPublicId(int uid)
     return rows[0]["user_id"].c_str();
 }
 
-void PostgresDao::WarmupAuthQueries()
+bool PostgresDao::WarmupAuthQueries()
 {
+    const auto warmup = [](pqxx::connection& connection) -> bool
+    {
+        if (!connection.is_open())
+        {
+            std::cerr << "WarmupAuthQueries PostgreSQL error: " << connection.error_message() << std::endl;
+            return false;
+        }
+
+        pqxx::read_transaction txn(connection);
+        const auto relation = txn.exec("SELECT to_regclass('memo.\"user\"') IS NOT NULL");
+        if (!TransactionOk("WarmupAuthQueries", txn) || relation.empty() || !relation[0][0].as<bool>())
+        {
+            return false;
+        }
+        txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
+                        "FROM \"user\" WHERE email = $1 LIMIT 1",
+                        "__memochat_query_warmup__");
+        if (!TransactionOk("WarmupAuthQueries", txn))
+        {
+            return false;
+        }
+        if (!txn.commit())
+        {
+            TransactionOk("WarmupAuthQueries", txn);
+            return false;
+        }
+        return true;
+    };
+
+    if (!account_connection_string_.empty())
+    {
+        pqxx::connection account_connection(account_connection_string_);
+        return warmup(account_connection);
+    }
+
     auto con = pool_->getConnection();
     if (con == nullptr)
     {
-        return;
+        return false;
     }
 
     Defer defer(
@@ -584,14 +619,7 @@ void PostgresDao::WarmupAuthQueries()
             pool_->returnConnection(std::move(con));
         });
 
-    pqxx::read_transaction txn(*con->_con);
-    txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
-                    "FROM \"user\" WHERE email = $1 LIMIT 1",
-                    "__memochat_query_warmup__");
-    if (!TransactionOk("WarmupAuthQueries", txn) || !txn.commit())
-    {
-        TransactionOk("WarmupAuthQueries", txn);
-    }
+    return warmup(*con->_con);
 }
 
 std::string PostgresDao::GenerateUserPublicId()

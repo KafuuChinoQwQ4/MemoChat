@@ -11,6 +11,18 @@ class IRelationRepository
 public:
     virtual ~IRelationRepository() = default;
 
+    // Reports whether all relation dependencies passed their startup
+    // validation. Dynamic dependency health belongs to a bounded background
+    // monitor; adapters without one remain fail-closed.
+    virtual bool CheckHealth(std::string* error)
+    {
+        if (error != nullptr)
+        {
+            *error = "relation repository health check is not implemented";
+        }
+        return false;
+    }
+
     virtual bool GetUidByUserId(const std::string& user_id, int& uid) = 0;
     virtual std::shared_ptr<UserInfo> GetUserByUid(int uid) = 0;
     virtual bool RefreshDialogsForOwner(int owner_uid) = 0;

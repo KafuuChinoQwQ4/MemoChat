@@ -31,4 +31,14 @@ int SuccessfulProbeStatus()
 {
     return 200;
 }
+
+int ReadinessFailureStatus()
+{
+    return 503;
+}
+
+const char* NotReadyStatusText()
+{
+    return "not_ready";
+}
 } // namespace memochat::gate::health::modules

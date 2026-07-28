@@ -15,7 +15,9 @@
 #include "GateWorkerPool.hpp"
 #include "LogicSystem.hpp"
 #include "RedisMgr.hpp"
+#include "core/cache/CacheReadinessProbes.hpp"
 #include "domain/AIHttpServiceRoutes.hpp"
+#include "modules/health/HealthRouteModule.hpp"
 #include "AsioIOServicePool.hpp"
 #include "logging/LogConfig.hpp"
 #include "logging/Logger.hpp"
@@ -110,6 +112,12 @@ int main(int argc, char* argv[])
         memolog::Logger::Shutdown();
         return 1;
     }
+    const auto redis_readiness = memochat::gate::cache::RedisReadinessProbe();
+    memochat::gate::modules::health::HealthRouteModule::SetReadinessCheck(
+        [redis_readiness](std::string* error)
+        {
+            return redis_readiness.check && redis_readiness.check(error);
+        });
     auto worker_pool = GateWorkerPool::GetInstance();
     std::string worker_pool_error;
     if (!worker_pool->Start(worker_threads, &worker_pool_error))

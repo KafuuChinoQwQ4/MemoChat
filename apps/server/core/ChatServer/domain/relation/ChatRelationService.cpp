@@ -83,6 +83,17 @@ ChatRelationService::ChatRelationService(IRelationRepository* relation_repositor
 {
 }
 
+bool ChatRelationService::AreUsersFriends(int uid, int peer_uid)
+{
+    return _relation_repository != nullptr && uid > 0 && peer_uid > 0 && uid != peer_uid &&
+           _relation_repository->IsPrivateFriend(uid, peer_uid) && _relation_repository->IsPrivateFriend(peer_uid, uid);
+}
+
+bool ChatRelationService::CheckHealth(std::string* error)
+{
+    return _relation_repository != nullptr && _relation_repository->CheckHealth(error);
+}
+
 void ChatRelationService::AppendRelationBootstrapJson(int uid, Json::Value& out)
 {
     const auto bootstrap_start_ms = NowMsRelationLocal();

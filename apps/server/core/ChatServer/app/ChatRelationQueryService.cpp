@@ -6,6 +6,7 @@
 #include "RedisMgr.hpp"
 #include "RedisRelationBootstrapCache.hpp"
 #include "SnowflakeUtil.hpp"
+#include "auth/RelationGrpcAuth.hpp"
 #include "logging/LogConfig.hpp"
 #include "logging/Logger.hpp"
 #include "logging/Telemetry.hpp"
@@ -23,6 +24,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 
 import memochat.chat.relation_query_service_runtime_algorithms;
 
@@ -153,6 +155,24 @@ int main(int argc, char** argv)
     ConfigMgr::InitConfigPath(config_path);
     auto& cfg = ConfigMgr::Inst();
 
+    RelationGrpcAuthTokens relation_auth_tokens{
+        .chat = cfg.GetValue("RelationQueryService", "ChatAuthToken"),
+        .call = cfg.GetValue("RelationQueryService", "CallAuthToken"),
+        .moments = cfg.GetValue("RelationQueryService", "MomentsAuthToken"),
+    };
+    if (!memochat::auth::IsStrongRelationGrpcAuthToken(relation_auth_tokens.chat) ||
+        !memochat::auth::IsStrongRelationGrpcAuthToken(relation_auth_tokens.call) ||
+        !memochat::auth::IsStrongRelationGrpcAuthToken(relation_auth_tokens.moments) ||
+        relation_auth_tokens.chat == relation_auth_tokens.call ||
+        relation_auth_tokens.chat == relation_auth_tokens.moments ||
+        relation_auth_tokens.call == relation_auth_tokens.moments)
+    {
+        std::cerr << "ChatRelationQueryService fatal: relation query auth tokens must be distinct and at least 32 "
+                     "printable ASCII bytes"
+                  << std::endl;
+        return EXIT_FAILURE;
+    }
+
     const auto service_name =
         ConfigValueOrDefault(cfg, "SelfServer", "Name", relation_query_service_modules::DefaultServiceName());
     SetInstanceNameEnv(service_name);
@@ -212,7 +232,9 @@ int main(int argc, char** argv)
                                                nullptr,
                                                nullptr,
                                                nullptr);
-    ChatRelationInternalGrpcService relation_grpc_service(&relation_query_service);
+    ChatRelationInternalGrpcService relation_grpc_service(&relation_query_service,
+                                                          RelationGrpcAccessMode::QueryOnly,
+                                                          std::move(relation_auth_tokens));
 
     const auto server_address = RelationQueryRpcAddress(cfg);
     grpc::ServerBuilder builder;

@@ -1,6 +1,6 @@
 # persistence/ 目录树
 
-> ChatServer 持久化层：PostgreSQL（消息/对话/群/用户分文件 DAO）、Mongo、Redis（在线路由/关系引导缓存/分布式锁）以及消息/关系/会话仓储与 Outbox 服务。
+> ChatServer 持久化层：PostgreSQL（消息/对话/群/用户分文件 DAO 与双库 readiness 监控）、Mongo、Redis（在线路由/关系引导缓存/分布式锁）以及消息/关系/会话仓储与 Outbox 服务。
 
 ## 子目录
 
@@ -33,16 +33,18 @@
 | `MongoMgr.hpp` | MongoDB 管理声明 |
 | `OnlineRouteSessionSupport.cpp` | 在线路由存储隔离 CSession 会话 ID 读取的非 module helper |
 | `OnlineRouteSessionSupport.hpp` | 在线路由会话 ID 读取 helper 声明 |
-| `PostgresDao.cpp` | Postgres DAO 主实现 |
+| `PostgresDao.cpp` | Postgres DAO 主实现，启动校验双库并以 connect/session/TCP 超时及非阻塞 deadline 执行后台 readiness 探针 |
 | `PostgresDaoDialogs.cpp` | Postgres 对话表 DAO 实现 |
 | `PostgresDaoGroupMessages.cpp` | Postgres 群消息表 DAO 实现 |
 | `PostgresDaoGroups.cpp` | Postgres 群表 DAO 实现 |
 | `PostgresDaoPrivateMessages.cpp` | Postgres 私聊消息表 DAO 实现 |
 | `PostgresDaoUsers.cpp` | Postgres 用户表 DAO 实现 |
-| `PostgresDao.hpp` | Postgres DAO 声明 |
+| `PostgresDao.hpp` | Postgres DAO 声明与动态健康快照入口 |
 | `PostgresDaoUtil.hpp` | Postgres DAO 公共工具 |
-| `PostgresMgr.cpp` | Postgres 连接管理实现 |
-| `PostgresMgr.hpp` | Postgres 管理声明 |
+| `PostgresHealthMonitor.cpp` | 双 PostgreSQL 后台周期探测、故障恢复快照和可中断停止实现 |
+| `PostgresHealthMonitor.hpp` | 可注入 PostgreSQL 健康探针与 atomic readiness 监控声明 |
+| `PostgresMgr.cpp` | Postgres 连接管理及请求线程非阻塞健康快照转发实现 |
+| `PostgresMgr.hpp` | Postgres 管理与动态健康检查声明 |
 | `RedisMgr.cpp` | Redis 连接管理实现 |
 | `RedisMgr.hpp` | Redis 管理声明 |
 | `RedisOnlineRouteStore.cpp` | Redis 在线路由存储实现 |

@@ -13,8 +13,10 @@ class RelationQueryGrpcClient final : public IRelationQueryService
 {
 public:
     explicit RelationQueryGrpcClient(const std::string& endpoint,
+                                     std::string auth_token,
                                      std::chrono::milliseconds timeout = std::chrono::seconds(2));
     explicit RelationQueryGrpcClient(std::shared_ptr<grpc::Channel> channel,
+                                     std::string auth_token,
                                      std::chrono::milliseconds timeout = std::chrono::seconds(2));
 
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override;
@@ -30,5 +32,6 @@ private:
     void Call(QueryRpc rpc, int uid, memochat::json::JsonValue& out);
 
     std::unique_ptr<chatinternal::ChatRelationInternalService::Stub> _stub;
+    std::string _auth_token;
     std::chrono::milliseconds _timeout;
 };

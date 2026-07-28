@@ -6,6 +6,8 @@
 add_library(GateCallCore STATIC
     core/support/CallPersistence.cpp
     core/support/CallPersistence.hpp
+    core/support/CallRelationClient.cpp
+    core/support/CallRelationClient.hpp
     core/support/CallPublicDtos.cpp
     core/support/CallPublicDtos.hpp
     core/support/CallSessionCacheDto.cpp

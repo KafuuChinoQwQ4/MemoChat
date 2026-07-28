@@ -43,6 +43,31 @@ const std::string& PostgresMgr::startupError() const noexcept
     return _dao == nullptr ? unavailable : _dao->startupError();
 }
 
+bool PostgresMgr::CheckHealth(std::string* error)
+{
+    if (_dao == nullptr || !_dao->Ready())
+    {
+        if (error != nullptr)
+        {
+            *error = startupError();
+        }
+        return false;
+    }
+    if (!_dao->CheckHealth())
+    {
+        if (error != nullptr)
+        {
+            *error = "ChatServer PostgreSQL readiness probe failed";
+        }
+        return false;
+    }
+    if (error != nullptr)
+    {
+        error->clear();
+    }
+    return true;
+}
+
 bool PostgresMgr::AddFriendApply(const int& from, const int& to)
 {
     EnsurePostgresDaoInitialized(this);

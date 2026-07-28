@@ -351,6 +351,7 @@ add_library(memochat_auth_security STATIC
     common/auth/JwtAccessToken.hpp
     common/auth/PasswordHasher.cpp
     common/auth/PasswordHasher.hpp
+    common/auth/RelationGrpcAuth.hpp
     common/auth/RefreshToken.cpp
     common/auth/RefreshToken.hpp
 )

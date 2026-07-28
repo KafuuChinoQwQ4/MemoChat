@@ -759,10 +759,9 @@ bool PostgresDao::IsFriend(const int& self_id, const int& friend_id)
 std::vector<int> PostgresDao::FilterFriendUids(int viewer_uid, const std::vector<int>& author_uids)
 {
     // Returns the subset of author_uids visible to viewer_uid under the moments
-    // "friends-only" rule: a bidirectional `friend` row OR an accepted (status=1)
-    // friend_apply in either direction. Mirrors the EXISTS logic the moments feed
-    // used to embed inline, so visibility semantics are unchanged after the feed
-    // query stops touching the friend tables directly.
+    // "friends-only" rule. Both current directional friend rows must exist;
+    // historical accepted applications are not authorization state and must not
+    // keep granting access after either user removes the friendship.
     std::vector<int> result;
     if (viewer_uid <= 0 || author_uids.empty())
     {
@@ -790,19 +789,17 @@ std::vector<int> PostgresDao::FilterFriendUids(int viewer_uid, const std::vector
         in_clause += "$" + std::to_string(i + 2);
         params.append(author_uids[i]);
     }
-    const auto rows =
-        txn.exec("SELECT a.uid FROM (SELECT unnest(ARRAY[" + in_clause +
-                     "]::int[]) AS uid) AS a "
-                     "WHERE EXISTS ("
-                     "    SELECT 1 FROM friend f "
-                     "    WHERE ((f.self_id = a.uid AND f.friend_id = $1) OR (f.self_id = $1 AND f.friend_id = a.uid))"
-                     ") "
-                     "OR EXISTS ("
-                     "    SELECT 1 FROM friend_apply fa "
-                     "    WHERE fa.status = 1 "
-                     "      AND ((fa.from_uid = a.uid AND fa.to_uid = $1) OR (fa.from_uid = $1 AND fa.to_uid = a.uid))"
-                     ")",
-                 params);
+    const auto rows = txn.exec("SELECT a.uid FROM (SELECT unnest(ARRAY[" + in_clause +
+                                   "]::int[]) AS uid) AS a "
+                                   "WHERE EXISTS ("
+                                   "    SELECT 1 FROM friend viewer_friend "
+                                   "    WHERE viewer_friend.self_id = $1 AND viewer_friend.friend_id = a.uid"
+                                   ") "
+                                   "AND EXISTS ("
+                                   "    SELECT 1 FROM friend author_friend "
+                                   "    WHERE author_friend.self_id = a.uid AND author_friend.friend_id = $1"
+                                   ")",
+                               params);
     if (!rows.ok())
     {
         const auto& postgres_error = rows.error_message();

@@ -34,7 +34,6 @@ public:
     bool CheckPwd(const std::string& email, const std::string& pwd, UserInfo& userInfo);
     std::string GetUserPublicId(int uid);
     bool GetCallUserProfile(int uid, CallUserProfile& profile);
-    bool IsFriend(int uid, int peer_uid);
     bool UpsertCallSession(const CallSessionInfo& session);
     bool GetCallSession(const std::string& call_id, CallSessionInfo& session);
     bool InsertMediaAsset(const MediaAssetInfo& asset);

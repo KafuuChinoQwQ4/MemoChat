@@ -304,7 +304,6 @@ public:
     bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
     std::string GetUserPublicId(int uid);
     bool GetCallUserProfile(int uid, CallUserProfile& profile);
-    bool IsFriend(int uid, int peer_uid);
     bool UpsertCallSession(const CallSessionInfo& session);
     bool GetCallSession(const std::string& call_id, CallSessionInfo& session);
     bool InsertMediaAsset(const MediaAssetInfo& asset);
@@ -356,7 +355,7 @@ public:
     bool GetMomentCommentLikes(int64_t comment_id, int limit, std::vector<MomentLikeInfo>& likes, bool& has_more);
 
 private:
-    void WarmupAuthQueries();
+    bool WarmupAuthQueries();
     std::string GenerateUserPublicId();
     std::unique_ptr<PostgresPool> pool_;
     // Optional dedicated connection to the account database (memo_account) for
