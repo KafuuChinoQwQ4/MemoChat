@@ -10,6 +10,9 @@ BUNDLE_ROOT=""
 IMAGE_PREFIX="memochat"
 IMAGE_TAG="local"
 BUILD_CONTEXT_ROOT=""
+PULL_RUNTIME_IMAGE=0
+
+readonly RUNTIME_IMAGE="ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90"
 
 readonly -a TARGET_ROWS=(
     "AIGatewayServer|ai-gateway"
@@ -39,6 +42,9 @@ Options:
   --bundle-root PATH   Root produced by package_backend_services.sh (required).
   --image-prefix NAME  Registry/repository prefix. Default: memochat
   --tag TAG            Image tag. Default: local
+  --pull               Pull the fixed runtime digest before building. The
+                       default is --pull=false so an already-loaded digest
+                       can be built without Docker Hub access.
   -h, --help           Show this help.
 USAGE
 }
@@ -72,6 +78,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || fail "--tag requires a value"
             IMAGE_TAG="$2"
             shift 2
+            ;;
+        --pull)
+            PULL_RUNTIME_IMAGE=1
+            shift
             ;;
         -h|--help)
             usage
@@ -108,15 +118,34 @@ for row in "${TARGET_ROWS[@]}"; do
     for library in libmsquic.so.2 libstdc++.so.6 libgcc_s.so.1 libatomic.so.1; do
         [[ -f "${bundle}/lib/${library}" ]] || fail "${target} is missing ${library}"
     done
+    sbom_path="${bundle}/sbom/vcpkg-build-dependencies.spdx.json"
+    [[ -f "$sbom_path" && ! -L "$sbom_path" && -s "$sbom_path" ]] \
+        || fail "${target} is missing the validated vcpkg dependency SBOM; package with --vcpkg-installed-root and --vcpkg-triplet"
     grep -Fx "format=memochat-cpp-service-bundle-v1" "${bundle}/MANIFEST.txt" >/dev/null \
         || fail "invalid bundle format: $target"
     grep -Fx "target=${target}" "${bundle}/MANIFEST.txt" >/dev/null \
         || fail "bundle target mismatch: $target"
+    grep -Fx "vcpkg_sbom_coverage=installed-closure-overapproximation" "${bundle}/MANIFEST.txt" >/dev/null \
+        || fail "${target} does not carry an installed-closure vcpkg SBOM"
+    expected_sbom_sha256="$(sed -n 's/^vcpkg_sbom_sha256=//p' "${bundle}/MANIFEST.txt")"
+    [[ "$expected_sbom_sha256" =~ ^[0-9a-f]{64}$ ]] \
+        || fail "${target} has an invalid vcpkg SBOM digest"
+    printf '%s  %s\n' "$expected_sbom_sha256" "$sbom_path" \
+        | sha256sum --check --strict >/dev/null \
+        || fail "${target} vcpkg SBOM digest verification failed"
     (cd -- "$bundle" && sha256sum --check --strict SHA256SUMS >/dev/null) \
         || fail "bundle checksum verification failed: $target"
     "$VERIFY_SCRIPT" "$bundle"
     printf '[OK] verified %s -> %s/%s:%s\n' "$target" "$IMAGE_PREFIX" "$slug" "$IMAGE_TAG"
 done
+
+if [[ "$PULL_RUNTIME_IMAGE" -eq 1 ]]; then
+    docker pull "$RUNTIME_IMAGE" >/dev/null \
+        || fail "could not pull the fixed runtime image: $RUNTIME_IMAGE"
+    RUNTIME_PULL_FLAG=(--pull)
+else
+    RUNTIME_PULL_FLAG=(--pull=false)
+fi
 
 BUILD_CONTEXT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/memochat-backend-image-context.XXXXXX")" \
     || fail "could not create an isolated Docker build context"
@@ -130,8 +159,10 @@ for row in "${TARGET_ROWS[@]}"; do
     image="${IMAGE_PREFIX}/${slug}:${IMAGE_TAG}"
     docker buildx build \
         --load \
+        "${RUNTIME_PULL_FLAG[@]}" \
         --build-context "service_bundle=${bundle}" \
         --build-context "server_entrypoint=${BUILD_CONTEXT_ROOT}/server_entrypoint" \
+        --build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}" \
         --build-arg "TARGET=${target}" \
         --file "$DOCKERFILE" \
         --tag "$image" \

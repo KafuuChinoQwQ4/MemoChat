@@ -4,7 +4,11 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd -P)"
 VERIFY_SCRIPT="${SCRIPT_DIR}/verify_release_tree.sh"
+LEGAL_VERIFIER="${SCRIPT_DIR}/verify_release_legal.sh"
 OUTPUT=""
+SOURCE_SHA=""
+APPROVAL_PUBLIC_KEY=""
+APPROVAL_SIGNATURE=""
 
 readonly -a CONFIG_FILES=(
     AccountService/account.ini
@@ -24,7 +28,7 @@ readonly -a CONFIG_FILES=(
 
 usage() {
     cat <<'USAGE'
-Usage: package_backend_deployment_kit.sh --output PATH
+Usage: package_backend_deployment_kit.sh --output PATH [options]
 
 Create a fresh, repository-shaped backend deployment kit. The kit contains the
 fixed release Compose entrypoint, public sanitized INI files, datastore
@@ -33,6 +37,12 @@ contains no private environment file, TLS key, credentials, or mutable data.
 
 Options:
   --output PATH  New output directory. It must not already exist.
+  --source-sha SHA
+                 Bind packaged legal inputs to this exact clean Git commit.
+  --approval-public-key PATH
+                 External legal approval public key; never discovered implicitly.
+  --approval-signature PATH
+                 External exact-source approval signature; never discovered implicitly.
   -h, --help     Show this help.
 USAGE
 }
@@ -49,6 +59,21 @@ while [[ $# -gt 0 ]]; do
             OUTPUT="$2"
             shift 2
             ;;
+        --source-sha)
+            [[ $# -ge 2 ]] || fail "--source-sha requires a value"
+            SOURCE_SHA="$2"
+            shift 2
+            ;;
+        --approval-public-key)
+            [[ $# -ge 2 ]] || fail "--approval-public-key requires a path"
+            APPROVAL_PUBLIC_KEY="$2"
+            shift 2
+            ;;
+        --approval-signature)
+            [[ $# -ge 2 ]] || fail "--approval-signature requires a path"
+            APPROVAL_SIGNATURE="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -60,11 +85,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$OUTPUT" ]] || fail "--output is required"
-for command_name in find grep install mktemp python3 realpath sha256sum; do
+for command_name in awk find grep install mktemp python3 realpath sha256sum; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: ${command_name}"
 done
 [[ -x "$VERIFY_SCRIPT" ]] || fail "release verifier is missing: $VERIFY_SCRIPT"
+[[ -x "$LEGAL_VERIFIER" ]] || fail "legal verifier is missing: $LEGAL_VERIFIER"
+declare -a LEGAL_ARGS=(--project-root "$PROJECT_ROOT")
+[[ -z "$SOURCE_SHA" ]] || LEGAL_ARGS+=(--source-sha "$SOURCE_SHA")
+[[ -z "$APPROVAL_PUBLIC_KEY" ]] \
+    || LEGAL_ARGS+=(--approval-public-key "$APPROVAL_PUBLIC_KEY")
+[[ -z "$APPROVAL_SIGNATURE" ]] \
+    || LEGAL_ARGS+=(--approval-signature "$APPROVAL_SIGNATURE")
 
 OUTPUT="$(realpath -m -- "$OUTPUT")"
 [[ "$OUTPUT" != "/" && "$OUTPUT" != "$PROJECT_ROOT" ]] \
@@ -112,6 +144,7 @@ copy_directory_files() {
 }
 
 copy_file tools/scripts/release/build_backend_images.sh 0555
+copy_file tools/scripts/release/audit_backend_images.sh 0555
 copy_file tools/scripts/release/run_release_compose.sh 0555
 copy_file tools/scripts/release/verify_release_tree.sh 0555
 copy_file infra/deploy/images/services/cpp-service.Dockerfile 0444
@@ -135,26 +168,27 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-replacements = {
-    "${MEMOCHAT_REDIS_PASSWORD:-123456}": "${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}",
-    "${MEMOCHAT_POSTGRES_PASSWORD:-123456}": "${MEMOCHAT_POSTGRES_PASSWORD:?set MEMOCHAT_POSTGRES_PASSWORD}",
-    "${MEMOCHAT_MONGO_ROOT_PASSWORD:-123456}": "${MEMOCHAT_MONGO_ROOT_PASSWORD:?set MEMOCHAT_MONGO_ROOT_PASSWORD}",
-    "${MEMOCHAT_MINIO_ROOT_USER:-memochat_admin}": "${MEMOCHAT_MINIO_ROOT_USER:?set MEMOCHAT_MINIO_ROOT_USER}",
-    "${MEMOCHAT_MINIO_ROOT_PASSWORD:-MinioPass2026!}": "${MEMOCHAT_MINIO_ROOT_PASSWORD:?set MEMOCHAT_MINIO_ROOT_PASSWORD}",
-    "${MEMOCHAT_RABBITMQ_USER:-memochat}": "${MEMOCHAT_RABBITMQ_USER:?set MEMOCHAT_RABBITMQ_USER}",
-    "${MEMOCHAT_RABBITMQ_PASSWORD:-123456}": "${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}",
-    "${MEMOCHAT_INFLUXDB_USERNAME:-admin}": "${MEMOCHAT_INFLUXDB_USERNAME:-}",
-    "${MEMOCHAT_INFLUXDB_PASSWORD:-adminadmin}": "${MEMOCHAT_INFLUXDB_PASSWORD:-}",
-    "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}": "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-}",
-    "${MEMOCHAT_GRAFANA_ADMIN_USER:-admin}": "${MEMOCHAT_GRAFANA_ADMIN_USER:-}",
-    "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-admin}": "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-}",
-    "minio/minio:latest": "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
-}
-missing = [old for old in replacements if old not in text]
+required_tokens = (
+    "${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}",
+    "${MEMOCHAT_POSTGRES_PASSWORD:?set MEMOCHAT_POSTGRES_PASSWORD}",
+    "${MEMOCHAT_MONGO_ROOT_PASSWORD:?set MEMOCHAT_MONGO_ROOT_PASSWORD}",
+    "${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}",
+    "${MEMOCHAT_MINIO_ROOT_PASSWORD:?set MEMOCHAT_MINIO_ROOT_PASSWORD}",
+    "${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}",
+    "${MEMOCHAT_INFLUXDB_PASSWORD:-}",
+    "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-}",
+    "${MEMOCHAT_INFLUXDB_GRAFANA_TOKEN:-}",
+    "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-}",
+)
+missing = [token for token in required_tokens if token not in text]
 if missing:
-    raise SystemExit(f"release base Compose no longer matches expected inputs: {missing}")
-for old, new in replacements.items():
-    text = text.replace(old, new)
+    raise SystemExit(f"release base Compose has non-externalized credentials: {missing}")
+if "minio/minio:latest" not in text:
+    raise SystemExit("release base Compose must keep the mutable MinIO tag for packaging pinning")
+text = text.replace(
+    "minio/minio:latest",
+    "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+)
 path.write_text(text, encoding="utf-8")
 PY
 
@@ -237,24 +271,27 @@ AIOrchestrator, Ollama, Qdrant, or Neo4j; `AIGatewayServer` and `AIServer` are
 therefore intentionally absent from its Compose model. The bundled public INI
 files have all credential fields cleared; runtime secrets are injected from the
 private env file. PostgreSQL migrations and the MongoDB/MinIO provisioners are
-included at the relative paths used by Compose.
+included at the relative paths used by Compose. The `legal` directory always
+records the MIT license, dependency inventory, and machine-readable legal
+status. A package marked `third_party_legal_corpus=incomplete` is suitable for
+local validation only and is not a formal redistributable release.
 README
 chmod 0444 "${STAGING}/README.md"
 
-legal_state=missing
-legal_count=0
-for legal_name in LICENSE THIRD_PARTY_NOTICES.md; do
-    legal_path="${PROJECT_ROOT}/${legal_name}"
-    if [[ ! -e "$legal_path" ]]; then
-        printf '[WARN] legal file is unavailable and will not be included: %s\n' "$legal_name" >&2
-        continue
-    fi
-    [[ -f "$legal_path" && ! -L "$legal_path" && -s "$legal_path" ]] \
-        || fail "legal file must be a non-empty regular file: $legal_path"
-    install -m 0444 -- "$legal_path" "${STAGING}/${legal_name}"
-    legal_count=$((legal_count + 1))
-done
-[[ "$legal_count" -eq 2 ]] && legal_state=complete
+"$LEGAL_VERIFIER" "${LEGAL_ARGS[@]}" --copy-to "${STAGING}/legal"
+legal_status="${STAGING}/legal/LEGAL-STATUS.txt"
+legal_inventory="$(awk -F= '$1 == "third_party_inventory" { print $2 }' "$legal_status")"
+third_party_legal_corpus="$(awk -F= '$1 == "third_party_legal_corpus" { print $2 }' "$legal_status")"
+corpus_review_id="$(awk -F= '$1 == "corpus_review_id" { print $2 }' "$legal_status")"
+corpus_sha256="$(awk -F= '$1 == "corpus_sha256" { print $2 }' "$legal_status")"
+release_source_sha="$(awk -F= '$1 == "release_source_sha" { print $2 }' "$legal_status")"
+formal_distribution_ready="$(awk -F= '$1 == "formal_distribution_ready" { print $2 }' "$legal_status")"
+legal_status_sha256="$(sha256sum -- "$legal_status" | awk '{print $1}')"
+[[ "$legal_inventory" == complete ]] || fail "generated legal inventory status is invalid"
+[[ "$third_party_legal_corpus" == complete || "$third_party_legal_corpus" == incomplete ]] \
+    || fail "generated third-party legal corpus status is invalid"
+[[ "$formal_distribution_ready" == true || "$formal_distribution_ready" == false ]] \
+    || fail "generated formal distribution status is invalid"
 
 {
     printf 'format=memochat-backend-deployment-kit-v1\n'
@@ -265,7 +302,13 @@ done
     printf 'migration_root=apps/server/migrations/postgresql/business\n'
     printf 'supported_profiles=calls,r18,observability\n'
     printf 'excluded_components=AIGatewayServer,AIServer,AIOrchestrator,Ollama,Qdrant,Neo4j\n'
-    printf 'legal_files=%s\n' "$legal_state"
+    printf 'legal_inventory=%s\n' "$legal_inventory"
+    printf 'third_party_legal_corpus=%s\n' "$third_party_legal_corpus"
+    printf 'corpus_review_id=%s\n' "$corpus_review_id"
+    printf 'corpus_sha256=%s\n' "$corpus_sha256"
+    printf 'release_source_sha=%s\n' "$release_source_sha"
+    printf 'legal_status_sha256=%s\n' "$legal_status_sha256"
+    printf 'formal_distribution_ready=%s\n' "$formal_distribution_ready"
 } >"${STAGING}/MANIFEST.txt"
 chmod 0444 "${STAGING}/MANIFEST.txt"
 
