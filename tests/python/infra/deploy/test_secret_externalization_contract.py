@@ -93,16 +93,12 @@ class SecretExternalizationContractTests(unittest.TestCase):
         grafana_datasource = read(LOCAL_DEPLOY / "observability/grafana/provisioning/datasources/datasources.yml")
 
         expected_tokens = (
-            "${MEMOCHAT_REDIS_PASSWORD:-123456}",
-            "${MEMOCHAT_POSTGRES_PASSWORD:-123456}",
-            "${MEMOCHAT_MONGO_ROOT_PASSWORD:-123456}",
-            "${MEMOCHAT_RABBITMQ_PASSWORD:-123456}",
-            "${MEMOCHAT_INFLUXDB_PASSWORD:-adminadmin}",
-            "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}",
-            "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-admin}",
-            'MEMOCHAT_INFLUXDB_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}"',
-            "${MEMOCHAT_LIVEKIT_API_SECRET:-secret}",
-            "${MEMOCHAT_TURN_PASSWORD:-123456}",
+            "${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}",
+            "${MEMOCHAT_POSTGRES_PASSWORD:?set MEMOCHAT_POSTGRES_PASSWORD}",
+            "${MEMOCHAT_MONGO_ROOT_PASSWORD:?set MEMOCHAT_MONGO_ROOT_PASSWORD}",
+            "${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}",
+            "${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}",
+            "${MEMOCHAT_LIVEKIT_API_SECRET:-}",
         )
         combined = "\n".join(files.values())
         for token in expected_tokens:
@@ -123,8 +119,23 @@ class SecretExternalizationContractTests(unittest.TestCase):
                 self.assertIsNone(re.search(pattern, combined))
 
         self.assertIn("secureJsonData:", grafana_datasource)
-        self.assertIn("token: ${MEMOCHAT_INFLUXDB_ADMIN_TOKEN}", grafana_datasource)
+        self.assertIn("token: ${MEMOCHAT_INFLUXDB_GRAFANA_TOKEN}", grafana_datasource)
         self.assertNotIn("token: my-super-secret-admin-token", grafana_datasource)
+
+        standalone_observability = files["observability"]
+        for variable_name in (
+            "MEMOCHAT_INFLUXDB_USERNAME",
+            "MEMOCHAT_INFLUXDB_PASSWORD",
+            "MEMOCHAT_INFLUXDB_ADMIN_TOKEN",
+            "MEMOCHAT_GRAFANA_ADMIN_USER",
+            "MEMOCHAT_GRAFANA_ADMIN_PASSWORD",
+            "MEMOCHAT_INFLUXDB_GRAFANA_TOKEN",
+        ):
+            with self.subTest(standalone_observability_secret=variable_name):
+                self.assertIn(
+                    f"${{{variable_name}:?set {variable_name}}}",
+                    standalone_observability,
+                )
 
     def test_split_local_compose_host_ports_bind_to_loopback(self):
         expected_ports = {
@@ -155,10 +166,9 @@ class SecretExternalizationContractTests(unittest.TestCase):
                 "127.0.0.1:9400:9400",
             },
             "livekit": {
-                "127.0.0.1:7880:7880",
-                "127.0.0.1:7881:7881/udp",
-                "127.0.0.1:3478:3478",
-                "127.0.0.1:49160-49200:49160-49200/udp",
+                "127.0.0.1:7880:7880/tcp",
+                "127.0.0.1:7881:7881/tcp",
+                "127.0.0.1:7882:7882/udp",
             },
         }
         for name, expected in expected_ports.items():
@@ -166,6 +176,18 @@ class SecretExternalizationContractTests(unittest.TestCase):
                 self.assertEqual(published_ports(SPLIT_COMPOSE_FILES[name]), expected)
                 for port in expected:
                     self.assertTrue(port.startswith("127.0.0.1:"), port)
+
+    def test_local_compose_documentation_uses_private_env_and_activates_calls(self):
+        readme = read(LOCAL_DEPLOY / "README.md")
+        startup = readme.split("## Recommended Startup Order", 1)[1].split("## Fresh Data Reset", 1)[0]
+
+        self.assertIn('docker compose --env-file "${LOCAL_ENV}"', startup)
+        self.assertRegex(
+            startup,
+            r"(?s)-f infra/deploy/local/compose/livekit\.yml \\\n\s+--profile calls up -d",
+        )
+        self.assertIn("do not combine it with `docker-compose.yml`", readme)
+        self.assertIn("--profile nvidia up -d", startup)
 
     def test_ai_stack_does_not_commit_usable_dependency_password_defaults(self):
         config_yaml = read(AI_ORCHESTRATOR / "config.yaml")
@@ -187,11 +209,11 @@ class SecretExternalizationContractTests(unittest.TestCase):
                 self.assertIsNone(re.search(pattern, config_yaml + "\n" + config_py + "\n" + k8s_config))
 
         for token in (
-            "MEMOCHAT_AI_POSTGRES__PASSWORD=${MEMOCHAT_AI_POSTGRES__PASSWORD:-123456}",
-            "MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD=${MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD:-123456}",
-            "MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD=${MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD:-123456}",
-            "MEMOCHAT_AI_NEO4J__PASSWORD=${MEMOCHAT_AI_NEO4J__PASSWORD:-password}",
-            "NEO4J_AUTH=neo4j/${MEMOCHAT_AI_NEO4J__PASSWORD:-password}",
+            "MEMOCHAT_AI_POSTGRES__PASSWORD=${MEMOCHAT_AI_POSTGRES__PASSWORD:?set MEMOCHAT_AI_POSTGRES__PASSWORD}",
+            "MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD=${MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD:?set MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD}",
+            "MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD=${MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD:?set MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD}",
+            "MEMOCHAT_AI_NEO4J__PASSWORD=${MEMOCHAT_AI_NEO4J__PASSWORD:?set MEMOCHAT_AI_NEO4J__PASSWORD}",
+            "NEO4J_AUTH=neo4j/${MEMOCHAT_AI_NEO4J__PASSWORD:?set MEMOCHAT_AI_NEO4J__PASSWORD}",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, compose)
@@ -233,6 +255,11 @@ class SecretExternalizationContractTests(unittest.TestCase):
         values = read(K8S_CHART / "values.yaml")
         required_names = (
             "externalServices.postgres.password",
+            "externalServices.postgres.rolePasswords.chat",
+            "externalServices.postgres.rolePasswords.media",
+            "externalServices.postgres.rolePasswords.moments",
+            "externalServices.postgres.rolePasswords.call",
+            "externalServices.postgres.rolePasswords.account",
             "externalServices.redis.password",
             "externalServices.mongodb.uri",
             "externalServices.rabbitmq.username",
@@ -245,6 +272,10 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "secrets.chatAuthSecret",
             "secrets.jwtAccessSecret",
             "secrets.authRefreshPepper",
+            "secrets.relationCommandAuthToken",
+            "secrets.relationChatQueryAuthToken",
+            "secrets.relationCallAuthToken",
+            "secrets.relationMomentsAuthToken",
             "secrets.livekitApiKey",
             "secrets.livekitApiSecret",
             "secrets.minioAccessKey",
@@ -270,6 +301,27 @@ class SecretExternalizationContractTests(unittest.TestCase):
         self.assertIn("sslMode: verify-full", values)
         self.assertNotIn("sslMode: disable", values)
 
+    def test_helm_mongo_and_account_postgres_credentials_are_secret_injected(self):
+        configmap = read(K8S_CHART / "templates/bootstrap/configmap-services.yaml")
+        chat = read(K8S_CHART / "templates/prod/chat.yaml")
+        gateways = read(K8S_CHART / "templates/prod/focused-gateways.yaml")
+
+        self.assertNotIn("Uri={{ .Values.externalServices.mongodb.uri }}", configmap)
+        self.assertIn("[AccountPostgres]", configmap)
+        self.assertIn("key: mongodb-uri", chat)
+        self.assertIn("MEMOCHAT_MONGO_URI", chat)
+        self.assertIn("key: postgres-account-password", chat)
+        self.assertIn("MEMOCHAT_ACCOUNTPOSTGRES_PASSWD", chat)
+        self.assertIn("key: mongodb-uri", gateways)
+        self.assertIn("MEMOCHAT_MONGO_URI", gateways)
+        self.assertIn("MEMOCHAT_ACCOUNTPOSTGRES_PASSWD", gateways)
+        self.assertNotIn("Username={{ .Values.externalServices.rabbitmq.username }}", configmap)
+        self.assertNotIn("SMTPUser={{ .Values.externalServices.smtp.user }}", configmap)
+        self.assertNotIn("From={{ .Values.externalServices.smtp.from }}", configmap)
+        self.assertIn("rabbitmq-username", read(K8S_CHART / "templates/bootstrap/external-secrets.yaml"))
+        self.assertIn("smtp-user", read(K8S_CHART / "templates/bootstrap/external-secrets.yaml"))
+        self.assertIn("smtp-from", read(K8S_CHART / "templates/bootstrap/external-secrets.yaml"))
+
     def test_helm_chart_has_service_mesh_and_external_secret_manager_contracts(self):
         values = read(K8S_CHART / "values.yaml")
         namespace_template = read(K8S_CHART / "templates/bootstrap/namespaces.yaml")
@@ -284,6 +336,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
         self.assertIn("provider: istio", values)
         self.assertIn("mtlsMode: STRICT", values)
         self.assertIn("externalSecrets:", values)
+        self.assertIn("relationTokensDistinct: false", values)
         self.assertIn("secretStoreRef:", values)
         self.assertIn("memochat/prod/app", values)
         self.assertIn("memochat/prod/etcd-tls", values)
@@ -302,14 +355,27 @@ class SecretExternalizationContractTests(unittest.TestCase):
         self.assertIn("creationPolicy: Owner", external_secret_template)
         self.assertIn("kubernetes.io/tls", external_secret_template)
         for key in (
+            "postgres-chat-password",
+            "postgres-media-password",
+            "postgres-moments-password",
+            "postgres-call-password",
+            "postgres-account-password",
+            "rabbitmq-username",
+            "smtp-user",
+            "smtp-from",
             "jwt-access-secret",
             "auth-refresh-pepper",
+            "relation-command-auth-token",
+            "relation-chat-query-auth-token",
+            "relation-call-auth-token",
+            "relation-moments-auth-token",
             "minio-access-key",
             "minio-secret-key",
             "ai-internal-api-key",
             "ai-provider-admin-key",
             "r18-picacg-api-key",
             "r18-picacg-hmac-key",
+            "r18-credential-master-key",
         ):
             with self.subTest(key=key):
                 self.assertIn(key, external_secret_template)
@@ -319,15 +385,47 @@ class SecretExternalizationContractTests(unittest.TestCase):
         for env_name in (
             "MEMOCHAT_AUTHTOKEN_JWTSECRET",
             "MEMOCHAT_AUTH_REFRESH_PEPPER",
+            "MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN",
+            "MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN",
             "MEMOCHAT_MINIO_ACCESSKEY",
             "MEMOCHAT_MINIO_SECRETKEY",
             "MEMOCHAT_AI_INTERNAL_API_KEY",
             "MEMOCHAT_AI_PROVIDER_ADMIN_KEY",
             "MEMOCHAT_R18_PICACG_API_KEY",
             "MEMOCHAT_R18_PICACG_HMAC_KEY",
+            "MEMOCHAT_R18_CREDENTIAL_MASTER_KEY",
         ):
             with self.subTest(env_name=env_name):
                 self.assertIn(env_name, combined_workloads)
+
+    def test_helm_r18_credentials_are_encrypted_and_persistent(self):
+        values = read(K8S_CHART / "values.yaml")
+        gateways = read(K8S_CHART / "templates/prod/focused-gateways.yaml")
+        secret = read(K8S_CHART / "templates/bootstrap/secret.yaml")
+        external_secret = read(K8S_CHART / "templates/bootstrap/external-secrets.yaml")
+        entrypoint = read(REPO_ROOT / "infra/deploy/images/common/entrypoints/server-entrypoint.sh")
+
+        self.assertIn('r18CredentialMasterKey: ""', values)
+        self.assertIn("ReadWriteMany", values)
+        self.assertIn("r18-credential-master-key", secret)
+        self.assertIn("r18-credential-master-key", external_secret)
+        self.assertIn("MEMOCHAT_R18_CREDENTIAL_MASTER_KEY", gateways)
+        self.assertIn(
+            'value: {{ if eq $name "r18gateway" }}/run/memochat/config.ini{{ else }}/app/config.ini{{ end }}',
+            gateways,
+        )
+        self.assertIn("mountPath: /run/memochat/data/r18", gateways)
+        self.assertIn("kind: PersistentVolumeClaim", gateways)
+        self.assertIn("requires persistence.enabled=true", gateways)
+        self.assertIn("requires ReadWriteMany persistence", gateways)
+        self.assertIn("MEMOCHAT_R18_CREDENTIAL_MASTER_KEY)", entrypoint)
+        self.assertIn("must contain exactly 64 hexadecimal characters", entrypoint)
+
+    def test_helm_varify_uses_the_config_path_mounted_by_the_workload(self):
+        varify = read(K8S_CHART / "templates/prod/varify.yaml")
+
+        self.assertIn("name: CONFIG_PATH\n              value: /app/config.ini", varify)
+        self.assertIn("mountPath: /app/config.ini", varify)
 
     def test_secret_management_doc_lists_required_production_overrides(self):
         docs = read(SECRET_DOC)
@@ -335,6 +433,10 @@ class SecretExternalizationContractTests(unittest.TestCase):
             "MEMOCHAT_CHATAUTH_HMACSECRET",
             "MEMOCHAT_AUTHTOKEN_JWTSECRET",
             "MEMOCHAT_EMAIL_SMTPPASS",
+            "MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN",
+            "MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN",
+            "MEMOCHAT_RELATION_CALL_AUTH_TOKEN",
+            "MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN",
             "MEMOCHAT_MINIO_SECRETKEY",
             "MINIO_SECRET_KEY",
             "MEMOCHAT_CALL_APISECRET",

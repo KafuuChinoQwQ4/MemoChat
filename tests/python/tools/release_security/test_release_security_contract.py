@@ -18,9 +18,9 @@ TOPOLOGY_SCRIPT = REPO_ROOT / "tools/scripts/status/runtime_topology.sh"
 RELEASE_SCANNER = REPO_ROOT / "tools/scripts/release/verify_release_tree.sh"
 BUILD_ENV_LOADER = REPO_ROOT / "tools/scripts/release/load_build_environment.sh"
 CLIENT_SCAN_ALLOWLIST = REPO_ROOT / "tools/scripts/release/client_release_scan.allowlist"
+VCPKG_SBOM_GENERATOR = REPO_ROOT / "tools/scripts/release/generate_vcpkg_installed_sbom.py"
 INI_CONFIG = REPO_ROOT / "apps/server/core/common/runtime/IniConfig.cpp"
 CI_WORKFLOW = REPO_ROOT / ".github/workflows/ci.yml"
-CD_WORKFLOW = REPO_ROOT / ".github/workflows/cd.yml"
 BACKEND_COMPOSE = REPO_ROOT / "infra/deploy/local/compose/backend-services.yml"
 ACTION_PINS = {
     "actions/attest-build-provenance": (
@@ -76,6 +76,35 @@ def workflow_step_script(workflow_path: Path, job_name: str, step_name: str) -> 
         if step.get("name") == step_name:
             return step["run"]
     raise AssertionError(f"workflow step is missing: {job_name}/{step_name}")
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    pass
+
+
+def construct_unique_mapping(
+    loader: UniqueKeyLoader,
+    node: yaml.nodes.MappingNode,
+    deep: bool = False,
+) -> dict[object, object]:
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key: {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    construct_unique_mapping,
+)
 
 
 class FreshRuntimeDeployTests(unittest.TestCase):
@@ -520,23 +549,51 @@ class ReleaseAssetManifestBindingTests(unittest.TestCase):
     def prepare_release_assets(self, root: Path) -> tuple[Path, Path]:
         client_dir = root / "release-assets/client"
         backend_dir = root / "release-assets/backend"
+        audit_dir = root / "release-assets/audit"
         metadata_dir = root / "release-assets/metadata"
         client_dir.mkdir(parents=True)
         backend_dir.mkdir(parents=True)
+        audit_dir.mkdir(parents=True)
         metadata_dir.mkdir(parents=True)
 
         client_name = f"MemoChatQml-{self.SOURCE_SHA[:12]}-linux-x86_64.tar.gz"
         backend_name = f"MemoChat-backend-{self.SOURCE_SHA[:12]}-linux-x86_64.tar.gz"
+        audit_name = f"backend-image-audit-{self.SOURCE_SHA[:12]}.tar.gz"
         client_path = client_dir / client_name
         backend_path = backend_dir / backend_name
+        audit_path = audit_dir / audit_name
         client_sha256 = self.write_archive_with_checksum(client_path, b"client archive\n")
         backend_sha256 = self.write_archive_with_checksum(backend_path, b"backend archive\n")
+        audit_sha256 = self.write_archive_with_checksum(audit_path, b"image audit evidence\n")
         manifest = {
             "schema": "memochat-release-v1",
             "source_sha": self.SOURCE_SHA,
             "client": {"artifact": client_name, "sha256": client_sha256},
             "backend": {"artifact": backend_name, "sha256": backend_sha256},
-            "images": [{"version_tag": self.VERSION_TAG, "bundle_sha256": f"{index:064x}"} for index in range(15)],
+            "legal": {
+                "release_source_sha": self.SOURCE_SHA,
+                "formal_distribution_ready": True,
+                "third_party_legal_corpus": "complete",
+                "corpus_review_id": "memo-legal-review-2026-07-28",
+                "corpus_sha256": hashlib.sha256(b"legal corpus\n").hexdigest(),
+                "status_sha256": hashlib.sha256(b"legal status\n").hexdigest(),
+            },
+            "backend_image_audit": {
+                "schema": "memochat-backend-image-audit-artifact-v1",
+                "source_sha": self.SOURCE_SHA,
+                "artifact": audit_name,
+                "sha256": audit_sha256,
+                "image_manifest_sha256": hashlib.sha256(b"backend-images.json").hexdigest(),
+            },
+            "images": [
+                {
+                    "version_tag": self.VERSION_TAG,
+                    "bundle_sha256": f"{index:064x}",
+                    "vcpkg_sbom_sha256": f"{index + 16:064x}",
+                    "legal_status_sha256": hashlib.sha256(b"legal status\n").hexdigest(),
+                }
+                for index in range(15)
+            ],
         }
         (metadata_dir / "manifest.json").write_text(
             json.dumps(manifest),
@@ -586,6 +643,20 @@ class ReleaseAssetManifestBindingTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode, result.stdout)
             self.assertIn("release manifest client archive is missing", result.stdout)
 
+    def test_rejects_an_image_audit_archive_and_checksum_that_drift_from_the_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_text:
+            root = Path(temp_text)
+            self.prepare_release_assets(root)
+            baseline = self.run_release_asset_verifier(root)
+            self.assertEqual(0, baseline.returncode, baseline.stdout)
+            audit_path = root / "release-assets/audit" / f"backend-image-audit-{self.SOURCE_SHA[:12]}.tar.gz"
+
+            self.write_archive_with_checksum(audit_path, b"different but self-consistent image audit\n")
+            result = self.run_release_asset_verifier(root)
+
+            self.assertNotEqual(0, result.returncode, result.stdout)
+            self.assertIn("backend image audit digest mismatch", result.stdout)
+
 
 class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
     def test_etcd_change_logging_never_streams_raw_values(self):
@@ -600,13 +671,16 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         for relative_path in TRACKED_VERIFY_LOGS:
             self.assertFalse((REPO_ROOT / relative_path).exists(), relative_path)
 
+    def test_release_sbom_generator_is_an_executable_regular_file(self):
+        mode = VCPKG_SBOM_GENERATOR.stat().st_mode
+        self.assertTrue(stat.S_ISREG(mode))
+        self.assertTrue(mode & stat.S_IXUSR)
+
     def test_workflows_are_linux_current_and_have_a_real_artifact_handoff(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
-        cd = CD_WORKFLOW.read_text(encoding="utf-8")
         yaml.safe_load(ci)
-        yaml.safe_load(cd)
 
-        combined = ci + cd
+        combined = ci
         for obsolete in ("windows-latest", "GateServer.exe", "ChatServer.exe", "docker-images"):
             self.assertNotIn(obsolete, combined)
         self.assertNotRegex(combined, r"(?<![A-Za-z])GateServer(?![A-Za-z])")
@@ -622,11 +696,10 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         ):
             self.assertIn(token, ci)
 
-        self.assertIn("github.event.workflow_run.id", cd)
-        self.assertIn("gh run download", cd)
         self.assertIn("release-metadata", ci)
-        self.assertIn("release-metadata", cd)
-        self.assertNotIn("actions/download-artifact", cd)
+        self.assertFalse((REPO_ROOT / ".github/workflows/cd.yml").exists())
+        self.assertNotIn("stable", ci)
+        self.assertNotIn("newTag: latest", ci)
         self.assertNotIn('sha256sum "$archive" >', ci)
         self.assertIn('sha256sum "$(basename -- "$archive")"', ci)
         self.assertNotIn("git grep -nI", ci)
@@ -636,12 +709,13 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn('test -x "$VCPKG_ROOT/vcpkg"', ci)
         self.assertNotIn("source /root/.memochat-linux-env", ci)
         self.assertIn("source tools/scripts/release/load_build_environment.sh", ci)
-
         self.assertRegex(ci, r"(?m)^permissions:\n\s+contents: read$")
-        self.assertRegex(cd, r"(?m)^permissions:\n\s+actions: read\n\s+contents: read$")
+
+    def test_release_workflow_rejects_duplicate_yaml_mapping_keys(self):
+        yaml.load(CI_WORKFLOW.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
 
     def test_all_remote_actions_are_pinned_to_verified_full_commit_shas(self):
-        workflows = CI_WORKFLOW.read_text(encoding="utf-8") + CD_WORKFLOW.read_text(encoding="utf-8")
+        workflows = CI_WORKFLOW.read_text(encoding="utf-8")
         uses_lines = re.findall(r"(?m)^\s*uses:\s*([^\s#]+)(?:\s+#\s*(\S+))?\s*$", workflows)
 
         self.assertTrue(uses_lines)
@@ -659,24 +733,50 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
 
         self.assertEqual(seen_repositories, set(ACTION_PINS))
 
-    def test_legal_files_are_required_only_for_version_tag_releases(self):
+    def test_version_releases_require_the_verified_distribution_legal_corpus(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
         release_contract_job = workflow_job_body(ci, "release-contracts")
 
-        self.assertIn("Verify release legal notices", release_contract_job)
+        self.assertIn("Inspect distribution legal status", release_contract_job)
+        self.assertIn('--status-file "$status_file"', release_contract_job)
+        self.assertIn('>> "$GITHUB_STEP_SUMMARY"', release_contract_job)
+        self.assertIn("Require complete distribution legal corpus", release_contract_job)
         self.assertIn("if: startsWith(github.ref, 'refs/tags/v')", release_contract_job)
-        self.assertIn("LICENSE", release_contract_job)
-        self.assertIn("THIRD_PARTY_NOTICES.md", release_contract_job)
-        self.assertIn('[[ -f "$legal_file" && ! -L "$legal_file" && -s "$legal_file" ]]', release_contract_job)
+        self.assertIn("--require-distribution-corpus", release_contract_job)
+        self.assertIn('--source-sha "$GITHUB_SHA"', release_contract_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM", release_contract_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64", release_contract_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-legal-approval-public.pem", release_contract_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-legal-approval.sig", release_contract_job)
+        self.assertIn("base64 --decode", release_contract_job)
+        self.assertIn('--approval-public-key "$public_key"', release_contract_job)
+        self.assertIn('--approval-signature "$signature"', release_contract_job)
+        self.assertIn('rm -f -- "$public_key" "$signature"', release_contract_job)
+        self.assertNotIn("$GITHUB_WORKSPACE/memochat-legal-approval", release_contract_job)
+        self.assertIn("bash -n tools/scripts/release/verify_release_legal.sh", release_contract_job)
+        self.assertNotIn("Verify release legal notices", release_contract_job)
 
     def test_version_tags_require_main_provenance_and_full_history_secret_scan(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        secret_scan_job = workflow_job_body(ci, "secret-scan")
         release_contract_job = workflow_job_body(ci, "release-contracts")
 
+        self.assertIn("Scan the current source tree with Gitleaks", secret_scan_job)
+        self.assertIn("gitleaks_${version}_linux_x64.tar.gz", secret_scan_job)
+        self.assertIn('gitleaks" dir', secret_scan_job)
+        self.assertIn("Scan every commit introduced by this event with Gitleaks", secret_scan_job)
+        self.assertIn('commit_range="${PULL_REQUEST_BASE_SHA}..${GITHUB_SHA}"', secret_scan_job)
+        self.assertIn('--log-opts="$commit_range"', secret_scan_job)
+        self.assertIn("--redact", secret_scan_job)
         self.assertIn("fetch-depth: 0", release_contract_job)
         self.assertIn("Release tags must be annotated", release_contract_job)
+        self.assertIn(
+            "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+            release_contract_job,
+        )
         self.assertIn('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', release_contract_job)
         self.assertIn('comm -23 "${RUNNER_TEMP}/history-paths.txt"', release_contract_job)
+        self.assertIn("+refs/pull/*/head:refs/remotes/origin/pull/*", release_contract_job)
         self.assertIn("Rewrite all refs and rotate affected credentials", release_contract_job)
         self.assertIn("gitleaks_${version}_linux_x64.tar.gz", release_contract_job)
         self.assertIn('gitleaks" git', release_contract_job)
@@ -690,10 +790,77 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
                 job = workflow_job_body(ci, job_name)
                 self.assertIn("if: github.event_name == 'push'", job)
                 self.assertNotIn("pull_request", job)
+                self.assertIn("-validation'", job)
+                self.assertIn("-release'", job)
+
+    def test_registry_and_release_writes_run_only_for_version_tags_after_strict_legal(self):
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        tag_condition = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+        for job_name in (
+            "publish-backend-images",
+            "audit-backend-images",
+            "attest-release-artifacts",
+            "release-metadata",
+            "publish-version-image-tags",
+            "publish-github-release",
+        ):
+            with self.subTest(job=job_name):
+                self.assertIn(tag_condition, workflow_job_body(ci, job_name))
+
+        publish_job = workflow_job_body(ci, "publish-backend-images")
+        self.assertIn("needs: [release-contracts, build-linux-backend]", publish_job)
+        self.assertFalse((REPO_ROOT / ".github/workflows/cd.yml").exists())
+        self.assertNotIn("stable", ci)
+
+    def test_packagers_and_dependency_sboms_are_explicitly_source_bound(self):
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        client_job = workflow_job_body(ci, "build-linux-client")
+        backend_job = workflow_job_body(ci, "build-linux-backend")
+        publish_job = workflow_job_body(ci, "publish-backend-images")
+        metadata_job = workflow_job_body(ci, "release-metadata")
+
+        self.assertIn("package_linux_client.sh", client_job)
+        self.assertIn('--source-sha "$GITHUB_SHA"', client_job)
+        self.assertIn("Prepare external legal approval evidence", client_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM", client_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64", client_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-client-legal-approval-public.pem", client_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-client-legal-approval.sig", client_job)
+        self.assertIn('--approval-public-key "$approval_public_key"', client_job)
+        self.assertIn('--approval-signature "$approval_signature"', client_job)
+        self.assertIn('"${legal_approval_args[@]}"', client_job)
+        self.assertIn("Remove external legal approval evidence", client_job)
+        self.assertIn('rm -f -- "$signature"', client_job)
+        self.assertIn("package_backend_services.sh", backend_job)
+        self.assertIn("package_backend_deployment_kit.sh", backend_job)
+        self.assertGreaterEqual(backend_job.count('--source-sha "$GITHUB_SHA"'), 2)
+        self.assertIn("Prepare external legal approval evidence", backend_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM", backend_job)
+        self.assertIn("MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64", backend_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-backend-legal-approval-public.pem", backend_job)
+        self.assertIn("${RUNNER_TEMP}/memochat-backend-legal-approval.sig", backend_job)
+        self.assertIn('--approval-public-key "$approval_public_key"', backend_job)
+        self.assertIn('--approval-signature "$approval_signature"', backend_job)
+        self.assertGreaterEqual(backend_job.count('"${legal_approval_args[@]}"'), 2)
+        self.assertIn("Remove external legal approval evidence", backend_job)
+        self.assertIn('rm -f -- "$signature"', backend_job)
+        self.assertIn('--vcpkg-installed-root "$VCPKG_ROOT/installed-memochat-gcc16-server-release"', backend_job)
+        self.assertIn("--vcpkg-triplet x64-linux-memochat-release", backend_job)
+        self.assertIn("'backend-vcpkg-sboms' || 'backend-vcpkg-validation-sboms'", backend_job)
+
+        for binding in (
+            "io.memochat.vcpkg.sbom.sha256",
+            "io.memochat.legal.status.sha256",
+            '"vcpkg_sbom_sha256": vcpkg_sbom_sha256',
+            '"legal_status_sha256": image_legal_status_sha256',
+            '"formal_distribution_ready": True',
+        ):
+            self.assertIn(binding, publish_job)
+        self.assertIn('"legal": backend_legal', metadata_job)
+        self.assertIn('image.get("vcpkg_sbom_sha256"', metadata_job)
 
     def test_ci_images_cover_all_bundles_while_compose_excludes_incomplete_ai(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
-        cd = CD_WORKFLOW.read_text(encoding="utf-8")
         compose = BACKEND_COMPOSE.read_text(encoding="utf-8")
         ci_mapping = dict(re.findall(r"^\s*\[([A-Za-z0-9]+)\]=([a-z0-9-]+)\s*$", ci, flags=re.M))
         compose_mapping = {
@@ -714,7 +881,8 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertNotIn("ai", re.findall(r"^\s+-\s+([a-z0-9-]+)\s*$", compose, flags=re.M))
         self.assertNotIn("${target,,}", ci)
         for target, slug in ci_mapping.items():
-            self.assertIn(f'"{target}": "{slug}"', cd)
+            self.assertIn(target, ci)
+            self.assertIn(slug, ci)
 
     def test_version_tags_publish_archives_and_alias_existing_image_digests(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")
@@ -735,9 +903,10 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn("docker buildx imagetools inspect", image_alias_job)
         self.assertIn('"${image}@${digest}"', image_alias_job)
         self.assertIn('"${image}:${version_tag}"', image_alias_job)
-        self.assertIn("Version image aliases are only partially present", image_alias_job)
         self.assertIn("Version image alias digest mismatch", image_alias_job)
-        self.assertIn('[[ "$alias_mode" == create ]]', image_alias_job)
+        self.assertIn('elif [[ "$inspect_status" -eq 1 ]]', image_alias_job)
+        self.assertIn('done < "$alias_plan"', image_alias_job)
+        self.assertNotIn("alias_mode", image_alias_job)
         self.assertLess(
             image_alias_job.index("docker buildx imagetools inspect"),
             image_alias_job.index("docker buildx imagetools create"),
@@ -767,12 +936,16 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn("group: publish-images-${{ github.sha }}", publish_job)
         self.assertIn("cancel-in-progress: false", publish_job)
         self.assertIn("docker buildx imagetools inspect", publish_job)
-        self.assertIn("Commit image tags are only partially present", publish_job)
-        self.assertIn('[[ "$publish_mode" == create ]]', publish_job)
+        self.assertIn('elif [[ "$inspect_status" -eq 1 ]]', publish_job)
+        self.assertIn("verify_bundle_binding", publish_job)
+        self.assertIn("Commit image digest set is incomplete", publish_job)
+        self.assertNotIn("publish_mode", publish_job)
         self.assertIn("Commit image tag changed during publication", publish_job)
         self.assertIn("org.opencontainers.image.revision", publish_job)
         self.assertIn("io.memochat.service.target", publish_job)
         self.assertIn("io.memochat.bundle.sha256", publish_job)
+        self.assertIn("io.memochat.vcpkg.sbom.sha256", publish_job)
+        self.assertIn("io.memochat.legal.status.sha256", publish_job)
         self.assertIn("Commit image bundle binding mismatch", publish_job)
         self.assertLess(
             publish_job.index("docker buildx imagetools inspect"),
@@ -795,6 +968,60 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn('manifest.get("client", {})', github_release_job)
         self.assertIn("client_hasher", github_release_job)
         self.assertIn('manifest.get("backend", {})', github_release_job)
+
+    def test_backend_images_are_audited_by_digest_before_release_aliases(self):
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        release_contract_job = workflow_job_body(ci, "release-contracts")
+        audit_job = workflow_job_body(ci, "audit-backend-images")
+        metadata_job = workflow_job_body(ci, "release-metadata")
+        image_alias_job = workflow_job_body(ci, "publish-version-image-tags")
+
+        self.assertIn("bash -n tools/scripts/release/audit_backend_images.sh", release_contract_job)
+        self.assertIn("needs: [publish-backend-images]", audit_job)
+        self.assertIn("packages: read", audit_job)
+        self.assertIn("syft_version=1.44.0", audit_job)
+        self.assertIn("grype_version=0.112.0", audit_job)
+        self.assertIn(
+            "0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a",
+            audit_job,
+        )
+        self.assertIn(
+            "acb14a030010fe9bdb9594b4ae108d9d14ef2f926d936aa0916dc62c89c058ea",
+            audit_job,
+        )
+        self.assertIn('"$grype_bin" db update', audit_job)
+        self.assertIn('grype_config="${RUNNER_TEMP}/memochat-grype-config.yaml"', audit_job)
+        self.assertIn('--config "$grype_config"', audit_job)
+        self.assertNotIn("--config /dev/null", audit_job)
+        self.assertIn('GRYPE_DB_AUTO_UPDATE: "false"', audit_job)
+        self.assertIn("tools/scripts/release/audit_backend_images.sh", audit_job)
+        self.assertIn("--image-manifest metadata/backend-images.json", audit_job)
+        self.assertIn("--pull", audit_job)
+        self.assertIn("--fail-on high", audit_job)
+        self.assertIn("--vcpkg-sbom-dir metadata/vcpkg", audit_job)
+        self.assertNotIn("--fix-policy", audit_job)
+        self.assertNotIn("--only-fixed", audit_job)
+        self.assertIn("tar --sort=name --mtime='UTC 1970-01-01'", audit_job)
+        self.assertIn("backend-image-audit-${GITHUB_SHA:0:12}.tar.gz", audit_job)
+        self.assertIn("name: backend-image-audit", audit_job)
+        self.assertIn("if: always()", audit_job)
+        self.assertIn("audit-backend-images", metadata_job)
+        self.assertIn("backend-image-audit", metadata_job)
+        self.assertIn("release-metadata", image_alias_job)
+
+    def test_release_manifest_and_github_release_bind_image_audit_evidence(self):
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        metadata_job = workflow_job_body(ci, "release-metadata")
+        github_release_job = workflow_job_body(ci, "publish-github-release")
+
+        self.assertIn('audit = json.loads(Path("metadata/audit/audit.json")', metadata_job)
+        self.assertIn('"backend_image_audit": audit', metadata_job)
+        self.assertIn("expected_audit_artifact", metadata_job)
+        self.assertIn("audit-backend-images", github_release_job)
+        self.assertIn("name: backend-image-audit", github_release_job)
+        self.assertIn('manifest.get("backend_image_audit", {})', github_release_job)
+        self.assertIn("audit_hasher = hashlib.sha256()", github_release_job)
+        self.assertIn('[[ "${#assets[@]}" -eq 7 ]]', github_release_job)
 
     def test_backend_image_builds_use_only_explicit_named_contexts(self):
         ci = CI_WORKFLOW.read_text(encoding="utf-8")

@@ -9,6 +9,22 @@ namespace
 class FakeRelationService final : public IRelationService
 {
 public:
+    bool AreUsersFriends(int uid, int peer_uid) override
+    {
+        last_friendship_uid = uid;
+        last_friendship_peer_uid = peer_uid;
+        return friendship_result;
+    }
+
+    bool CheckHealth(std::string* error) override
+    {
+        if (error != nullptr)
+        {
+            *error = health_error;
+        }
+        return health_result;
+    }
+
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override
     {
         out["bootstrap_uid"] = uid;
@@ -72,6 +88,11 @@ public:
     }
 
     RelationCommandRequest last_request;
+    int last_friendship_uid = 0;
+    int last_friendship_peer_uid = 0;
+    bool friendship_result = false;
+    bool health_result = true;
+    std::string health_error;
 };
 
 memochat::json::JsonValue ParsePayload(const std::string& payload)
@@ -88,7 +109,10 @@ memochat::json::JsonValue ParsePayload(const std::string& payload)
 TEST(ChatRelationInternalGrpcServiceTest, AppendRelationBootstrapBuildsBootstrapResponse)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::BootstrapRequest request;
     request.set_uid(42);
@@ -109,7 +133,10 @@ TEST(ChatRelationInternalGrpcServiceTest, AppendRelationBootstrapBuildsBootstrap
 TEST(ChatRelationInternalGrpcServiceTest, BuildDialogListBuildsBootstrapResponse)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::BootstrapRequest request;
     request.set_uid(7);
@@ -126,10 +153,89 @@ TEST(ChatRelationInternalGrpcServiceTest, BuildDialogListBuildsBootstrapResponse
     EXPECT_EQ(payload["dialogs"][0].asString(), "dialog-a");
 }
 
+TEST(ChatRelationInternalGrpcServiceTest, CheckFriendshipUsesStrictRelationQuery)
+{
+    FakeRelationService fake;
+    fake.friendship_result = true;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
+
+    chatinternal::FriendshipRequest request;
+    request.set_uid(42);
+    request.set_peer_uid(84);
+    chatinternal::FriendshipResponse response;
+
+    const auto status = service.CheckFriendship(nullptr, &request, &response);
+
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_TRUE(response.are_friends());
+    EXPECT_EQ(fake.last_friendship_uid, 42);
+    EXPECT_EQ(fake.last_friendship_peer_uid, 84);
+}
+
+TEST(ChatRelationInternalGrpcServiceTest, CheckFriendshipRejectsInvalidPairs)
+{
+    FakeRelationService fake;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
+
+    chatinternal::FriendshipRequest request;
+    request.set_uid(42);
+    request.set_peer_uid(42);
+    chatinternal::FriendshipResponse response;
+
+    const auto status = service.CheckFriendship(nullptr, &request, &response);
+
+    EXPECT_EQ(status.error_code(), grpc::StatusCode::INVALID_ARGUMENT);
+    EXPECT_EQ(fake.last_friendship_uid, 0);
+}
+
+TEST(ChatRelationInternalGrpcServiceTest, CheckHealthDelegatesToRelationDependency)
+{
+    FakeRelationService fake;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
+
+    chatinternal::RelationHealthRequest request;
+    chatinternal::RelationHealthResponse response;
+    const auto status = service.CheckHealth(nullptr, &request, &response);
+
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_TRUE(response.ready());
+}
+
+TEST(ChatRelationInternalGrpcServiceTest, CheckHealthFailsWhenRelationDependencyIsUnavailable)
+{
+    FakeRelationService fake;
+    fake.health_result = false;
+    fake.health_error = "database unavailable";
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
+
+    chatinternal::RelationHealthRequest request;
+    chatinternal::RelationHealthResponse response;
+    const auto status = service.CheckHealth(nullptr, &request, &response);
+
+    EXPECT_EQ(status.error_code(), grpc::StatusCode::UNAVAILABLE);
+    EXPECT_FALSE(response.ready());
+    EXPECT_EQ(response.error(), "relation dependency unavailable");
+}
+
 TEST(ChatRelationInternalGrpcServiceTest, InvalidUidReturnsInvalidArgument)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::BootstrapRequest request;
     request.set_uid(0);
@@ -143,7 +249,10 @@ TEST(ChatRelationInternalGrpcServiceTest, InvalidUidReturnsInvalidArgument)
 
 TEST(ChatRelationInternalGrpcServiceTest, MissingRelationServiceReturnsFailedPrecondition)
 {
-    ChatRelationInternalGrpcService service(nullptr);
+    ChatRelationInternalGrpcService service(nullptr,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::BootstrapRequest request;
     request.set_uid(42);
@@ -157,7 +266,10 @@ TEST(ChatRelationInternalGrpcServiceTest, MissingRelationServiceReturnsFailedPre
 TEST(ChatRelationInternalGrpcServiceTest, SearchUserDelegatesToRelationCommandService)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::JsonPayloadRequest request;
     request.set_tcp_msg_id(ID_SEARCH_USER_REQ);
@@ -184,7 +296,10 @@ TEST(ChatRelationInternalGrpcServiceTest, SearchUserDelegatesToRelationCommandSe
 
 TEST(ChatRelationInternalGrpcServiceTest, MissingRelationCommandServiceReturnsFailedPrecondition)
 {
-    ChatRelationInternalGrpcService service(nullptr);
+    ChatRelationInternalGrpcService service(nullptr,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
 
     chatinternal::JsonPayloadRequest request;
     request.set_tcp_msg_id(ID_SEARCH_USER_REQ);
@@ -195,4 +310,43 @@ TEST(ChatRelationInternalGrpcServiceTest, MissingRelationCommandServiceReturnsFa
 
     EXPECT_EQ(status.error_code(), grpc::StatusCode::FAILED_PRECONDITION);
     EXPECT_EQ(response.error(), ErrorCodes::RPCFailed);
+}
+
+TEST(ChatRelationInternalGrpcServiceTest, QueryOnlyModeRejectsCommandSurfaceButKeepsVisibilityQuery)
+{
+    FakeRelationService fake;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::QueryOnly,
+                                            {},
+                                            RelationGrpcAuthMode::DisabledForTests);
+    chatinternal::JsonPayloadRequest request;
+    request.set_tcp_msg_id(999);
+    request.set_payload_json(R"({"viewer_uid":42,"author_uids":[84]})");
+    request.mutable_session()->set_uid(42);
+
+    using RestrictedCommand = grpc::Status (ChatRelationInternalGrpcService::*)(grpc::ServerContext*,
+                                                                                const chatinternal::JsonPayloadRequest*,
+                                                                                chatinternal::JsonPayloadResponse*);
+    const RestrictedCommand restricted_commands[] = {
+        &ChatRelationInternalGrpcService::SearchUser,
+        &ChatRelationInternalGrpcService::AddFriendApply,
+        &ChatRelationInternalGrpcService::AuthFriendApply,
+        &ChatRelationInternalGrpcService::DeleteFriend,
+        &ChatRelationInternalGrpcService::GetDialogList,
+        &ChatRelationInternalGrpcService::SyncDraft,
+        &ChatRelationInternalGrpcService::PinDialog,
+    };
+    for (const auto command : restricted_commands)
+    {
+        chatinternal::JsonPayloadResponse response;
+        const auto status = (service.*command)(nullptr, &request, &response);
+        EXPECT_EQ(status.error_code(), grpc::StatusCode::PERMISSION_DENIED);
+        EXPECT_EQ(response.error(), ErrorCodes::RPCFailed);
+    }
+    EXPECT_TRUE(fake.last_request.payload_json.empty());
+
+    chatinternal::JsonPayloadResponse filter_response;
+    const auto filter_status = service.FilterFriendUids(nullptr, &request, &filter_response);
+    ASSERT_TRUE(filter_status.ok()) << filter_status.error_message();
+    EXPECT_EQ(fake.last_request.payload_json, request.payload_json());
 }

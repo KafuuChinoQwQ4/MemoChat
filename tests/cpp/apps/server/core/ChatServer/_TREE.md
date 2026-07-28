@@ -43,7 +43,7 @@
 | `ChatRelationQueryServiceRuntimeAlgorithmsConsumer.cpp` | 测试侧导入 ChatRelationQueryService 入口运行时算法 module 的桥接 consumer |
 | `ChatRelationQueryServiceRuntimeAlgorithmsTest.cpp` | 验证关系查询服务入口启动参数、默认值和 logger 名称算法 |
 | `ChatRelationServiceWorkerRuntimeAlgorithmsConsumer.cpp` | 测试侧导入 ChatRelationServiceWorker 入口运行时算法 module 的桥接 consumer |
-| `ChatRelationServiceWorkerRuntimeAlgorithmsTest.cpp` | 验证关系服务 worker 入口启动参数、默认值和 bus fallback 文案算法 |
+| `ChatRelationServiceWorkerRuntimeAlgorithmsTest.cpp` | 验证关系服务 worker 启动参数、默认值以及开发 fallback/正式 fail-closed bus 策略 |
 | `ChatRelationServiceAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer 关系服务算法 module 的桥接 consumer |
 | `ChatRelationServiceAlgorithmsTest.cpp` | 验证关系服务搜索、好友、dialog guard、事件/task 字面量和 mute 归一化算法 |
 | `ChatUserProfileDtoTest.cpp` | 验证 Chat 用户 profile/cache DTO 的 Glaze 编解码、响应投影和字段清单 |
@@ -81,8 +81,8 @@
 | `OnlineRouteResolverTest.cpp` | 验证在线路由解析四分支纯决策 |
 | `OutboxAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer outbox retry 算法 module 的桥接 consumer |
 | `OutboxAlgorithmsTest.cpp` | 验证 Chat outbox retry 递增、backoff、终止和 repair 调度决策 |
-| `PostgresDaoAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresDao 连接配置算法 module 的桥接 consumer |
-| `PostgresDaoAlgorithmsTest.cpp` | 验证 PostgresDao 配置段回退、启用、默认 schema/sslmode 和启动池大小决策 |
+| `PostgresDaoAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresDao 连接配置与健康探针超时算法 module 的桥接 consumer |
+| `PostgresDaoAlgorithmsTest.cpp` | 验证 PostgresDao 配置段回退、默认 schema/sslmode 及 connect/statement/TCP/本地 deadline 超时契约 |
 | `PostgresDaoDialogsAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresDao dialogs 算法 module 的桥接 consumer |
 | `PostgresDaoDialogsAlgorithmsTest.cpp` | 验证会话列表、read-state、dialog meta 和群申请分页 guard 决策 |
 | `PostgresDaoGroupMessagesAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresDao 群消息算法 module 的桥接 consumer |
@@ -93,6 +93,7 @@
 | `PostgresDaoPrivateMessagesAlgorithmsTest.cpp` | 验证私聊消息读取、分页、编辑、撤回和 read-state guard 决策 |
 | `PostgresDaoUsersAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresDao 用户算法 module 的桥接 consumer |
 | `PostgresDaoUsersAlgorithmsTest.cpp` | 验证用户公开 ID 和 uid guard 决策 |
+| `PostgresHealthMonitorTest.cpp` | 验证双库后台探针故障降级、恢复、停止竞态 fail-closed 和析构中断等待 |
 | `PostgresMgrAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer PostgresMgr 初始化算法 module 的桥接 consumer |
 | `PostgresMgrAlgorithmsTest.cpp` | 验证 PostgresMgr DAO 初始化、析构 reset 和初始化失败日志字面量决策 |
 | `RabbitMqTaskBusAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer RabbitMQ 任务总线算法 module 的桥接 consumer |
@@ -110,7 +111,7 @@
 | `RelationQueryGrpcClientAlgorithmsTest.cpp` | 验证关系查询 gRPC 客户端方法名、远程错误字段和 gRPC/payload guard 决策 |
 | `RelationQueryGrpcClientTest.cpp` | 验证关系查询 gRPC 客户端调用 |
 | `RelationQueryRemoteSmokeTest.cpp` | 跨节点关系查询的远端冒烟测试 |
-| `RelationQueryServiceFactoryTest.cpp` | 验证关系查询服务工厂装配 |
+| `RelationQueryServiceFactoryTest.cpp` | 验证关系查询服务工厂装配及默认失败关闭、开发显式降级和发布禁用降级策略。 |
 | `RelationServiceFactoryTest.cpp` | 验证关系服务工厂装配 |
 | `RedisAsyncEventBusAlgorithmsConsumer.cpp` | 测试侧导入 ChatServer Redis 事件总线算法 module 的桥接 consumer |
 | `RedisAsyncEventBusAlgorithmsTest.cpp` | 验证 Redis 事件总线序列化、重入队 guard 和错误字面量算法 |

@@ -65,6 +65,26 @@ add_dependencies(gtest_tests momentsservice_route_schema_gtest)
 
 gtest_discover_tests(momentsservice_route_schema_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(momentsservice_relation_client_gtest
+    ${CMAKE_SOURCE_DIR}/apps/server/core/MomentsService/clients/MomentsRelationClient.cpp
+    main.cpp
+    MomentsRelationClientTest.cpp
+)
+
+target_link_libraries(momentsservice_relation_client_gtest PRIVATE
+    GTest_TestLib
+    memochat_server_deps
+)
+
+target_include_directories(momentsservice_relation_client_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/MomentsService
+    ${CMAKE_SOURCE_DIR}/apps/server/core/GateShared/core
+)
+
+add_dependencies(gtest_tests momentsservice_relation_client_gtest)
+
+gtest_discover_tests(momentsservice_relation_client_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     add_executable(momentsservice_route_registration_algorithms_gtest
         main.cpp

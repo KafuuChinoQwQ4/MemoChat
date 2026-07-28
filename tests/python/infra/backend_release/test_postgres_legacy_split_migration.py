@@ -276,6 +276,7 @@ class PostgresLegacySplitMigrationTests(unittest.TestCase):
         self.sql("memo_account", 'ALTER TABLE memo."user" DROP CONSTRAINT reject_legacy_rows;')
         succeeded = self.run_migration()
         self.assertEqual(0, succeeded.returncode, succeeded.stdout)
+        self.assertNotIn("ERROR:", succeeded.stdout)
         self.assertEqual("1", self.sql("memo_account", 'SELECT count(*) FROM memo."user";'))
         self.assertEqual("1", self.sql("memo_media", "SELECT count(*) FROM memo.chat_media_asset;"))
         self.assertEqual("1", self.sql("memo_moments", "SELECT count(*) FROM memo.moments;"))
@@ -284,11 +285,13 @@ class PostgresLegacySplitMigrationTests(unittest.TestCase):
         self.sql("memo_pg", 'INSERT INTO memo."user" VALUES (2);')
         second = self.run_migration()
         self.assertEqual(0, second.returncode, second.stdout)
+        self.assertNotIn("ERROR:", second.stdout)
         self.assertEqual("1", self.sql("memo_account", 'SELECT count(*) FROM memo."user";'))
 
         self.sql("memo_account", 'DELETE FROM memo."user";')
         after_clear = self.run_migration()
         self.assertEqual(0, after_clear.returncode, after_clear.stdout)
+        self.assertNotIn("ERROR:", after_clear.stdout)
         self.assertEqual("0", self.sql("memo_account", 'SELECT count(*) FROM memo."user";'))
 
     def test_base_provision_skips_call_database_until_calls_are_enabled(self):
@@ -297,6 +300,7 @@ class PostgresLegacySplitMigrationTests(unittest.TestCase):
         base = self.run_provisioner(enable_calls=False)
 
         self.assertEqual(0, base.returncode, base.stdout)
+        self.assertNotIn("ERROR:", base.stdout)
         self.assertEqual(
             "f",
             self.sql("postgres", "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'memo_call');"),
@@ -309,6 +313,7 @@ class PostgresLegacySplitMigrationTests(unittest.TestCase):
         calls = self.run_provisioner(enable_calls=True)
 
         self.assertEqual(0, calls.returncode, calls.stdout)
+        self.assertNotIn("ERROR:", calls.stdout)
         self.assertEqual(
             "t",
             self.sql("postgres", "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'memo_call');"),

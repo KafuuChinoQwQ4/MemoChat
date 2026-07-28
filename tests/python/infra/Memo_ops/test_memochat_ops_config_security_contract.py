@@ -10,9 +10,7 @@ K8S_SECRETS = MEMO_OPS / "k8s/base/secrets.yaml"
 K8S_CONFIGMAP = MEMO_OPS / "k8s/base/configmap.yaml"
 K8S_NETWORK_POLICY = MEMO_OPS / "k8s/base/networkpolicy.yaml"
 K8S_PROD_OVERLAY = MEMO_OPS / "k8s/overlays/prod/kustomization.yaml"
-K8S_PROD_EXTERNAL_SECRETS = MEMO_OPS / "k8s/overlays/prod/external-secrets.yaml"
-K8S_PROD_MESH = MEMO_OPS / "k8s/overlays/prod/mesh-istio.yaml"
-CD_WORKFLOW = REPO_ROOT / ".github/workflows/cd.yml"
+DEPLOY_SCRIPT = REPO_ROOT / ".github/scripts/deploy-k8s.sh"
 ETCD_STATEFULSET = MEMO_OPS / "k8s/etcd/statefulset.yaml"
 OPSSERVER = MEMO_OPS / "config/opsserver.yaml"
 OPSCOLLECTOR = MEMO_OPS / "config/opscollector.yaml"
@@ -31,7 +29,6 @@ K8S_OVERLAYS = (
     MEMO_OPS / "k8s/overlays/dev/kustomization.yaml",
     MEMO_OPS / "k8s/overlays/dev-single/kustomization.yaml",
     MEMO_OPS / "k8s/overlays/staging/kustomization.yaml",
-    K8S_PROD_OVERLAY,
 )
 
 
@@ -69,112 +66,25 @@ class MemoOpsConfigSecurityContractTests(unittest.TestCase):
 
         self.assertIn("Do not commit real production secrets", content)
 
-    def test_prod_overlay_deletes_base_placeholder_secret_manifest(self):
+    def test_prod_overlay_is_deliberately_non_buildable(self):
         content = K8S_PROD_OVERLAY.read_text(encoding="utf-8")
+        manifest = yaml.safe_load(content)
+        blocker = "RETIRED_PRODUCTION_OVERLAY_USE_HELM.yaml"
 
-        self.assertIn("- ../../base", content)
-        self.assertIn("- external-secrets.yaml", content)
-        self.assertIn("- mesh-istio.yaml", content)
-        self.assertIn("istio-injection: enabled", content)
-        self.assertIn("$patch: delete", content)
-        self.assertRegex(
-            content,
-            r"(?s)kind:\s+Secret\s+metadata:\s+name:\s+memochat-secrets.*target:\s+kind:\s+Secret\s+name:\s+memochat-secrets",
-        )
-        self.assertNotIn("CHANGE_ME_", content)
-        self.assertNotIn("newTag: latest", content)
-        self.assertIn("newTag: prod-digest-required", content)
+        self.assertEqual(manifest["resources"], [blocker])
+        self.assertNotIn("bases", manifest)
+        self.assertFalse(K8S_PROD_OVERLAY.with_name(blocker).exists())
+        self.assertIn("deliberately non-buildable", content)
+        self.assertIn("infra/deploy/kubernetes/charts/memochat", content)
 
-    def test_prod_overlay_uses_istio_strict_mtls_resources(self):
-        docs = {doc["kind"]: doc for doc in load_yaml_docs(K8S_PROD_MESH)}
-
-        peer_auth = docs["PeerAuthentication"]
-        self.assertEqual(peer_auth["apiVersion"], "security.istio.io/v1")
-        self.assertEqual(peer_auth["metadata"]["namespace"], "memochat")
-        self.assertEqual(peer_auth["spec"]["mtls"]["mode"], "STRICT")
-
-        destination_rule = docs["DestinationRule"]
-        self.assertEqual(destination_rule["apiVersion"], "networking.istio.io/v1")
-        self.assertEqual(destination_rule["spec"]["trafficPolicy"]["tls"]["mode"], "ISTIO_MUTUAL")
-        self.assertEqual(destination_rule["spec"]["host"], "*.memochat.svc.cluster.local")
-
-        authz = docs["AuthorizationPolicy"]
-        self.assertEqual(authz["apiVersion"], "security.istio.io/v1")
-        self.assertEqual(authz["spec"]["action"], "ALLOW")
-        namespaces = authz["spec"]["rules"][0]["from"][0]["source"]["namespaces"]
-        self.assertEqual(namespaces, ["memochat"])
-
-    def test_prod_overlay_uses_external_secrets_for_secret_manager_contract(self):
-        docs = load_yaml_docs(K8S_PROD_EXTERNAL_SECRETS)
-        by_name = {doc["metadata"]["name"]: doc for doc in docs}
-
-        store = by_name["memochat-vault"]
-        self.assertEqual(store["kind"], "ClusterSecretStore")
-        vault = store["spec"]["provider"]["vault"]
-        self.assertTrue(vault["server"].startswith("https://"), vault["server"])
-        self.assertEqual(vault["version"], "v2")
-        self.assertIn("kubernetes", vault["auth"])
-        self.assertEqual(vault["auth"]["kubernetes"]["role"], "memochat-prod")
-
-        app_secret = by_name["memochat-secrets"]
-        self.assertEqual(app_secret["kind"], "ExternalSecret")
-        self.assertEqual(app_secret["spec"]["secretStoreRef"], {"name": "memochat-vault", "kind": "ClusterSecretStore"})
-        self.assertEqual(app_secret["spec"]["target"]["name"], "memochat-secrets")
-        self.assertEqual(app_secret["spec"]["target"]["creationPolicy"], "Owner")
-        secret_keys = {item["secretKey"] for item in app_secret["spec"]["data"]}
-        for key in (
-            "postgres-password",
-            "redis-password",
-            "mongodb-uri",
-            "rabbitmq-username",
-            "rabbitmq-password",
-            "neo4j-password",
-            "mysql-password",
-            "smtp-pass",
-            "chat-auth-secret",
-            "auth-refresh-pepper",
-            "livekit-api-key",
-            "livekit-api-secret",
-            "minio-access-key",
-            "minio-secret-key",
-            "ai-internal-api-key",
-            "ai-provider-admin-key",
-            "r18-picacg-api-key",
-            "r18-picacg-hmac-key",
-        ):
-            with self.subTest(key=key):
-                self.assertIn(key, secret_keys)
-
-        ops_secret = by_name["memochat-ops-secrets"]
-        self.assertEqual(ops_secret["spec"]["target"]["name"], "memochat-ops-secrets")
-        self.assertIn("mysql-password", {item["secretKey"] for item in ops_secret["spec"]["data"]})
-
-        etcd_secret = by_name["memochat-etcd-secrets"]
-        self.assertEqual(etcd_secret["spec"]["target"]["name"], "memochat-etcd-secrets")
-        self.assertIn("root-password", {item["secretKey"] for item in etcd_secret["spec"]["data"]})
-
-        etcd_tls = by_name["memochat-etcd-tls"]
-        self.assertEqual(etcd_tls["spec"]["target"]["template"]["type"], "kubernetes.io/tls")
-        self.assertEqual({item["secretKey"] for item in etcd_tls["spec"]["data"]}, {"ca.crt", "tls.crt", "tls.key"})
-
-    def test_prod_cd_rewrites_overlay_to_immutable_image_digests(self):
-        workflow = CD_WORKFLOW.read_text(encoding="utf-8")
-        prod_block = workflow[workflow.index("deploy-prod:") :]
-
-        self.assertNotIn(":latest", prod_block)
-        self.assertIn("docker buildx imagetools inspect", prod_block)
-        self.assertIn("id: image-digests", prod_block)
-        self.assertIn("Materialize production image digests", prod_block)
-        self.assertIn("newName: {os.environ['GATESERVER_IMAGE']}", prod_block)
-        self.assertIn("digest: {os.environ['GATESERVER_DIGEST']}", prod_block)
-        self.assertIn("newName: {os.environ['CHATSERVER_IMAGE']}", prod_block)
-        self.assertIn("digest: {os.environ['CHATSERVER_DIGEST']}", prod_block)
-        self.assertIn("newName: {os.environ['VARIFYSERVER_IMAGE']}", prod_block)
-        self.assertIn("digest: {os.environ['VARIFYSERVER_DIGEST']}", prod_block)
-        self.assertLess(
-            prod_block.index("Materialize production image digests"),
-            prod_block.index("kubectl apply -k infra/Memo_ops/k8s/overlays/prod"),
-        )
+    def test_legacy_kustomize_production_deploy_is_fail_closed(self):
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("legacy MemoOps Kustomize production path is retired", script)
+        self.assertIn("infra/deploy/kubernetes/charts/memochat", script)
+        self.assertIn("prod)", script)
+        self.assertIn("exit 64", script)
+        self.assertIn('kubectl apply -k "infra/Memo_ops/k8s/overlays/${ENV}/"', script)
+        self.assertLess(script.index("prod)"), script.index("kubectl apply -k"))
 
     def test_memoops_password_config_values_are_env_substitutable(self):
         for path in (OPSSERVER, OPSCOLLECTOR):

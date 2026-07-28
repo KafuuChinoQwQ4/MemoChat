@@ -86,6 +86,22 @@ class FocusedPersistenceSeamTests(unittest.TestCase):
             with self.subTest(service=name):
                 self.assertEqual([seam["adapter"]], call_sites)
 
+    def test_call_friendship_check_uses_relation_service_not_the_call_database(self):
+        root = FOCUSED_SEAMS["Call"]["root"]
+        adapter = read(root / "CallPersistence.cpp")
+        relation_client = read(root / "CallRelationClient.cpp")
+        cmake = read(FOCUSED_SEAMS["Call"]["cmake"])
+
+        self.assertIn("RelationClient().AreUsersFriends", adapter)
+        relation_service = read(SERVER_CORE / "ChatServer" / "domain" / "relation" / "ChatRelationService.cpp")
+        self.assertIn("IsPrivateFriend(uid, peer_uid)", relation_service)
+        self.assertIn("IsPrivateFriend(peer_uid, uid)", relation_service)
+        self.assertNotIn("->IsFriend", adapter)
+        self.assertIn("CheckFriendship", relation_client)
+        self.assertNotIn("FilterFriendUids", relation_client)
+        self.assertIn("InjectGrpcTraceMetadata", relation_client)
+        self.assertIn("CallRelationClient.cpp", cmake)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 import json
+import subprocess
 import unittest
 
 from tests.python.support.paths import repo_root
@@ -13,6 +14,26 @@ MONGO_C_DRIVER_PORT = REPO_ROOT / "cmake/vcpkg-overlay-ports/mongo-c-driver"
 NGHTTP2_PORTFILE = REPO_ROOT / "infra/ports/nghttp2/portfile.cmake"
 NGHTTP2_MANIFEST = REPO_ROOT / "infra/ports/nghttp2/vcpkg.json"
 SERVICE_IMAGE_README = REPO_ROOT / "infra/deploy/images/README.md"
+LEGAL_APPROVAL_PACKAGERS = (
+    (
+        REPO_ROOT / "tools/scripts/release/package_linux_client.sh",
+        "approval_public_key",
+        "approval_signature",
+        "legal_args",
+    ),
+    (
+        REPO_ROOT / "tools/scripts/release/package_backend_services.sh",
+        "APPROVAL_PUBLIC_KEY",
+        "APPROVAL_SIGNATURE",
+        "LEGAL_ARGS",
+    ),
+    (
+        REPO_ROOT / "tools/scripts/release/package_backend_deployment_kit.sh",
+        "APPROVAL_PUBLIC_KEY",
+        "APPROVAL_SIGNATURE",
+        "LEGAL_ARGS",
+    ),
+)
 
 
 class ReleasePresetContractTests(unittest.TestCase):
@@ -76,6 +97,44 @@ class ReleasePresetContractTests(unittest.TestCase):
             release_docs,
             r"cmake --build --preset linux-(?:client|server)-release-gcc16\s+--parallel",
         )
+
+    def test_packagers_only_forward_explicit_external_legal_approval_inputs(self):
+        for packager, key_variable, signature_variable, argument_array in LEGAL_APPROVAL_PACKAGERS:
+            with self.subTest(packager=packager.name):
+                help_result = subprocess.run(
+                    ["bash", str(packager), "--help"],
+                    cwd=REPO_ROOT,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    check=False,
+                )
+                self.assertEqual(0, help_result.returncode, help_result.stdout)
+                self.assertIn("--approval-public-key", help_result.stdout)
+                self.assertIn("--approval-signature", help_result.stdout)
+
+                script = packager.read_text(encoding="utf-8")
+                self.assertIn(f'{key_variable}=""', script)
+                self.assertIn(f'{signature_variable}=""', script)
+                self.assertIn("--approval-public-key)", script)
+                self.assertIn("--approval-signature)", script)
+                self.assertIn(
+                    f'{argument_array}+=(--approval-public-key "${key_variable}")',
+                    script,
+                )
+                self.assertIn(
+                    f'{argument_array}+=(--approval-signature "${signature_variable}")',
+                    script,
+                )
+                self.assertNotIn(f'{key_variable}="${{', script)
+                self.assertNotIn(f'{signature_variable}="${{', script)
+
+                verifier_calls = [
+                    line.strip() for line in script.splitlines() if line.lstrip().startswith('"$LEGAL_VERIFIER"')
+                ]
+                self.assertTrue(verifier_calls)
+                for verifier_call in verifier_calls:
+                    self.assertIn(f'"${{{argument_array}[@]}}"', verifier_call)
 
     def test_release_presets_scrub_source_and_dependency_build_paths(self):
         for name in ("linux-client-release-gcc16", "linux-server-release-gcc16"):

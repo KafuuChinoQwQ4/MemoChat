@@ -58,6 +58,26 @@ add_dependencies(gtest_tests callservice_public_dtos_gtest)
 
 gtest_discover_tests(callservice_public_dtos_gtest TEST_DISCOVERY_MODE POST_BUILD)
 
+add_executable(callservice_relation_client_gtest
+    ${CMAKE_SOURCE_DIR}/apps/server/core/CallService/core/support/CallRelationClient.cpp
+    main.cpp
+    CallRelationClientTest.cpp
+)
+
+target_link_libraries(callservice_relation_client_gtest PRIVATE
+    GTest_TestLib
+    memochat_server_deps
+)
+
+target_include_directories(callservice_relation_client_gtest PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/server/core/CallService/core/support
+    ${CMAKE_SOURCE_DIR}/apps/server/core/GateShared/core
+)
+
+add_dependencies(gtest_tests callservice_relation_client_gtest)
+
+gtest_discover_tests(callservice_relation_client_gtest TEST_DISCOVERY_MODE POST_BUILD)
+
 if(MEMOCHAT_ENABLE_GNU_MODULES)
     add_executable(callservice_token_algorithms_gtest
         main.cpp

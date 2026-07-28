@@ -6,6 +6,6 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `test_client_release_hardening.py` | 验证日志脱敏与原始 payload 禁写、TLS/本地 CA、受限资产/开发路径隔离及 Linux 发布包 fail-closed 合同 |
+| `test_client_release_hardening.py` | 验证日志脱敏、TLS/本地 CA、受限资产/开发路径隔离、法律状态及 Linux 发布包 fail-closed 合同 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

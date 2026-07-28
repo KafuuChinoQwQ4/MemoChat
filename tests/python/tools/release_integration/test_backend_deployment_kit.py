@@ -88,6 +88,10 @@ class BackendDeploymentKitTests(unittest.TestCase):
                 "README.md",
                 "MANIFEST.txt",
                 "SHA256SUMS",
+                "legal/LEGAL-STATUS.txt",
+                "legal/LICENSE",
+                "legal/THIRD_PARTY_NOTICES.md",
+                "tools/scripts/release/audit_backend_images.sh",
                 "tools/scripts/release/build_backend_images.sh",
                 "tools/scripts/release/run_release_compose.sh",
                 "tools/scripts/release/verify_release_tree.sh",
@@ -109,6 +113,7 @@ class BackendDeploymentKitTests(unittest.TestCase):
                     self.assertTrue(output.joinpath(relative).is_file())
 
             self.assertTrue(output.joinpath("tools/scripts/release/run_release_compose.sh").stat().st_mode & 0o100)
+            self.assertTrue(output.joinpath("tools/scripts/release/audit_backend_images.sh").stat().st_mode & 0o100)
             self.assertTrue(output.joinpath("infra/deploy/local/provision/postgres.sh").stat().st_mode & 0o100)
             self.assertFalse(any(output.rglob("_TREE.md")))
             self.assertFalse(any(output.rglob("*.key")))
@@ -152,6 +157,14 @@ class BackendDeploymentKitTests(unittest.TestCase):
             self.assertIn("format=memochat-backend-deployment-kit-v1", manifest)
             self.assertIn("supported_profiles=calls,r18,observability", manifest)
             self.assertIn("excluded_components=AIGatewayServer,AIServer,AIOrchestrator,Ollama,Qdrant,Neo4j", manifest)
+            self.assertIn("legal_inventory=complete", manifest)
+            self.assertIn("third_party_legal_corpus=incomplete", manifest)
+            self.assertIn("formal_distribution_ready=false", manifest)
+            self.assertNotIn("legal_files=complete", manifest)
+            legal_status = output.joinpath("legal/LEGAL-STATUS.txt").read_text(encoding="utf-8")
+            self.assertIn("third_party_legal_corpus=incomplete", legal_status)
+            self.assertIn("formal_distribution_ready=false", legal_status)
+            self.assertFalse(output.joinpath("legal/third-party").exists())
             readme = output.joinpath("README.md").read_text(encoding="utf-8")
             self.assertIn("--bundle-root ../backend", readme)
             self.assertNotIn("`ai`", readme)
@@ -165,7 +178,7 @@ class BackendDeploymentKitTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("legal file is unavailable", result.stdout)
+            self.assertNotIn("legal file is unavailable", result.stdout)
 
     def test_bundled_image_builder_resolves_the_sibling_backend_archive(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -187,12 +200,21 @@ class BackendDeploymentKitTests(unittest.TestCase):
                 binary.chmod(0o755)
                 for library in ("libmsquic.so.2", "libstdc++.so.6", "libgcc_s.so.1", "libatomic.so.1"):
                     (bundle / "lib" / library).write_text("release-test-library\n", encoding="utf-8")
+                sbom = bundle / "sbom/vcpkg-build-dependencies.spdx.json"
+                sbom.parent.mkdir()
+                sbom.write_text(
+                    '{"spdxVersion":"SPDX-2.3","packages":[{"name":"fixture"}]}\n',
+                    encoding="utf-8",
+                )
+                sbom_sha256 = hashlib.sha256(sbom.read_bytes()).hexdigest()
                 (bundle / "MANIFEST.txt").write_text(
-                    f"format=memochat-cpp-service-bundle-v1\ntarget={target}\n",
+                    f"format=memochat-cpp-service-bundle-v1\ntarget={target}\n"
+                    "vcpkg_sbom_coverage=installed-closure-overapproximation\n"
+                    f"vcpkg_sbom_sha256={sbom_sha256}\n",
                     encoding="utf-8",
                 )
                 checksum_lines = []
-                for path in sorted((*bundle.joinpath("bin").iterdir(), *bundle.joinpath("lib").iterdir())):
+                for path in sorted((*bundle.joinpath("bin").iterdir(), *bundle.joinpath("lib").iterdir(), sbom)):
                     checksum_lines.append(
                         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(bundle)}"
                     )

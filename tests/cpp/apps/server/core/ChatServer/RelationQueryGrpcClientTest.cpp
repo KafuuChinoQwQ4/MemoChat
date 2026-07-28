@@ -2,6 +2,7 @@
 
 #include "ChatRelationInternalGrpcService.hpp"
 #include "RelationQueryGrpcClient.hpp"
+#include "auth/RelationGrpcAuth.hpp"
 #include "const.hpp"
 #include "json/GlazeCompat.hpp"
 
@@ -13,9 +14,28 @@
 
 namespace
 {
+std::string TestRoleToken(char role)
+{
+    return std::string(32, role);
+}
+
+RelationGrpcAuthTokens TestQueryTokens()
+{
+    return RelationGrpcAuthTokens{
+        .chat = TestRoleToken('c'),
+        .call = TestRoleToken('a'),
+        .moments = TestRoleToken('m'),
+    };
+}
+
 class FakeRelationQueryService final : public IRelationService
 {
 public:
+    bool AreUsersFriends(int uid, int peer_uid) override
+    {
+        return uid == 42 && peer_uid == 84;
+    }
+
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override
     {
         out["bootstrap_uid"] = uid;
@@ -114,12 +134,12 @@ RunningGrpcServer StartServer(chatinternal::ChatRelationInternalService::Service
 TEST(RelationQueryGrpcClientTest, AppendRelationBootstrapMergesRemotePayload)
 {
     FakeRelationQueryService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake, RelationGrpcAccessMode::QueryOnly, TestQueryTokens());
     auto running = StartServer(&service);
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationQueryGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationQueryGrpcClient client(running.Endpoint(), TestRoleToken('c'), std::chrono::milliseconds(500));
     memochat::json::JsonValue out(memochat::json::object_t{});
     out["error"] = ErrorCodes::Success;
     out["existing"] = "keep";
@@ -140,12 +160,12 @@ TEST(RelationQueryGrpcClientTest, AppendRelationBootstrapMergesRemotePayload)
 TEST(RelationQueryGrpcClientTest, BuildDialogListMergesRemotePayload)
 {
     FakeRelationQueryService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake, RelationGrpcAccessMode::QueryOnly, TestQueryTokens());
     auto running = StartServer(&service);
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationQueryGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationQueryGrpcClient client(running.Endpoint(), TestRoleToken('c'), std::chrono::milliseconds(500));
     memochat::json::JsonValue out(memochat::json::object_t{});
     out["error"] = ErrorCodes::Success;
 
@@ -161,6 +181,64 @@ TEST(RelationQueryGrpcClientTest, BuildDialogListMergesRemotePayload)
     running.server->Shutdown();
 }
 
+TEST(RelationQueryGrpcClientTest, QueryOnlyServiceRejectsWrongRoleToken)
+{
+    FakeRelationQueryService fake;
+    ChatRelationInternalGrpcService service(&fake, RelationGrpcAccessMode::QueryOnly, TestQueryTokens());
+    auto running = StartServer(&service);
+    ASSERT_NE(running.server, nullptr);
+
+    RelationQueryGrpcClient client(running.Endpoint(), TestRoleToken('a'), std::chrono::milliseconds(500));
+    memochat::json::JsonValue out(memochat::json::object_t{});
+    out["error"] = ErrorCodes::Success;
+    client.AppendRelationBootstrapJson(42, out);
+
+    EXPECT_EQ(out["error"].asInt(), ErrorCodes::RPCFailed);
+    EXPECT_EQ(out["relation_query_remote_status_code"].asInt(), static_cast<int>(grpc::StatusCode::UNAUTHENTICATED));
+    running.server->Shutdown();
+}
+
+TEST(RelationQueryGrpcClientTest, QueryOnlyServiceEnforcesPerRpcCallerAllowlist)
+{
+    FakeRelationQueryService fake;
+    ChatRelationInternalGrpcService service(&fake, RelationGrpcAccessMode::QueryOnly, TestQueryTokens());
+    auto running = StartServer(&service);
+    ASSERT_NE(running.server, nullptr);
+    auto stub = chatinternal::ChatRelationInternalService::NewStub(
+        grpc::CreateChannel(running.Endpoint(), grpc::InsecureChannelCredentials()));
+
+    chatinternal::FriendshipRequest friendship_request;
+    friendship_request.set_uid(42);
+    friendship_request.set_peer_uid(84);
+    chatinternal::FriendshipResponse friendship_response;
+    grpc::ClientContext call_context;
+    memochat::auth::InjectRelationGrpcAuth(call_context, TestRoleToken('a'));
+    EXPECT_TRUE(stub->CheckFriendship(&call_context, friendship_request, &friendship_response).ok());
+
+    chatinternal::BootstrapRequest bootstrap_request;
+    bootstrap_request.set_uid(42);
+    chatinternal::BootstrapResponse bootstrap_response;
+    grpc::ClientContext cross_role_context;
+    memochat::auth::InjectRelationGrpcAuth(cross_role_context, TestRoleToken('a'));
+    EXPECT_EQ(stub->AppendRelationBootstrap(&cross_role_context, bootstrap_request, &bootstrap_response).error_code(),
+              grpc::StatusCode::UNAUTHENTICATED);
+
+    chatinternal::JsonPayloadRequest filter_request;
+    filter_request.set_payload_json(R"({"viewer_uid":42,"author_uids":[84]})");
+    filter_request.mutable_session()->set_uid(42);
+    chatinternal::JsonPayloadResponse filter_response;
+    grpc::ClientContext moments_context;
+    memochat::auth::InjectRelationGrpcAuth(moments_context, TestRoleToken('m'));
+    EXPECT_TRUE(stub->FilterFriendUids(&moments_context, filter_request, &filter_response).ok());
+
+    chatinternal::JsonPayloadResponse restricted_response;
+    grpc::ClientContext restricted_context;
+    memochat::auth::InjectRelationGrpcAuth(restricted_context, TestRoleToken('c'));
+    EXPECT_EQ(stub->SearchUser(&restricted_context, filter_request, &restricted_response).error_code(),
+              grpc::StatusCode::PERMISSION_DENIED);
+    running.server->Shutdown();
+}
+
 TEST(RelationQueryGrpcClientTest, RemoteFailureMarksBusinessError)
 {
     FailingRelationInternalGrpcService service;
@@ -168,7 +246,7 @@ TEST(RelationQueryGrpcClientTest, RemoteFailureMarksBusinessError)
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationQueryGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationQueryGrpcClient client(running.Endpoint(), TestRoleToken('c'), std::chrono::milliseconds(500));
     memochat::json::JsonValue out(memochat::json::object_t{});
     out["error"] = ErrorCodes::Success;
 

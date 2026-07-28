@@ -54,6 +54,23 @@ CONFIG_FILES = (
     "VarifyServer/config.ini",
 )
 
+OBSERVABILITY_RUNTIME_DIRECTORIES = (
+    "observability/credentials",
+    "observability/influxdb",
+    "observability/grafana",
+    "observability/prometheus",
+    "observability/alertmanager",
+    "observability/loki",
+    "observability/tempo",
+)
+
+RELATION_ROLE_TOKEN_VARIABLES = (
+    "MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN",
+    "MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN",
+    "MEMOCHAT_RELATION_CALL_AUTH_TOKEN",
+    "MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN",
+)
+
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -75,9 +92,18 @@ class ReleaseComposePreflightTests(unittest.TestCase):
         (data_root / "media/uploads").mkdir(parents=True)
         (data_root / "r18").mkdir()
         (data_root / "envoy/logs").mkdir(parents=True)
+        (data_root / "redpanda/data").mkdir(parents=True)
+        for relative_directory in OBSERVABILITY_RUNTIME_DIRECTORIES:
+            (data_root / relative_directory).mkdir(parents=True)
         runtime_uid = os.getuid() if os.getuid() != 0 else 10001
         runtime_gid = os.getgid() if os.getuid() != 0 else 10001
-        for runtime_directory in (data_root / "media/uploads", data_root / "r18", data_root / "envoy/logs"):
+        for runtime_directory in (
+            data_root / "media/uploads",
+            data_root / "r18",
+            data_root / "envoy/logs",
+            data_root / "redpanda/data",
+            *(data_root / relative_directory for relative_directory in OBSERVABILITY_RUNTIME_DIRECTORIES),
+        ):
             runtime_directory.chmod(0o700)
             if os.getuid() == 0:
                 os.chown(runtime_directory, runtime_uid, runtime_gid)
@@ -165,6 +191,13 @@ class ReleaseComposePreflightTests(unittest.TestCase):
             'printf \'%s\\n\' "$@" >> "${FAKE_DOCKER_CAPTURE:?}"\n'
             'if [[ "${1:-}" == image && "${2:-}" == inspect && "${4:-}" == "${FAKE_DOCKER_MISSING_IMAGE:-}" ]]; then\n'
             "  exit 66\n"
+            "fi\n"
+            'if [[ "${*: -1}" == memochat-release-provision-influxdb && -n "${FAKE_GRAFANA_TOKEN_FILE:-}" ]]; then\n'
+            "  printf '%s\\n' fixture-rotated-grafana-reader-token-0123456789abcdef > \"$FAKE_GRAFANA_TOKEN_FILE\"\n"
+            '  chmod 0600 "$FAKE_GRAFANA_TOKEN_FILE"\n'
+            "fi\n"
+            'if [[ "$*" == *" ps -q memochat-grafana"* && -n "${FAKE_GRAFANA_RUNNING:-}" ]]; then\n'
+            "  echo fake-grafana-container-id\n"
             "fi\n",
             encoding="utf-8",
         )
@@ -172,6 +205,7 @@ class ReleaseComposePreflightTests(unittest.TestCase):
         environment = os.environ.copy()
         environment["PATH"] = f"{bin_dir}:{environment['PATH']}"
         environment["FAKE_DOCKER_CAPTURE"] = str(capture)
+        environment["FAKE_GRAFANA_TOKEN_FILE"] = str(temp / "data/observability/credentials/grafana-reader.token")
         return environment, capture
 
     @staticmethod
@@ -191,6 +225,9 @@ class ReleaseComposePreflightTests(unittest.TestCase):
             Path(env_values["MEMOCHAT_BACKEND_CONFIG_ROOT"], "CallService/callgateway.ini").unlink()
             Path(env_values["MEMOCHAT_BACKEND_CONFIG_ROOT"], "R18Service/r18gateway.ini").unlink()
             Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"], "r18").rmdir()
+            for relative_directory in reversed(OBSERVABILITY_RUNTIME_DIRECTORIES):
+                Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"], relative_directory).rmdir()
+            Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"], "observability").rmdir()
             environment, capture = self.make_fake_docker(temp)
 
             checked = run("bash", str(PREFLIGHT), "--env-file", str(env_file), "check", env=environment)
@@ -259,7 +296,7 @@ class ReleaseComposePreflightTests(unittest.TestCase):
     def test_wrapper_owns_the_call_provisioning_flag(self):
         with tempfile.TemporaryDirectory() as temp_text:
             temp = Path(temp_text)
-            env_file, _ = self.make_release_env(temp)
+            env_file, env_values = self.make_release_env(temp)
             environment, _ = self.make_fake_docker(temp)
             profile_capture = temp / "profile.flag"
             environment["FAKE_DOCKER_PROFILE_CAPTURE"] = str(profile_capture)
@@ -344,6 +381,133 @@ class ReleaseComposePreflightTests(unittest.TestCase):
                 ["--profile", "observability", "up", "-d", "memochat-chat-server"],
             )
 
+    def test_up_cannot_activate_an_unvalidated_profile_service(self):
+        cases = (
+            ("memochat-call-gateway", "calls"),
+            ("memochat-livekit", "calls"),
+            ("memochat-r18-gateway", "r18"),
+            ("memochat-cadvisor", "observability"),
+            ("memochat-grafana", "observability"),
+        )
+        for service_name, required_profile in cases:
+            with self.subTest(service=service_name), tempfile.TemporaryDirectory() as temp_text:
+                temp = Path(temp_text)
+                env_file, _ = self.make_release_env(temp)
+                environment, capture = self.make_fake_docker(temp)
+
+                result = run(
+                    "bash",
+                    str(PREFLIGHT),
+                    "--env-file",
+                    str(env_file),
+                    "up",
+                    service_name,
+                    env=environment,
+                )
+
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(f"--profile {required_profile}", result.stdout)
+                self.assertFalse(capture.exists(), result.stdout)
+
+    def test_up_rejects_direct_provision_job_activation(self):
+        with tempfile.TemporaryDirectory() as temp_text:
+            temp = Path(temp_text)
+            env_file, _ = self.make_release_env(temp)
+            environment, capture = self.make_fake_docker(temp)
+
+            result = run(
+                "bash",
+                str(PREFLIGHT),
+                "--env-file",
+                str(env_file),
+                "up",
+                "memochat-release-provision-influxdb",
+                env=environment,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("provision action", result.stdout.lower())
+            self.assertFalse(capture.exists(), result.stdout)
+
+    def test_observability_up_runs_the_idempotent_influx_scraper_provisioner(self):
+        with tempfile.TemporaryDirectory() as temp_text:
+            temp = Path(temp_text)
+            env_file, env_values = self.make_release_env(temp)
+            environment, capture = self.make_fake_docker(temp)
+
+            result = run(
+                "bash",
+                str(PREFLIGHT),
+                "--env-file",
+                str(env_file),
+                "--profile",
+                "observability",
+                "up",
+                "memochat-prometheus",
+                env=environment,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            credential_root = Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"]) / "observability/credentials"
+            expected_runtime_secrets = {
+                "influxdb-username": env_values["MEMOCHAT_INFLUXDB_USERNAME"],
+                "influxdb-password": env_values["MEMOCHAT_INFLUXDB_PASSWORD"],
+                "influxdb-admin.token": env_values["MEMOCHAT_INFLUXDB_ADMIN_TOKEN"],
+            }
+            for file_name, expected_value in expected_runtime_secrets.items():
+                with self.subTest(runtime_secret=file_name):
+                    secret_file = credential_root / file_name
+                    self.assertEqual(secret_file.read_text(encoding="utf-8"), f"{expected_value}\n")
+                    self.assertEqual(stat.S_IMODE(secret_file.stat().st_mode), 0o400)
+                    self.assertEqual(secret_file.stat().st_uid, int(env_values["MEMOCHAT_RUNTIME_UID"]))
+                    self.assertEqual(secret_file.stat().st_gid, int(env_values["MEMOCHAT_RUNTIME_GID"]))
+                    self.assertNotIn(expected_value, result.stdout)
+            self.assertNotIn("fixture-old-grafana-reader-token", result.stdout)
+            self.assertNotIn("fixture-rotated-grafana-reader-token", result.stdout)
+            calls = capture.read_text(encoding="utf-8")
+            self.assertRegex(calls, r"up\n-d\nmemochat-postgres\nmemochat-mongo\nmemochat-minio\nmemochat-influxdb")
+            self.assertRegex(
+                calls,
+                r"--profile\nprovision\nrun\n--rm\n--no-deps\nmemochat-release-provision-influxdb",
+            )
+            self.assertTrue(calls.rstrip().endswith("up\n-d\nmemochat-prometheus"), calls)
+
+    def test_observability_token_rotation_recreates_only_an_existing_grafana(self):
+        with tempfile.TemporaryDirectory() as temp_text:
+            temp = Path(temp_text)
+            env_file, env_values = self.make_release_env(temp)
+            environment, capture = self.make_fake_docker(temp)
+            token_file = (
+                Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"]) / "observability/credentials/grafana-reader.token"
+            )
+            token_file.write_text("fixture-old-grafana-reader-token-0123456789abcdef\n", encoding="utf-8")
+            token_file.chmod(0o600)
+            if os.getuid() == 0:
+                os.chown(token_file, int(env_values["MEMOCHAT_RUNTIME_UID"]), int(env_values["MEMOCHAT_RUNTIME_GID"]))
+            environment["FAKE_GRAFANA_TOKEN_FILE"] = str(token_file)
+            environment["FAKE_GRAFANA_RUNNING"] = "1"
+
+            result = run(
+                "bash",
+                str(PREFLIGHT),
+                "--env-file",
+                str(env_file),
+                "--profile",
+                "observability",
+                "provision",
+                env=environment,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertNotIn("fixture-old-grafana-reader-token", result.stdout)
+            self.assertNotIn("fixture-rotated-grafana-reader-token", result.stdout)
+            calls = capture.read_text(encoding="utf-8")
+            self.assertRegex(calls, r"ps\n-q\nmemochat-grafana")
+            self.assertRegex(
+                calls,
+                r"up\n-d\n--no-deps\n--force-recreate\nmemochat-grafana",
+            )
+
     def test_up_rejects_option_like_service_arguments_before_docker(self):
         with tempfile.TemporaryDirectory() as temp_text:
             temp = Path(temp_text)
@@ -408,6 +572,8 @@ class ReleaseComposePreflightTests(unittest.TestCase):
             "weak": ("MEMOCHAT_REDIS_PASSWORD", "123456"),
             "short": ("MEMOCHAT_AUTHTOKEN_JWTSECRET", "not-long-enough"),
             "weak-mongo-app-password": ("MEMOCHAT_MONGO_APP_PASSWORD", "123456"),
+            "short-relation-call-token": ("MEMOCHAT_RELATION_CALL_AUTH_TOKEN", "x" * 31),
+            "non-ascii-relation-token": ("MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN", "密" * 32),
         }
         for case, (name, value) in cases.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temp_text:
@@ -429,6 +595,45 @@ class ReleaseComposePreflightTests(unittest.TestCase):
                 self.assertIn(name, result.stdout)
                 self.assertNotIn(value, result.stdout)
                 self.assertFalse(capture.exists(), result.stdout)
+
+    def test_relation_role_tokens_are_required_and_cannot_be_reused(self):
+        for variable_name in RELATION_ROLE_TOKEN_VARIABLES:
+            with self.subTest(missing=variable_name), tempfile.TemporaryDirectory() as temp_text:
+                temp = Path(temp_text)
+                env_file, _ = self.make_release_env(temp)
+                retained_lines = [
+                    line
+                    for line in env_file.read_text(encoding="utf-8").splitlines()
+                    if not line.startswith(f"{variable_name}=")
+                ]
+                env_file.write_text("\n".join(retained_lines) + "\n", encoding="utf-8")
+                environment, capture = self.make_fake_docker(temp)
+
+                result = run("bash", str(PREFLIGHT), "--env-file", str(env_file), "check", env=environment)
+
+                self.assertNotEqual(0, result.returncode, result.stdout)
+                self.assertIn(variable_name, result.stdout)
+                self.assertFalse(capture.exists(), result.stdout)
+
+        with tempfile.TemporaryDirectory() as temp_text:
+            temp = Path(temp_text)
+            env_file, env_values = self.make_release_env(temp)
+            duplicate_value = env_values["MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN"]
+            rendered_lines = [
+                f"MEMOCHAT_RELATION_CALL_AUTH_TOKEN={duplicate_value}"
+                if line.startswith("MEMOCHAT_RELATION_CALL_AUTH_TOKEN=")
+                else line
+                for line in env_file.read_text(encoding="utf-8").splitlines()
+            ]
+            env_file.write_text("\n".join(rendered_lines) + "\n", encoding="utf-8")
+            environment, capture = self.make_fake_docker(temp)
+
+            result = run("bash", str(PREFLIGHT), "--env-file", str(env_file), "check", env=environment)
+
+            self.assertNotEqual(0, result.returncode, result.stdout)
+            self.assertIn("must not be reused", result.stdout)
+            self.assertNotIn(duplicate_value, result.stdout)
+            self.assertFalse(capture.exists(), result.stdout)
 
     def test_env_file_must_be_owned_mode_0600_regular_and_non_symlink(self):
         with tempfile.TemporaryDirectory() as temp_text:
@@ -510,7 +715,9 @@ class ReleaseComposePreflightTests(unittest.TestCase):
         cases = (
             ("media/uploads", None),
             ("envoy/logs", None),
+            ("redpanda/data", None),
             ("r18", "r18"),
+            *((relative_path, "observability") for relative_path in OBSERVABILITY_RUNTIME_DIRECTORIES),
         )
         for relative_path, profile in cases:
             with self.subTest(relative_path=relative_path, profile=profile), tempfile.TemporaryDirectory() as temp_text:
@@ -529,20 +736,29 @@ class ReleaseComposePreflightTests(unittest.TestCase):
                 self.assertIn(relative_path, result.stdout)
                 self.assertFalse(capture.exists(), result.stdout)
 
-    def test_envoy_log_directory_requires_owner_only_permissions(self):
-        with tempfile.TemporaryDirectory() as temp_text:
-            temp = Path(temp_text)
-            env_file, env_values = self.make_release_env(temp)
-            environment, capture = self.make_fake_docker(temp)
-            log_directory = Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"]) / "envoy/logs"
-            log_directory.chmod(0o755)
+    def test_mutable_runtime_directories_require_owner_only_permissions(self):
+        cases = (
+            ("envoy/logs", None),
+            ("observability/grafana", "observability"),
+        )
+        for relative_path, profile in cases:
+            with self.subTest(relative_path=relative_path), tempfile.TemporaryDirectory() as temp_text:
+                temp = Path(temp_text)
+                env_file, env_values = self.make_release_env(temp)
+                environment, capture = self.make_fake_docker(temp)
+                runtime_directory = Path(env_values["MEMOCHAT_DOCKER_DATA_ROOT"]) / relative_path
+                runtime_directory.chmod(0o755)
 
-            result = run("bash", str(PREFLIGHT), "--env-file", str(env_file), "check", env=environment)
+                arguments = ["bash", str(PREFLIGHT), "--env-file", str(env_file)]
+                if profile:
+                    arguments.extend(("--profile", profile))
+                arguments.append("check")
+                result = run(*arguments, env=environment)
 
-            self.assertNotEqual(result.returncode, 0, result.stdout)
-            self.assertIn("envoy/logs", result.stdout)
-            self.assertIn("0700", result.stdout)
-            self.assertFalse(capture.exists(), result.stdout)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(relative_path, result.stdout)
+                self.assertIn("0700", result.stdout)
+                self.assertFalse(capture.exists(), result.stdout)
 
     def test_duplicate_expanding_or_command_like_assignments_are_rejected_without_execution(self):
         cases = {
@@ -570,6 +786,22 @@ class ReleaseComposePreflightTests(unittest.TestCase):
         self.assertIn("tools/scripts/release/run_release_compose.sh", start_section)
         self.assertNotIn("docker compose --env-file", start_section)
 
+    def test_release_documentation_tracks_profiles_for_status_and_shutdown(self):
+        readme = README.read_text(encoding="utf-8")
+        health_section = readme.split("### 4. Health checks and stop", 1)[1].split("## Compose Files", 1)[0]
+
+        self.assertIn("RELEASE_PROFILE_ARGS=()", health_section)
+        self.assertIn("-f infra/deploy/local/compose/livekit.yml", health_section)
+        self.assertIn('"${RELEASE_PROFILE_ARGS[@]}" ps', health_section)
+        self.assertIn('"${RELEASE_PROFILE_ARGS[@]}" \\\n  down', health_section)
+
+    def test_release_documentation_states_the_influx_admin_token_file_boundary(self):
+        readme = README.read_text(encoding="utf-8")
+
+        self.assertIn("native `_FILE`", readme)
+        self.assertIn("docker inspect", readme)
+        self.assertIn("mode `0400`", readme)
+
     def test_preflight_allowlists_track_every_release_compose_variable_and_config_mount(self):
         script = PREFLIGHT.read_text(encoding="utf-8")
         compose = BACKEND_COMPOSE.read_text(encoding="utf-8")
@@ -586,7 +818,16 @@ class ReleaseComposePreflightTests(unittest.TestCase):
         self.assertGreaterEqual(len(variable_blocks), 3)
         script_names = set(re.findall(r"MEMOCHAT_[A-Z0-9_]+", "\n".join(variable_blocks)))
         compose_names = set(re.findall(r"\$\{(MEMOCHAT_[A-Z0-9_]+)", compose))
-        self.assertEqual(script_names, compose_names)
+        materialized_secret_names = set(re.findall(r"materialize_runtime_secret [^\n]+ (MEMOCHAT_[A-Z0-9_]+)", script))
+        self.assertEqual(
+            materialized_secret_names,
+            {
+                "MEMOCHAT_INFLUXDB_USERNAME",
+                "MEMOCHAT_INFLUXDB_PASSWORD",
+                "MEMOCHAT_INFLUXDB_ADMIN_TOKEN",
+            },
+        )
+        self.assertEqual(script_names, compose_names | materialized_secret_names)
         self.assertEqual(script_names, example_names)
 
         config_blocks = re.findall(
