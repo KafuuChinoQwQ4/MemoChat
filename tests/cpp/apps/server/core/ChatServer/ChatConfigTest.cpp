@@ -37,9 +37,11 @@ void EnsureConfigFixture()
                        out << "[RelationService]\n";
                        out << "Backend = Remote\n";
                        out << "Endpoint = 127.0.0.1:50091\n";
+                       out << "AuthToken = " << std::string(32, 'c') << "\n";
                        out << "[RelationQueryService]\n";
                        out << "Backend = GRPC\n";
                        out << "Endpoint = 127.0.0.1:50090\n";
+                       out << "ChatAuthToken = " << std::string(32, 'q') << "\n";
                        out.close();
 
                        ConfigMgr::InitConfigPath(path);
@@ -75,6 +77,8 @@ TEST(ChatConfigTest, ServiceBackendsAreLowercasedThroughImportedAlgorithms)
     EXPECT_EQ(message_config.MessageServiceEndpoint(), "127.0.0.1:50092");
     EXPECT_EQ(relation_config.RelationServiceBackend(), "remote");
     EXPECT_EQ(relation_config.RelationServiceEndpoint(), "127.0.0.1:50091");
+    EXPECT_EQ(relation_config.RelationServiceAuthToken(), std::string(32, 'c'));
     EXPECT_EQ(relation_query_config.RelationQueryServiceBackend(), "grpc");
     EXPECT_EQ(relation_query_config.RelationQueryServiceEndpoint(), "127.0.0.1:50090");
+    EXPECT_EQ(relation_query_config.RelationQueryServiceChatAuthToken(), std::string(32, 'q'));
 }

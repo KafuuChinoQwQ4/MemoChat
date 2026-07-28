@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -59,6 +60,46 @@ class CppServiceBundleTests(unittest.TestCase):
         (self.build_bin / "server.key").write_text("PRIVATE KEY sentinel\n", encoding="utf-8")
         (self.build_bin / "credentials.json").write_text('{"token":"sentinel"}\n', encoding="utf-8")
 
+        self.vcpkg_installed = self.root / "vcpkg-installed"
+        self.vcpkg_triplet = "x64-linux-memochat-release"
+        package_share = self.vcpkg_installed / self.vcpkg_triplet / "share" / "zlib"
+        package_share.mkdir(parents=True)
+        package_share.joinpath("vcpkg.spdx.json").write_text(
+            json.dumps(
+                {
+                    "spdxVersion": "SPDX-2.2",
+                    "SPDXID": "SPDXRef-DOCUMENT",
+                    "name": "zlib fixture",
+                    "dataLicense": "CC0-1.0",
+                    "documentNamespace": "https://example.invalid/zlib-fixture",
+                    "creationInfo": {
+                        "created": "1970-01-01T00:00:00Z",
+                        "creators": ["Tool: vcpkg-test"],
+                    },
+                    "packages": [
+                        {
+                            "name": "zlib",
+                            "SPDXID": "SPDXRef-Package-zlib",
+                            "versionInfo": "1.3.1",
+                            "downloadLocation": "NOASSERTION",
+                            "filesAnalyzed": False,
+                            "licenseConcluded": "Zlib",
+                            "licenseDeclared": "Zlib",
+                            "copyrightText": "NOASSERTION",
+                        }
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        status = self.vcpkg_installed / "vcpkg" / "status"
+        status.parent.mkdir(parents=True)
+        status.write_text(
+            f"Package: zlib\nVersion: 1.3.1\nArchitecture: {self.vcpkg_triplet}\nStatus: install ok installed\n",
+            encoding="utf-8",
+        )
+
     def tearDown(self):
         self.temp_dir.cleanup()
 
@@ -107,6 +148,13 @@ class CppServiceBundleTests(unittest.TestCase):
         self.assertTrue(library.is_file())
         self.assertTrue((service / "MANIFEST.txt").is_file())
         self.assertTrue((service / "SHA256SUMS").is_file())
+        legal_status = service.joinpath("legal/LEGAL-STATUS.txt").read_text(encoding="utf-8")
+        self.assertIn("third_party_legal_corpus=incomplete", legal_status)
+        self.assertIn("formal_distribution_ready=false", legal_status)
+        manifest = service.joinpath("MANIFEST.txt").read_text(encoding="utf-8")
+        self.assertIn("legal_inventory=complete", manifest)
+        self.assertIn("third_party_legal_corpus=incomplete", manifest)
+        self.assertIn("formal_distribution_ready=false", manifest)
         self.assertFalse(any(output.rglob("*.key")))
         self.assertFalse(any(output.rglob("credentials.json")))
 
@@ -119,6 +167,41 @@ class CppServiceBundleTests(unittest.TestCase):
         env["LD_LIBRARY_PATH"] = str(service / "lib")
         run = subprocess.run([str(executable)], env=env, check=False)
         self.assertEqual(0, run.returncode)
+
+    def test_packages_a_validated_vcpkg_installed_closure_sbom(self):
+        output = self.root / "release-with-sbom"
+
+        result = self.run_packager(
+            output,
+            "--vcpkg-installed-root",
+            str(self.vcpkg_installed),
+            "--vcpkg-triplet",
+            self.vcpkg_triplet,
+        )
+
+        self.assertEqual(0, result.returncode, result.stdout)
+        service = output / "LoginServer"
+        sbom_path = service / "sbom/vcpkg-build-dependencies.spdx.json"
+        self.assertTrue(sbom_path.is_file())
+        sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+        self.assertEqual("SPDX-2.3", sbom["spdxVersion"])
+        self.assertEqual(
+            "release_source_sha=unbound; coverage=installed-closure-overapproximation",
+            sbom["documentComment"],
+        )
+        self.assertEqual(["zlib"], [package["name"] for package in sbom["packages"]])
+        manifest = service.joinpath("MANIFEST.txt").read_text(encoding="utf-8")
+        self.assertIn("vcpkg_sbom_coverage=installed-closure-overapproximation", manifest)
+        self.assertRegex(manifest, r"(?m)^vcpkg_sbom_sha256=[0-9a-f]{64}$")
+        self.assertIn("vcpkg_sbom_source_sha=unbound", manifest)
+        self.assertRegex(manifest, r"(?m)^legal_status_sha256=[0-9a-f]{64}$")
+        subprocess.run(
+            ["sha256sum", "--check", "--strict", "SHA256SUMS"],
+            cwd=service,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
     def test_allows_verified_bundle_output_below_the_current_user_home(self):
         with tempfile.TemporaryDirectory(prefix="memochat-bundle-home-", dir=Path.home()) as home_temp:
@@ -233,28 +316,36 @@ class CppServiceBundleTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("outside explicit --library-dir roots", result.stdout)
 
-    def test_includes_repository_legal_files_when_they_exist(self):
+    def test_includes_verified_repository_legal_inventory(self):
         fixture_repo = self.root / "fixture-repo"
         fixture_script = fixture_repo / "tools/scripts/release/package_backend_services.sh"
+        fixture_verifier = fixture_repo / "tools/scripts/release/verify_release_legal.sh"
         fixture_script.parent.mkdir(parents=True)
         shutil.copy2(PACKAGER, fixture_script)
+        shutil.copy2(REPO_ROOT / "tools/scripts/release/verify_release_legal.sh", fixture_verifier)
         fixture_script.chmod(0o755)
-        (fixture_repo / "LICENSE").write_text("Test license\n", encoding="utf-8")
-        (fixture_repo / "THIRD_PARTY_NOTICES.md").write_text("Test notices\n", encoding="utf-8")
+        fixture_verifier.chmod(0o755)
+        shutil.copy2(REPO_ROOT / "LICENSE", fixture_repo / "LICENSE")
+        shutil.copy2(REPO_ROOT / "THIRD_PARTY_NOTICES.md", fixture_repo / "THIRD_PARTY_NOTICES.md")
         output = self.root / "release-with-legal"
 
         result = self.run_packager(output, packager=fixture_script)
 
         self.assertEqual(0, result.returncode, result.stdout)
         service = output / "LoginServer"
-        self.assertEqual("Test license\n", service.joinpath("legal/LICENSE").read_text(encoding="utf-8"))
         self.assertEqual(
-            "Test notices\n",
-            service.joinpath("legal/THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
+            fixture_repo.joinpath("LICENSE").read_bytes(),
+            service.joinpath("legal/LICENSE").read_bytes(),
         )
+        self.assertEqual(
+            fixture_repo.joinpath("THIRD_PARTY_NOTICES.md").read_bytes(),
+            service.joinpath("legal/THIRD_PARTY_NOTICES.md").read_bytes(),
+        )
+        self.assertTrue(service.joinpath("legal/LEGAL-STATUS.txt").is_file())
         checksums = service.joinpath("SHA256SUMS").read_text(encoding="utf-8")
         self.assertIn("legal/LICENSE", checksums)
         self.assertIn("legal/THIRD_PARTY_NOTICES.md", checksums)
+        self.assertIn("legal/LEGAL-STATUS.txt", checksums)
 
         dockerfile = REPO_ROOT.joinpath("infra/deploy/images/services/cpp-service.Dockerfile").read_text(
             encoding="utf-8"

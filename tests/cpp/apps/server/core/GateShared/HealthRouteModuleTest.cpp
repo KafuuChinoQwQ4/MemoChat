@@ -31,8 +31,9 @@ memochat::json::JsonValue ParseBody(const std::string& body)
 }
 } // namespace
 
-TEST(HealthRouteModuleTest, RegistersHealthAndReadinessRoutesThroughImportedAlgorithms)
+TEST(HealthRouteModuleTest, RegistersHealthAndFailsClosedWithoutReadinessCheck)
 {
+    HealthRouteModule::SetReadinessCheck({});
     RouteRegistry registry;
     HealthRouteModule("MemoChat-Gate").RegisterRoutes(registry);
 
@@ -48,11 +49,12 @@ TEST(HealthRouteModuleTest, RegistersHealthAndReadinessRoutesThroughImportedAlgo
     GateResponse readiness_response;
     ASSERT_TRUE(registry.Dispatch(GateRequest{.method = "GET", .path = memochat::tests::gate::health::ReadinessPath()},
                                   readiness_response));
-    EXPECT_EQ(readiness_response.status, memochat::tests::gate::health::SuccessfulProbeStatus());
+    EXPECT_EQ(readiness_response.status, 503);
     EXPECT_EQ(readiness_response.content_type, memochat::tests::gate::health::JsonContentType());
     const auto readiness = ParseBody(readiness_response.body);
-    EXPECT_EQ(readiness["status"].asString(), memochat::tests::gate::health::ReadinessStatusText());
+    EXPECT_EQ(readiness["status"].asString(), "not_ready");
     EXPECT_EQ(readiness["service"].asString(), "MemoChat-Gate");
+    EXPECT_EQ(readiness["error"].asString(), "readiness check is not configured");
 }
 
 TEST(HealthRouteModuleTest, DoesNotRegisterNonProbePaths)
@@ -63,4 +65,46 @@ TEST(HealthRouteModuleTest, DoesNotRegisterNonProbePaths)
     GateResponse response;
     EXPECT_FALSE(registry.Dispatch(GateRequest{.method = "GET", .path = "/healthz/extra"}, response));
     EXPECT_FALSE(registry.Dispatch(GateRequest{.method = "GET", .path = "/readyz?full=1"}, response));
+}
+
+TEST(HealthRouteModuleTest, ReadinessReturnsSuccessWhenConfiguredProbeSucceeds)
+{
+    HealthRouteModule::SetReadinessCheck(
+        [](std::string*)
+        {
+            return true;
+        });
+
+    RouteRegistry registry;
+    HealthRouteModule("MemoChat-Gate").RegisterRoutes(registry);
+    GateResponse response;
+    ASSERT_TRUE(registry.Dispatch(GateRequest{.method = "GET", .path = "/readyz"}, response));
+    EXPECT_EQ(response.status, memochat::tests::gate::health::SuccessfulProbeStatus());
+    const auto body = ParseBody(response.body);
+    EXPECT_EQ(body["status"].asString(), memochat::tests::gate::health::ReadinessStatusText());
+    EXPECT_FALSE(body.isMember("error"));
+    HealthRouteModule::SetReadinessCheck({});
+}
+
+TEST(HealthRouteModuleTest, ReadinessReturnsServiceUnavailableWhenProbeFails)
+{
+    HealthRouteModule::SetReadinessCheck(
+        [](std::string* error)
+        {
+            if (error != nullptr)
+            {
+                *error = "dependency unavailable";
+            }
+            return false;
+        });
+
+    RouteRegistry registry;
+    HealthRouteModule("MemoChat-Gate").RegisterRoutes(registry);
+    GateResponse response;
+    ASSERT_TRUE(registry.Dispatch(GateRequest{.method = "GET", .path = "/readyz"}, response));
+    EXPECT_EQ(response.status, 503);
+    const auto body = ParseBody(response.body);
+    EXPECT_EQ(body["status"].asString(), "not_ready");
+    EXPECT_EQ(body["error"].asString(), "dependency unavailable");
+    HealthRouteModule::SetReadinessCheck({});
 }

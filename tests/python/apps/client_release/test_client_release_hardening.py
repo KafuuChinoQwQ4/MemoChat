@@ -598,6 +598,8 @@ def test_linux_client_packager_uses_a_fresh_allowlisted_stage() -> None:
     assert 'cp -a "$qt_root/plugins/."' not in script
     assert "sqldrivers/libqsqlite.so" in script
     assert "libqsqlmimer.so" not in script
+    assert "platformthemes/libqgtk3.so" not in script
+    assert '"$base" == libicu*.so*' not in script
     assert "--library-dir" in script
     assert 'dependency_search_path="${dependency_search_path}${LD_LIBRARY_PATH' not in script
     assert "clean_ldd" in script
@@ -610,6 +612,10 @@ def test_linux_client_packager_uses_a_fresh_allowlisted_stage() -> None:
     assert "verify_release_tree.sh" in script
     assert "client_release_scan.allowlist" in script
     assert "is_project_owned_release_file" in script
+    assert "verify_release_legal.sh" in script
+    assert 'legal_args=(--project-root "$PROJECT_ROOT")' in script
+    assert 'legal_args+=(--source-sha "$source_sha")' in script
+    assert '"$LEGAL_VERIFIER" "${legal_args[@]}" --copy-to "$stage/legal"' in script
     assert "--ca-cert" in script
     assert "openssl x509" in script
     verifier = RELEASE_TREE_VERIFIER.read_text(encoding="utf-8")
@@ -1266,6 +1272,20 @@ def test_linux_client_packager_creates_audited_portable_outputs(tmp_path: Path) 
     assert (portable_dir / "MemoChat").is_file()
     assert (portable_dir / "MemoChatQml").is_file()
     assert (portable_dir / "config.ini").is_file()
+    assert (portable_dir / "legal/LICENSE").read_text(encoding="utf-8") == (REPO_ROOT / "LICENSE").read_text(
+        encoding="utf-8"
+    )
+    assert (portable_dir / "legal/THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8") == (
+        REPO_ROOT / "THIRD_PARTY_NOTICES.md"
+    ).read_text(encoding="utf-8")
+    legal_status = (portable_dir / "legal/LEGAL-STATUS.txt").read_text(encoding="utf-8")
+    assert "third_party_legal_corpus=incomplete" in legal_status
+    assert "formal_distribution_ready=false" in legal_status
+    assert not (portable_dir / "legal/third-party").exists()
+    release_info = (portable_dir / "RELEASE-INFO.txt").read_text(encoding="utf-8")
+    assert "Legal inventory: complete" in release_info
+    assert "Third-party legal corpus: incomplete" in release_info
+    assert "Formal distribution ready: false" in release_info
     assert (portable_dir / "MANIFEST.sha256").is_file()
     assert archive.is_file()
     assert Path(f"{archive}.sha256").is_file()

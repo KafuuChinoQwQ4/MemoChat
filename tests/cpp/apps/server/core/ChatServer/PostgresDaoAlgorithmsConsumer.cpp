@@ -31,3 +31,33 @@ const char* MemoChatTestPostgresDaoSelectSchema(bool schema_empty, const char* s
 {
     return postgres_dao_modules::SelectSchema(schema_empty, schema);
 }
+
+int MemoChatTestPostgresDaoConnectTimeoutSeconds()
+{
+    return postgres_dao_modules::ConnectTimeoutSeconds();
+}
+
+int MemoChatTestPostgresDaoStatementTimeoutMilliseconds()
+{
+    return postgres_dao_modules::StatementTimeoutMilliseconds();
+}
+
+int MemoChatTestPostgresDaoHealthProbeIntervalMilliseconds()
+{
+    return postgres_dao_modules::HealthProbeIntervalMilliseconds();
+}
+
+int MemoChatTestPostgresDaoTcpUserTimeoutMilliseconds()
+{
+    return postgres_dao_modules::TcpUserTimeoutMilliseconds();
+}
+
+int MemoChatTestPostgresDaoHealthProbeDeadlineMilliseconds()
+{
+    return postgres_dao_modules::HealthProbeDeadlineMilliseconds();
+}
+
+const char* MemoChatTestPostgresDaoHealthProbeSessionOptions()
+{
+    return postgres_dao_modules::HealthProbeSessionOptions();
+}

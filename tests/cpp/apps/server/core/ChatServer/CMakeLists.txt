@@ -1018,8 +1018,10 @@ gtest_discover_tests(chatserver_postgres_mgr_algorithms_gtest TEST_DISCOVERY_MOD
 
 add_executable(chatserver_postgres_dao_algorithms_gtest
     main.cpp
+    ${CMAKE_SOURCE_DIR}/apps/server/core/ChatServer/persistence/PostgresHealthMonitor.cpp
     PostgresDaoAlgorithmsConsumer.cpp
     PostgresDaoAlgorithmsTest.cpp
+    PostgresHealthMonitorTest.cpp
 )
 
 target_link_libraries(chatserver_postgres_dao_algorithms_gtest PRIVATE

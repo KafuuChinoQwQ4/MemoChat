@@ -7,6 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `CallPublicDtosTest.cpp` | 验证通话公共请求/固定成功响应 DTO 的 JSON 兼容性与字段清单 |
+| `CallRelationClientTest.cpp` | 验证通话关系 gRPC 的强类型好友授权、trace metadata 与失败关闭语义 |
 | `CallRouteModuleAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入通话路由注册常量与路由模块算法。 |
 | `CallRouteModuleAlgorithmsTest.cpp` | 验证通话 route registration 常量、uid 查询解析与 trace_id 追加边界算法。 |
 | `CallRouteResponseAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入通话路由响应元数据字面量算法。 |

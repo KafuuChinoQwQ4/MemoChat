@@ -37,6 +37,9 @@ POSTGRES_DAO_HEADER = SERVER_CORE / "GateShared/core/persistence/PostgresDao.hpp
 GATE_DOMAIN_SERVER = SERVER_CORE / "GateShared/app/GateDomainServer.cpp"
 CHAT_SERVER = SERVER_CORE / "ChatServer/app/ChatServer.cpp"
 AIGATEWAY_SERVER = SERVER_CORE / "AIGatewayService/app/AIGatewayServer.cpp"
+GATE_REDIS_HEADER = SERVER_CORE / "GateShared/core/cache/RedisMgr.hpp"
+GATE_CACHE_READINESS = SERVER_CORE / "GateShared/core/cache/CacheReadinessProbes.cpp"
+GATE_HEALTH_ROUTE = SERVER_CORE / "GateShared/modules/health/HealthRouteModule.cpp"
 CHAT_LOGIC_SYSTEM = SERVER_CORE / "ChatServer/domain/orchestration/LogicSystem.cpp"
 CHAT_PRIVATE_MESSAGE = SERVER_CORE / "ChatServer/domain/message/PrivateMessageService.cpp"
 CHAT_GROUP_MESSAGE = SERVER_CORE / "ChatServer/domain/message/GroupMessageService.cpp"
@@ -1159,6 +1162,31 @@ class SecurityHardeningContractTests(unittest.TestCase):
             with self.subTest(path=path.relative_to(REPO_ROOT).as_posix()):
                 self.assertIsNone(re.search(r"(?m)^(?:Passwd|Password)\s*=\s*(?:123456|password)\s*$", text))
                 self.assertNotIn("mongodb://memochat_app:123456@", text)
+
+    def test_aigateway_readiness_uses_cached_dynamic_redis_health_and_fails_closed(self):
+        redis_header = read(GATE_REDIS_HEADER)
+        cache_readiness = read(GATE_CACHE_READINESS)
+        health_route = read(GATE_HEALTH_ROUTE)
+        aigateway_server = read(AIGATEWAY_SERVER)
+
+        self.assertIn("redisConnectWithTimeout", redis_header)
+        self.assertIn("redisSetTimeout", redis_header)
+        self.assertIn("kHealthCheckInterval", redis_header)
+        self.assertIn("std::atomic<bool> healthy_", redis_header)
+        self.assertIn("redisContext* health_context_", redis_header)
+        self.assertIn("CheckOnePoolConnection", redis_header)
+        self.assertIn("RepairOneConnection", redis_header)
+        self.assertNotIn("while (fail_count_", redis_header)
+        self.assertIn("redis->Healthy()", cache_readiness)
+        self.assertNotIn("!readiness_check ||", health_route)
+        self.assertIn("std::lock_guard<std::mutex>", health_route)
+        self.assertIn('readiness_error = "readiness check is not configured"', health_route)
+        self.assertIn("RedisReadinessProbe()", aigateway_server)
+        self.assertIn("HealthRouteModule::SetReadinessCheck", aigateway_server)
+        self.assertLess(
+            aigateway_server.index("HealthRouteModule::SetReadinessCheck"),
+            aigateway_server.index("LogicSystem::GetInstance()"),
+        )
 
     def test_ci_scans_for_secrets_and_runtime_configs_remain_ignored(self):
         ci = read(CI_WORKFLOW)

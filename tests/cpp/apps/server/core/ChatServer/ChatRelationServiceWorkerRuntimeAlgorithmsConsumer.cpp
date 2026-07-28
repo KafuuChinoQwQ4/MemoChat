@@ -64,6 +64,15 @@ bool MemoChatTestRelationServiceWorkerIsKafkaBackend(const std::string& value)
     return relation_service_worker_modules::IsKafkaBackend(value.data(), value.size());
 }
 
+bool MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(bool release_mode,
+                                                                            bool configured_backend,
+                                                                            bool build_available)
+{
+    return relation_service_worker_modules::ShouldFailClosedForUnavailableBackend(release_mode,
+                                                                                  configured_backend,
+                                                                                  build_available);
+}
+
 std::string MemoChatTestRelationServiceWorkerEventBusUnavailableError()
 {
     return relation_service_worker_modules::EventBusUnavailableError();
@@ -87,4 +96,14 @@ std::string MemoChatTestRelationServiceWorkerKafkaUnavailableLogEvent()
 std::string MemoChatTestRelationServiceWorkerKafkaUnavailableLogMessage()
 {
     return relation_service_worker_modules::KafkaUnavailableLogMessage();
+}
+
+std::string MemoChatTestRelationServiceWorkerRabbitMqUnavailableReleaseError()
+{
+    return relation_service_worker_modules::RabbitMqUnavailableReleaseError();
+}
+
+std::string MemoChatTestRelationServiceWorkerKafkaUnavailableReleaseError()
+{
+    return relation_service_worker_modules::KafkaUnavailableReleaseError();
 }
