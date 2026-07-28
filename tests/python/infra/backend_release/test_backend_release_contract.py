@@ -203,6 +203,18 @@ class BackendReleaseContractTests(unittest.TestCase):
         )
         self.assertIn("test -x /usr/bin/bash", text)
         self.assertIn("test -x /usr/bin/timeout", text)
+        self.assertIn(
+            "RUN install -d -o root -g root -m 0755 /etc/ssl /etc/ssl/certs",
+            text,
+        )
+        self.assertIn("test \"$(stat -c '%a' /etc/ssl)\" = 755", text)
+        self.assertIn("test \"$(stat -c '%a' /etc/ssl/certs)\" = 755", text)
+        self.assertIn(
+            "test \"$(stat -c '%a' /etc/ssl/certs/ca-certificates.crt)\" = 644",
+            text,
+        )
+        self.assertIn("setpriv --reuid=10001 --regid=10001 --clear-groups", text)
+        self.assertIn("/usr/bin/test -r /etc/ssl/certs/ca-certificates.crt", text)
         self.assertRegex(text, r"COPY\s+--from=service_bundle[^\n]+/sbom/")
         self.assertIn("vcpkg-build-dependencies.spdx.json", text)
         snapshot_update = "apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 ${apt_ca_option} update"
