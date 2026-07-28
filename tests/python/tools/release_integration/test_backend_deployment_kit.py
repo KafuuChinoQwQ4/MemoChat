@@ -189,6 +189,15 @@ class BackendDeploymentKitTests(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stdout)
             canary = deployment / "operator-private.env"
             canary.write_text("CANARY_PRIVATE_TLS_VALUE\n", encoding="utf-8")
+            builder_ca_target = archive_root / "operator-builder-ca-source.pem"
+            builder_ca_target.write_text(
+                "-----BEGIN CERTIFICATE-----\n"
+                "cmVsZWFzZS10ZXN0LWJ1aWxkZXItY2E=\n"
+                "-----END CERTIFICATE-----\n",
+                encoding="utf-8",
+            )
+            builder_ca = archive_root / "operator-builder-ca.pem"
+            builder_ca.symlink_to(builder_ca_target.name)
 
             for target in TARGET_SLUGS:
                 bundle = backend / target
@@ -252,6 +261,8 @@ class BackendDeploymentKitTests(unittest.TestCase):
                     "memochat",
                     "--tag",
                     "local",
+                    "--builder-ca",
+                    str(builder_ca),
                 ],
                 cwd=deployment,
                 env=environment,
@@ -268,6 +279,10 @@ class BackendDeploymentKitTests(unittest.TestCase):
                 with self.subTest(target=target):
                     command = next(line for line in docker_commands if f"TARGET={target}" in line)
                     self.assertIn(f"--tag memochat/{slug}:local", command)
+                    self.assertIn(
+                        f"--secret id=memochat_builder_ca,src={builder_ca_target.resolve()}",
+                        command,
+                    )
                     self.assertIn(str(deployment / "infra/deploy/images/services/cpp-service.Dockerfile"), command)
 
     def test_refuses_to_merge_into_an_existing_output(self):

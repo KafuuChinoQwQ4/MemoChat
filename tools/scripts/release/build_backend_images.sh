@@ -10,6 +10,7 @@ BUNDLE_ROOT=""
 IMAGE_PREFIX="memochat"
 IMAGE_TAG="local"
 BUILD_CONTEXT_ROOT=""
+BUILDER_CA=""
 PULL_RUNTIME_IMAGE=0
 
 readonly RUNTIME_IMAGE="ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90"
@@ -42,6 +43,10 @@ Options:
   --bundle-root PATH   Root produced by package_backend_services.sh (required).
   --image-prefix NAME  Registry/repository prefix. Default: memochat
   --tag TAG            Image tag. Default: local
+  --builder-ca PATH    Optional PEM CA bundle exposed only as a BuildKit
+                       secret to the in-image apt transaction. BuildKit must
+                       already trust the earlier remote ADD endpoint. The CA
+                       is not copied into the resulting image.
   --pull               Pull the fixed runtime digest before building. The
                        default is --pull=false so an already-loaded digest
                        can be built without Docker Hub access.
@@ -79,6 +84,11 @@ while [[ $# -gt 0 ]]; do
             IMAGE_TAG="$2"
             shift 2
             ;;
+        --builder-ca)
+            [[ $# -ge 2 ]] || fail "--builder-ca requires a path"
+            BUILDER_CA="$2"
+            shift 2
+            ;;
         --pull)
             PULL_RUNTIME_IMAGE=1
             shift
@@ -106,6 +116,18 @@ command -v realpath >/dev/null 2>&1 || fail "realpath is required"
 [[ -f "$DOCKERFILE" ]] || fail "Dockerfile is missing: $DOCKERFILE"
 [[ -f "$ENTRYPOINT_SOURCE" && ! -L "$ENTRYPOINT_SOURCE" ]] \
     || fail "server entrypoint is missing or unsafe: $ENTRYPOINT_SOURCE"
+
+BUILDER_CA_ARGS=()
+if [[ -n "$BUILDER_CA" ]]; then
+    builder_ca_input="$BUILDER_CA"
+    BUILDER_CA="$(realpath -e -- "$builder_ca_input")" \
+        || fail "could not resolve --builder-ca: $builder_ca_input"
+    [[ -f "$BUILDER_CA" && -s "$BUILDER_CA" ]] \
+        || fail "--builder-ca must resolve to a non-empty regular file: $BUILDER_CA"
+    grep -q -- '-----BEGIN CERTIFICATE-----' "$BUILDER_CA" \
+        || fail "--builder-ca must contain PEM certificates: $BUILDER_CA"
+    BUILDER_CA_ARGS=(--secret "id=memochat_builder_ca,src=${BUILDER_CA}")
+fi
 
 BUNDLE_ROOT="$(realpath -e -- "$BUNDLE_ROOT")" || fail "bundle root does not exist"
 [[ -d "$BUNDLE_ROOT" ]] || fail "bundle root is not a directory: $BUNDLE_ROOT"
@@ -160,6 +182,7 @@ for row in "${TARGET_ROWS[@]}"; do
     docker buildx build \
         --load \
         "${RUNTIME_PULL_FLAG[@]}" \
+        "${BUILDER_CA_ARGS[@]}" \
         --build-context "service_bundle=${bundle}" \
         --build-context "server_entrypoint=${BUILD_CONTEXT_ROOT}/server_entrypoint" \
         --build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}" \

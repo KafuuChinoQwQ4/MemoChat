@@ -7,7 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `audit_backend_images.sh` | 按固定 15 服务映射校验镜像身份、非 root 元数据与 digest/provenance 绑定，并生成含 Grype 数据库状态的 SBOM 和漏洞证据 |
-| `build_backend_images.sh` | 验证含 commit-bound vcpkg SBOM 的 15 个后端 service bundle，并以固定 Ubuntu digest（默认离线复用本地层）通过隔离的最小命名上下文构建运行时镜像 |
+| `build_backend_images.sh` | 验证含 commit-bound vcpkg SBOM 的 15 个后端 service bundle，并以固定 Ubuntu digest、可选仅构建期 CA secret 和隔离的最小命名上下文构建运行时镜像 |
 | `client_release_scan.allowlist` | 客户端发布扫描中允许出现公开认证文案的精确相对路径 |
 | `generate_vcpkg_installed_sbom.py` | 从指定 triplet 的 vcpkg status 与 SPDX 记录生成绑定 source SHA 的确定性依赖闭包 SBOM |
 | `load_build_environment.sh` | 校验并加载私有构建环境，仅保留工具链变量，清除运行时密钥和会覆盖受审计 preset 的并发参数 |

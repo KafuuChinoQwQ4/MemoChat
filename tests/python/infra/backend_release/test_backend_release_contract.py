@@ -228,8 +228,62 @@ class BackendReleaseContractTests(unittest.TestCase):
         self.assertIn("sha256sum --check --strict", build_images)
         self.assertIn("--pull=false", build_images)
         self.assertIn('--build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}"', build_images)
+        self.assertIn("--builder-ca", build_images)
+        self.assertIn('id=memochat_builder_ca,src=${BUILDER_CA}', build_images)
+        self.assertIn('builder_ca_input="$BUILDER_CA"', build_images)
+        self.assertIn('BUILDER_CA="$(realpath -e -- "$builder_ca_input")"', build_images)
+        self.assertIn('[[ -f "$BUILDER_CA" && -s "$BUILDER_CA" ]]', build_images)
+        self.assertIn("-----BEGIN CERTIFICATE-----", build_images)
+        self.assertIn("BuildKit must", build_images)
         self.assertIn("--pull)", build_images)
         self.assertNotIn("GateServer", build_images)
+
+    def test_image_builder_rejects_invalid_builder_ca_paths_before_building(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            bundle_root = root / "backend"
+            bundle_root.mkdir()
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+            fake_docker.chmod(0o755)
+            empty_ca = root / "empty.pem"
+            empty_ca.touch()
+            ca_directory = root / "ca-directory"
+            ca_directory.mkdir()
+            non_pem_ca = root / "not-pem.txt"
+            non_pem_ca.write_text("not a certificate\n", encoding="utf-8")
+            environment = os.environ.copy()
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+
+            cases = (
+                (root / "missing.pem", "could not resolve --builder-ca"),
+                (empty_ca, "must resolve to a non-empty regular file"),
+                (ca_directory, "must resolve to a non-empty regular file"),
+                (non_pem_ca, "must contain PEM certificates"),
+            )
+            for path, expected_error in cases:
+                with self.subTest(path=path.name):
+                    result = subprocess.run(
+                        [
+                            "bash",
+                            str(BUILD_IMAGES),
+                            "--bundle-root",
+                            str(bundle_root),
+                            "--builder-ca",
+                            str(path),
+                        ],
+                        cwd=REPO_ROOT,
+                        env=environment,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        check=False,
+                    )
+                    self.assertNotEqual(0, result.returncode, result.stdout)
+                    self.assertIn(expected_error, result.stdout)
+                    self.assertNotEqual(99, result.returncode, result.stdout)
 
     def test_entrypoint_rejects_unknown_service_and_missing_config(self):
         unknown = run_entrypoint(
