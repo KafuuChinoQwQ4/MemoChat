@@ -107,6 +107,24 @@ if [[ "$ACTION" == "up" ]]; then
     for service_name in "${ACTION_ARGS[@]}"; do
         [[ "$service_name" =~ ^[a-z0-9][a-z0-9_.-]*$ ]] \
             || fail "Invalid release Compose service name"
+        required_profile=""
+        case "$service_name" in
+            memochat-call-gateway|memochat-livekit)
+                required_profile=calls
+                ;;
+            memochat-r18-gateway)
+                required_profile=r18
+                ;;
+            memochat-influxdb|memochat-grafana|memochat-otel-collector|memochat-cadvisor|memochat-prometheus|memochat-alertmanager|memochat-loki|memochat-tempo)
+                required_profile=observability
+                ;;
+            memochat-release-provision-*)
+                fail "Provision jobs are internal; use the provision action"
+                ;;
+        esac
+        if [[ -n "$required_profile" && -z "${SELECTED_PROFILES[$required_profile]:-}" ]]; then
+            fail "Service ${service_name} requires --profile ${required_profile}"
+        fi
     done
 fi
 [[ "$ENV_FILE" == /* ]] || fail "Release environment path must be absolute"
@@ -150,6 +168,10 @@ readonly -a BASE_REQUIRED_VARIABLES=(
     MEMOCHAT_CHATAUTH_HMACSECRET
     MEMOCHAT_AUTHTOKEN_JWTSECRET
     MEMOCHAT_AUTH_REFRESH_PEPPER
+    MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN
+    MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN
+    MEMOCHAT_RELATION_CALL_AUTH_TOKEN
+    MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN
     MEMOCHAT_EMAIL_SMTPUSER
     MEMOCHAT_EMAIL_SMTPPASS
     MEMOCHAT_EMAIL_FROM
@@ -242,9 +264,11 @@ validate_secret() {
     local variable_name="$1"
     local minimum_length="$2"
     local variable_value="${ENV_VALUES[$variable_name]}"
+    local byte_length
     is_weak_value "$variable_value" && fail "Placeholder or weak value rejected: ${variable_name}"
-    [[ "${#variable_value}" -ge "$minimum_length" ]] \
-        || fail "Secret is shorter than ${minimum_length} characters: ${variable_name}"
+    byte_length="$(printf '%s' "$variable_value" | wc -c)"
+    [[ "$byte_length" -ge "$minimum_length" ]] \
+        || fail "Secret is shorter than ${minimum_length} bytes: ${variable_name}"
     if [[ -n "${SECRET_OWNERS[$variable_value]:-}" ]]; then
         fail "Release secrets must not be reused: ${variable_name}"
     fi
@@ -255,6 +279,10 @@ declare -a SECRETS_32=(
     MEMOCHAT_CHATAUTH_HMACSECRET
     MEMOCHAT_AUTHTOKEN_JWTSECRET
     MEMOCHAT_AUTH_REFRESH_PEPPER
+    MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN
+    MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN
+    MEMOCHAT_RELATION_CALL_AUTH_TOKEN
+    MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN
 )
 declare -a SECRETS_16=(
     MEMOCHAT_REDIS_PASSWORD
@@ -296,9 +324,22 @@ fi
 for variable_name in "${SECRETS_32[@]}"; do
     validate_secret "$variable_name" 32
 done
+for variable_name in \
+    MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN \
+    MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN \
+    MEMOCHAT_RELATION_CALL_AUTH_TOKEN \
+    MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN; do
+    printf '%s\n' "${ENV_VALUES[$variable_name]}" | LC_ALL=C grep -Eq '^[!-~]+$' \
+        || fail "Relation auth token must contain only printable ASCII bytes: ${variable_name}"
+done
 for variable_name in "${SECRETS_16[@]}"; do
     validate_secret "$variable_name" 16
 done
+if [[ -n "${SELECTED_PROFILES[observability]:-}" ]]; then
+    printf '%s\n' "${ENV_VALUES[MEMOCHAT_INFLUXDB_ADMIN_TOKEN]}" \
+        | LC_ALL=C grep -Eq '^[A-Za-z0-9._~+/=-]+$' \
+        || fail "MEMOCHAT_INFLUXDB_ADMIN_TOKEN contains unsupported characters"
+fi
 if [[ -n "${SELECTED_PROFILES[r18]:-}" ]]; then
     validate_secret MEMOCHAT_R18_CREDENTIAL_MASTER_KEY 64
     [[ "${ENV_VALUES[MEMOCHAT_R18_CREDENTIAL_MASTER_KEY]}" =~ ^[0-9A-Fa-f]{64}$ ]] \
@@ -378,9 +419,20 @@ data_root_mode_octal=$((8#$data_root_mode))
 (( (data_root_mode_octal & 0022) == 0 )) \
     || fail "MEMOCHAT_DOCKER_DATA_ROOT must not be group- or world-writable"
 
-declare -a RUNTIME_DIRECTORIES=(media/uploads envoy/logs)
+declare -a RUNTIME_DIRECTORIES=(media/uploads envoy/logs redpanda/data)
 if [[ -n "${SELECTED_PROFILES[r18]:-}" ]]; then
     RUNTIME_DIRECTORIES+=(r18)
+fi
+if [[ -n "${SELECTED_PROFILES[observability]:-}" ]]; then
+    RUNTIME_DIRECTORIES+=(
+        observability/credentials
+        observability/influxdb
+        observability/grafana
+        observability/prometheus
+        observability/alertmanager
+        observability/loki
+        observability/tempo
+    )
 fi
 for relative_runtime_directory in "${RUNTIME_DIRECTORIES[@]}"; do
     runtime_directory="${ENV_VALUES[MEMOCHAT_DOCKER_DATA_ROOT]}/${relative_runtime_directory}"
@@ -469,6 +521,37 @@ if [[ "$ACTION" == "check" ]]; then
 fi
 command -v docker >/dev/null 2>&1 || fail "docker is required for the ${ACTION} action"
 
+materialize_runtime_secret() {
+    local credential_directory="$1"
+    local file_name="$2"
+    local variable_name="$3"
+    local target_file="${credential_directory}/${file_name}"
+    local temp_file
+    [[ ! -L "$target_file" && ( ! -e "$target_file" || -f "$target_file" ) ]] \
+        || fail "Runtime secret path is not a regular file: ${file_name}"
+    temp_file="$(mktemp "${credential_directory}/.${file_name}.tmp.XXXXXX")" \
+        || fail "Could not create runtime secret staging file: ${file_name}"
+    if ! printf '%s\n' "${ENV_VALUES[$variable_name]}" > "$temp_file" \
+        || ! chmod 0400 "$temp_file" \
+        || ! chown "${ENV_VALUES[MEMOCHAT_RUNTIME_UID]}:${ENV_VALUES[MEMOCHAT_RUNTIME_GID]}" "$temp_file" \
+        || ! mv -f -- "$temp_file" "$target_file"; then
+        rm -f -- "$temp_file"
+        fail "Could not atomically materialize runtime secret: ${file_name}"
+    fi
+    [[ "$(stat -c '%a' -- "$target_file")" == 400 ]] \
+        || fail "Runtime secret has the wrong mode: ${file_name}"
+    [[ "$(stat -c '%u:%g' -- "$target_file")" == \
+        "${ENV_VALUES[MEMOCHAT_RUNTIME_UID]}:${ENV_VALUES[MEMOCHAT_RUNTIME_GID]}" ]] \
+        || fail "Runtime secret has the wrong owner: ${file_name}"
+}
+
+if [[ -n "${SELECTED_PROFILES[observability]:-}" && "$ACTION" != "config" ]]; then
+    observability_credentials="${ENV_VALUES[MEMOCHAT_DOCKER_DATA_ROOT]}/observability/credentials"
+    materialize_runtime_secret "$observability_credentials" influxdb-username MEMOCHAT_INFLUXDB_USERNAME
+    materialize_runtime_secret "$observability_credentials" influxdb-password MEMOCHAT_INFLUXDB_PASSWORD
+    materialize_runtime_secret "$observability_credentials" influxdb-admin.token MEMOCHAT_INFLUXDB_ADMIN_TOKEN
+fi
+
 while IFS= read -r variable_name; do
     case "$variable_name" in
         MEMOCHAT_*) unset "$variable_name" ;;
@@ -499,7 +582,17 @@ if [[ "$ACTION" == "config" ]]; then
 fi
 
 run_provision() {
-    docker "${COMPOSE_ARGS[@]}" up -d memochat-postgres memochat-mongo memochat-minio
+    local -a datastore_services=(memochat-postgres memochat-mongo memochat-minio)
+    local grafana_token_file=""
+    local grafana_token_hash_before=""
+    if [[ -n "${SELECTED_PROFILES[observability]:-}" ]]; then
+        datastore_services+=(memochat-influxdb)
+        grafana_token_file="${ENV_VALUES[MEMOCHAT_DOCKER_DATA_ROOT]}/observability/credentials/grafana-reader.token"
+        if [[ -f "$grafana_token_file" && ! -L "$grafana_token_file" ]]; then
+            grafana_token_hash_before="$(sha256sum -- "$grafana_token_file" | awk '{print $1}')"
+        fi
+    fi
+    docker "${COMPOSE_ARGS[@]}" up -d "${datastore_services[@]}"
     local provision_service
     for provision_service in \
         memochat-release-provision-postgres \
@@ -507,6 +600,22 @@ run_provision() {
         memochat-release-provision-minio; do
         docker "${COMPOSE_ARGS[@]}" --profile provision run --rm --no-deps "$provision_service"
     done
+    if [[ -n "${SELECTED_PROFILES[observability]:-}" ]]; then
+        docker "${COMPOSE_ARGS[@]}" --profile provision run --rm --no-deps \
+            memochat-release-provision-influxdb
+
+        [[ -f "$grafana_token_file" && ! -L "$grafana_token_file" ]] \
+            || fail "InfluxDB provisioning did not produce the Grafana reader token"
+        local grafana_token_hash_after
+        grafana_token_hash_after="$(sha256sum -- "$grafana_token_file" | awk '{print $1}')"
+        if [[ "$grafana_token_hash_before" != "$grafana_token_hash_after" ]]; then
+            local grafana_container
+            grafana_container="$(docker "${COMPOSE_ARGS[@]}" ps -q memochat-grafana)"
+            if [[ -n "$grafana_container" ]]; then
+                docker "${COMPOSE_ARGS[@]}" up -d --no-deps --force-recreate memochat-grafana
+            fi
+        fi
+    fi
 }
 
 if [[ "$ACTION" == "provision" ]]; then

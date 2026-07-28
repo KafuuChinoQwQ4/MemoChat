@@ -5,7 +5,9 @@ umask 077
 
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+readonly PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
 readonly RELEASE_VERIFIER="$SCRIPT_DIR/verify_release_tree.sh"
+readonly LEGAL_VERIFIER="$SCRIPT_DIR/verify_release_legal.sh"
 readonly CLIENT_SCAN_ALLOWLIST="$SCRIPT_DIR/client_release_scan.allowlist"
 
 die() {
@@ -26,6 +28,9 @@ Usage:
     [--qml-source-root apps/client/desktop/MemoChat-qml] \
     [--ca-cert /path/to/local-deployment-ca.pem] \
     [--library-dir /path/to/compiler/runtime/lib]... \
+    [--source-sha 40-character-commit] \
+    [--approval-public-key /outside/repository/legal-approval.pem] \
+    [--approval-signature /outside/repository/legal-approval.sig] \
     [--artifact-name MemoChatQml-linux-x86_64]
 
 Recommended build input:
@@ -134,7 +139,7 @@ is_system_library() {
 is_qt_library() {
     local base
     base="$(basename "$1")"
-    [[ "$base" == libQt6*.so* || "$base" == libicu*.so* ]]
+    [[ "$base" == libQt6*.so* ]]
 }
 
 is_compiler_runtime() {
@@ -154,6 +159,9 @@ output_dir=""
 qt_root=""
 qml_source_root="$SCRIPT_DIR/../../../apps/client/desktop/MemoChat-qml"
 ca_cert=""
+source_sha=""
+approval_public_key=""
+approval_signature=""
 library_dirs=()
 artifact_name="MemoChatQml-linux-x86_64"
 
@@ -199,6 +207,21 @@ while (($# > 0)); do
             artifact_name="$2"
             shift 2
             ;;
+        --source-sha)
+            (($# >= 2)) || die "--source-sha requires a value"
+            source_sha="$2"
+            shift 2
+            ;;
+        --approval-public-key)
+            (($# >= 2)) || die "--approval-public-key requires a path"
+            approval_public_key="$2"
+            shift 2
+            ;;
+        --approval-signature)
+            (($# >= 2)) || die "--approval-signature requires a path"
+            approval_signature="$2"
+            shift 2
+            ;;
         -h | --help)
             usage
             exit 0
@@ -220,7 +243,14 @@ for command_name in file readelf ldd patchelf strip strings realpath mktemp find
     require_command "$command_name"
 done
 [[ -x "$RELEASE_VERIFIER" ]] || die "release verifier is missing or not executable: $RELEASE_VERIFIER"
+[[ -x "$LEGAL_VERIFIER" ]] || die "legal verifier is missing or not executable: $LEGAL_VERIFIER"
 [[ -f "$CLIENT_SCAN_ALLOWLIST" ]] || die "client release scan allowlist is missing: $CLIENT_SCAN_ALLOWLIST"
+legal_args=(--project-root "$PROJECT_ROOT")
+[[ -z "$source_sha" ]] || legal_args+=(--source-sha "$source_sha")
+[[ -z "$approval_public_key" ]] \
+    || legal_args+=(--approval-public-key "$approval_public_key")
+[[ -z "$approval_signature" ]] \
+    || legal_args+=(--approval-signature "$approval_signature")
 
 binary="$(canonical_file "$binary")"
 config="$(canonical_file "$config")"
@@ -350,6 +380,20 @@ stage="$work_root/$artifact_name"
 mkdir -p "$stage/lib" "$stage/plugins" "$stage/qml"
 install -m 0755 "$binary" "$stage/MemoChatQml"
 install -m 0644 "$config" "$stage/config.ini"
+"$LEGAL_VERIFIER" "${legal_args[@]}" --copy-to "$stage/legal"
+legal_status="$stage/legal/LEGAL-STATUS.txt"
+legal_inventory="$(awk -F= '$1 == "third_party_inventory" { print $2 }' "$legal_status")"
+third_party_legal_corpus="$(awk -F= '$1 == "third_party_legal_corpus" { print $2 }' "$legal_status")"
+corpus_review_id="$(awk -F= '$1 == "corpus_review_id" { print $2 }' "$legal_status")"
+corpus_sha256="$(awk -F= '$1 == "corpus_sha256" { print $2 }' "$legal_status")"
+release_source_sha="$(awk -F= '$1 == "release_source_sha" { print $2 }' "$legal_status")"
+formal_distribution_ready="$(awk -F= '$1 == "formal_distribution_ready" { print $2 }' "$legal_status")"
+legal_status_sha256="$(sha256sum "$legal_status" | awk '{print $1}')"
+[[ "$legal_inventory" == complete ]] || die "generated legal inventory status is invalid"
+[[ "$third_party_legal_corpus" == complete || "$third_party_legal_corpus" == incomplete ]] \
+    || die "generated third-party legal corpus status is invalid"
+[[ "$formal_distribution_ready" == true || "$formal_distribution_ready" == false ]] \
+    || die "generated formal distribution status is invalid"
 deployment_trust_anchor="system trust store"
 if [[ -n "$ca_cert" ]]; then
     readonly packaged_ca_path="certs/memochat-local-ca.crt"
@@ -417,7 +461,6 @@ if readelf -d "$binary" | grep -Eq 'libQt6(Core|Gui)\.so'; then
         platforms/libqoffscreen.so
         platforminputcontexts/libcomposeplatforminputcontextplugin.so
         platforminputcontexts/libibusplatforminputcontextplugin.so
-        platformthemes/libqgtk3.so
         platformthemes/libqxdgdesktopportal.so
         networkinformation/libqglib.so
         networkinformation/libqnetworkmanager.so
@@ -698,6 +741,14 @@ Architecture: x86_64 Linux
 Minimum glibc: $minimum_glibc
 Client entrypoint: ./MemoChat
 Public configuration: ./config.ini
+Legal notices: ./legal/
+Legal inventory: $legal_inventory
+Third-party legal corpus: $third_party_legal_corpus
+Legal corpus review: $corpus_review_id
+Legal corpus SHA-256: $corpus_sha256
+Release source SHA: $release_source_sha
+Legal status SHA-256: $legal_status_sha256
+Formal distribution ready: $formal_distribution_ready
 Deployment trust anchor: $deployment_trust_anchor
 Native Live2D SDK: not included
 Build preset: linux-client-release-gcc16

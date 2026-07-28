@@ -28,11 +28,24 @@ test -x "$VCPKG_ROOT/vcpkg"
 ```
 
 推送 `v*` 标签会发布 Linux 客户端/后端压缩包、SHA-256 校验文件、发布清单和 GHCR
-版本镜像别名。正式标签发布前，项目所有者必须在仓库根目录提供非空的常规文件 `LICENSE`
-和 `THIRD_PARTY_NOTICES.md`；缺少任一文件时 CI 会在构建和发布前停止。普通分支和 PR
-不受该法律文件门禁影响，外部 fork PR 不会进入私有 self-hosted runner。版本标签必须是
-位于 `main` 历史上的 annotated SemVer 标签；发布前 CI 会扫描完整 Git 历史，已经存在的
-GitHub Release 和同版本资产不允许覆盖。
+版本镜像别名；普通 `main/develop` push 不写入 GHCR，也不生成 `stable/dev` 浮动标签。
+普通分支和 PR 会校验根目录 MIT `LICENSE` 与
+`THIRD_PARTY_NOTICES.md` 清单，并明确报告正式第三方法律语料状态；当前
+`legal/third-party` 尚未齐备，因此本地/普通 CI 制品会标记
+`third_party_legal_corpus=incomplete`。正式 `v*` 标签额外要求该目录中的
+`CORPUS.json`、`SHA256SUMS`、全部必要 scope 和 `approved-for-distribution`
+状态通过校验；仓库内 `CORPUS.sig` 会被拒绝。最终提交确定后，verifier 在仓库外生成绑定
+source SHA/tree、根法律文件和 corpus 摘要的 v2 payload，由独立审批方使用离线私钥签署。
+标签 CI 通过受保护的 `MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM` 和
+`MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64` secrets 在 checkout 外注入公钥与 detached
+signature，verifier 会拒绝仓库内或 symlink 输入。CI 传入的 release source SHA 还必须等于
+当前 clean checkout `HEAD`，否则在构建和发布前失败。完整离线签署步骤见
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+后端 bundle 还会生成同一 source SHA 绑定的 vcpkg 安装闭包 SPDX；其摘要与法律状态摘要
+会贯穿 OCI label、镜像 manifest、漏洞审计证据和最终 release manifest。
+外部 fork PR 不会进入私有 self-hosted runner。版本标签必须是位于 `main` 历史上的
+annotated SemVer 标签；发布前 CI 还会扫描完整 Git 历史，已经存在的 GitHub Release 和
+同版本资产不允许覆盖。
 
 本地发布部署入口、私有环境文件格式、数据服务初始化、可选服务 profile 和客户端本地
 CA 打包方式见 [`infra/deploy/local/README.md`](infra/deploy/local/README.md)。
