@@ -515,7 +515,8 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("SELECT to_regclass('chat_group_member') IS NOT NULL", access_block)
         self.assertIn("SELECT to_regclass('friend') IS NOT NULL", access_block)
         self.assertIn(
-            "if (friend_table_rows.empty() || friend_table_rows[0][0].is_null() || !friend_table_rows[0][0].as<bool>()) { return false; }",
+            'if (!TransactionOk("HasMediaAccess", txn) || friend_table_rows.empty() || '
+            "friend_table_rows[0][0].is_null() || !friend_table_rows[0][0].as<bool>()) { return false; }",
             compact,
         )
 
