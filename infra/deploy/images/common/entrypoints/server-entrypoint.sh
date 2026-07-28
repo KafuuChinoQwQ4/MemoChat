@@ -6,11 +6,6 @@ fail() {
   exit 64
 }
 
-if [ "${1:-}" = "--healthcheck" ]; then
-  kill -0 1 2>/dev/null || exit 1
-  exit 0
-fi
-
 umask 077
 
 service="${MEMOCHAT_SERVICE:-}"
@@ -21,6 +16,27 @@ case "${service}" in
     fail "Unsupported MEMOCHAT_SERVICE: ${service:-<empty>}"
     ;;
 esac
+
+if [ "${1:-}" = "--healthcheck" ]; then
+  if [ "${service}" = "ChatDeliveryWorker" ]; then
+    kill -0 1 2>/dev/null || exit 1
+    exit 0
+  fi
+
+  health_port="${MEMOCHAT_HEALTHCHECK_TCP_PORT:-}"
+  case "${health_port}" in
+    ''|*[!0-9]*|??????*) fail "MEMOCHAT_HEALTHCHECK_TCP_PORT must be an integer in range 1..65535" ;;
+  esac
+  if [ "${health_port}" -lt 1 ] || [ "${health_port}" -gt 65535 ]; then
+    fail "MEMOCHAT_HEALTHCHECK_TCP_PORT must be an integer in range 1..65535"
+  fi
+
+  /usr/bin/timeout 2s /usr/bin/bash -c \
+    'exec 3<>"/dev/tcp/127.0.0.1/${1}"' memochat-healthcheck "${health_port}" \
+    >/dev/null 2>&1 \
+    || exit 1
+  exit 0
+fi
 
 if [ "${MEMOCHAT_RELEASE_MODE:-1}" = "1" ] && [ "${MEMOCHAT_ALLOW_DEV_SECRETS:-0}" != "0" ]; then
   fail "MEMOCHAT_ALLOW_DEV_SECRETS must remain 0 in release mode"
@@ -50,9 +66,23 @@ for variable_name in ${REQUIRED_ENV_VARS:-}; do
   esac
 
   case "${variable_name}" in
+    MEMOCHAT_R18_CREDENTIAL_MASTER_KEY)
+      case "${variable_value}" in
+        *[!0123456789abcdefABCDEF]*) fail "R18 credential master key must be hexadecimal" ;;
+      esac
+      [ "${#variable_value}" -eq 64 ] \
+        || fail "R18 credential master key must contain exactly 64 hexadecimal characters"
+      ;;
     *PEPPER*)
       [ "${#variable_value}" -ge 32 ] \
         || fail "Required pepper environment variable is too short: ${variable_name}"
+      ;;
+    MEMOCHAT_RELATIONSERVICE_AUTHTOKEN|MEMOCHAT_RELATIONQUERYSERVICE_*AUTHTOKEN)
+      case "${variable_value}" in
+        *[![:print:]]*) fail "Relation auth token must contain printable ASCII only: ${variable_name}" ;;
+      esac
+      [ "${#variable_value}" -ge 32 ] \
+        || fail "Relation auth token is too short: ${variable_name}"
       ;;
     *HMAC*|*JWT*)
       [ "${#variable_value}" -ge 32 ] \

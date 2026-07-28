@@ -1,0 +1,6 @@
+# Enable only R18. Persistence remains mandatory and inherits the chart's
+# ReadWriteMany/key-storage safety defaults.
+focusedGateways:
+  services:
+    r18gateway:
+      enabled: true

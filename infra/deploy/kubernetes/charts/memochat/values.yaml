@@ -1,4 +1,5 @@
 global:
+  environment: development
   imagePullSecrets: []
   storageClassName: ""
   domain: memochat.example.com
@@ -25,6 +26,9 @@ mesh:
 
 externalSecrets:
   enabled: false
+  # Set true only after the Vault properties for all four relation tokens have
+  # been checked for printable ASCII, >=32 bytes, and pairwise uniqueness.
+  relationTokensDistinct: false
   refreshInterval: 1h
   secretStoreRef:
     name: memochat-vault
@@ -69,70 +73,83 @@ observability:
     nvidiaEnabled: false
 
 images:
+  # Production requires a CI-produced immutable sha-<40 hex> tag.
+  releaseRegistry: ghcr.io/kafuuchinoqwq4/memochat
+  releaseTag: ""
   gate:
     repository: memochat/gateserver
-    tag: latest
+    tag: local
     pullPolicy: IfNotPresent
   focusedGateways:
     aigateway:
-      repository: memochat/aigateway
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/ai-gateway
+      tag: local
       pullPolicy: IfNotPresent
     mediagateway:
-      repository: memochat/mediagateway
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/media-gateway
+      tag: local
       pullPolicy: IfNotPresent
     momentsgateway:
-      repository: memochat/momentsgateway
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/moments-gateway
+      tag: local
       pullPolicy: IfNotPresent
     callgateway:
-      repository: memochat/callgateway
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/call-gateway
+      tag: local
       pullPolicy: IfNotPresent
     r18gateway:
-      repository: memochat/r18gateway
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/r18-gateway
+      tag: local
       pullPolicy: IfNotPresent
     register:
-      repository: memochat/register
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/register-server
+      tag: local
       pullPolicy: IfNotPresent
     login:
-      repository: memochat/login
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/login-server
+      tag: local
       pullPolicy: IfNotPresent
     account:
-      repository: memochat/account
-      tag: latest
+      repository: ghcr.io/kafuuchinoqwq4/memochat/account-server
+      tag: local
       pullPolicy: IfNotPresent
   chat:
-    repository: memochat/chatserver
-    tag: latest
+    repository: ghcr.io/kafuuchinoqwq4/memochat/chat-server
+    tag: local
+    pullPolicy: IfNotPresent
+  chatRelationQuery:
+    repository: ghcr.io/kafuuchinoqwq4/memochat/chat-relation-query-service
+    tag: local
+    pullPolicy: IfNotPresent
+  chatRelationService:
+    repository: ghcr.io/kafuuchinoqwq4/memochat/chat-relation-service-worker
+    tag: local
     pullPolicy: IfNotPresent
   aiServer:
-    repository: memochat/aiserver
-    tag: latest
+    repository: ghcr.io/kafuuchinoqwq4/memochat/ai-server
+    tag: local
     pullPolicy: IfNotPresent
   aiOrchestrator:
     repository: memochat/ai-orchestrator
-    tag: latest
+    tag: local
     pullPolicy: IfNotPresent
   varify:
-    repository: memochat/varifyserver
-    tag: latest
+    repository: ghcr.io/kafuuchinoqwq4/memochat/varify-server
+    tag: local
     pullPolicy: IfNotPresent
   memoOps:
     repository: memochat/memo-ops
-    tag: latest
+    tag: local
     pullPolicy: IfNotPresent
   envoy:
     repository: envoyproxy/envoy
     tag: v1.38.0
+    digest: sha256:8146b97ee61a42cd216514709e4e3198af75f014974e3d9f310aef9c901fcbdf
     pullPolicy: IfNotPresent
   otelCollector:
     repository: otel/opentelemetry-collector-contrib
     tag: 0.99.0
+    digest: sha256:b65527791431d76d058b2813748a3f4a8912540d7b23beac2f6b4e02c872f5b7
     pullPolicy: IfNotPresent
 
 externalServices:
@@ -145,10 +162,17 @@ externalServices:
     schema: memo
     sslMode: verify-full
     roles:
+      chat: memo_chat_app
       media: memo_media_app
       moments: memo_moments_app
       call: memo_call_app
       account: memo_account_app
+    rolePasswords:
+      chat: ""
+      media: ""
+      moments: ""
+      call: ""
+      account: ""
   redis:
     host: redis.example.internal
     port: 6379
@@ -226,6 +250,7 @@ focusedGateways:
   env: {}
   services:
     aigateway:
+      enabled: true
       serviceName: aigateway
       target: AIGatewayServer
       configKey: aigateway.ini
@@ -233,6 +258,7 @@ focusedGateways:
       port: 8093
       replicaCount: 2
     mediagateway:
+      enabled: true
       serviceName: mediagateway
       target: MediaGatewayServer
       configKey: mediagateway.ini
@@ -240,6 +266,7 @@ focusedGateways:
       port: 8094
       replicaCount: 2
     momentsgateway:
+      enabled: true
       serviceName: momentsgateway
       target: MomentsGatewayServer
       configKey: momentsgateway.ini
@@ -247,6 +274,7 @@ focusedGateways:
       port: 8099
       replicaCount: 2
     callgateway:
+      enabled: true
       serviceName: callgateway
       target: CallGatewayServer
       configKey: callgateway.ini
@@ -254,6 +282,7 @@ focusedGateways:
       port: 8097
       replicaCount: 2
     r18gateway:
+      enabled: true
       serviceName: r18gateway
       target: R18GatewayServer
       configKey: r18gateway.ini
@@ -261,7 +290,15 @@ focusedGateways:
       port: 8098
       replicaCount: 2
       allowedImageHosts: "storage-b.picacomic.com,img.picacomic.com"
+      persistence:
+        enabled: true
+        existingClaim: ""
+        accessModes:
+          - ReadWriteMany
+        size: 1Gi
+        storageClassName: ""
     register:
+      enabled: true
       serviceName: register
       target: RegisterServer
       configKey: register.ini
@@ -269,6 +306,7 @@ focusedGateways:
       port: 8101
       replicaCount: 2
     login:
+      enabled: true
       serviceName: login
       target: LoginServer
       configKey: login.ini
@@ -276,6 +314,7 @@ focusedGateways:
       port: 8102
       replicaCount: 2
     account:
+      enabled: true
       serviceName: account
       target: AccountServer
       configKey: account.ini
@@ -295,6 +334,22 @@ chat:
     minAvailable: 1
   resources: {}
   env: {}
+  relationQuery:
+    enabled: true
+    replicaCount: 1
+    serviceName: chat-relation-query
+    configKey: chatrelationquery.ini
+    grpcPort: 50090
+    resources: {}
+    env: {}
+  relationService:
+    enabled: true
+    replicaCount: 1
+    serviceName: chat-relation-service
+    configKey: chatrelationservice.ini
+    grpcPort: 50091
+    resources: {}
+    env: {}
 
 aiServer:
   enabled: true
@@ -339,6 +394,7 @@ varify:
   env: {}
 
 memoOps:
+  enabled: true
   server:
     replicaCount: 1
     service:
@@ -361,13 +417,13 @@ otelCollector:
 jobs:
   postgresMigrate:
     enabled: true
-    image: postgres:16-alpine
+    image: postgres@sha256:78df81b1442dcc764c1104154da7162635e40cfffe67579c42a1c1b96dfc209c
   kafkaInit:
     enabled: true
-    image: python:3.12-alpine
+    image: python@sha256:46cb7cc2877e60fbd5e21a9ae6115c30ace7a077b9f8772da879e4590c18c2e3
   rabbitmqInit:
     enabled: true
-    image: python:3.12-alpine
+    image: python@sha256:46cb7cc2877e60fbd5e21a9ae6115c30ace7a077b9f8772da879e4590c18c2e3
 
 envoy:
   tls:
@@ -377,6 +433,10 @@ secrets:
   chatAuthSecret: ""
   jwtAccessSecret: ""
   authRefreshPepper: ""
+  relationCommandAuthToken: ""
+  relationChatQueryAuthToken: ""
+  relationCallAuthToken: ""
+  relationMomentsAuthToken: ""
   livekitApiKey: ""
   livekitApiSecret: ""
   minioAccessKey: ""
@@ -386,3 +446,4 @@ secrets:
   r18PicacgApiKey: ""
   r18PicacgHmacKey: ""
   r18SourceAdminKey: ""
+  r18CredentialMasterKey: ""

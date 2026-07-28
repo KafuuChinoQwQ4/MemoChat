@@ -4,7 +4,7 @@ services:
     container_name: memochat-redis
     restart: unless-stopped
     environment:
-      REDIS_ARGS: "--appendonly yes --requirepass ${MEMOCHAT_REDIS_PASSWORD:-123456}"
+      REDIS_ARGS: "--appendonly yes --requirepass ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}"
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: memochat
-      POSTGRES_PASSWORD: "${MEMOCHAT_POSTGRES_PASSWORD:-123456}"
+      POSTGRES_PASSWORD: "${MEMOCHAT_POSTGRES_PASSWORD:?set MEMOCHAT_POSTGRES_PASSWORD}"
       POSTGRES_DB: memo_pg
     ports:
       - "127.0.0.1:15432:5432"
@@ -29,8 +29,10 @@ services:
     container_name: memochat-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: "${MEMOCHAT_MONGO_ROOT_USERNAME:-root}"
-      MONGO_INITDB_ROOT_PASSWORD: "${MEMOCHAT_MONGO_ROOT_PASSWORD:-123456}"
+      MONGO_INITDB_ROOT_USERNAME: "${MEMOCHAT_MONGO_ROOT_USERNAME:?set MEMOCHAT_MONGO_ROOT_USERNAME}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MEMOCHAT_MONGO_ROOT_PASSWORD:?set MEMOCHAT_MONGO_ROOT_PASSWORD}"
+      MEMOCHAT_MONGO_APP_USER: "${MEMOCHAT_MONGO_APP_USER:?set MEMOCHAT_MONGO_APP_USER}"
+      MEMOCHAT_MONGO_APP_PASSWORD: "${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}"
       MONGO_INITDB_DATABASE: memochat
     ports:
       - "127.0.0.1:27017:27017"

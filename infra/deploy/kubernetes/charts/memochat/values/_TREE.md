@@ -8,7 +8,8 @@
 | --- | --- |
 | `README.md` | values 用法说明。 |
 | `dev.yaml` | 开发环境 values。 |
-| `prod.yaml` | 生产环境 values。 |
+| `prod.yaml` | 启用 Istio STRICT、commit-SHA 镜像门禁并关闭未认证可选镜像的生产 values。 |
+| `profiles/` | 生产可选能力的显式覆盖：base、calls、r18、observability。 |
 | `staging.yaml` | 预发布环境 values。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

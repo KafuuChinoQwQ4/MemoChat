@@ -1,4 +1,4 @@
-{{- if .Values.gate.autoscaling.enabled }}
+{{- if and .Values.legacyGate.enabled .Values.gate.autoscaling.enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -45,6 +45,7 @@ spec:
 {{- $root := . }}
 {{- range $name := list "aigateway" "mediagateway" "momentsgateway" "callgateway" "r18gateway" "register" "login" "account" }}
 {{- $svc := index $root.Values.focusedGateways.services $name }}
+{{- if $svc.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -65,5 +66,6 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ $root.Values.focusedGateways.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
 {{- end }}
 {{- end }}

@@ -1,0 +1,11 @@
+# Production base profile. Keep optional capabilities off until an explicit
+# profile is layered after values/prod.yaml.
+observability:
+  enabled: false
+
+focusedGateways:
+  services:
+    callgateway:
+      enabled: false
+    r18gateway:
+      enabled: false

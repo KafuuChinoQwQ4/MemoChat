@@ -5,30 +5,31 @@ datasources:
     uid: prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://memochat-prometheus:9090
     isDefault: true
     editable: false
   - name: InfluxDB
     uid: influxdb
     type: influxdb
     access: proxy
-    url: http://influxdb:8086
-    database: metrics
+    url: http://memochat-influxdb:8086
     jsonData:
+      version: Flux
       httpMode: POST
       organization: memochat
+      defaultBucket: metrics
     secureJsonData:
-      token: ${MEMOCHAT_INFLUXDB_ADMIN_TOKEN}
+      token: ${MEMOCHAT_INFLUXDB_GRAFANA_TOKEN}
     editable: false
   - name: Loki
     uid: loki
     type: loki
     access: proxy
-    url: http://loki:3100
+    url: http://memochat-loki:3100
     editable: false
   - name: Tempo
     uid: tempo
     type: tempo
     access: proxy
-    url: http://tempo:3200
+    url: http://memochat-tempo:3200
     editable: false

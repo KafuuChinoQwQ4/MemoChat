@@ -211,6 +211,7 @@ data:
                                   retry_on: connect-failure,reset,5xx,gateway-error
                                   num_retries: 2
                                   per_try_timeout: 15s
+                            {{- if .Values.focusedGateways.services.callgateway.enabled }}
                             - name: call
                               match:
                                 prefix: /api/call/
@@ -221,6 +222,8 @@ data:
                                   retry_on: connect-failure,reset,5xx,gateway-error
                                   num_retries: 2
                                   per_try_timeout: 15s
+                            {{- end }}
+                            {{- if .Values.focusedGateways.services.r18gateway.enabled }}
                             - name: r18
                               match:
                                 prefix: /api/r18/
@@ -231,6 +234,7 @@ data:
                                   retry_on: connect-failure,reset,5xx,gateway-error
                                   num_retries: 2
                                   per_try_timeout: 15s
+                            {{- end }}
                             - name: profile
                               match:
                                 path: /user_update_profile
@@ -363,6 +367,7 @@ data:
                         socket_address:
                           address: {{ .Values.focusedGateways.services.momentsgateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
                           port_value: {{ .Values.focusedGateways.services.momentsgateway.port }}
+        {{- if .Values.focusedGateways.services.callgateway.enabled }}
         - name: callgateway_backend
           type: STRICT_DNS
           connect_timeout: 5s
@@ -377,6 +382,8 @@ data:
                         socket_address:
                           address: {{ .Values.focusedGateways.services.callgateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
                           port_value: {{ .Values.focusedGateways.services.callgateway.port }}
+        {{- end }}
+        {{- if .Values.focusedGateways.services.r18gateway.enabled }}
         - name: r18gateway_backend
           type: STRICT_DNS
           connect_timeout: 5s
@@ -391,6 +398,7 @@ data:
                         socket_address:
                           address: {{ .Values.focusedGateways.services.r18gateway.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}
                           port_value: {{ .Values.focusedGateways.services.r18gateway.port }}
+        {{- end }}
         - name: register_backend
           type: STRICT_DNS
           connect_timeout: 5s
@@ -487,10 +495,15 @@ spec:
         tier: loadbalancer
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: envoy
-          image: "{{ .Values.images.envoy.repository }}:{{ .Values.images.envoy.tag }}"
+          image: {{ include "memochat.infrastructureImage" .Values.images.envoy | quote }}
           imagePullPolicy: {{ .Values.images.envoy.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           command:
             - envoy
           args:
@@ -528,6 +541,8 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: config
               mountPath: /etc/envoy/envoy.yaml
               subPath: envoy.yaml
@@ -535,6 +550,8 @@ spec:
               mountPath: /etc/envoy/tls
               readOnly: true
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: config
           configMap:
             name: envoy-lb-config

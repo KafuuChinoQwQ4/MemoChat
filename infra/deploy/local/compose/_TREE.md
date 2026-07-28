@@ -6,7 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `backend-services.yml` | 11 个核心与 2 个可选 C++ 服务的发布模式 Compose 覆盖，按 profile 注入密钥、固定基础镜像 digest、只读配置与最小暴露。 |
+| `backend-services.yml` | 11 个核心与 2 个可选 C++ 服务及观测 profile 的发布模式覆盖，按 profile 注入密钥、固定镜像 digest、收紧运行用户/权限与最小暴露。 |
 | `datastores.yml` | Redis/PostgreSQL/MongoDB 数据存储 compose。 |
 | `envoy-lb.yaml` | Envoy 负载均衡监听/集群配置。 |
 | `envoy-lb.yml` | Envoy 负载均衡 compose 服务定义。 |

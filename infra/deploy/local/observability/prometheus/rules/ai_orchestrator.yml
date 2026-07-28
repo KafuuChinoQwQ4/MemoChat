@@ -1,16 +1,6 @@
 groups:
   - name: memochat-ai-orchestrator
     rules:
-      - alert: AIOrchestratorScrapeMissing
-        expr: absent(up{job="ai_orchestrator"})
-        for: 2m
-        labels:
-          severity: critical
-          service: ai_orchestrator
-        annotations:
-          summary: "AIOrchestrator scrape target is missing"
-          description: "Prometheus has no up{} series for job=ai_orchestrator. Check Prometheus config, host.docker.internal routing, and port 8096."
-
       - alert: AIOrchestratorDown
         expr: up{job="ai_orchestrator"} == 0
         for: 2m

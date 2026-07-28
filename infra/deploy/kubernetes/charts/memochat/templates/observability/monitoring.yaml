@@ -1,5 +1,6 @@
 {{- if .Values.observability.enabled }}
 {{- if .Values.observability.serviceMonitor.enabled }}
+{{- if .Values.memoOps.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -20,6 +21,7 @@ spec:
     - port: metrics
       interval: {{ .Values.observability.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.observability.serviceMonitor.scrapeTimeout }}
+{{- end }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -43,6 +45,7 @@ spec:
       scrapeTimeout: {{ .Values.observability.serviceMonitor.scrapeTimeout }}
 {{- end }}
 {{- if .Values.observability.podMonitor.enabled }}
+{{- if .Values.memoOps.enabled }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
@@ -64,5 +67,6 @@ spec:
     - port: metrics
       interval: {{ .Values.observability.podMonitor.interval }}
       scrapeTimeout: {{ .Values.observability.podMonitor.scrapeTimeout }}
+{{- end }}
 {{- end }}
 {{- end }}

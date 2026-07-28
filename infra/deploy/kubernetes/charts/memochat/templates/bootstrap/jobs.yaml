@@ -11,9 +11,14 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: postgres-migrate
-          image: {{ .Values.jobs.postgresMigrate.image }}
+          image: {{ .Values.jobs.postgresMigrate.image | quote }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
             - name: PGPASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
@@ -37,9 +42,13 @@ spec:
               -U {{ .Values.externalServices.postgres.user }} -d {{ .Values.externalServices.postgres.database }}
               -f /migrations/001_memo_ops_baseline.sql
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: init
               mountPath: /migrations
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: init
           configMap:
             name: memochat-platform-init
@@ -58,17 +67,28 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: kafka-init
-          image: {{ .Values.jobs.kafkaInit.image }}
+          image: {{ .Values.jobs.kafkaInit.image | quote }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
+            - name: PYTHONUSERBASE
+              value: /tmp/python-user
             - name: KAFKA_BROKERS
               value: {{ .Values.externalServices.kafka.brokers | quote }}
           command: ["python", "/init/init-kafka.py"]
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: init
               mountPath: /init
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: init
           configMap:
             name: memochat-platform-init
@@ -87,25 +107,36 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: rabbitmq-init
-          image: {{ .Values.jobs.rabbitmqInit.image }}
+          image: {{ .Values.jobs.rabbitmqInit.image | quote }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
+            - name: PYTHONUSERBASE
+              value: /tmp/python-user
             - name: RABBITMQ_HOST
               value: {{ .Values.externalServices.rabbitmq.host | quote }}
             - name: RABBITMQ_PORT
               value: {{ .Values.externalServices.rabbitmq.port | quote }}
             - name: RABBITMQ_USERNAME
-              value: {{ .Values.externalServices.rabbitmq.username | quote }}
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
             - name: RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
             - name: RABBITMQ_VHOST
               value: {{ .Values.externalServices.rabbitmq.vhost | quote }}
           command: ["python", "/init/init-rabbitmq.py"]
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: init
               mountPath: /init
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: init
           configMap:
             name: memochat-platform-init

@@ -71,7 +71,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -87,7 +87,7 @@ data:
     [RabbitMQ]
     Host={{ .Values.externalServices.rabbitmq.host }}
     Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
+    Username=
     Password=
     VHost={{ .Values.externalServices.rabbitmq.vhost }}
     ExchangeDirect=memochat.direct
@@ -125,7 +125,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -181,7 +181,7 @@ data:
     [Postgres]
     Host={{ .Values.externalServices.postgres.host }}
     Port={{ .Values.externalServices.postgres.port }}
-    User={{ .Values.externalServices.postgres.user }}
+    User={{ .Values.externalServices.postgres.roles.chat }}
     Passwd=
     Database={{ .Values.externalServices.postgres.database }}
     Schema={{ .Values.externalServices.postgres.schema }}
@@ -202,7 +202,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -279,7 +279,7 @@ data:
         enabled: true
         host: "{{ .Values.externalServices.rabbitmq.host }}"
         port: {{ .Values.externalServices.rabbitmq.port }}
-        username: "{{ .Values.externalServices.rabbitmq.username }}"
+        username: ""
         password: ""
         vhost: "{{ .Values.externalServices.rabbitmq.vhost }}"
         exchange: "memochat.direct"
@@ -412,7 +412,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -437,6 +437,18 @@ data:
     Schema={{ .Values.externalServices.postgres.schema }}
     SslMode={{ .Values.externalServices.postgres.sslMode }}
     PoolSize=12
+    [AccountPostgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=8
+    [RelationQueryService]
+    Endpoint={{ .Values.chat.relationQuery.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}:{{ .Values.chat.relationQuery.grpcPort }}
+    MomentsAuthToken=
     [Redis]
     Host={{ .Values.externalServices.redis.host }}
     Port={{ .Values.externalServices.redis.port }}
@@ -451,7 +463,7 @@ data:
     AccessTokenTtlSec=900
     [Mongo]
     Enabled=true
-    Uri={{ .Values.externalServices.mongodb.uri }}
+    Uri=
     Database={{ .Values.externalServices.mongodb.database }}
     MomentsCollection=moments_content
     [Log]
@@ -465,7 +477,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -490,6 +502,18 @@ data:
     Schema={{ .Values.externalServices.postgres.schema }}
     SslMode={{ .Values.externalServices.postgres.sslMode }}
     PoolSize=12
+    [AccountPostgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=8
+    [RelationQueryService]
+    Endpoint={{ .Values.chat.relationQuery.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}:{{ .Values.chat.relationQuery.grpcPort }}
+    CallAuthToken=
     [Redis]
     Host={{ .Values.externalServices.redis.host }}
     Port={{ .Values.externalServices.redis.port }}
@@ -531,7 +555,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -584,7 +608,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -641,7 +665,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -703,7 +727,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -757,7 +781,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -765,6 +789,149 @@ data:
     ExportTraces=true
     ExportMetrics=false
     ServiceName=AccountServer
+    ServiceNamespace=memochat
+  chatrelationquery.ini: |
+    [SelfServer]
+    Name=chat-relation-query
+    [Snowflake]
+    DatacenterId=1
+    WorkerId=8
+    [Runtime]
+    Role=worker
+    AsyncEventBus=kafka
+    TaskBus=rabbitmq
+    [RelationQueryRpc]
+    Host=0.0.0.0
+    Port={{ .Values.chat.relationQuery.grpcPort }}
+    [RelationQueryService]
+    Backend=inprocess
+    ChatAuthToken=
+    CallAuthToken=
+    MomentsAuthToken=
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.chat }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [AccountPostgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=8
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [RelationBootstrapCache]
+    TtlSec=15
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/chat-relation-query
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled={{ .Values.observability.enabled }}
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=ChatRelationQueryService
+    ServiceNamespace=memochat
+  chatrelationservice.ini: |
+    [SelfServer]
+    Name=chat-relation-service
+    [Snowflake]
+    DatacenterId=1
+    WorkerId=9
+    [Runtime]
+    Role=worker
+    AsyncEventBus=kafka
+    TaskBus=rabbitmq
+    [RelationServiceRpc]
+    Host=0.0.0.0
+    Port={{ .Values.chat.relationService.grpcPort }}
+    [RelationService]
+    Backend=inprocess
+    AuthToken=
+    [Postgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.chat }}
+    Passwd=
+    Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=12
+    [AccountPostgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    PoolSize=8
+    [Redis]
+    Host={{ .Values.externalServices.redis.host }}
+    Port={{ .Values.externalServices.redis.port }}
+    Passwd=
+    [RelationBootstrapCache]
+    TtlSec=15
+    [RabbitMQ]
+    Host={{ .Values.externalServices.rabbitmq.host }}
+    Port={{ .Values.externalServices.rabbitmq.port }}
+    Username=
+    Password=
+    VHost={{ .Values.externalServices.rabbitmq.vhost }}
+    PrefetchCount=50
+    ExchangeDirect=memochat.direct
+    ExchangeDlx=memochat.dlx
+    RetryDelayMs=5000
+    MaxRetries=5
+    [Kafka]
+    Brokers={{ .Values.externalServices.kafka.brokers }}
+    ClientId=memochat-chat-relation-service
+    ConsumerGroup=memochat-chat-workers
+    TopicPrivate=chat.private.v1
+    TopicGroup=chat.group.v1
+    TopicPrivateDlq=chat.private.dlq.v1
+    TopicGroupDlq=chat.group.dlq.v1
+    EnableIdempotence=true
+    BatchNumMessages=1000
+    [Log]
+    Level=info
+    Dir=/var/log/memochat/chat-relation-service
+    Format=json
+    ToConsole=true
+    RotateMode=daily
+    MaxFiles=14
+    MaxSizeMB=100
+    Redact=true
+    Env=k8s
+    [Telemetry]
+    Enabled={{ .Values.observability.enabled }}
+    OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
+    Protocol=otlp-http
+    SampleRatio=1.0
+    ExportLogs=true
+    ExportTraces=true
+    ExportMetrics=false
+    ServiceName=ChatRelationServiceWorker
     ServiceNamespace=memochat
   chat.ini: |
     [GateServer]
@@ -778,6 +945,22 @@ data:
     Role=hybrid
     AsyncEventBus=kafka
     TaskBus=rabbitmq
+    [RelationService]
+    {{- if .Values.chat.relationService.enabled }}
+    Backend=remote
+    Endpoint={{ .Values.chat.relationService.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}:{{ .Values.chat.relationService.grpcPort }}
+    AuthToken=
+    {{- else }}
+    Backend=inprocess
+    {{- end }}
+    [RelationQueryService]
+    {{- if .Values.chat.relationQuery.enabled }}
+    Backend=grpc
+    Endpoint={{ .Values.chat.relationQuery.serviceName }}.{{ .Values.namespaces.prod }}.svc.{{ .Values.global.clusterDomain }}:{{ .Values.chat.relationQuery.grpcPort }}
+    ChatAuthToken=
+    {{- else }}
+    Backend=inprocess
+    {{- end }}
     [FeatureFlags]
     chat_private_kafka_shadow=false
     chat_private_kafka_primary=false
@@ -787,9 +970,17 @@ data:
     [Postgres]
     Host={{ .Values.externalServices.postgres.host }}
     Port={{ .Values.externalServices.postgres.port }}
-    User={{ .Values.externalServices.postgres.user }}
+    User={{ .Values.externalServices.postgres.roles.chat }}
     Passwd=
     Database={{ .Values.externalServices.postgres.database }}
+    Schema={{ .Values.externalServices.postgres.schema }}
+    SslMode={{ .Values.externalServices.postgres.sslMode }}
+    [AccountPostgres]
+    Host={{ .Values.externalServices.postgres.host }}
+    Port={{ .Values.externalServices.postgres.port }}
+    User={{ .Values.externalServices.postgres.roles.account }}
+    Passwd=
+    Database=memo_account
     Schema={{ .Values.externalServices.postgres.schema }}
     SslMode={{ .Values.externalServices.postgres.sslMode }}
     [Redis]
@@ -818,7 +1009,7 @@ data:
     [RabbitMQ]
     Host={{ .Values.externalServices.rabbitmq.host }}
     Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
+    Username=
     Password=
     VHost={{ .Values.externalServices.rabbitmq.vhost }}
     PrefetchCount=50
@@ -830,7 +1021,7 @@ data:
     TtlSec=15
     [Mongo]
     Enabled=true
-    Uri={{ .Values.externalServices.mongodb.uri }}
+    Uri=
     Database={{ .Values.externalServices.mongodb.database }}
     PrivateCollection=private_messages
     GroupCollection=group_messages
@@ -853,7 +1044,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -874,9 +1065,9 @@ data:
     [Email]
     SMTPHost={{ .Values.externalServices.smtp.host }}
     SMTPPort={{ .Values.externalServices.smtp.port }}
-    SMTPUser={{ .Values.externalServices.smtp.user }}
+    SMTPUser=
     SMTPPass=
-    From={{ .Values.externalServices.smtp.from }}
+    From=
     [RateLimit]
     EmailWindowSec=60
     EmailMaxRequests=3
@@ -896,7 +1087,7 @@ data:
     Redact=true
     Env=k8s
     [Telemetry]
-    Enabled=true
+    Enabled={{ .Values.observability.enabled }}
     OtlpEndpoint=http://otel-collector.{{ .Values.namespaces.observability }}.svc.{{ .Values.global.clusterDomain }}:4318/v1/traces
     Protocol=otlp-http
     SampleRatio=1.0
@@ -908,7 +1099,7 @@ data:
     [RabbitMQ]
     Host={{ .Values.externalServices.rabbitmq.host }}
     Port={{ .Values.externalServices.rabbitmq.port }}
-    Username={{ .Values.externalServices.rabbitmq.username }}
+    Username=
     Password=
     VHost={{ .Values.externalServices.rabbitmq.vhost }}
     PrefetchCount=8

@@ -54,7 +54,7 @@ services:
     container_name: memochat-redis
     restart: unless-stopped
     environment:
-      REDIS_ARGS: "--appendonly yes --requirepass ${MEMOCHAT_REDIS_PASSWORD:-123456}"
+      REDIS_ARGS: "--appendonly yes --requirepass ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}"
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: memochat
-      POSTGRES_PASSWORD: "${MEMOCHAT_POSTGRES_PASSWORD:-123456}"
+      POSTGRES_PASSWORD: "${MEMOCHAT_POSTGRES_PASSWORD:?set MEMOCHAT_POSTGRES_PASSWORD}"
       POSTGRES_DB: memo_pg
     command:
       - postgres
@@ -84,21 +84,24 @@ services:
     container_name: memochat-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: "${MEMOCHAT_MONGO_ROOT_USERNAME:-root}"
-      MONGO_INITDB_ROOT_PASSWORD: "${MEMOCHAT_MONGO_ROOT_PASSWORD:-123456}"
+      MONGO_INITDB_ROOT_USERNAME: "${MEMOCHAT_MONGO_ROOT_USERNAME:?set MEMOCHAT_MONGO_ROOT_USERNAME}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MEMOCHAT_MONGO_ROOT_PASSWORD:?set MEMOCHAT_MONGO_ROOT_PASSWORD}"
+      MEMOCHAT_MONGO_APP_USER: "${MEMOCHAT_MONGO_APP_USER:?set MEMOCHAT_MONGO_APP_USER}"
+      MEMOCHAT_MONGO_APP_PASSWORD: "${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}"
       MONGO_INITDB_DATABASE: memochat
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/mongo:/data/db
+      - ./init/mongo:/docker-entrypoint-initdb.d:ro
 
   memochat-minio:
     image: minio/minio:latest
     container_name: memochat-minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: "${MEMOCHAT_MINIO_ROOT_USER:-memochat_admin}"
-      MINIO_ROOT_PASSWORD: "${MEMOCHAT_MINIO_ROOT_PASSWORD:-MinioPass2026!}"
+      MINIO_ROOT_USER: "${MEMOCHAT_MINIO_ROOT_USER:?set MEMOCHAT_MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MEMOCHAT_MINIO_ROOT_PASSWORD:?set MEMOCHAT_MINIO_ROOT_PASSWORD}"
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
@@ -140,10 +143,20 @@ services:
       - --node-id
       - "0"
       - --check=false
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=memochat-redpanda:33145
       - --kafka-addr=INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
       - --advertise-kafka-addr=INTERNAL://memochat-redpanda:9092,OUTSIDE://127.0.0.1:19092
       - --pandaproxy-addr=0.0.0.0:18082
       - --advertise-pandaproxy-addr=127.0.0.1:18082
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "rpk cluster health -X brokers=127.0.0.1:9092 2>/dev/null | grep -Eq '^Healthy:[[:space:]]+true$'"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     volumes:
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/redpanda/data:/var/lib/redpanda/data
 
@@ -152,8 +165,8 @@ services:
     container_name: memochat-rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: "${MEMOCHAT_RABBITMQ_USER:-memochat}"
-      RABBITMQ_DEFAULT_PASS: "${MEMOCHAT_RABBITMQ_PASSWORD:-123456}"
+      RABBITMQ_DEFAULT_USER: "${MEMOCHAT_RABBITMQ_USER:?set MEMOCHAT_RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}"
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
@@ -208,11 +221,11 @@ services:
       - "127.0.0.1:8086:8086"
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: "${MEMOCHAT_INFLUXDB_USERNAME:-admin}"
-      DOCKER_INFLUXDB_INIT_PASSWORD: "${MEMOCHAT_INFLUXDB_PASSWORD:-adminadmin}"
+      DOCKER_INFLUXDB_INIT_USERNAME: "${MEMOCHAT_INFLUXDB_USERNAME:-}"
+      DOCKER_INFLUXDB_INIT_PASSWORD: "${MEMOCHAT_INFLUXDB_PASSWORD:-}"
       DOCKER_INFLUXDB_INIT_ORG: memochat
       DOCKER_INFLUXDB_INIT_BUCKET: metrics
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}"
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-}"
     volumes:
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb:/var/lib/influxdb2
       - ${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker-data/memochat}/observability/influxdb/config:/etc/influxdb2
@@ -226,9 +239,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: "${MEMOCHAT_GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-admin}"
-      MEMOCHAT_INFLUXDB_ADMIN_TOKEN: "${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-my-super-secret-admin-token}"
+      GF_SECURITY_ADMIN_USER: "${MEMOCHAT_GRAFANA_ADMIN_USER:-}"
+      GF_SECURITY_ADMIN_PASSWORD: "${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-}"
+      MEMOCHAT_INFLUXDB_GRAFANA_TOKEN: "${MEMOCHAT_INFLUXDB_GRAFANA_TOKEN:-}"
       GF_USERS_DEFAULT_THEME: light
     volumes:
       - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro

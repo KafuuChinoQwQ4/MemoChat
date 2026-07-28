@@ -1,4 +1,5 @@
 global:
+  environment: staging
   domain: memochat-staging.example.com
 
 gate:
