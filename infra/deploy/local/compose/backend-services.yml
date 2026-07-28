@@ -26,6 +26,22 @@ x-backend-environment: &backend-environment
   MEMOCHAT_CHATSERVER1_RPCHOST: 127.0.0.1
   MEMOCHAT_AISERVER_HOST: 127.0.0.1
 
+x-backend-depends-on: &backend-depends-on
+  memochat-envoy-gateway:
+    condition: service_started
+  memochat-redis:
+    condition: service_started
+  memochat-postgres:
+    condition: service_started
+  memochat-mongo:
+    condition: service_started
+  memochat-rabbitmq:
+    condition: service_started
+  memochat-redpanda:
+    condition: service_started
+  memochat-chat-tls-init:
+    condition: service_completed_successfully
+
 x-backend-service: &backend-service
   restart: unless-stopped
   init: true
@@ -38,21 +54,17 @@ x-backend-service: &backend-service
     - no-new-privileges:true
   tmpfs:
     - /tmp:rw,noexec,nosuid,nodev,size=64m
-  depends_on:
-    memochat-envoy-gateway:
-      condition: service_started
-    memochat-redis:
-      condition: service_started
-    memochat-postgres:
-      condition: service_started
-    memochat-mongo:
-      condition: service_started
-    memochat-rabbitmq:
-      condition: service_started
-    memochat-redpanda:
-      condition: service_started
-    memochat-chat-tls-init:
-      condition: service_completed_successfully
+  depends_on: *backend-depends-on
+
+x-observability-service: &observability-service
+  user: ${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID}:${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID}
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID},gid=${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID},mode=0700
 
 services:
   # The release stack uses preflight-validated host certificates. Keep the base
@@ -185,6 +197,31 @@ services:
       memochat-minio:
         condition: service_started
 
+  memochat-release-provision-influxdb:
+    <<: *observability-service
+    image: influxdb@sha256:5455e9b8bb42dcb8aa0b8a0354b5f0758d0b4a01f595b8dc03e3f850aa5829e9
+    profiles:
+      - provision
+    restart: "no"
+    environment:
+      INFLUX_HOST: http://memochat-influxdb:8086
+      INFLUX_ORG: memochat
+      INFLUX_TOKEN_FILE: /run/secrets/memochat-influxdb/influxdb-admin.token
+      INFLUX_BUCKET: metrics
+    entrypoint:
+      - /bin/sh
+      - /provision/influxdb_observability.sh
+    volumes:
+      - ./provision:/provision:ro
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/credentials
+        target: /run/secrets/memochat-influxdb
+        bind:
+          create_host_path: false
+    depends_on:
+      memochat-influxdb:
+        condition: service_healthy
+
   # Release mode must override every weak development default in the base file.
   memochat-redis:
     image: redis/redis-stack-server@sha256:b569cb292d85bd0c85807a485ee9407dfc596ccd3686516e5d81d753d65405b7
@@ -229,31 +266,100 @@ services:
 
   memochat-redpanda:
     image: redpandadata/redpanda@sha256:c9983f650ad08015a781ec9974fe94e25c36e9f15be553db596afe179e5b2c3a
+    user: ${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID}:${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID},gid=${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID},mode=0700
+      - /etc/redpanda:rw,noexec,nosuid,nodev,size=4m,uid=${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID},gid=${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID},mode=0700
 
   memochat-influxdb:
+    <<: *observability-service
     image: influxdb@sha256:5455e9b8bb42dcb8aa0b8a0354b5f0758d0b4a01f595b8dc03e3f850aa5829e9
     profiles:
       - observability
-    environment:
+    environment: !override
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${MEMOCHAT_INFLUXDB_USERNAME:-}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${MEMOCHAT_INFLUXDB_PASSWORD:-}
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/memochat-influxdb/influxdb-username
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/memochat-influxdb/influxdb-password
       DOCKER_INFLUXDB_INIT_ORG: memochat
       DOCKER_INFLUXDB_INIT_BUCKET: metrics
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/memochat-influxdb/influxdb-admin.token
+      INFLUX_CONFIGS_PATH: /tmp/influx-configs
+    volumes: !override
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/influxdb
+        target: /var/lib/influxdb2
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/credentials
+        target: /run/secrets/memochat-influxdb
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   memochat-grafana:
+    <<: *observability-service
     image: grafana/grafana@sha256:886b56d5534e54f69a8cfcb4b8928da8fc753178a7a3d20c3f9b04b660169805
     profiles:
       - observability
-    environment:
+    environment: !override
       GF_SECURITY_ADMIN_USER: ${MEMOCHAT_GRAFANA_ADMIN_USER:-}
       GF_SECURITY_ADMIN_PASSWORD: ${MEMOCHAT_GRAFANA_ADMIN_PASSWORD:-}
-      MEMOCHAT_INFLUXDB_ADMIN_TOKEN: ${MEMOCHAT_INFLUXDB_ADMIN_TOKEN:-}
       GF_USERS_DEFAULT_THEME: light
+      GF_LOG_MODE: console
+      HOME: /tmp
+    entrypoint:
+      - /bin/sh
+      - /provision/grafana_entrypoint.sh
+    volumes: !override
+      - type: bind
+        source: ./provision
+        target: /provision
+        read_only: true
+      - type: bind
+        source: ./observability/grafana/provisioning/datasources
+        target: /etc/grafana/provisioning/datasources
+        read_only: true
+      - type: bind
+        source: ./observability/grafana/provisioning/dashboards
+        target: /etc/grafana/provisioning/dashboards
+        read_only: true
+      - type: bind
+        source: ./observability/grafana/dashboards
+        target: /var/lib/grafana/dashboards
+        read_only: true
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/grafana
+        target: /var/lib/grafana
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/credentials
+        target: /run/secrets/memochat-influxdb
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   # Do not inherit broad source/build mounts from the development stack.
   memochat-otel-collector:
+    <<: *observability-service
     image: otel/opentelemetry-collector-contrib@sha256:b65527791431d76d058b2813748a3f4a8912540d7b23beac2f6b4e02c872f5b7
     profiles:
       - observability
@@ -268,32 +374,131 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "validate", "--config=http://127.0.0.1:13133/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-  # cAdvisor needs privileged host mounts, so release deployments opt in.
+  # cAdvisor is the sole observability exception: container discovery requires
+  # root, privileged mode, /dev/kmsg, and read-only host namespace mounts.
   memochat-cadvisor:
     image: gcr.io/cadvisor/cadvisor@sha256:3cde6faf0791ebf7b41d6f8ae7145466fed712ea6f252c935294d2608b1af388
     profiles:
       - observability
+    user: "0:0"
+    privileged: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
   memochat-prometheus:
+    <<: *observability-service
     image: prom/prometheus@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
     profiles:
       - observability
+    depends_on: !override
+      memochat-alertmanager:
+        condition: service_healthy
+      memochat-cadvisor:
+        condition: service_healthy
+      memochat-otel-collector:
+        condition: service_healthy
+    volumes: !override
+      - type: bind
+        source: ./observability/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+      - type: bind
+        source: ./observability/prometheus/rules
+        target: /etc/prometheus/rules
+        read_only: true
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/prometheus
+        target: /prometheus
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   memochat-alertmanager:
+    <<: *observability-service
     image: prom/alertmanager@sha256:e13b6ed5cb929eeaee733479dce55e10eb3bc2e9c4586c705a4e8da41e5eacf5
     profiles:
       - observability
+    volumes: !override
+      - type: bind
+        source: ./observability/alertmanager/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/alertmanager
+        target: /alertmanager
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:9093/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   memochat-loki:
+    <<: *observability-service
     image: grafana/loki@sha256:e689cc634841c937de4d7ea6157f17e29cf257d6a320f1c293ab18d46cfea986
     profiles:
       - observability
+    volumes: !override
+      - type: bind
+        source: ./observability/loki/config.yaml
+        target: /etc/loki/config.yaml
+        read_only: true
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/loki
+        target: /loki
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   memochat-tempo:
+    <<: *observability-service
     image: grafana/tempo@sha256:f0200a9bff6d14eb3a4332194f7b77c37ee1a3535e7e41db024d95aab6f1b4e8
     profiles:
       - observability
+    volumes: !override
+      - type: bind
+        source: ./observability/tempo/config.yaml
+        target: /etc/tempo/config.yaml
+        read_only: true
+      - type: bind
+        source: ${MEMOCHAT_DOCKER_DATA_ROOT:?set MEMOCHAT_DOCKER_DATA_ROOT}/observability/tempo
+        target: /var/tempo
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   # Existing Envoy clusters use host.docker.internal. The release overlay keeps
   # those stable ports private by colocating every C++ process with Envoy.
@@ -340,9 +545,17 @@ services:
   memochat-chat-server:
     <<: *backend-service
     image: ${MEMOCHAT_CPP_IMAGE_PREFIX:-memochat}/chat-server:${MEMOCHAT_IMAGE_TAG:-local}
+    depends_on:
+      <<: *backend-depends-on
+      memochat-chat-relation-query:
+        condition: service_started
+      memochat-chat-relation-service:
+        condition: service_started
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: ChatServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "50055"
+      MEMOCHAT_INSTANCE_NAME: chatserver1
       MEMOCHAT_POSTGRES_USER: memo_chat_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_CHAT_POSTGRES_PASSWORD:?set MEMOCHAT_CHAT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: ${MEMOCHAT_POSTGRES_DATABASE:?set MEMOCHAT_POSTGRES_DATABASE}
@@ -353,11 +566,13 @@ services:
       MEMOCHAT_RABBITMQ_PASSWORD: ${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}
       MEMOCHAT_MONGO_URI: "mongodb://${MEMOCHAT_MONGO_APP_USER:?set MEMOCHAT_MONGO_APP_USER}:${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}@memochat-mongo:27017/memochat?authSource=memochat"
       MEMOCHAT_CHATAUTH_HMACSECRET: ${MEMOCHAT_CHATAUTH_HMACSECRET:?set MEMOCHAT_CHATAUTH_HMACSECRET}
+      MEMOCHAT_RELATIONSERVICE_AUTHTOKEN: ${MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN:?set MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN}
+      MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN: ${MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN:?set MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN}
       MEMOCHAT_QUIC_CERTFILE: /run/memochat/tls/server.crt
       MEMOCHAT_QUIC_PRIVATEKEYFILE: /run/memochat/tls/server.key
       MEMOCHAT_CHATSERVER1_WTCERTFILE: /run/memochat/tls/server.crt
       MEMOCHAT_CHATSERVER1_WTKEYFILE: /run/memochat/tls/server.key
-      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_PASSWORD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET
+      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_PASSWORD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_RELATIONSERVICE_AUTHTOKEN MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN
     volumes:
       - type: bind
         source: ${MEMOCHAT_BACKEND_CONFIG_ROOT:?set MEMOCHAT_BACKEND_CONFIG_ROOT}/ChatServer/chatserver1.ini
@@ -397,6 +612,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: ChatRelationQueryService
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "50090"
       MEMOCHAT_POSTGRES_USER: memo_chat_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_CHAT_POSTGRES_PASSWORD:?set MEMOCHAT_CHAT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: ${MEMOCHAT_POSTGRES_DATABASE:?set MEMOCHAT_POSTGRES_DATABASE}
@@ -404,7 +620,10 @@ services:
       MEMOCHAT_ACCOUNTPOSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
       MEMOCHAT_ACCOUNTPOSTGRES_DATABASE: memo_account
       MEMOCHAT_REDIS_PASSWD: ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}
-      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD
+      MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN: ${MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN:?set MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN}
+      MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN: ${MEMOCHAT_RELATION_CALL_AUTH_TOKEN:?set MEMOCHAT_RELATION_CALL_AUTH_TOKEN}
+      MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN: ${MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN:?set MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN}
+      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
     volumes:
       - type: bind
         source: ${MEMOCHAT_BACKEND_CONFIG_ROOT:?set MEMOCHAT_BACKEND_CONFIG_ROOT}/ChatServer/chatrelationquery1.ini
@@ -417,6 +636,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: ChatRelationServiceWorker
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "50091"
       MEMOCHAT_POSTGRES_USER: memo_chat_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_CHAT_POSTGRES_PASSWORD:?set MEMOCHAT_CHAT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: ${MEMOCHAT_POSTGRES_DATABASE:?set MEMOCHAT_POSTGRES_DATABASE}
@@ -425,7 +645,8 @@ services:
       MEMOCHAT_ACCOUNTPOSTGRES_DATABASE: memo_account
       MEMOCHAT_REDIS_PASSWD: ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}
       MEMOCHAT_RABBITMQ_PASSWORD: ${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}
-      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_PASSWORD
+      MEMOCHAT_RELATIONSERVICE_AUTHTOKEN: ${MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN:?set MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN}
+      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_PASSWORD MEMOCHAT_RELATIONSERVICE_AUTHTOKEN
     volumes:
       - type: bind
         source: ${MEMOCHAT_BACKEND_CONFIG_ROOT:?set MEMOCHAT_BACKEND_CONFIG_ROOT}/ChatServer/chatrelationservice1.ini
@@ -438,6 +659,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: ChatMessageService
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "50092"
       MEMOCHAT_POSTGRES_USER: memo_chat_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_CHAT_POSTGRES_PASSWORD:?set MEMOCHAT_CHAT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: ${MEMOCHAT_POSTGRES_DATABASE:?set MEMOCHAT_POSTGRES_DATABASE}
@@ -460,6 +682,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: MediaGatewayServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8094"
       MEMOCHAT_POSTGRES_USER: memo_media_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_MEDIA_POSTGRES_PASSWORD:?set MEMOCHAT_MEDIA_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_media
@@ -485,9 +708,14 @@ services:
   memochat-moments-gateway:
     <<: *backend-service
     image: ${MEMOCHAT_CPP_IMAGE_PREFIX:-memochat}/moments-gateway:${MEMOCHAT_IMAGE_TAG:-local}
+    depends_on:
+      <<: *backend-depends-on
+      memochat-chat-relation-query:
+        condition: service_started
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: MomentsGatewayServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8099"
       MEMOCHAT_POSTGRES_USER: memo_moments_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_MOMENTS_POSTGRES_PASSWORD:?set MEMOCHAT_MOMENTS_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_moments
@@ -498,7 +726,8 @@ services:
       MEMOCHAT_MONGO_URI: "mongodb://${MEMOCHAT_MONGO_APP_USER:?set MEMOCHAT_MONGO_APP_USER}:${MEMOCHAT_MONGO_APP_PASSWORD:?set MEMOCHAT_MONGO_APP_PASSWORD}@memochat-mongo:27017/memochat?authSource=memochat"
       MEMOCHAT_CHATAUTH_HMACSECRET: ${MEMOCHAT_CHATAUTH_HMACSECRET:?set MEMOCHAT_CHATAUTH_HMACSECRET}
       MEMOCHAT_AUTHTOKEN_JWTSECRET: ${MEMOCHAT_AUTHTOKEN_JWTSECRET:?set MEMOCHAT_AUTHTOKEN_JWTSECRET}
-      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET
+      MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN: ${MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN:?set MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN}
+      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
     volumes:
       - type: bind
         source: ${MEMOCHAT_BACKEND_CONFIG_ROOT:?set MEMOCHAT_BACKEND_CONFIG_ROOT}/MomentsService/momentsgateway.ini
@@ -510,19 +739,28 @@ services:
     profiles:
       - calls
     image: ${MEMOCHAT_CPP_IMAGE_PREFIX:-memochat}/call-gateway:${MEMOCHAT_IMAGE_TAG:-local}
+    depends_on:
+      <<: *backend-depends-on
+      memochat-chat-relation-query:
+        condition: service_started
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: CallGatewayServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8097"
       MEMOCHAT_POSTGRES_USER: memo_call_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_CALL_POSTGRES_PASSWORD:-}
       MEMOCHAT_POSTGRES_DATABASE: memo_call
+      MEMOCHAT_ACCOUNTPOSTGRES_USER: memo_account_app
+      MEMOCHAT_ACCOUNTPOSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
+      MEMOCHAT_ACCOUNTPOSTGRES_DATABASE: memo_account
       MEMOCHAT_REDIS_PASSWD: ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}
       MEMOCHAT_CHATAUTH_HMACSECRET: ${MEMOCHAT_CHATAUTH_HMACSECRET:?set MEMOCHAT_CHATAUTH_HMACSECRET}
       MEMOCHAT_AUTHTOKEN_JWTSECRET: ${MEMOCHAT_AUTHTOKEN_JWTSECRET:?set MEMOCHAT_AUTHTOKEN_JWTSECRET}
+      MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN: ${MEMOCHAT_RELATION_CALL_AUTH_TOKEN:?set MEMOCHAT_RELATION_CALL_AUTH_TOKEN}
       MEMOCHAT_CALL_APIKEY: ${MEMOCHAT_LIVEKIT_API_KEY:-}
       MEMOCHAT_CALL_APISECRET: ${MEMOCHAT_LIVEKIT_API_SECRET:-}
       MEMOCHAT_CALL_LIVEKITURL: ${MEMOCHAT_LIVEKIT_URL:-}
-      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_CALL_APIKEY MEMOCHAT_CALL_APISECRET
+      REQUIRED_ENV_VARS: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN MEMOCHAT_CALL_APIKEY MEMOCHAT_CALL_APISECRET
     volumes:
       - type: bind
         source: ${MEMOCHAT_BACKEND_CONFIG_ROOT:?set MEMOCHAT_BACKEND_CONFIG_ROOT}/CallService/callgateway.ini
@@ -537,6 +775,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: R18GatewayServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8098"
       MEMOCHAT_POSTGRES_USER: memo_account_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_account
@@ -565,6 +804,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: RegisterServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8101"
       MEMOCHAT_POSTGRES_USER: memo_account_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_account
@@ -585,6 +825,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: LoginServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8102"
       MEMOCHAT_POSTGRES_USER: memo_account_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_account
@@ -605,6 +846,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: AccountServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8103"
       MEMOCHAT_POSTGRES_USER: memo_account_app
       MEMOCHAT_POSTGRES_PASSWD: ${MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD:?set MEMOCHAT_ACCOUNT_POSTGRES_PASSWORD}
       MEMOCHAT_POSTGRES_DATABASE: memo_account
@@ -625,6 +867,7 @@ services:
     environment:
       <<: *backend-environment
       MEMOCHAT_SERVICE: VarifyServer
+      MEMOCHAT_HEALTHCHECK_TCP_PORT: "8083"
       MEMOCHAT_REDIS_PASSWD: ${MEMOCHAT_REDIS_PASSWORD:?set MEMOCHAT_REDIS_PASSWORD}
       MEMOCHAT_RABBITMQ_PASSWORD: ${MEMOCHAT_RABBITMQ_PASSWORD:?set MEMOCHAT_RABBITMQ_PASSWORD}
       MEMOCHAT_EMAIL_SMTPUSER: ${MEMOCHAT_EMAIL_SMTPUSER:?set MEMOCHAT_EMAIL_SMTPUSER}

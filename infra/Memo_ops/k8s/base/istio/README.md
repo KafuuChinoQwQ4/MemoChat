@@ -1,7 +1,7 @@
 # H-12: mTLS between all MemoChat microservices
 
-Istio service-mesh configuration for MemoChat. All files in this directory
-are kustomize base resources consumed by each overlay (`dev`, `staging`, `prod`).
+Istio service-mesh configuration for the legacy non-production MemoOps
+kustomize path. Production is owned by the MemoChat Helm chart.
 
 ---
 
@@ -36,12 +36,10 @@ Expected output includes `istiod-*` (Running) and `istio-ingressgateway-*`
 ## 2. Label the namespace for sidecar injection
 
 The Envoy sidecar is injected automatically when the namespace carries the
-`istio-injection=enabled` label. The prod overlay applies this label via a
-kustomize patch; for other environments run it manually:
+`istio-injection=enabled` label. For legacy development and staging
+environments, apply it manually:
 
 ```bash
-# Production (managed by kustomize patch — no manual step required)
-
 # Staging
 kubectl label namespace memochat-staging istio-injection=enabled --overwrite
 
@@ -68,10 +66,12 @@ kubectl apply -f infra/Memo_ops/k8s/base/istio/peer-authentication.yaml
 kubectl apply -f infra/Memo_ops/k8s/base/istio/destination-rules.yaml
 ```
 
-Or via the overlay (recommended):
+The legacy production overlay is deliberately non-buildable. Production mesh
+resources must be rendered from the Helm chart, which enforces strict mTLS:
 
 ```bash
-kubectl apply -k infra/Memo_ops/k8s/overlays/prod
+helm template memochat infra/deploy/kubernetes/charts/memochat \
+  -f infra/deploy/kubernetes/charts/memochat/values/prod.yaml
 ```
 
 ---

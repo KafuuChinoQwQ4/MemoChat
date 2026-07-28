@@ -18,17 +18,32 @@ spec:
         app.kubernetes.io/component: varifyserver
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: varifyserver
-          image: "{{ .Values.images.varify.repository }}:{{ .Values.images.varify.tag }}"
+          image: {{ include "memochat.image" (dict "root" . "image" .Values.images.varify) | quote }}
           imagePullPolicy: {{ .Values.images.varify.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
+            - name: CONFIG_PATH
+              value: /app/config.ini
             - name: MEMOCHAT_REDIS_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
             - name: MEMOCHAT_EMAIL_SMTPPASS
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: smtp-pass } }
+            - name: MEMOCHAT_EMAIL_SMTPUSER
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: smtp-user } }
+            - name: MEMOCHAT_EMAIL_FROM
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: smtp-from } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_USERNAME MEMOCHAT_RABBITMQ_PASSWORD MEMOCHAT_EMAIL_SMTPUSER MEMOCHAT_EMAIL_SMTPPASS MEMOCHAT_EMAIL_FROM
             - name: MEMOCHAT_VARIFYSERVER_PORT
               value: {{ .Values.varify.service.grpcPort | quote }}
             - name: MEMOCHAT_HEALTH_PORT
@@ -39,6 +54,10 @@ spec:
             - name: health
               containerPort: {{ .Values.varify.service.healthPort }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
             - name: config
               mountPath: /app/config.ini
               subPath: varify.ini
@@ -53,6 +72,10 @@ spec:
           resources:
             {{- toYaml .Values.varify.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-config

@@ -6,7 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
-| `monitoring.yaml` | Prometheus/Grafana 等监控资源模板。 |
-| `otel.yaml` | OpenTelemetry Collector 资源模板。 |
+| `monitoring.yaml` | Prometheus 监控资源模板，仅在 `observability.enabled=true` 时渲染。 |
+| `otel.yaml` | 使用固定镜像 digest 的 OpenTelemetry Collector 资源模板，仅在 `observability.enabled=true` 时渲染。 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

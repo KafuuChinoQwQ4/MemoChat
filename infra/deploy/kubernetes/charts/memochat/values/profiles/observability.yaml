@@ -1,0 +1,4 @@
+# Enable only the OTel/monitoring resources. MemoOps remains disabled by the
+# production base because it is outside the attested release image set.
+observability:
+  enabled: true

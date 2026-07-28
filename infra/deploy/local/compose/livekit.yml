@@ -5,6 +5,8 @@ services:
     profiles:
       - calls
     restart: unless-stopped
+    user: ${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID}:${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID}
+    read_only: true
     command: []
     environment:
       LIVEKIT_CONFIG: |
@@ -25,3 +27,13 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=${MEMOCHAT_RUNTIME_UID:?set MEMOCHAT_RUNTIME_UID},gid=${MEMOCHAT_RUNTIME_GID:?set MEMOCHAT_RUNTIME_GID},mode=0700
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -q -T 3 -O - http://127.0.0.1:7880/ | grep -Fxq OK"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s

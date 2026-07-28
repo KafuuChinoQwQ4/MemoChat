@@ -4,9 +4,9 @@
 This directory contains the External Secrets Operator (ESO) configuration that
 pulls runtime credentials from an external secret store into Kubernetes Secrets.
 
-Two backends are documented:
-- **AWS Secrets Manager** (primary, used by this base layer)
-- **HashiCorp Vault** (alternative, used by the `overlays/prod` Vault overlay)
+This legacy base is limited to development and staging. Production secrets are
+defined by `infra/deploy/kubernetes/charts/memochat/templates/bootstrap/external-secrets.yaml`;
+the old `overlays/prod` path is deliberately non-buildable.
 
 ---
 
@@ -135,8 +135,8 @@ kubectl annotate externalsecret memochat-postgres-secret \
 
 ### 2c. Patch the region per overlay
 
-In `overlays/prod/kustomization.yaml` (or `overlays/staging/kustomization.yaml`),
-add a strategic-merge patch to set the actual region:
+In `overlays/staging/kustomization.yaml`, add a strategic-merge patch to set
+the actual region:
 
 ```yaml
 patches:
@@ -153,9 +153,9 @@ patches:
 
 ## 3. Alternative: HashiCorp Vault
 
-The `overlays/prod` overlay already ships a `ClusterSecretStore` backed by an
-internal Vault server using Kubernetes auth.  Use this section to provision the
-corresponding secrets inside Vault.
+The commands below are historical Vault examples for local evaluation only;
+they are not the production secret contract. Use the Helm ExternalSecret
+properties for a production deployment.
 
 ### 3a. Enable KV v2 and Kubernetes auth (run once per Vault cluster)
 
@@ -193,7 +193,7 @@ vault write auth/kubernetes/role/memochat-prod \
 ### 3c. Store secrets in Vault
 
 ```bash
-# Application secrets (maps to overlays/prod ExternalSecret memochat-secrets)
+# Historical example only; this key set is not sufficient for production.
 vault kv put secret/memochat/prod/app \
   postgres-password="<STRONG_RANDOM_PASSWORD>" \
   redis-password="<STRONG_RANDOM_PASSWORD>" \

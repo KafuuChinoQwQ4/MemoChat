@@ -1,26 +1,29 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 ENV="${1:-dev}"
 NAMESPACE="memochat-${ENV}"
-REGISTRY="${REGISTRY:-ghcr.io}"
-IMAGE_NAME="${IMAGE_NAME:-memochat}"
 
-if [ "$ENV" == "prod" ]; then
-    NAMESPACE="memochat"
-fi
+case "$ENV" in
+    dev|dev-single|staging)
+        ;;
+    prod)
+        echo "Error: the legacy MemoOps Kustomize production path is retired." >&2
+        echo "Use infra/deploy/kubernetes/charts/memochat with reviewed production values and External Secrets." >&2
+        exit 64
+        ;;
+    *)
+        echo "Error: unsupported environment: $ENV" >&2
+        exit 64
+        ;;
+esac
 
 echo "Deploying to $ENV environment..."
 echo "Namespace: $NAMESPACE"
 
-if ! command -v kubectl &> /dev/null; then
+if ! command -v kubectl >/dev/null 2>&1; then
     echo "Error: kubectl is not installed"
     exit 1
-fi
-
-if ! command -v kustomize &> /dev/null; then
-    echo "Installing kustomize..."
-    kubectl kustomize > /dev/null 2>&1 || true
 fi
 
 echo "Applying K8s manifests..."

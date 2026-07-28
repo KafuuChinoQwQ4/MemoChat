@@ -15,8 +15,12 @@ cmake --preset linux-server-release-gcc16
 cmake --build --preset linux-server-release-gcc16
 
 BUNDLE_ROOT=/data/releases/memochat/backend-bundles-v1
+SOURCE_SHA="$(git rev-parse HEAD)"
 tools/scripts/release/package_backend_services.sh \
   --library-dir "$VCPKG_ROOT/installed-memochat-gcc16-server-release/x64-linux-memochat-release/lib" \
+  --vcpkg-installed-root "$VCPKG_ROOT/installed-memochat-gcc16-server-release" \
+  --vcpkg-triplet x64-linux-memochat-release \
+  --source-sha "$SOURCE_SHA" \
   --output "${BUNDLE_ROOT}"
 tools/scripts/release/verify_release_tree.sh "${BUNDLE_ROOT}"
 ```
@@ -31,7 +35,11 @@ allowlisted layout:
   lib/libstdc++.so.6
   lib/libgcc_s.so.1
   lib/libatomic.so.1
-  legal/                       # real root notices when available; otherwise empty
+  legal/LICENSE
+  legal/THIRD_PARTY_NOTICES.md
+  legal/LEGAL-STATUS.txt       # inventory/corpus/formal-release state
+  legal/third-party/           # present only after the formal corpus verifies
+  sbom/vcpkg-build-dependencies.spdx.json
   MANIFEST.txt
   SHA256SUMS
 ```
@@ -41,8 +49,10 @@ copies required compiler/non-system runtime libraries, and rejects unresolved
 dependencies. Its initial and recursive `ldd` calls use a clean loader
 environment: every non-system dependency must resolve below an explicit,
 canonical `--library-dir`; ambient `LD_LIBRARY_PATH` and `LD_PRELOAD` values are
-not trusted. `verify_release_tree.sh` is still mandatory: the Docker build does
-not hide developer paths or suspicious content that remain in an ELF.
+not trusted. The vcpkg SPDX is a fail-closed over-approximation of every
+installed base package for the release triplet and is bound to `SOURCE_SHA`.
+`verify_release_tree.sh` is still mandatory: the Docker build does not hide
+developer paths or suspicious content that remain in an ELF.
 
 Generate the separately scanned, repository-shaped local deployment kit with:
 
@@ -53,9 +63,12 @@ tools/scripts/release/package_backend_deployment_kit.sh \
 
 It contains the fixed release Compose files/wrapper, sanitized public INI files,
 all business migrations, and the PostgreSQL/MongoDB/MinIO provisioners. Normal
-local packaging warns when root `LICENSE` or `THIRD_PARTY_NOTICES.md` is absent;
-versioned tag CI fails closed until both real legal files exist. When present,
-they are copied into the service bundles and deployment kit.
+local packaging fails if the root MIT license or third-party inventory is
+missing or malformed. It otherwise writes `LEGAL-STATUS.txt` and may explicitly
+report an incomplete formal corpus. Versioned tag CI additionally fails closed
+until `legal/third-party` passes scope, checksum, approval-state, and release
+commit binding checks; only then is that corpus copied into bundles and the
+deployment kit.
 
 Build all 15 Compose images after verification:
 
@@ -70,7 +83,19 @@ The script owns the explicit target-to-image mapping, verifies every bundle
 before the first image mutation, and uses `docker buildx build --load`. It gives
 BuildKit only the verified bundle, the server entrypoint, and an empty default
 context; private environment or TLS files beside the deployment kit are never
-part of the build context.
+part of the build context. The runtime base is the immutable
+`ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90`
+reference. Local builds use `--pull=false`, which allows a preloaded digest to
+build when Docker Hub is unavailable; pass `--pull` only when the fixed digest
+must be fetched from the registry. Apt sources are rewritten to the fixed Ubuntu
+`20260727T000000Z` snapshot before package resolution. Because the minimal base
+has no CA bundle, the Dockerfile first extracts Mozilla certificate data from
+the snapshot's `ca-certificates_20260601~24.04.1_all.deb`, protected by SHA-256
+`6bac2a01979e210d9eac1d4d56747ec709ea60654744d66705dc3c36e7629e50`.
+The final stage installs and asserts exactly
+`ca-certificates=20260601~24.04.1`, `libturbojpeg=1:2.1.5-2ubuntu2`, and
+`libwebp7=1.3.2-0.4build3`; image labels preserve the base digest, snapshot,
+bootstrap digest, and package tuple for audit.
 
 For a focused diagnostic build, pass one service bundle as a BuildKit named
 context directly:
@@ -89,10 +114,11 @@ docker buildx build --load \
   "${EMPTY_CONTEXT}"
 ```
 
-The Dockerfile validates the target allowlist, manifest, checksums,
-`libmsquic.so.2`, gcc16 runtime libraries, and final `ldd` output. It runs as
-the unprivileged `memochat` user with configuration expected at
-`/run/memochat/config.ini`.
+The Dockerfile validates the target allowlist, manifest, checksums, vcpkg SBOM,
+`libmsquic.so.2`, gcc16 runtime libraries, and final `ldd` output. It installs
+only the required runtime packages from the fixed Ubuntu base and does not run
+a blanket distribution upgrade. It runs as UID/GID `10001:10001` with
+configuration expected at `/run/memochat/config.ini`.
 
 ## Current targets and local image names
 

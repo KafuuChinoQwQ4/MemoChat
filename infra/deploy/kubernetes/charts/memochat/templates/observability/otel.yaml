@@ -1,3 +1,4 @@
+{{- if .Values.observability.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,10 +19,15 @@ spec:
         app.kubernetes.io/component: otel-collector
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: otel-collector
-          image: "{{ .Values.images.otelCollector.repository }}:{{ .Values.images.otelCollector.tag }}"
+          image: {{ include "memochat.infrastructureImage" .Values.images.otelCollector | quote }}
           imagePullPolicy: {{ .Values.images.otelCollector.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           args: ["--config=/etc/otelcol-contrib/config.yaml"]
           ports:
             - name: otlp-grpc
@@ -33,12 +39,16 @@ spec:
             - name: metrics
               containerPort: {{ .Values.otelCollector.service.metricsPort }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: config
               mountPath: /etc/otelcol-contrib/config.yaml
               subPath: config.yaml
           resources:
             {{- toYaml .Values.otelCollector.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: config
           configMap:
             name: otel-collector-config
@@ -72,3 +82,4 @@ spec:
     - name: metrics
       port: {{ .Values.otelCollector.service.metricsPort }}
       targetPort: metrics
+{{- end }}

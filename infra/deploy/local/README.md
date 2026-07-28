@@ -40,6 +40,13 @@ openssl rand -hex 32
 Generate `MEMOCHAT_AUTH_REFRESH_PEPPER` independently from the JWT and chat
 HMAC secrets. Production refresh-token hashing requires at least 32 bytes; the
 hex command above produces a 64-character value representing 32 random bytes.
+Generate `MEMOCHAT_RELATION_COMMAND_AUTH_TOKEN`,
+`MEMOCHAT_RELATION_CHAT_QUERY_AUTH_TOKEN`, `MEMOCHAT_RELATION_CALL_AUTH_TOKEN`,
+and `MEMOCHAT_RELATION_MOMENTS_AUTH_TOKEN` independently as well. Each token
+must contain at least 32 printable ASCII bytes. The relation services use these
+role-specific values to prevent a query consumer from issuing write commands or
+one backend domain from impersonating another; never reuse one token for more
+than one role.
 
 `MEMOCHAT_BACKEND_CONFIG_ROOT` is the absolute path to
 `apps/server/core`. `MEMOCHAT_TLS_CERT_FILE` and `MEMOCHAT_TLS_KEY_FILE` are
@@ -65,17 +72,24 @@ path into the packaged `config.ini`. Without `--ca-cert`, the client uses the
 system trust store; `MEMOCHAT_CLIENT_CA_FILE` can override the public CA path at
 launch without rebuilding the package.
 
-Create the writable Media upload and Envoy log directories before `up`.
-Create the R18 directory only when enabling `--profile r18`; Compose deliberately
-refuses to create these paths as root. They are mutable runtime state, not
-release content:
+Create the writable Media upload, Envoy log, and Redpanda directories before
+`up`. Create the R18 directory only when enabling `--profile r18`, and create
+the seven observability runtime directories only when enabling
+`--profile observability`. Compose deliberately refuses to create these paths
+as root. Every directory must be owned by
+`MEMOCHAT_RUNTIME_UID:MEMOCHAT_RUNTIME_GID` with mode
+`0700`; they are mutable runtime state, not release content:
 
 ```bash
 install -d -m 0700 -o 10001 -g 10001 \
   /data/docker-data/memochat/media/uploads \
-  /data/docker-data/memochat/envoy/logs
+  /data/docker-data/memochat/envoy/logs \
+  /data/docker-data/memochat/redpanda/data
 install -d -m 0700 -o 10001 -g 10001 \
   /data/docker-data/memochat/r18  # only with --profile r18
+# Only with --profile observability.
+install -d -m 0700 -o 10001 -g 10001 \
+  /data/docker-data/memochat/observability/{credentials,influxdb,grafana,prometheus,alertmanager,loki,tempo}
 ```
 
 Use the configured `MEMOCHAT_DOCKER_DATA_ROOT` instead of `/data/docker-data/memochat`
@@ -84,10 +98,26 @@ uses `umask 077`; credential and upload/session files default to owner-only.
 
 The release wrapper provisions Postgres schemas, isolated least-privilege
 databases/roles, the Mongo application user/collections, MinIO buckets, and the
-MinIO media account. The jobs are idempotent and use only values from the
-validated private env file. They also migrate legacy main-database rows into an
-empty split database and synchronize identity sequences. Run provisioning
-explicitly when preparing a host:
+MinIO media account. With `--profile observability`, it also creates or updates
+an InfluxDB scraper that persists the current Prometheus federation into the
+`metrics` bucket. Before provisioning, the wrapper atomically materializes the
+Influx username, password, and administrator Token as runtime-owned mode `0400`
+files under `observability/credentials`. InfluxDB uses its native `_FILE`
+inputs, and the short-lived provision job receives only the administrator token
+file path; these credentials are absent from `docker inspect` container
+environment output and command arguments. Keep both the private env file and
+runtime credential directory owner-only, restrict Docker socket access, and
+rotate the files and source values after suspected host exposure. The job
+creates or reuses one authorization with only read access to the
+`metrics` bucket and atomically writes that token as mode `0600` under
+`observability/credentials`; Grafana reads the file at startup and exports the
+scoped value to its own process environment. The wrapper compares token hashes
+without printing them and recreates only an already-running Grafana container
+when provisioning rotates this token.
+The jobs are idempotent and use only values from the validated private env file.
+They also migrate legacy main-database rows into an empty split database and
+synchronize identity sequences. Run provisioning explicitly when preparing a
+host:
 
 ```bash
 RELEASE_ENV=/absolute/private/path/memochat-release.env
@@ -138,11 +168,26 @@ deployment. Internet-facing calls require a separately reviewed LiveKit
 deployment with trusted TLS, public IP/firewall configuration, and TURN where
 the target network requires it; do not publish the local profile directly.
 
-The release overlay limits OTel Collector access to its configuration and the
-Envoy log directory; it does not mount source or build trees. cAdvisor's
-privileged host mounts are disabled by default. Add `--profile observability`
-before the release `up` action only when container-level host metrics are
-needed:
+The release overlay runs InfluxDB, Grafana, Prometheus, Alertmanager, Loki,
+Tempo, and OTel Collector as
+`MEMOCHAT_RUNTIME_UID:MEMOCHAT_RUNTIME_GID` with read-only root
+filesystems, all Linux capabilities dropped, `no-new-privileges`, explicit
+health checks, and only their preflight-owned runtime directories writable. OTel
+Collector can read only its configuration and the Envoy log directory; it does
+not mount source or build trees. Its distroless-compatible health check loads the
+live internal `/healthz` response through the collector's own HTTP config
+provider, rather than merely validating the static file. InfluxDB writes its CLI
+setup file to a tmpfs; its administrator token remains only in the owner-only
+runtime credential file, not under `/etc/influxdb2` or in container metadata.
+Grafana receives only the generated bucket-scoped read token, never the Influx
+administrator token.
+
+cAdvisor is the documented exception: Docker/container discovery requires it
+to remain root and privileged with `/dev/kmsg` plus read-only host namespace
+mounts. Its own root filesystem is still read-only and
+`no-new-privileges` remains enabled. cAdvisor and all other observability
+services are disabled by default; add `--profile observability` only when the
+operator accepts that host-level visibility:
 
 ```bash
 tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" \
@@ -152,13 +197,23 @@ tools/scripts/release/run_release_compose.sh --env-file "${RELEASE_ENV}" \
 ### 4. Health checks and stop
 
 ```bash
-docker compose --env-file "${RELEASE_ENV}" \
-  -f infra/deploy/local/docker-compose.yml \
-  -f infra/deploy/local/compose/backend-services.yml ps
+RELEASE_PROFILE_ARGS=()
+# Add exactly the profiles used for the corresponding `up` command:
+# RELEASE_PROFILE_ARGS+=(--profile calls)
+# RELEASE_PROFILE_ARGS+=(--profile r18)
+# RELEASE_PROFILE_ARGS+=(--profile observability)
 
 docker compose --env-file "${RELEASE_ENV}" \
   -f infra/deploy/local/docker-compose.yml \
   -f infra/deploy/local/compose/backend-services.yml \
+  -f infra/deploy/local/compose/livekit.yml \
+  "${RELEASE_PROFILE_ARGS[@]}" ps
+
+docker compose --env-file "${RELEASE_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/backend-services.yml \
+  -f infra/deploy/local/compose/livekit.yml \
+  "${RELEASE_PROFILE_ARGS[@]}" \
   exec memochat-envoy-gateway sh -ec \
   'wget -qO- http://127.0.0.1:8101/healthz && wget -qO- http://127.0.0.1:8102/healthz'
 
@@ -167,8 +222,14 @@ curl -fsS http://127.0.0.1/health
 docker compose --env-file "${RELEASE_ENV}" \
   -f infra/deploy/local/docker-compose.yml \
   -f infra/deploy/local/compose/backend-services.yml \
+  -f infra/deploy/local/compose/livekit.yml \
+  "${RELEASE_PROFILE_ARGS[@]}" \
   down
 ```
+
+Use the same profile list that was passed to the wrapper. An empty array is the
+base-only deployment; omitting a previously enabled profile can leave its
+optional containers outside the intended status or shutdown operation.
 
 Registration email, password hashes, chat records, uploaded objects, and all
 other account data live in the configured database/object-store volumes under
@@ -197,6 +258,8 @@ release artifact.
   - containerized Gate/Chat cluster variant with Envoy LB `80` (HTTP), `8090-8091` (TCP Stream)
   - do not use this fragment with the default Windows-process local runtime because ChatServer ports would collide
 - `compose/observability.yml`
+  - standalone observability-only stack; do not combine it with `docker-compose.yml`
+  - fails closed unless the InfluxDB and Grafana credentials are supplied by a private env file
   - Prometheus `9090` (短期存储)
   - InfluxDB `8086` (长期存储)
   - Grafana `3000`
@@ -212,19 +275,39 @@ From the repository root:
 
 ```bash
 source /root/.memochat-linux-env
-docker compose -f infra/deploy/local/docker-compose.yml up -d
+LOCAL_ENV=/absolute/private/path/memochat-local.env
+docker compose --env-file "${LOCAL_ENV}" \
+  -f infra/deploy/local/docker-compose.yml up -d
 ```
+
+The private local env file must contain the datastore and observability values
+referenced by `docker-compose.yml`; do not use `.env.release.example` directly.
+The supported release path remains `run_release_compose.sh`, which additionally
+validates ownership, permissions, secret strength, and enabled profiles.
 
 If you need local call/invite or media-call debugging, also start:
 
 ```bash
-docker compose -f infra/deploy/local/compose/livekit.yml up -d
+docker compose --env-file "${LOCAL_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/livekit.yml \
+  --profile calls up -d
 ```
 
-If the machine has an NVIDIA GPU and Docker GPU passthrough is configured, add:
+`compose/observability.yml` is a standalone alternative for observability-only
+debugging. It requires explicit InfluxDB and Grafana credentials, including an
+already-provisioned bucket-scoped `MEMOCHAT_INFLUXDB_GRAFANA_TOKEN`; never reuse
+the Influx administrator token for Grafana. Do not layer this file onto the main
+compose file because both define the same containers. Start it on its own, and
+add `--profile nvidia` only when Docker GPU passthrough is configured:
 
 ```bash
-docker compose -f infra/deploy/local/compose/observability.yml --profile nvidia up -d
+docker compose --env-file "${LOCAL_ENV}" \
+  -f infra/deploy/local/compose/observability.yml up -d
+# NVIDIA hosts only:
+docker compose --env-file "${LOCAL_ENV}" \
+  -f infra/deploy/local/compose/observability.yml \
+  --profile nvidia up -d
 ```
 
 ## Fresh Data Reset
@@ -238,6 +321,9 @@ All local Docker data is stored under `${MEMOCHAT_DOCKER_DATA_ROOT:-/data/docker
 - `/data/docker-data/memochat/redpanda`
 - `/data/docker-data/memochat/rabbitmq`
 - `/data/docker-data/memochat/observability/prometheus`
+- `/data/docker-data/memochat/observability/alertmanager`
+- `/data/docker-data/memochat/observability/credentials`
+- `/data/docker-data/memochat/observability/influxdb`
 - `/data/docker-data/memochat/observability/grafana`
 - `/data/docker-data/memochat/observability/loki`
 - `/data/docker-data/memochat/observability/tempo`
@@ -432,16 +518,26 @@ scripts\windows\stop_test_services.bat
 
 Then stop Docker dependencies:
 
-```powershell
-docker compose -f infra/deploy/local/docker-compose.yml down
-docker compose -f infra/deploy/local/compose/livekit.yml down
+```bash
+LOCAL_PROFILE_ARGS=()
+# Use this when the calls profile was started:
+# LOCAL_PROFILE_ARGS+=(--profile calls)
+docker compose --env-file "${LOCAL_ENV}" \
+  -f infra/deploy/local/docker-compose.yml \
+  -f infra/deploy/local/compose/livekit.yml \
+  "${LOCAL_PROFILE_ARGS[@]}" down
 ```
+
+If the standalone observability stack was started, stop it with the same
+`--env-file` and optional `--profile nvidia` arguments used for startup.
 
 ## Notes
 
 - `group_ops` and `history_ack` are stateful TCP scenarios. Do not run them in parallel against the same small local account pool.
 - `windows_exporter` runs on the Windows host, not inside Docker. Use `scripts\windows\start_windows_exporter.ps1` before starting Prometheus.
-- Grafana defaults to `admin/admin`. Dashboards are provisioned automatically under the `MemoChat` folder.
+- Grafana has no committed default login; provide private
+  `MEMOCHAT_GRAFANA_ADMIN_USER` and `MEMOCHAT_GRAFANA_ADMIN_PASSWORD` values.
+  Dashboards are provisioned automatically under the `MemoChat` folder.
 - The local chat cluster currently uses synchronous PostgreSQL persistence by default:
   - `chat_private_kafka_primary=false`
   - `chat_group_kafka_primary=false`

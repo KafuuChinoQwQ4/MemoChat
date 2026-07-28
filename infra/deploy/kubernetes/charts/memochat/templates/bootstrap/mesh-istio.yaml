@@ -8,7 +8,7 @@ metadata:
     {{- include "memochat.labels" . | nindent 4 }}
 spec:
   mtls:
-    mode: {{ .Values.mesh.istio.mtlsMode | default "STRICT" }}
+    mode: {{ .Values.mesh.istio.mtlsMode | default "STRICT" | upper }}
 {{- if .Values.mesh.istio.destinationRule.enabled }}
 ---
 apiVersion: networking.istio.io/v1

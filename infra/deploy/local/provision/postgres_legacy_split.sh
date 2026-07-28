@@ -46,15 +46,28 @@ SQL
 marker_is_applied() {
   destination="$1"
   migration_id="$2"
-  [ "$(
+  if ! marker_state="$(
     psql -X -v ON_ERROR_STOP=1 -d "$destination" \
-      -v migration_id="$migration_id" -tAc \
-      "SELECT EXISTS (
-         SELECT 1
-         FROM memochat_release.data_migration
-         WHERE migration_id = :'migration_id'
-       )"
-  )" = t ]
+      -v migration_id="$migration_id" -tA <<'SQL'
+SELECT EXISTS (
+  SELECT 1
+  FROM memochat_release.data_migration
+  WHERE migration_id = :'migration_id'
+);
+SQL
+  )"; then
+    printf '[postgres-split-migration] failed to read migration marker %s\n' "$migration_id" >&2
+    exit 1
+  fi
+
+  case "$marker_state" in
+    t) return 0 ;;
+    f) return 1 ;;
+    *)
+      printf '[postgres-split-migration] invalid marker state for %s\n' "$migration_id" >&2
+      exit 1
+      ;;
+  esac
 }
 
 copy_legacy_table_once() {
