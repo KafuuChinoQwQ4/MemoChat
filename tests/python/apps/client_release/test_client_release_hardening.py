@@ -1279,12 +1279,12 @@ def test_linux_client_packager_creates_audited_portable_outputs(tmp_path: Path) 
         REPO_ROOT / "THIRD_PARTY_NOTICES.md"
     ).read_text(encoding="utf-8")
     legal_status = (portable_dir / "legal/LEGAL-STATUS.txt").read_text(encoding="utf-8")
-    assert "third_party_legal_corpus=incomplete" in legal_status
+    assert "third_party_legal_corpus=complete" in legal_status
     assert "formal_distribution_ready=false" in legal_status
-    assert not (portable_dir / "legal/third-party").exists()
+    assert (portable_dir / "legal/third-party").is_dir()
     release_info = (portable_dir / "RELEASE-INFO.txt").read_text(encoding="utf-8")
     assert "Legal inventory: complete" in release_info
-    assert "Third-party legal corpus: incomplete" in release_info
+    assert "Third-party legal corpus: complete" in release_info
     assert "Formal distribution ready: false" in release_info
     assert (portable_dir / "MANIFEST.sha256").is_file()
     assert archive.is_file()

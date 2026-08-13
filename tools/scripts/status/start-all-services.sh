@@ -361,9 +361,7 @@ export_minio_runtime_credentials() {
 }
 
 ensure_ai_internal_api_key
-if is_truthy "$START_DOCKER_DEPS" || is_truthy "$START_MEDIAGATEWAY"; then
-    export_minio_runtime_credentials
-fi
+export_minio_runtime_credentials
 
 wait_for_minio() {
     local waited=0
