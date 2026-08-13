@@ -149,11 +149,11 @@ class CppServiceBundleTests(unittest.TestCase):
         self.assertTrue((service / "MANIFEST.txt").is_file())
         self.assertTrue((service / "SHA256SUMS").is_file())
         legal_status = service.joinpath("legal/LEGAL-STATUS.txt").read_text(encoding="utf-8")
-        self.assertIn("third_party_legal_corpus=incomplete", legal_status)
+        self.assertIn("third_party_legal_corpus=complete", legal_status)
         self.assertIn("formal_distribution_ready=false", legal_status)
         manifest = service.joinpath("MANIFEST.txt").read_text(encoding="utf-8")
         self.assertIn("legal_inventory=complete", manifest)
-        self.assertIn("third_party_legal_corpus=incomplete", manifest)
+        self.assertIn("third_party_legal_corpus=complete", manifest)
         self.assertIn("formal_distribution_ready=false", manifest)
         self.assertFalse(any(output.rglob("*.key")))
         self.assertFalse(any(output.rglob("credentials.json")))
@@ -320,11 +320,17 @@ class CppServiceBundleTests(unittest.TestCase):
         fixture_repo = self.root / "fixture-repo"
         fixture_script = fixture_repo / "tools/scripts/release/package_backend_services.sh"
         fixture_verifier = fixture_repo / "tools/scripts/release/verify_release_legal.sh"
+        fixture_snapshot = fixture_script.parent / "compute_release_source_snapshot.py"
         fixture_script.parent.mkdir(parents=True)
         shutil.copy2(PACKAGER, fixture_script)
         shutil.copy2(REPO_ROOT / "tools/scripts/release/verify_release_legal.sh", fixture_verifier)
+        shutil.copy2(
+            REPO_ROOT / "tools/scripts/release/compute_release_source_snapshot.py",
+            fixture_snapshot,
+        )
         fixture_script.chmod(0o755)
         fixture_verifier.chmod(0o755)
+        fixture_snapshot.chmod(0o755)
         shutil.copy2(REPO_ROOT / "LICENSE", fixture_repo / "LICENSE")
         shutil.copy2(REPO_ROOT / "THIRD_PARTY_NOTICES.md", fixture_repo / "THIRD_PARTY_NOTICES.md")
         output = self.root / "release-with-legal"
