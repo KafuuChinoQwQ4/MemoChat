@@ -7,17 +7,13 @@ readonly SCRIPT_NAME="$(basename -- "$0")"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly DEFAULT_PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd -P)"
 readonly EXPECTED_LICENSE_SHA256="030cbe3ed1aabdf58b3e882cdcb34fb1a397e6116c8418fa01f44d88072bb181"
+readonly SOURCE_SNAPSHOT_TOOL="${SCRIPT_DIR}/compute_release_source_snapshot.py"
 
 PROJECT_ROOT="$DEFAULT_PROJECT_ROOT"
 COPY_TO=""
 STATUS_FILE=""
 SOURCE_SHA=""
 REQUIRE_DISTRIBUTION_CORPUS=0
-APPROVAL_PUBLIC_KEY=""
-APPROVAL_SIGNATURE=""
-WRITE_APPROVAL_PAYLOAD=""
-APPROVAL_PAYLOAD_TEMPLATE=""
-APPROVAL_PAYLOAD_OUTPUT_TEMPLATE=""
 STATUS_TEMPLATE=""
 
 usage() {
@@ -32,20 +28,9 @@ Options:
   --project-root PATH
       Repository root to inspect. Defaults to the current MemoChat checkout.
   --require-distribution-corpus
-      Fail unless legal/third-party is complete and approved for distribution.
+      Fail unless legal/third-party contains complete distribution materials.
   --source-sha SHA
       Bind a complete corpus to this 40-character checkout commit SHA.
-  --approval-public-key PATH
-      Public key used to verify the canonical v2 approval payload. PATH must
-      be a nonempty regular file outside the repository.
-  --approval-signature PATH
-      OpenSSL SHA-256 detached signature over the canonical v2 approval
-      payload. PATH must be a nonempty regular file outside the repository.
-      Formal distribution requires this option and --approval-public-key.
-  --write-approval-payload PATH
-      Write the canonical v2 approval payload for independent signing. PATH
-      must be outside the repository and must not already exist. Requires a
-      complete corpus, --source-sha, and an exact clean checkout.
   --copy-to PATH
       Create a new legal directory containing LICENSE, THIRD_PARTY_NOTICES.md,
       LEGAL-STATUS.txt, and the verified third-party corpus when complete.
@@ -62,13 +47,6 @@ fail() {
 }
 
 cleanup() {
-    if [[ -n "${APPROVAL_PAYLOAD_TEMPLATE:-}" && -f "$APPROVAL_PAYLOAD_TEMPLATE" ]]; then
-        rm -f -- "$APPROVAL_PAYLOAD_TEMPLATE"
-    fi
-    if [[ -n "${APPROVAL_PAYLOAD_OUTPUT_TEMPLATE:-}" \
-        && -f "$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE" ]]; then
-        rm -f -- "$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE"
-    fi
     if [[ -n "${STATUS_TEMPLATE:-}" && -f "$STATUS_TEMPLATE" ]]; then
         rm -f -- "$STATUS_TEMPLATE"
     fi
@@ -91,21 +69,6 @@ while [[ $# -gt 0 ]]; do
             SOURCE_SHA="$2"
             shift 2
             ;;
-        --approval-public-key)
-            [[ $# -ge 2 ]] || fail "--approval-public-key requires a path"
-            APPROVAL_PUBLIC_KEY="$2"
-            shift 2
-            ;;
-        --approval-signature)
-            [[ $# -ge 2 ]] || fail "--approval-signature requires a path"
-            APPROVAL_SIGNATURE="$2"
-            shift 2
-            ;;
-        --write-approval-payload)
-            [[ $# -ge 2 ]] || fail "--write-approval-payload requires a path"
-            WRITE_APPROVAL_PAYLOAD="$2"
-            shift 2
-            ;;
         --copy-to)
             [[ $# -ge 2 ]] || fail "--copy-to requires a path"
             COPY_TO="$2"
@@ -126,7 +89,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-for command_name in awk basename cat chmod cp dirname find grep install ln mkdir mktemp python3 realpath rm sha256sum stat wc; do
+for command_name in awk basename cat chmod cp dirname find grep install mkdir mktemp python3 realpath rm sha256sum stat wc; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: ${command_name}"
 done
@@ -137,6 +100,8 @@ done
 PROJECT_ROOT="$(realpath -e -- "$PROJECT_ROOT")" \
     || fail "project root does not exist: $PROJECT_ROOT"
 [[ -d "$PROJECT_ROOT" ]] || fail "project root is not a directory: $PROJECT_ROOT"
+[[ -f "$SOURCE_SNAPSHOT_TOOL" && ! -L "$SOURCE_SNAPSHOT_TOOL" ]] \
+    || fail "release source snapshot tool is missing or unsafe: $SOURCE_SNAPSHOT_TOOL"
 
 license_path="${PROJECT_ROOT}/LICENSE"
 notice_path="${PROJECT_ROOT}/THIRD_PARTY_NOTICES.md"
@@ -174,12 +139,10 @@ corpus_root="${PROJECT_ROOT}/legal/third-party"
 corpus_status=incomplete
 corpus_review_id=unavailable
 corpus_sha256=unavailable
-approval_payload_sha256=unavailable
-approval_signature_status=unavailable
-approval_signature_sha256=unavailable
-approval_public_key_fingerprint_sha256=unavailable
+reviewed_source_snapshot_sha256=unavailable
 release_source_sha=unbound
 release_source_tree=unbound
+release_source_snapshot_sha256=unbound
 corpus_reason="legal/third-party is absent"
 
 if [[ -e "$corpus_root" ]]; then
@@ -192,7 +155,7 @@ if [[ -e "$corpus_root" ]]; then
     [[ -z "$unsupported_entry" ]] \
         || fail "third-party legal corpus contains an unsupported filesystem entry: $unsupported_entry"
 
-    corpus_review_id="$({
+    corpus_metadata="$({
         python3 - "$corpus_root" <<'PY'
 import hashlib
 import json
@@ -217,6 +180,15 @@ def fail(message: str) -> None:
     raise SystemExit(f"third-party legal corpus {message}")
 
 
+def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            fail(f"CORPUS.json contains duplicate key: {key}")
+        result[key] = value
+    return result
+
+
 manifest_path = corpus_root / "CORPUS.json"
 checksums_path = corpus_root / "SHA256SUMS"
 for path in (manifest_path, checksums_path):
@@ -224,23 +196,38 @@ for path in (manifest_path, checksums_path):
         fail(f"requires a nonempty regular {path.name}")
 
 try:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(
+        manifest_path.read_text(encoding="utf-8"),
+        object_pairs_hook=reject_duplicate_keys,
+    )
 except (OSError, UnicodeError, json.JSONDecodeError) as error:
     fail(f"CORPUS.json is invalid: {error}")
 if not isinstance(manifest, dict):
     fail("CORPUS.json must be an object")
-allowed_manifest_keys = {"schema", "review_status", "review_id", "scopes"}
+allowed_manifest_keys = {
+    "schema",
+    "review_status",
+    "review_id",
+    "reviewed_source_snapshot_sha256",
+    "scopes",
+}
 unexpected_manifest_keys = sorted(set(manifest) - allowed_manifest_keys)
 if unexpected_manifest_keys:
     fail(f"CORPUS.json contains unexpected key(s): {', '.join(unexpected_manifest_keys)}")
-if manifest.get("schema") != "memochat-third-party-corpus-v1":
-    fail("CORPUS.json schema is not memochat-third-party-corpus-v1")
-if manifest.get("review_status") != "approved-for-distribution":
-    fail("CORPUS.json review_status is not approved-for-distribution")
+if manifest.get("schema") != "memochat-third-party-corpus-v2":
+    fail("CORPUS.json schema is not memochat-third-party-corpus-v2")
+if manifest.get("review_status") != "distribution-materials-complete":
+    fail("CORPUS.json review_status is not distribution-materials-complete")
 
 review_id = manifest.get("review_id")
 if not isinstance(review_id, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{7,127}", review_id) is None:
     fail("CORPUS.json review_id must be an 8-128 character stable identifier")
+
+reviewed_source_snapshot_sha256 = manifest.get("reviewed_source_snapshot_sha256")
+if not isinstance(reviewed_source_snapshot_sha256, str) or re.fullmatch(
+    r"[0-9a-f]{64}", reviewed_source_snapshot_sha256
+) is None:
+    fail("CORPUS.json reviewed_source_snapshot_sha256 must be a lowercase SHA-256 digest")
 
 scopes = manifest.get("scopes")
 if not isinstance(scopes, dict):
@@ -314,38 +301,29 @@ for raw_path, expected_digest in checksum_rows.items():
     if actual_digest != expected_digest:
         fail(f"checksum mismatch for {raw_path}")
 
-print(review_id)
+print(f"{review_id}\t{reviewed_source_snapshot_sha256}")
 PY
-    } 2>&1)" || fail "$corpus_review_id"
+    } 2>&1)" || fail "$corpus_metadata"
+    IFS=$'\t' read -r corpus_review_id reviewed_source_snapshot_sha256 extra_metadata \
+        <<<"$corpus_metadata"
+    [[ -z "${extra_metadata:-}" ]] \
+        || fail "third-party legal corpus verifier returned unexpected metadata"
     [[ "$corpus_review_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$ ]] \
         || fail "third-party legal corpus verifier returned an invalid review_id"
+    [[ "$reviewed_source_snapshot_sha256" =~ ^[0-9a-f]{64}$ ]] \
+        || fail "third-party legal corpus verifier returned an invalid source snapshot digest"
     corpus_sha256="$(sha256sum -- "${corpus_root}/SHA256SUMS" | awk '{print $1}')"
     [[ "$corpus_sha256" =~ ^[0-9a-f]{64}$ ]] \
         || fail "third-party legal corpus verifier returned an invalid corpus digest"
     corpus_status=complete
-    corpus_reason="contents verified; external release approval is unavailable"
+    corpus_reason="distribution materials and checksums verified"
 fi
 
-if [[ -n "$APPROVAL_PUBLIC_KEY" && -z "$APPROVAL_SIGNATURE" ]]; then
-    fail "--approval-public-key requires --approval-signature"
-fi
-if [[ -n "$APPROVAL_SIGNATURE" && -z "$APPROVAL_PUBLIC_KEY" ]]; then
-    fail "--approval-signature requires --approval-public-key"
-fi
 if [[ "$REQUIRE_DISTRIBUTION_CORPUS" -eq 1 ]]; then
     [[ -n "$SOURCE_SHA" ]] \
         || fail "formal distribution is blocked: --require-distribution-corpus requires --source-sha"
     [[ "$corpus_status" == complete ]] \
         || fail "formal distribution is blocked: third-party distribution corpus is incomplete (${corpus_reason})"
-    [[ -n "$APPROVAL_PUBLIC_KEY" ]] \
-        || fail "formal distribution is blocked: --require-distribution-corpus requires --approval-public-key"
-    [[ -n "$APPROVAL_SIGNATURE" ]] \
-        || fail "formal distribution is blocked: --require-distribution-corpus requires --approval-signature"
-fi
-if [[ -n "$WRITE_APPROVAL_PAYLOAD" ]]; then
-    [[ -n "$SOURCE_SHA" ]] || fail "--write-approval-payload requires --source-sha"
-    [[ "$corpus_status" == complete ]] \
-        || fail "--write-approval-payload requires a complete third-party distribution corpus"
 fi
 
 if [[ -n "$SOURCE_SHA" ]]; then
@@ -390,95 +368,24 @@ if [[ -n "$SOURCE_SHA" ]]; then
     )" || fail "could not resolve the release source tree"
     [[ "$release_source_tree" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] \
         || fail "release source tree has an invalid Git object ID"
-fi
-
-if [[ "$corpus_status" == complete && "$release_source_sha" != unbound ]]; then
-    APPROVAL_PAYLOAD_TEMPLATE="$(mktemp)"
-    cat >"$APPROVAL_PAYLOAD_TEMPLATE" <<EOF
-format=memochat-release-legal-approval-v2
-release_source_sha=${release_source_sha}
-release_source_tree=${release_source_tree}
-license_sha256=${actual_license_sha256}
-third_party_notices_sha256=${actual_notice_sha256}
-corpus_review_id=${corpus_review_id}
-corpus_sha256=${corpus_sha256}
-EOF
-    chmod 0444 "$APPROVAL_PAYLOAD_TEMPLATE"
-    approval_payload_sha256="$(sha256sum -- "$APPROVAL_PAYLOAD_TEMPLATE" | awk '{print $1}')"
-    [[ "$approval_payload_sha256" =~ ^[0-9a-f]{64}$ ]] \
-        || fail "canonical legal approval payload digest is invalid"
-fi
-
-if [[ -n "$WRITE_APPROVAL_PAYLOAD" ]]; then
-    approval_payload_output_input="$WRITE_APPROVAL_PAYLOAD"
-    [[ ! -e "$approval_payload_output_input" && ! -L "$approval_payload_output_input" ]] \
-        || fail "approval payload output already exists"
-    approval_payload_output_parent="$(
-        realpath -e -- "$(dirname -- "$approval_payload_output_input")"
-    )" || fail "approval payload output parent does not exist"
-    [[ -d "$approval_payload_output_parent" ]] \
-        || fail "approval payload output parent is not a directory"
-    WRITE_APPROVAL_PAYLOAD="$(
-        realpath -m -- "${approval_payload_output_parent}/$(basename -- "$approval_payload_output_input")"
-    )"
-    [[ "$WRITE_APPROVAL_PAYLOAD" != "$PROJECT_ROOT" \
-        && "$WRITE_APPROVAL_PAYLOAD" != "$PROJECT_ROOT/"* ]] \
-        || fail "approval payload output must be outside the repository trust boundary"
-    [[ ! -e "$WRITE_APPROVAL_PAYLOAD" && ! -L "$WRITE_APPROVAL_PAYLOAD" ]] \
-        || fail "approval payload output already exists"
-fi
-
-if [[ -n "$APPROVAL_PUBLIC_KEY" ]]; then
-    [[ -n "$APPROVAL_PAYLOAD_TEMPLATE" && -f "$APPROVAL_PAYLOAD_TEMPLATE" ]] \
-        || fail "external legal approval requires a complete source-bound approval payload"
-    command -v openssl >/dev/null 2>&1 \
-        || fail "openssl is required to verify the external legal approval signature"
-
-    approval_public_key_input="$APPROVAL_PUBLIC_KEY"
-    [[ ! -L "$approval_public_key_input" ]] \
-        || fail "approval public key must not be a symlink"
-    APPROVAL_PUBLIC_KEY="$(realpath -e -- "$approval_public_key_input")" \
-        || fail "approval public key does not exist: $approval_public_key_input"
-    [[ -f "$APPROVAL_PUBLIC_KEY" && -s "$APPROVAL_PUBLIC_KEY" ]] \
-        || fail "approval public key must be a nonempty regular non-symlink file"
-    [[ "$APPROVAL_PUBLIC_KEY" != "$PROJECT_ROOT" && "$APPROVAL_PUBLIC_KEY" != "$PROJECT_ROOT/"* ]] \
-        || fail "approval public key must be provided from outside the repository trust boundary"
-
-    approval_signature_input="$APPROVAL_SIGNATURE"
-    [[ ! -L "$approval_signature_input" ]] \
-        || fail "approval signature must not be a symlink"
-    APPROVAL_SIGNATURE="$(realpath -e -- "$approval_signature_input")" \
-        || fail "approval signature does not exist: $approval_signature_input"
-    [[ -f "$APPROVAL_SIGNATURE" && -s "$APPROVAL_SIGNATURE" ]] \
-        || fail "approval signature must be a nonempty regular non-symlink file"
-    [[ "$APPROVAL_SIGNATURE" != "$PROJECT_ROOT" && "$APPROVAL_SIGNATURE" != "$PROJECT_ROOT/"* ]] \
-        || fail "approval signature must be provided from outside the repository trust boundary"
-
-    openssl pkey -pubin -in "$APPROVAL_PUBLIC_KEY" -noout >/dev/null 2>&1 \
-        || fail "approval public key is not a valid OpenSSL public key"
-    approval_public_key_fingerprint_sha256="$(
-        openssl pkey -pubin -in "$APPROVAL_PUBLIC_KEY" -outform DER 2>/dev/null \
-            | sha256sum | awk '{print $1}'
-    )" || fail "could not fingerprint the approval public key"
-    [[ "$approval_public_key_fingerprint_sha256" =~ ^[0-9a-f]{64}$ ]] \
-        || fail "approval public key fingerprint is invalid"
-    approval_signature_sha256="$(sha256sum -- "$APPROVAL_SIGNATURE" | awk '{print $1}')"
-    [[ "$approval_signature_sha256" =~ ^[0-9a-f]{64}$ ]] \
-        || fail "approval signature digest is invalid"
-    openssl dgst -sha256 \
-        -verify "$APPROVAL_PUBLIC_KEY" \
-        -signature "$APPROVAL_SIGNATURE" \
-        "$APPROVAL_PAYLOAD_TEMPLATE" >/dev/null 2>&1 \
-        || fail "external legal approval signature verification failed"
-    approval_signature_status=verified
-    corpus_reason="contents verified and externally approved for the exact source tree"
+    release_source_snapshot_sha256="$(
+        python3 "$SOURCE_SNAPSHOT_TOOL" \
+            --project-root "$PROJECT_ROOT" \
+            --source-sha "$SOURCE_SHA" 2>&1
+    )" || fail "could not compute release source snapshot digest: $release_source_snapshot_sha256"
+    [[ "$release_source_snapshot_sha256" =~ ^[0-9a-f]{64}$ ]] \
+        || fail "release source snapshot digest is invalid"
+    if [[ "$corpus_status" == complete ]]; then
+        [[ "$release_source_snapshot_sha256" == "$reviewed_source_snapshot_sha256" ]] \
+            || fail "release source snapshot does not match the corpus-reviewed source snapshot"
+    fi
 fi
 
 formal_ready=false
 if [[ "$corpus_status" == complete \
-    && "$approval_signature_status" == verified \
     && "$release_source_sha" != unbound \
-    && "$release_source_tree" != unbound ]]; then
+    && "$release_source_tree" != unbound \
+    && "$release_source_snapshot_sha256" == "$reviewed_source_snapshot_sha256" ]]; then
     formal_ready=true
 fi
 
@@ -506,46 +413,26 @@ fi
 
 if [[ "$REQUIRE_DISTRIBUTION_CORPUS" -eq 1 ]]; then
     [[ "$release_source_sha" == "$SOURCE_SHA" ]] \
-        || fail "formal distribution is blocked: legal approval is not bound to the checkout commit"
+        || fail "formal distribution is blocked: legal materials are not bound to the checkout commit"
     [[ "$formal_ready" == true ]] \
-        || fail "formal distribution is blocked: exact-source external legal approval is not verified"
+        || fail "formal distribution is blocked: exact-source distribution materials are not verified"
 fi
 
 STATUS_TEMPLATE="$(mktemp)"
 cat >"$STATUS_TEMPLATE" <<EOF
-format=memochat-distribution-legal-status-v2
+format=memochat-distribution-legal-status-v3
 project_license=complete
 third_party_inventory=complete
 third_party_legal_corpus=${corpus_status}
 corpus_review_id=${corpus_review_id}
 corpus_sha256=${corpus_sha256}
-approval_payload_sha256=${approval_payload_sha256}
-approval_signature_status=${approval_signature_status}
-approval_signature_sha256=${approval_signature_sha256}
-approval_public_key_fingerprint_sha256=${approval_public_key_fingerprint_sha256}
+reviewed_source_snapshot_sha256=${reviewed_source_snapshot_sha256}
 release_source_sha=${release_source_sha}
 release_source_tree=${release_source_tree}
+release_source_snapshot_sha256=${release_source_snapshot_sha256}
 formal_distribution_ready=${formal_ready}
 EOF
 chmod 0444 "$STATUS_TEMPLATE"
-
-if [[ -n "$WRITE_APPROVAL_PAYLOAD" ]]; then
-    approval_payload_output_parent="$(dirname -- "$WRITE_APPROVAL_PAYLOAD")"
-    APPROVAL_PAYLOAD_OUTPUT_TEMPLATE="$(
-        mktemp "${approval_payload_output_parent}/.memochat-legal-approval.XXXXXX"
-    )" || fail "could not create approval payload output staging file"
-    cat -- "$APPROVAL_PAYLOAD_TEMPLATE" >"$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE" \
-        || fail "could not stage canonical legal approval payload"
-    chmod 0444 "$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE"
-    if ! ln -- "$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE" "$WRITE_APPROVAL_PAYLOAD"; then
-        if [[ -e "$WRITE_APPROVAL_PAYLOAD" || -L "$WRITE_APPROVAL_PAYLOAD" ]]; then
-            fail "approval payload output already exists"
-        fi
-        fail "could not atomically create approval payload output"
-    fi
-    rm -f -- "$APPROVAL_PAYLOAD_OUTPUT_TEMPLATE"
-    APPROVAL_PAYLOAD_OUTPUT_TEMPLATE=""
-fi
 
 if [[ -n "$STATUS_FILE" ]]; then
     install -m 0444 -- "$STATUS_TEMPLATE" "$STATUS_FILE"
@@ -561,16 +448,6 @@ if [[ -n "$COPY_TO" ]]; then
         find "${COPY_TO}/third-party" -type d -exec chmod 0555 {} +
         find "${COPY_TO}/third-party" -type f -exec chmod 0444 {} +
     fi
-    if [[ -n "$APPROVAL_PAYLOAD_TEMPLATE" ]]; then
-        mkdir -m 0700 -- "${COPY_TO}/approval"
-        install -m 0444 -- "$APPROVAL_PAYLOAD_TEMPLATE" \
-            "${COPY_TO}/approval/APPROVAL-PAYLOAD.txt"
-        if [[ "$approval_signature_status" == verified ]]; then
-            install -m 0444 -- "$APPROVAL_SIGNATURE" \
-                "${COPY_TO}/approval/APPROVAL.sig"
-        fi
-        chmod 0555 "${COPY_TO}/approval"
-    fi
     chmod 0555 "$COPY_TO"
 fi
 
@@ -578,15 +455,9 @@ printf '[OK] project license: complete\n'
 printf '[OK] third-party inventory: complete\n'
 if [[ "$corpus_status" == complete ]]; then
     printf '[OK] third-party distribution corpus: complete (%s)\n' "$corpus_review_id"
-    printf '[%s] external legal approval signature: %s\n' \
-        "$([[ "$approval_signature_status" == verified ]] && printf 'OK' || printf 'WARN')" \
-        "$approval_signature_status"
     printf '[%s] release source binding: %s\n' \
         "$([[ "$release_source_sha" != unbound ]] && printf 'OK' || printf 'WARN')" \
         "$release_source_sha"
 else
     printf '[WARN] third-party distribution corpus: incomplete (%s)\n' "$corpus_reason"
-fi
-if [[ -n "$WRITE_APPROVAL_PAYLOAD" ]]; then
-    printf '[OK] canonical legal approval payload: %s\n' "$WRITE_APPROVAL_PAYLOAD"
 fi

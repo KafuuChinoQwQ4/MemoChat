@@ -29,8 +29,6 @@ Usage:
     [--ca-cert /path/to/local-deployment-ca.pem] \
     [--library-dir /path/to/compiler/runtime/lib]... \
     [--source-sha 40-character-commit] \
-    [--approval-public-key /outside/repository/legal-approval.pem] \
-    [--approval-signature /outside/repository/legal-approval.sig] \
     [--artifact-name MemoChatQml-linux-x86_64]
 
 Recommended build input:
@@ -160,8 +158,6 @@ qt_root=""
 qml_source_root="$SCRIPT_DIR/../../../apps/client/desktop/MemoChat-qml"
 ca_cert=""
 source_sha=""
-approval_public_key=""
-approval_signature=""
 library_dirs=()
 artifact_name="MemoChatQml-linux-x86_64"
 
@@ -212,16 +208,6 @@ while (($# > 0)); do
             source_sha="$2"
             shift 2
             ;;
-        --approval-public-key)
-            (($# >= 2)) || die "--approval-public-key requires a path"
-            approval_public_key="$2"
-            shift 2
-            ;;
-        --approval-signature)
-            (($# >= 2)) || die "--approval-signature requires a path"
-            approval_signature="$2"
-            shift 2
-            ;;
         -h | --help)
             usage
             exit 0
@@ -247,10 +233,6 @@ done
 [[ -f "$CLIENT_SCAN_ALLOWLIST" ]] || die "client release scan allowlist is missing: $CLIENT_SCAN_ALLOWLIST"
 legal_args=(--project-root "$PROJECT_ROOT")
 [[ -z "$source_sha" ]] || legal_args+=(--source-sha "$source_sha")
-[[ -z "$approval_public_key" ]] \
-    || legal_args+=(--approval-public-key "$approval_public_key")
-[[ -z "$approval_signature" ]] \
-    || legal_args+=(--approval-signature "$approval_signature")
 
 binary="$(canonical_file "$binary")"
 config="$(canonical_file "$config")"

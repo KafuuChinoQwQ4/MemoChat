@@ -33,13 +33,11 @@ test -x "$VCPKG_ROOT/vcpkg"
 `THIRD_PARTY_NOTICES.md` 清单，并明确报告正式第三方法律语料状态；当前
 `legal/third-party` 尚未齐备，因此本地/普通 CI 制品会标记
 `third_party_legal_corpus=incomplete`。正式 `v*` 标签额外要求该目录中的
-`CORPUS.json`、`SHA256SUMS`、全部必要 scope 和 `approved-for-distribution`
-状态通过校验；仓库内 `CORPUS.sig` 会被拒绝。最终提交确定后，verifier 在仓库外生成绑定
-source SHA/tree、根法律文件和 corpus 摘要的 v2 payload，由独立审批方使用离线私钥签署。
-标签 CI 通过受保护的 `MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM` 和
-`MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64` secrets 在 checkout 外注入公钥与 detached
-signature，verifier 会拒绝仓库内或 symlink 输入。CI 传入的 release source SHA 还必须等于
-当前 clean checkout `HEAD`，否则在构建和发布前失败。完整离线签署步骤见
+`CORPUS.json`、`SHA256SUMS`、全部必要 scope 和
+`distribution-materials-complete` 状态通过校验；仓库内 `CORPUS.sig` 会作为未声明材料被拒绝。
+CI 传入的 release source SHA 必须等于当前 clean checkout `HEAD`，且根法律文件与完整 corpus
+必须精确存在于该提交中，否则在构建和发布前失败。这个门禁只证明分发材料完整、校验和一致并
+绑定具体源码提交，不构成法律意见或外部法律审批。材料结构与校验流程见
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 后端 bundle 还会生成同一 source SHA 绑定的 vcpkg 安装闭包 SPDX；其摘要与法律状态摘要
 会贯穿 OCI label、镜像 manifest、漏洞审计证据和最终 release manifest。
