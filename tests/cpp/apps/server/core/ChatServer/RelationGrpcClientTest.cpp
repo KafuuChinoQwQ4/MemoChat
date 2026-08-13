@@ -15,9 +15,21 @@
 
 namespace
 {
+std::string TestChatAuthToken()
+{
+    return std::string(32, 'c');
+}
+
 class FakeRelationService final : public IRelationService
 {
 public:
+    bool AreUsersFriends(int uid, int peer_uid) override
+    {
+        last_friendship_uid = uid;
+        last_friendship_peer_uid = peer_uid;
+        return friendship_result;
+    }
+
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override
     {
         out["bootstrap_uid"] = uid;
@@ -79,6 +91,9 @@ public:
     }
 
     RelationCommandRequest last_request;
+    int last_friendship_uid = 0;
+    int last_friendship_peer_uid = 0;
+    bool friendship_result = false;
 };
 
 class FailingRelationInternalService final : public chatinternal::ChatRelationInternalService::Service
@@ -174,15 +189,56 @@ bool HasGroupDialog(const memochat::json::JsonValue& dialogs, int64_t group_id)
 }
 } // namespace
 
-TEST(RelationGrpcClientTest, SearchUserRoundTripsCommandPayload)
+TEST(RelationGrpcClientTest, CheckFriendshipRoundTripsTypedResponse)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    fake.friendship_result = true;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            RelationGrpcAuthTokens{.chat = TestChatAuthToken()});
     auto running = StartServer(&service);
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationGrpcClient client(running.Endpoint(), TestChatAuthToken(), std::chrono::milliseconds(500));
+
+    EXPECT_TRUE(client.AreUsersFriends(42, 84));
+    EXPECT_EQ(fake.last_friendship_uid, 42);
+    EXPECT_EQ(fake.last_friendship_peer_uid, 84);
+    EXPECT_FALSE(client.AreUsersFriends(42, 42));
+    running.server->Shutdown();
+}
+
+TEST(RelationGrpcClientTest, ReadWriteServiceRejectsWrongChatToken)
+{
+    FakeRelationService fake;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            RelationGrpcAuthTokens{.chat = TestChatAuthToken()});
+    auto running = StartServer(&service);
+    ASSERT_NE(running.server, nullptr);
+
+    RelationGrpcClient client(running.Endpoint(), std::string(32, 'x'), std::chrono::milliseconds(500));
+    memochat::json::JsonValue out(memochat::json::object_t{});
+    out["error"] = ErrorCodes::Success;
+    client.AppendRelationBootstrapJson(42, out);
+
+    EXPECT_EQ(out["error"].asInt(), ErrorCodes::RPCFailed);
+    EXPECT_EQ(out["relation_remote_status_code"].asInt(), static_cast<int>(grpc::StatusCode::UNAUTHENTICATED));
+    running.server->Shutdown();
+}
+
+TEST(RelationGrpcClientTest, SearchUserRoundTripsCommandPayload)
+{
+    FakeRelationService fake;
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            RelationGrpcAuthTokens{.chat = TestChatAuthToken()});
+    auto running = StartServer(&service);
+    ASSERT_NE(running.server, nullptr);
+    ASSERT_GT(running.port, 0);
+
+    RelationGrpcClient client(running.Endpoint(), TestChatAuthToken(), std::chrono::milliseconds(500));
     RelationCommandRequest request;
     request.request_msg_id = ID_SEARCH_USER_REQ;
     request.payload_json = R"({"user_id":"alice"})";
@@ -207,12 +263,14 @@ TEST(RelationGrpcClientTest, SearchUserRoundTripsCommandPayload)
 TEST(RelationGrpcClientTest, QueryMethodsMergeRemotePayload)
 {
     FakeRelationService fake;
-    ChatRelationInternalGrpcService service(&fake);
+    ChatRelationInternalGrpcService service(&fake,
+                                            RelationGrpcAccessMode::ReadWrite,
+                                            RelationGrpcAuthTokens{.chat = TestChatAuthToken()});
     auto running = StartServer(&service);
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationGrpcClient client(running.Endpoint(), TestChatAuthToken(), std::chrono::milliseconds(500));
     memochat::json::JsonValue out(memochat::json::object_t{});
     out["error"] = ErrorCodes::Success;
     client.AppendRelationBootstrapJson(7, out);
@@ -231,7 +289,7 @@ TEST(RelationGrpcClientTest, QueryRemoteFailureMarksBusinessError)
     ASSERT_NE(running.server, nullptr);
     ASSERT_GT(running.port, 0);
 
-    RelationGrpcClient client(running.Endpoint(), std::chrono::milliseconds(500));
+    RelationGrpcClient client(running.Endpoint(), TestChatAuthToken(), std::chrono::milliseconds(500));
     memochat::json::JsonValue out(memochat::json::object_t{});
     out["error"] = ErrorCodes::Success;
 
@@ -252,7 +310,12 @@ TEST(RelationGrpcClientTest, RuntimeSmokeSearchUserUsesRealRelationServiceWorker
         GTEST_SKIP() << "MEMOCHAT_RELATION_SERVICE_SMOKE_ENDPOINT is not set";
     }
 
-    RelationGrpcClient client(endpoint, std::chrono::seconds(2));
+    const std::string auth_token = EnvValue("MEMOCHAT_RELATION_SERVICE_SMOKE_AUTH_TOKEN");
+    if (auth_token.empty())
+    {
+        GTEST_SKIP() << "MEMOCHAT_RELATION_SERVICE_SMOKE_AUTH_TOKEN is not set";
+    }
+    RelationGrpcClient client(endpoint, auth_token, std::chrono::seconds(2));
     RelationCommandRequest request;
     request.request_msg_id = ID_SEARCH_USER_REQ;
     request.payload_json = R"({})";
@@ -284,7 +347,12 @@ TEST(RelationGrpcClientTest, RuntimeSmokeGetDialogListUsesRealRelationServiceWor
     const int peer_uid = EnvIntOrDefault("MEMOCHAT_RELATION_SERVICE_SMOKE_PEER_UID", 910002);
     const int64_t group_id = EnvIntOrDefault("MEMOCHAT_RELATION_SERVICE_SMOKE_GROUP_ID", 0);
 
-    RelationGrpcClient client(endpoint, std::chrono::seconds(2));
+    const std::string auth_token = EnvValue("MEMOCHAT_RELATION_SERVICE_SMOKE_AUTH_TOKEN");
+    if (auth_token.empty())
+    {
+        GTEST_SKIP() << "MEMOCHAT_RELATION_SERVICE_SMOKE_AUTH_TOKEN is not set";
+    }
+    RelationGrpcClient client(endpoint, auth_token, std::chrono::seconds(2));
     RelationCommandRequest request;
     request.request_msg_id = ID_GET_DIALOG_LIST_REQ;
     request.payload_json = std::string(R"({"fromuid":)") + std::to_string(uid) + "}";

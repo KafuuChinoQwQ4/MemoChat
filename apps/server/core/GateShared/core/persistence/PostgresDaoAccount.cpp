@@ -116,7 +116,7 @@ int PostgresDao::RegUserTransaction(const std::string& name,
             TransactionOk("RegUserTransaction", txn);
             return -1;
         }
-        std::cout << "email " << email << " exists" << std::endl;
+        std::cout << "RegUserTransaction account already exists" << std::endl;
         return 0;
     }
 
@@ -524,7 +524,7 @@ bool PostgresDao::CheckPwd(const std::string& email, const std::string& pwd, Use
                                       email);
     if (!TransactionOk("CheckPwd", txn) || rows.empty())
     {
-        std::cout << "CheckPwd user not found for email " << email << std::endl;
+        std::cout << "CheckPwd account lookup failed" << std::endl;
         return false;
     }
 
@@ -570,12 +570,47 @@ std::string PostgresDao::GetUserPublicId(int uid)
     return rows[0]["user_id"].c_str();
 }
 
-void PostgresDao::WarmupAuthQueries()
+bool PostgresDao::WarmupAuthQueries()
 {
+    const auto warmup = [](pqxx::connection& connection) -> bool
+    {
+        if (!connection.is_open())
+        {
+            std::cerr << "WarmupAuthQueries PostgreSQL error: " << connection.error_message() << std::endl;
+            return false;
+        }
+
+        pqxx::read_transaction txn(connection);
+        const auto relation = txn.exec("SELECT to_regclass('memo.\"user\"') IS NOT NULL");
+        if (!TransactionOk("WarmupAuthQueries", txn) || relation.empty() || !relation[0][0].as<bool>())
+        {
+            return false;
+        }
+        txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
+                        "FROM \"user\" WHERE email = $1 LIMIT 1",
+                        "__memochat_query_warmup__");
+        if (!TransactionOk("WarmupAuthQueries", txn))
+        {
+            return false;
+        }
+        if (!txn.commit())
+        {
+            TransactionOk("WarmupAuthQueries", txn);
+            return false;
+        }
+        return true;
+    };
+
+    if (!account_connection_string_.empty())
+    {
+        pqxx::connection account_connection(account_connection_string_);
+        return warmup(account_connection);
+    }
+
     auto con = pool_->getConnection();
     if (con == nullptr)
     {
-        return;
+        return false;
     }
 
     Defer defer(
@@ -584,14 +619,7 @@ void PostgresDao::WarmupAuthQueries()
             pool_->returnConnection(std::move(con));
         });
 
-    pqxx::read_transaction txn(*con->_con);
-    txn.exec_params("SELECT uid, name, email, password_hash, user_id, nick, icon, \"desc\", sex "
-                    "FROM \"user\" WHERE email = $1 LIMIT 1",
-                    "__memochat_warmup__@invalid.local");
-    if (!TransactionOk("WarmupAuthQueries", txn) || !txn.commit())
-    {
-        TransactionOk("WarmupAuthQueries", txn);
-    }
+    return warmup(*con->_con);
 }
 
 std::string PostgresDao::GenerateUserPublicId()
@@ -763,7 +791,7 @@ bool PostgresDao::TestProcedure(const std::string& email, int& uid, std::string&
     const auto rows = txn.exec_params("SELECT uid, name FROM " + PgTable("user") + " WHERE email = $1 LIMIT 1", email);
     if (!TransactionOk("TestProcedure", txn) || rows.empty())
     {
-        std::cout << "TestProcedure user not found for email " << email << std::endl;
+        std::cout << "TestProcedure account lookup failed" << std::endl;
         return false;
     }
     uid = rows[0]["uid"].as<int>();

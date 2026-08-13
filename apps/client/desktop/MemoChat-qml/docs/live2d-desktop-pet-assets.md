@@ -40,6 +40,13 @@ runtime item reports a model display error. The checked-in Linux full preset set
 `MEMOCHAT_ENABLE_LIVE2D_NATIVE=ON`; an empty or invalid SDK root should fail
 during configure with a clear message.
 
+The distributable Linux client uses `linux-client-release-gcc16`. That preset
+must keep `MEMOCHAT_ENABLE_LIVE2D_NATIVE=OFF` and
+`MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD=ON`. Distribution builds fail during CMake
+configuration if a resource manifest references local `resources/live2d`
+model/texture/voice assets, and the package script verifies the corresponding
+release-policy marker before staging the executable.
+
 ## What Must Not Be Committed
 
 The following items must not be committed:

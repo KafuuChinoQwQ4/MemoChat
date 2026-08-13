@@ -37,6 +37,9 @@ POSTGRES_DAO_HEADER = SERVER_CORE / "GateShared/core/persistence/PostgresDao.hpp
 GATE_DOMAIN_SERVER = SERVER_CORE / "GateShared/app/GateDomainServer.cpp"
 CHAT_SERVER = SERVER_CORE / "ChatServer/app/ChatServer.cpp"
 AIGATEWAY_SERVER = SERVER_CORE / "AIGatewayService/app/AIGatewayServer.cpp"
+GATE_REDIS_HEADER = SERVER_CORE / "GateShared/core/cache/RedisMgr.hpp"
+GATE_CACHE_READINESS = SERVER_CORE / "GateShared/core/cache/CacheReadinessProbes.cpp"
+GATE_HEALTH_ROUTE = SERVER_CORE / "GateShared/modules/health/HealthRouteModule.cpp"
 CHAT_LOGIC_SYSTEM = SERVER_CORE / "ChatServer/domain/orchestration/LogicSystem.cpp"
 CHAT_PRIVATE_MESSAGE = SERVER_CORE / "ChatServer/domain/message/PrivateMessageService.cpp"
 CHAT_GROUP_MESSAGE = SERVER_CORE / "ChatServer/domain/message/GroupMessageService.cpp"
@@ -54,6 +57,7 @@ MOMENTS_PERSISTENCE_HEADER = SERVER_CORE / "MomentsService/domain/services/momen
 POSTGRES_DAO = SERVER_CORE / "GateShared/core/persistence/PostgresDao.cpp"
 POSTGRES_MGR = SERVER_CORE / "GateShared/core/persistence/PostgresMgr.cpp"
 VARIFY_SERVICE_IMPL = SERVER_CORE / "VarifyServer/VarifyServiceImpl.cpp"
+VARIFY_EMAIL_SENDER = SERVER_CORE / "VarifyServer/EmailSender.cpp"
 VARIFY_RATE_LIMITER = SERVER_CORE / "VarifyServer/RateLimiter.cpp"
 AIGATEWAY_AI_SERVICE = SERVER_CORE / "AIGatewayService/domain/services/ai/AIService.cpp"
 AIGATEWAY_AI_CLIENT = SERVER_CORE / "AIGatewayService/domain/AIServiceClient.cpp"
@@ -1159,6 +1163,31 @@ class SecurityHardeningContractTests(unittest.TestCase):
                 self.assertIsNone(re.search(r"(?m)^(?:Passwd|Password)\s*=\s*(?:123456|password)\s*$", text))
                 self.assertNotIn("mongodb://memochat_app:123456@", text)
 
+    def test_aigateway_readiness_uses_cached_dynamic_redis_health_and_fails_closed(self):
+        redis_header = read(GATE_REDIS_HEADER)
+        cache_readiness = read(GATE_CACHE_READINESS)
+        health_route = read(GATE_HEALTH_ROUTE)
+        aigateway_server = read(AIGATEWAY_SERVER)
+
+        self.assertIn("redisConnectWithTimeout", redis_header)
+        self.assertIn("redisSetTimeout", redis_header)
+        self.assertIn("kHealthCheckInterval", redis_header)
+        self.assertIn("std::atomic<bool> healthy_", redis_header)
+        self.assertIn("redisContext* health_context_", redis_header)
+        self.assertIn("CheckOnePoolConnection", redis_header)
+        self.assertIn("RepairOneConnection", redis_header)
+        self.assertNotIn("while (fail_count_", redis_header)
+        self.assertIn("redis->Healthy()", cache_readiness)
+        self.assertNotIn("!readiness_check ||", health_route)
+        self.assertIn("std::lock_guard<std::mutex>", health_route)
+        self.assertIn('readiness_error = "readiness check is not configured"', health_route)
+        self.assertIn("RedisReadinessProbe()", aigateway_server)
+        self.assertIn("HealthRouteModule::SetReadinessCheck", aigateway_server)
+        self.assertLess(
+            aigateway_server.index("HealthRouteModule::SetReadinessCheck"),
+            aigateway_server.index("LogicSystem::GetInstance()"),
+        )
+
     def test_ci_scans_for_secrets_and_runtime_configs_remain_ignored(self):
         ci = read(CI_WORKFLOW)
         gitignore = read(GITIGNORE)
@@ -1406,6 +1435,8 @@ class SecurityHardeningContractTests(unittest.TestCase):
 
     def test_logging_redaction_covers_current_credential_keys_and_query_tokens(self):
         redaction = read(REDACTION_MODULE)
+        auth_login = read(AUTH_LOGIN_SUPPORT)
+        email_sender = read(VARIFY_EMAIL_SENDER)
         h1 = read(H1_HTTP_CONNECTION)
         h3 = read(H3_HTTP_LISTENER)
 
@@ -1418,10 +1449,17 @@ class SecurityHardeningContractTests(unittest.TestCase):
             '"x-token"',
             '"set-cookie"',
             'EndsWithAsciiLiteral(key, size, "_token")',
+            'EndsWithAsciiLiteral(key, size, "_email")',
+            'EndsWithAsciiLiteral(key, size, "-email")',
             'ContainsAsciiLiteral(key, size, "secret")',
         ):
             with self.subTest(token=token):
                 self.assertIn(token, redaction)
+
+        self.assertIn('{{"requested_email", email}', auth_login)
+        self.assertIn('{"db_email", dbUserInfo.email}', auth_login)
+        self.assertNotIn('{{"to", to_email}', email_sender)
+        self.assertEqual(email_sender.count('{{"to_email", to_email}'), 3)
 
         self.assertIn("RequestPathForLog", h1)
         self.assertIn("target.find('?')", h1)
@@ -1429,6 +1467,49 @@ class SecurityHardeningContractTests(unittest.TestCase):
         self.assertIn("RequestPathForLog", h3)
         self.assertIn("path.find('?')", h3)
         self.assertIn('fields["path"] = RequestPathForLog(stream_ctx->Path);', h3)
+
+    def test_smtp_tls_requires_system_trust_peer_and_hostname_verification(self):
+        source = read(VARIFY_EMAIL_SENDER)
+
+        for token in (
+            "TLS_client_method()",
+            "SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION)",
+            "SSL_CTX_set_default_verify_paths(ctx)",
+            "SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr)",
+            "SSL_set_tlsext_host_name(ssl, host.c_str())",
+            "SSL_set1_host(ssl, host.c_str())",
+            "SSL_get_verify_result(ssl) != X509_V_OK",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, source)
+
+        self.assertNotIn("TLSv1_2_client_method()", source)
+
+    def test_starttls_keeps_credentials_and_message_on_verified_tls_transport(self):
+        source = read(VARIFY_EMAIL_SENDER)
+
+        self.assertIn("smtp_transaction(ssl", source)
+        self.assertEqual(source.count('send_command(sock, "EHLO localhost")'), 1)
+        self.assertEqual(source.count('send_command(sock, "STARTTLS")'), 1)
+        for plaintext_operation in (
+            'send_command(sock, "AUTH LOGIN")',
+            "send_command(sock, b64_encode(user))",
+            "send_command(sock, b64_encode(pass))",
+            'send_command(sock, "MAIL FROM:',
+            'send_command(sock, "RCPT TO:',
+            'send_command(sock, "DATA")',
+            "send_all(sock, body.data()",
+        ):
+            with self.subTest(plaintext_operation=plaintext_operation):
+                self.assertNotIn(plaintext_operation, source)
+
+        self.assertNotIn("SSL_connect(ssl);", source)
+
+    def test_account_persistence_does_not_log_email_values(self):
+        source = read(POSTGRES_DAO_ACCOUNT)
+
+        self.assertNotRegex(source, r"std::(?:cout|cerr)[^;]*<<\s*email\b")
+        self.assertNotIn("user not found for email", source)
 
     def test_start_all_services_rejects_stale_pid_and_non_runtime_port_owner(self):
         script = read(START_ALL_SERVICES)

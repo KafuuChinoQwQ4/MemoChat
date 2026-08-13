@@ -287,17 +287,21 @@ class NoExceptionsContractTests(unittest.TestCase):
             source = (REPO_ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("if (!memolog::Logger::Init(", source, relative)
 
-    def test_postgres_startup_validates_schema_and_serializes_ddl(self):
+    def test_postgres_startup_validates_schema_without_runtime_ddl(self):
         persistence = REPO_ROOT / "apps/server/core/ChatServer/persistence"
         dao = (persistence / "PostgresDao.cpp").read_text(encoding="utf-8")
         dialogs = (persistence / "PostgresDaoDialogs.cpp").read_text(encoding="utf-8")
 
         self.assertIn(r"FROM \"user\" WHERE FALSE", dao)
         self.assertIn("SELECT id FROM user_id WHERE FALSE", dao)
-        self.assertLess(dao.index("EnsureChatMessageIdempotencySchema()"), dao.index("ready_ = true"))
-        self.assertLess(dao.index("EnsureChatEventOutboxSchema()"), dao.index("ready_ = true"))
+        self.assertLess(dao.index("ValidateChatMessageIdempotencySchema()"), dao.index("ready_ = true"))
+        self.assertLess(dao.index("ValidateChatEventOutboxSchema()"), dao.index("ready_ = true"))
         self.assertLess(dao.index("WarmupRelationBootstrapQueries()"), dao.index("ready_ = true"))
-        self.assertEqual(dialogs.count("SELECT pg_advisory_xact_lock($1)"), 2)
+        validation_region = dialogs.split("bool PostgresDao::ValidateChatMessageIdempotencySchema()", 1)[1].split(
+            "bool PostgresDao::GetPendingGroupApplyForReviewer", 1
+        )[0]
+        self.assertEqual(validation_region.count("pqxx::read_transaction txn(conn)"), 2)
+        self.assertNotIn("SELECT pg_advisory_xact_lock($1)", validation_region)
 
 
 if __name__ == "__main__":

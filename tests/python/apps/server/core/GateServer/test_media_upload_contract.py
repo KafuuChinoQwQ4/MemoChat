@@ -360,8 +360,9 @@ class MediaUploadContractTest(unittest.TestCase):
 
         self.assertIn("export_minio_runtime_credentials", startup)
         self.assertIn("first_env_value", startup)
-        self.assertIn('access_key="${access_key:-memochat_admin}"', startup)
-        self.assertIn('secret_key="${secret_key:-MinioPass2026!}"', startup)
+        self.assertIn('[[ -z "$access_key" || -z "$secret_key" ]]', startup)
+        self.assertIn('(( ${#access_key} < 3 || ${#secret_key} < 8 ))', startup)
+        self.assertIn('if is_truthy "$START_DOCKER_DEPS" || is_truthy "$START_MEDIAGATEWAY"; then', startup)
         self.assertIn('MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}"', startup)
         self.assertIn('MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}"', startup)
 
@@ -514,7 +515,8 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("SELECT to_regclass('chat_group_member') IS NOT NULL", access_block)
         self.assertIn("SELECT to_regclass('friend') IS NOT NULL", access_block)
         self.assertIn(
-            "if (friend_table_rows.empty() || friend_table_rows[0][0].is_null() || !friend_table_rows[0][0].as<bool>()) { return false; }",
+            'if (!TransactionOk("HasMediaAccess", txn) || friend_table_rows.empty() || '
+            "friend_table_rows[0][0].is_null() || !friend_table_rows[0][0].as<bool>()) { return false; }",
             compact,
         )
 

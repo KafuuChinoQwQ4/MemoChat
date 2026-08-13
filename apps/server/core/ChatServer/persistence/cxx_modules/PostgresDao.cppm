@@ -32,4 +32,34 @@ const char* SelectSchema(bool schema_empty, const char* schema)
     return schema_empty || schema == nullptr ? DefaultSchema() : schema;
 }
 
+int ConnectTimeoutSeconds()
+{
+    return 3;
+}
+
+int StatementTimeoutMilliseconds()
+{
+    return 2000;
+}
+
+int HealthProbeIntervalMilliseconds()
+{
+    return 10000;
+}
+
+int TcpUserTimeoutMilliseconds()
+{
+    return 3000;
+}
+
+int HealthProbeDeadlineMilliseconds()
+{
+    return 3000;
+}
+
+const char* HealthProbeSessionOptions()
+{
+    return "-c statement_timeout=2000";
+}
+
 } // namespace memochat::chat::persistence::postgres_dao::modules

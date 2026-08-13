@@ -23,6 +23,8 @@ public:
 
     void AppendRelationBootstrapJson(int uid, memochat::json::JsonValue& out) override;
     void BuildDialogListJson(int uid, memochat::json::JsonValue& out) override;
+    bool AreUsersFriends(int uid, int peer_uid) override;
+    bool CheckHealth(std::string* error) override;
     RelationCommandResult SearchUser(const RelationCommandRequest& request) override;
     RelationCommandResult AddFriendApply(const RelationCommandRequest& request) override;
     RelationCommandResult AuthFriendApply(const RelationCommandRequest& request) override;

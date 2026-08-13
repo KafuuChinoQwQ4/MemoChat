@@ -12,6 +12,7 @@
 #include "RedisRelationBootstrapCache.hpp"
 #include "SnowflakeUtil.hpp"
 #include "TaskDispatcher.hpp"
+#include "auth/RelationGrpcAuth.hpp"
 #include "ports/IEventPublisher.hpp"
 #include "logging/LogConfig.hpp"
 #include "logging/Logger.hpp"
@@ -30,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 
 import memochat.chat.relation_service_worker_runtime_algorithms;
 
@@ -90,6 +92,12 @@ std::string ConfigValueOrDefault(ConfigMgr& cfg,
 {
     const auto value = cfg.GetValue(section, key);
     return relation_service_worker_modules::ShouldUseDefaultConfigValue(value.empty()) ? default_value : value;
+}
+
+bool EnvironmentFlagEnabled(const char* name)
+{
+    const char* value = std::getenv(name);
+    return value != nullptr && std::string_view(value) == "1";
 }
 
 void SetInstanceNameEnv(const std::string& instance_name)
@@ -178,13 +186,24 @@ private:
     std::shared_ptr<IAsyncEventBus> _event_bus;
 };
 
-std::shared_ptr<IAsyncTaskBus> BuildTaskBus()
+std::shared_ptr<IAsyncTaskBus> BuildTaskBus(bool release_mode, std::string* error)
 {
     const auto backend = memochat::chatruntime::TaskBusBackend();
     const bool use_rabbitmq = relation_service_worker_modules::IsRabbitMqBackend(backend.data(), backend.size());
-    if (use_rabbitmq && RabbitMqTaskBus::BuildAvailable())
+    const bool build_available = RabbitMqTaskBus::BuildAvailable();
+    if (use_rabbitmq && build_available)
     {
         return std::make_shared<RabbitMqTaskBus>();
+    }
+    if (relation_service_worker_modules::ShouldFailClosedForUnavailableBackend(release_mode,
+                                                                               use_rabbitmq,
+                                                                               build_available))
+    {
+        if (error != nullptr)
+        {
+            *error = relation_service_worker_modules::RabbitMqUnavailableReleaseError();
+        }
+        return nullptr;
     }
     if (use_rabbitmq)
     {
@@ -195,13 +214,24 @@ std::shared_ptr<IAsyncTaskBus> BuildTaskBus()
     return std::make_shared<InlineTaskBus>();
 }
 
-std::shared_ptr<IAsyncEventBus> BuildAsyncEventBus()
+std::shared_ptr<IAsyncEventBus> BuildAsyncEventBus(bool release_mode, std::string* error)
 {
     const auto backend = memochat::chatruntime::AsyncEventBusBackend();
     const bool use_kafka = relation_service_worker_modules::IsKafkaBackend(backend.data(), backend.size());
-    if (use_kafka && KafkaAsyncEventBus::BuildAvailable())
+    const bool build_available = KafkaAsyncEventBus::BuildAvailable();
+    if (use_kafka && build_available)
     {
         return std::make_shared<KafkaAsyncEventBus>();
+    }
+    if (relation_service_worker_modules::ShouldFailClosedForUnavailableBackend(release_mode,
+                                                                               use_kafka,
+                                                                               build_available))
+    {
+        if (error != nullptr)
+        {
+            *error = relation_service_worker_modules::KafkaUnavailableReleaseError();
+        }
+        return nullptr;
     }
     if (use_kafka)
     {
@@ -224,6 +254,15 @@ int main(int argc, char** argv)
     }
     ConfigMgr::InitConfigPath(config_path);
     auto& cfg = ConfigMgr::Inst();
+
+    const auto relation_auth_token = cfg.GetValue("RelationService", "AuthToken");
+    if (!memochat::auth::IsStrongRelationGrpcAuthToken(relation_auth_token))
+    {
+        std::cerr << "ChatRelationServiceWorker fatal: relation service auth token must be at least 32 printable "
+                     "ASCII bytes"
+                  << std::endl;
+        return EXIT_FAILURE;
+    }
 
     const auto service_name =
         ConfigValueOrDefault(cfg, "SelfServer", "Name", relation_service_worker_modules::DefaultServiceName());
@@ -288,8 +327,23 @@ int main(int argc, char** argv)
     // task + event publishers onto the same buses the main ChatServer
     // consumes (TaskDispatcher handles "relation_notify",
     // AsyncEventDispatcher handles TopicRelationState).
-    auto task_bus = BuildTaskBus();
-    auto async_event_bus = BuildAsyncEventBus();
+    const bool release_mode = EnvironmentFlagEnabled("MEMOCHAT_RELEASE_MODE");
+    auto task_bus = BuildTaskBus(release_mode, &startup_error);
+    if (!task_bus)
+    {
+        memolog::LogError("relation_service.task_bus.release_unavailable",
+                          "ChatRelationServiceWorker release task bus is unavailable",
+                          {{"error", startup_error}});
+        return EXIT_FAILURE;
+    }
+    auto async_event_bus = BuildAsyncEventBus(release_mode, &startup_error);
+    if (!async_event_bus)
+    {
+        memolog::LogError("relation_service.event_bus.release_unavailable",
+                          "ChatRelationServiceWorker release event bus is unavailable",
+                          {{"error", startup_error}});
+        return EXIT_FAILURE;
+    }
     TaskDispatcher task_publisher(
         task_bus,
         []()
@@ -305,7 +359,9 @@ int main(int argc, char** argv)
                                          nullptr,
                                          &task_publisher,
                                          &event_publisher);
-    ChatRelationInternalGrpcService relation_grpc_service(&relation_service);
+    ChatRelationInternalGrpcService relation_grpc_service(&relation_service,
+                                                          RelationGrpcAccessMode::ReadWrite,
+                                                          RelationGrpcAuthTokens{.chat = relation_auth_token});
 
     const auto server_address = RelationServiceRpcAddress(cfg);
     grpc::ServerBuilder builder;

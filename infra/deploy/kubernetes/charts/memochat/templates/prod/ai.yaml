@@ -19,10 +19,15 @@ spec:
         app.kubernetes.io/component: {{ .Values.aiServer.serviceName }}
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: {{ .Values.aiServer.serviceName }}
-          image: "{{ .Values.images.aiServer.repository }}:{{ .Values.images.aiServer.tag }}"
+          image: {{ include "memochat.image" (dict "root" . "image" .Values.images.aiServer) | quote }}
           imagePullPolicy: {{ .Values.images.aiServer.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
             - name: MEMOCHAT_ENV
               value: production
@@ -33,7 +38,7 @@ spec:
             - name: CONFIG_PATH
               value: /app/config.ini
             - name: MEMOCHAT_POSTGRES_PASSWD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-chat-password } }
             - name: MEMOCHAT_REDIS_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_AI_INTERNAL_API_KEY
@@ -44,6 +49,10 @@ spec:
             - name: grpc
               containerPort: {{ .Values.aiServer.service.grpcPort }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
             - name: config
               mountPath: /app/config.ini
               subPath: aiserver.ini
@@ -58,6 +67,10 @@ spec:
           resources:
             {{- toYaml .Values.aiServer.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-config
@@ -98,19 +111,28 @@ spec:
         app.kubernetes.io/component: {{ .Values.aiOrchestrator.serviceName }}
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: {{ .Values.aiOrchestrator.serviceName }}
           image: "{{ .Values.images.aiOrchestrator.repository }}:{{ .Values.images.aiOrchestrator.tag }}"
           imagePullPolicy: {{ .Values.images.aiOrchestrator.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
             - name: MEMOCHAT_ENV
               value: production
             - name: MEMOCHAT_AI_POSTGRES__PASSWORD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-chat-password } }
+            - name: MEMOCHAT_AI_POSTGRES__USER
+              value: {{ .Values.externalServices.postgres.roles.chat | quote }}
             - name: MEMOCHAT_AI_SEMANTIC_CACHE__REDIS__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_AI_AGENT_QUEUE__RABBITMQ__USERNAME
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
             - name: MEMOCHAT_AI_NEO4J__PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: neo4j-password } }
             - name: MEMOCHAT_AI_INTERNAL_API_KEY
@@ -124,6 +146,12 @@ spec:
             - name: http
               containerPort: {{ .Values.aiOrchestrator.service.port }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ai-cache
+              mountPath: /app/.cache
+            - name: ai-data
+              mountPath: /app/.data
             - name: config
               mountPath: /app/config.yaml
               subPath: ai-orchestrator.yaml
@@ -138,6 +166,12 @@ spec:
           resources:
             {{- toYaml .Values.aiOrchestrator.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ai-cache
+          emptyDir: {}
+        - name: ai-data
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-config

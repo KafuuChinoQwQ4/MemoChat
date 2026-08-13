@@ -24,8 +24,8 @@ class EmailDeliveryFailureContractTests(unittest.TestCase):
         source = read(VARIFY_DIR / "EmailSender.cpp")
 
         self.assertIn("smtp_ok", source)
-        self.assertRegex(source, r"smtp_ok\s*=\s*smtp_ok\s*&&\s*ssl_expect_code\(235\);")
-        self.assertRegex(source, r"smtp_ok\s*=\s*smtp_ok\s*&&\s*expect_code\(sock,\s*235\);")
+        self.assertRegex(source, r"smtp_ok\s*=\s*smtp_ok\s*&&\s*ssl_expect_code\(ssl,\s*235\);")
+        self.assertNotIn('send_command(sock, "AUTH LOGIN")', source)
         self.assertIsNotNone(
             re.search(
                 r"if \(!smtp_ok\)\s*\{(?:(?!return true;).)*varify\.email\.send_failed(?:(?!return true;).)*return false;",
@@ -42,8 +42,7 @@ class EmailDeliveryFailureContractTests(unittest.TestCase):
 
         for text in (config, varify2):
             with self.subTest(config_hash=hash(text)):
-                self.assertNotIn("kafu_chino", text)
-                self.assertNotIn("hrkhkvgptixfdfja", text)
+                self.assertIn("MEMOCHAT_EMAIL_SMTPUSER", text)
                 self.assertIn("MEMOCHAT_EMAIL_SMTPPASS", text)
                 self.assertRegex(text, r"(?m)^SMTPUser=$")
                 self.assertRegex(text, r"(?m)^SMTPPass=$")

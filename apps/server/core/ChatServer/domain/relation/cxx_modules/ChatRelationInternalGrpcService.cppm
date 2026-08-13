@@ -27,6 +27,21 @@ const char* MissingRelationCommandRequestMessage()
     return "missing relation command request or response";
 }
 
+const char* MissingFriendshipRequestMessage()
+{
+    return "missing friendship request or response";
+}
+
+const char* FriendshipUidsMustBeDistinctAndPositiveMessage()
+{
+    return "friendship uids must be distinct and positive";
+}
+
+const char* CommandDisabledMessage()
+{
+    return "relation command rpc is disabled on the query service";
+}
+
 bool ShouldReportMissingRequestOrResponse(bool has_request, bool has_response)
 {
     return !has_request || !has_response;
@@ -40,6 +55,11 @@ bool ShouldReportMissingRelationService(bool has_service)
 bool ShouldReportInvalidUid(int uid)
 {
     return uid <= 0;
+}
+
+bool ShouldReportInvalidFriendship(int uid, int peer_uid)
+{
+    return uid <= 0 || peer_uid <= 0 || uid == peer_uid;
 }
 
 short TcpMessageId(int value)

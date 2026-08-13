@@ -17,7 +17,7 @@
 | `ConfigMgr.h` | 配置管理声明 |
 | `EmailDeliveryTaskCodec.cpp` | 邮件投递任务序列化/反序列化实现 |
 | `EmailDeliveryTaskCodec.h` | 邮件投递任务编解码声明 |
-| `EmailSender.cpp` | 邮件发送实现，导入 module 复用 SMTP 端口/SSL 和状态行判定 |
+| `EmailSender.cpp` | 邮件发送实现，导入 module 复用 SMTP 端口/SSL 和状态行判定，并用 email 语义键记录脱敏日志 |
 | `EmailSender.h` | 邮件发送声明 |
 | `EmailTaskBus.cpp` | 邮件异步任务总线实现，导入 module 复用 RabbitMQ 默认值和重试边界判定 |
 | `EmailTaskBus.h` | 邮件任务总线声明 |

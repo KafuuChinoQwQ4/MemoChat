@@ -165,6 +165,162 @@ bool send_command(SocketType sock, const std::string& cmd)
     return send_all(sock, full.data(), static_cast<int>(full.size()));
 }
 
+bool ssl_send_all(SSL* ssl, const char* data, std::size_t len)
+{
+    std::size_t sent = 0;
+    while (sent < len)
+    {
+        std::size_t written = 0;
+        if (SSL_write_ex(ssl, data + sent, len - sent, &written) != 1 || written == 0)
+        {
+            return false;
+        }
+        sent += written;
+    }
+    return true;
+}
+
+bool ssl_recv_line(SSL* ssl, std::string& line)
+{
+    constexpr std::size_t kMaxSmtpReplyLineLength = 16 * 1024;
+
+    line.clear();
+    while (line.size() < kMaxSmtpReplyLineLength)
+    {
+        char character = '\0';
+        std::size_t received = 0;
+        if (SSL_read_ex(ssl, &character, 1, &received) != 1 || received != 1)
+        {
+            return false;
+        }
+        if (character == '\n')
+        {
+            return true;
+        }
+        line += character;
+    }
+    return false;
+}
+
+bool ssl_expect_code(SSL* ssl, int expected_code)
+{
+    bool more_lines = false;
+    do
+    {
+        std::string line;
+        if (!ssl_recv_line(ssl, line))
+        {
+            return false;
+        }
+
+        int code = 0;
+        if (!parse_smtp_status_line(line, &code, &more_lines) ||
+            !email_sender_modules::IsExpectedStatusCode(code, expected_code))
+        {
+            return false;
+        }
+    } while (more_lines);
+
+    return true;
+}
+
+bool ssl_send_command(SSL* ssl, const std::string& command)
+{
+    const std::string full = command + "\r\n";
+    return ssl_send_all(ssl, full.data(), full.size());
+}
+
+bool create_verified_tls_session(SocketType sock, const std::string& host, SSL_CTX** output_ctx, SSL** output_ssl)
+{
+    if (!output_ctx || !output_ssl)
+    {
+        return false;
+    }
+    *output_ctx = nullptr;
+    *output_ssl = nullptr;
+
+    const SSL_METHOD* method = TLS_client_method();
+    SSL_CTX* ctx = SSL_CTX_new(method);
+    if (!ctx)
+    {
+        return false;
+    }
+    if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) != 1 || SSL_CTX_set_default_verify_paths(ctx) != 1)
+    {
+        SSL_CTX_free(ctx);
+        return false;
+    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
+
+    SSL* ssl = SSL_new(ctx);
+    if (!ssl)
+    {
+        SSL_CTX_free(ctx);
+        return false;
+    }
+    if (SSL_set_tlsext_host_name(ssl, host.c_str()) != 1 || SSL_set1_host(ssl, host.c_str()) != 1 ||
+        SSL_set_fd(ssl, static_cast<int>(sock)) != 1 || SSL_connect(ssl) != 1 ||
+        SSL_get_verify_result(ssl) != X509_V_OK)
+    {
+        SSL_free(ssl);
+        SSL_CTX_free(ctx);
+        return false;
+    }
+
+    *output_ctx = ctx;
+    *output_ssl = ssl;
+    return true;
+}
+
+bool smtp_transaction(SSL* ssl,
+                      const std::string& user,
+                      const std::string& pass,
+                      const std::string& from,
+                      const std::string& to_email,
+                      const std::string& code)
+{
+    bool smtp_ok = ssl_send_command(ssl, "EHLO localhost");
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 250);
+
+    smtp_ok = smtp_ok && ssl_send_command(ssl, "AUTH LOGIN");
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 334);
+    smtp_ok = smtp_ok && ssl_send_command(ssl, b64_encode(user));
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 334);
+    smtp_ok = smtp_ok && ssl_send_command(ssl, b64_encode(pass));
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 235);
+
+    smtp_ok = smtp_ok && ssl_send_command(ssl, "MAIL FROM:<" + from + ">");
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 250);
+    smtp_ok = smtp_ok && ssl_send_command(ssl, "RCPT TO:<" + to_email + ">");
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 250);
+    smtp_ok = smtp_ok && ssl_send_command(ssl, "DATA");
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 354);
+
+    std::stringstream body_stream;
+    body_stream << "From: " << from << "\r\n"
+                << "To: " << to_email << "\r\n"
+                << "Subject: =?UTF-8?B?";
+    b64_encode_stream(body_stream, std::string("\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81"));
+    body_stream
+        << "?=\r\n"
+        << "Content-Type: text/plain; charset=UTF-8\r\n"
+        << "\r\n"
+        << "\xe6\x82\xa8\xe7\x9a\x84\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81\xe4\xb8\xba" << code
+        << "\xe8\xaf\xb7\xe4\xb8\x89\xe5\x88\x86\xe9\x92\x9f\xe5\x86\x85\xe5\xae\x8c\xe6\x88\x90\xe6\xb3\xa8\xe5\x86"
+           "\x8c\r\n"
+        << ".\r\n";
+    const std::string body = body_stream.str();
+    smtp_ok = smtp_ok && ssl_send_all(ssl, body.data(), body.size());
+    smtp_ok = smtp_ok && ssl_expect_code(ssl, 250);
+
+    if (smtp_ok)
+    {
+        ssl_send_command(ssl, "QUIT");
+        ssl_expect_code(ssl, 221);
+    }
+    return smtp_ok;
+}
+
 } // anonymous namespace
 
 namespace varifyservice
@@ -232,7 +388,7 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
 
     memolog::LogInfo("varify.email.send_start",
                      "sending email",
-                     {{"to", to_email}, {"smtp_host", host}, {"smtp_port", std::to_string(port)}});
+                     {{"to_email", to_email}, {"smtp_host", host}, {"smtp_port", std::to_string(port)}});
 
 #ifdef _WIN32
     WSADATA wsa_data;
@@ -288,245 +444,52 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
         return false;
     }
 
+    if (!use_ssl && (!expect_code(sock, 220) || !send_command(sock, "EHLO localhost") || !expect_code(sock, 250) ||
+                     !send_command(sock, "STARTTLS") || !expect_code(sock, 220)))
+    {
+        memolog::LogError("varify.email.send_failed", "SMTP STARTTLS negotiation failed");
+        CLOSE_SOCKET(sock);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return false;
+    }
+
+    SSL_CTX* ctx = nullptr;
+    SSL* ssl = nullptr;
+    if (!create_verified_tls_session(sock, host, &ctx, &ssl))
+    {
+        memolog::LogError("varify.email.send_failed",
+                          "SMTP TLS certificate verification failed",
+                          {{"smtp_host", host}, {"smtp_port", std::to_string(port)}});
+        CLOSE_SOCKET(sock);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return false;
+    }
+
+    bool smtp_ok = true;
     if (use_ssl)
     {
-#ifdef _WIN32
-        SSL_library_init();
-        SSL_load_error_strings();
-        const SSL_METHOD* method = TLSv1_2_client_method();
-#else
-        SSL_library_init();
-        SSL_load_error_strings();
-        const SSL_METHOD* method = TLS_client_method();
-#endif
-        SSL_CTX* ctx = SSL_CTX_new(method);
-        if (!ctx)
-        {
-            memolog::LogError("varify.email.send_failed", "SSL_CTX_new failed");
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
-
-        SSL* ssl = SSL_new(ctx);
-        if (!ssl)
-        {
-            memolog::LogError("varify.email.send_failed", "SSL_new failed");
-            SSL_CTX_free(ctx);
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
-
-        SSL_set_fd(ssl, static_cast<int>(sock));
-        if (SSL_connect(ssl) != 1)
-        {
-            memolog::LogError("varify.email.send_failed",
-                              "SSL_connect failed",
-                              {{"error", std::to_string(sock_errno())}});
-            SSL_free(ssl);
-            SSL_CTX_free(ctx);
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
-
-        auto ssl_send = [&ssl](const char* data, int len) -> int
-        {
-            return SSL_write(ssl, data, len);
-        };
-        auto ssl_recv_line = [&ssl](std::string& line) -> bool
-        {
-            line.clear();
-            char buf[2] = {0, 0};
-            while (true)
-            {
-                int n = SSL_read(ssl, buf, 1);
-                if (n <= 0)
-                    return false;
-                if (buf[0] == '\n')
-                    break;
-                line += buf[0];
-            }
-            return true;
-        };
-        auto ssl_expect_code = [&ssl_recv_line](int expected_code) -> bool
-        {
-            bool more_lines = false;
-            do
-            {
-                std::string line;
-                if (!ssl_recv_line(line))
-                    return false;
-
-                int code = 0;
-                if (!parse_smtp_status_line(line, &code, &more_lines))
-                    return false;
-                if (!email_sender_modules::IsExpectedStatusCode(code, expected_code))
-                    return false;
-            } while (more_lines);
-
-            return true;
-        };
-        auto ssl_send_cmd = [&ssl_send](const std::string& cmd) -> bool
-        {
-            std::string full = cmd + "\r\n";
-            return ssl_send(full.data(), static_cast<int>(full.size())) > 0;
-        };
-
-        bool smtp_ok = ssl_expect_code(220);
-        if (!smtp_ok)
-        {
-            memolog::LogError("varify.email.send_failed", "SMTP greeting failed (SSL)");
-            SSL_free(ssl);
-            SSL_CTX_free(ctx);
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
-
-        smtp_ok = smtp_ok && ssl_send_cmd("EHLO localhost");
-        smtp_ok = smtp_ok && ssl_expect_code(250);
-
-        smtp_ok = smtp_ok && ssl_send_cmd("AUTH LOGIN");
-        smtp_ok = smtp_ok && ssl_expect_code(334);
-
-        std::string user_b64 = b64_encode(user);
-        smtp_ok = smtp_ok && ssl_send_cmd(user_b64);
-        smtp_ok = smtp_ok && ssl_expect_code(334);
-
-        std::string pass_b64 = b64_encode(pass);
-        smtp_ok = smtp_ok && ssl_send_cmd(pass_b64);
-        smtp_ok = smtp_ok && ssl_expect_code(235);
-
-        smtp_ok = smtp_ok && ssl_send_cmd("MAIL FROM:<" + from + ">");
-        smtp_ok = smtp_ok && ssl_expect_code(250);
-
-        smtp_ok = smtp_ok && ssl_send_cmd("RCPT TO:<" + to_email + ">");
-        smtp_ok = smtp_ok && ssl_expect_code(250);
-
-        smtp_ok = smtp_ok && ssl_send_cmd("DATA");
-        smtp_ok = smtp_ok && ssl_expect_code(354);
-
-        std::stringstream ss;
-        ss << "From: " << from << "\r\n"
-           << "To: " << to_email << "\r\n"
-           << "Subject: =?UTF-8?B?";
-        b64_encode_stream(ss, std::string("\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81"));
-        ss << "?=\r\n"
-           << "Content-Type: text/plain; charset=UTF-8\r\n"
-           << "\r\n"
-           << "\xe6\x82\xa8\xe7\x9a\x84\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81\xe4\xb8\xba" << code
-           << "\xe8\xaf\xb7\xe4\xb8\x89\xe5\x88\x86\xe9\x92\x9f\xe5\x86\x85\xe5\xae\x8c\xe6\x88\x90\xe6\xb3\xa8\xe5\x86"
-              "\x8c\r\n"
-           << ".\r\n";
-        std::string body = ss.str();
-        smtp_ok = smtp_ok && (ssl_send(body.data(), static_cast<int>(body.size())) > 0);
-        smtp_ok = smtp_ok && ssl_expect_code(250);
-
-        ssl_send_cmd("QUIT");
-        ssl_expect_code(221);
-
-        SSL_free(ssl);
-        SSL_CTX_free(ctx);
-
-        if (!smtp_ok)
-        {
-            memolog::LogError("varify.email.send_failed",
-                              "SMTP transaction failed",
-                              {{"to", to_email}, {"smtp_host", host}, {"smtp_port", std::to_string(port)}});
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
+        smtp_ok = ssl_expect_code(ssl, 220);
     }
-    else
+    smtp_ok = smtp_ok && smtp_transaction(ssl, user, pass, from, to_email, code);
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+
+    if (!smtp_ok)
     {
-        if (!expect_code(sock, 220))
-        {
-            memolog::LogError("varify.email.send_failed", "SMTP greeting failed");
-            CLOSE_SOCKET(sock);
+        memolog::LogError("varify.email.send_failed",
+                          "SMTP transaction failed",
+                          {{"to_email", to_email}, {"smtp_host", host}, {"smtp_port", std::to_string(port)}});
+        CLOSE_SOCKET(sock);
 #ifdef _WIN32
-            WSACleanup();
+        WSACleanup();
 #endif
-            return false;
-        }
-
-        bool smtp_ok = send_command(sock, "EHLO localhost");
-        smtp_ok = smtp_ok && expect_code(sock, 250);
-
-        smtp_ok = smtp_ok && send_command(sock, "STARTTLS");
-        smtp_ok = smtp_ok && expect_code(sock, 220);
-
-        {
-            SSL_library_init();
-            SSL_load_error_strings();
-            const SSL_METHOD* method = TLS_client_method();
-            SSL_CTX* ctx = SSL_CTX_new(method);
-            SSL* ssl = SSL_new(ctx);
-            SSL_set_fd(ssl, static_cast<int>(sock));
-            SSL_connect(ssl);
-            SSL_free(ssl);
-            SSL_CTX_free(ctx);
-        }
-
-        smtp_ok = smtp_ok && send_command(sock, "EHLO localhost");
-        smtp_ok = smtp_ok && expect_code(sock, 250);
-
-        smtp_ok = smtp_ok && send_command(sock, "AUTH LOGIN");
-        smtp_ok = smtp_ok && expect_code(sock, 334);
-        smtp_ok = smtp_ok && send_command(sock, b64_encode(user));
-        smtp_ok = smtp_ok && expect_code(sock, 334);
-        smtp_ok = smtp_ok && send_command(sock, b64_encode(pass));
-        smtp_ok = smtp_ok && expect_code(sock, 235);
-
-        smtp_ok = smtp_ok && send_command(sock, "MAIL FROM:<" + from + ">");
-        smtp_ok = smtp_ok && expect_code(sock, 250);
-        smtp_ok = smtp_ok && send_command(sock, "RCPT TO:<" + to_email + ">");
-        smtp_ok = smtp_ok && expect_code(sock, 250);
-        smtp_ok = smtp_ok && send_command(sock, "DATA");
-        smtp_ok = smtp_ok && expect_code(sock, 354);
-
-        std::stringstream ss;
-        ss << "From: " << from << "\r\n"
-           << "To: " << to_email << "\r\n"
-           << "Subject: =?UTF-8?B?";
-        b64_encode_stream(ss, std::string("\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81"));
-        ss << "?=\r\n"
-           << "Content-Type: text/plain; charset=UTF-8\r\n"
-           << "\r\n"
-           << "\xe6\x82\xa8\xe7\x9a\x84\xe9\xaa\x8c\xe8\xaf\x81\xe7\xa0\x81\xe4\xb8\xba" << code
-           << "\xe8\xaf\xb7\xe4\xb8\x89\xe5\x88\x86\xe9\x92\x9f\xe5\x86\x85\xe5\xae\x8c\xe6\x88\x90\xe6\xb3\xa8\xe5\x86"
-              "\x8c\r\n"
-           << ".\r\n";
-        std::string body = ss.str();
-        smtp_ok = smtp_ok && send_all(sock, body.data(), static_cast<int>(body.size()));
-        smtp_ok = smtp_ok && expect_code(sock, 250);
-
-        send_command(sock, "QUIT");
-        expect_code(sock, 221);
-
-        if (!smtp_ok)
-        {
-            memolog::LogError("varify.email.send_failed",
-                              "SMTP transaction failed",
-                              {{"to", to_email}, {"smtp_host", host}, {"smtp_port", std::to_string(port)}});
-            CLOSE_SOCKET(sock);
-#ifdef _WIN32
-            WSACleanup();
-#endif
-            return false;
-        }
+        return false;
     }
 
     CLOSE_SOCKET(sock);
@@ -534,7 +497,7 @@ bool EmailSender::Send(const std::string& to_email, const std::string& code)
     WSACleanup();
 #endif
 
-    memolog::LogInfo("varify.email.send_ok", "email sent", {{"to", to_email}});
+    memolog::LogInfo("varify.email.send_ok", "email sent", {{"to_email", to_email}});
     return true;
 }
 

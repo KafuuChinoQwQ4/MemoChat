@@ -14,11 +14,16 @@ long long MemoChatTestRelationServiceWorkerDefaultWorkerId();
 std::string MemoChatTestRelationServiceWorkerLoggerName();
 bool MemoChatTestRelationServiceWorkerIsRabbitMqBackend(const std::string& value);
 bool MemoChatTestRelationServiceWorkerIsKafkaBackend(const std::string& value);
+bool MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(bool release_mode,
+                                                                            bool configured_backend,
+                                                                            bool build_available);
 std::string MemoChatTestRelationServiceWorkerEventBusUnavailableError();
 std::string MemoChatTestRelationServiceWorkerRabbitMqUnavailableLogEvent();
 std::string MemoChatTestRelationServiceWorkerRabbitMqUnavailableLogMessage();
 std::string MemoChatTestRelationServiceWorkerKafkaUnavailableLogEvent();
 std::string MemoChatTestRelationServiceWorkerKafkaUnavailableLogMessage();
+std::string MemoChatTestRelationServiceWorkerRabbitMqUnavailableReleaseError();
+std::string MemoChatTestRelationServiceWorkerKafkaUnavailableReleaseError();
 
 TEST(ChatRelationServiceWorkerRuntimeAlgorithmsTest, ClassifiesConfigArguments)
 {
@@ -68,4 +73,20 @@ TEST(ChatRelationServiceWorkerRuntimeAlgorithmsTest, DefinesBusFallbackLiterals)
               "relation_service.event_bus.kafka_unavailable");
     EXPECT_EQ(MemoChatTestRelationServiceWorkerKafkaUnavailableLogMessage(),
               "kafka async event bus unavailable in this build, falling back to redis");
+}
+
+TEST(ChatRelationServiceWorkerRuntimeAlgorithmsTest, FailsClosedOnlyForUnavailableConfiguredReleaseBackend)
+{
+    EXPECT_TRUE(MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(true, true, false));
+    EXPECT_FALSE(MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(false, true, false));
+    EXPECT_FALSE(MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(true, false, false));
+    EXPECT_FALSE(MemoChatTestRelationServiceWorkerShouldFailClosedForUnavailableBackend(true, true, true));
+}
+
+TEST(ChatRelationServiceWorkerRuntimeAlgorithmsTest, DefinesReleaseModeBusErrors)
+{
+    EXPECT_EQ(MemoChatTestRelationServiceWorkerRabbitMqUnavailableReleaseError(),
+              "rabbitmq task bus is required in release mode but unavailable in this build");
+    EXPECT_EQ(MemoChatTestRelationServiceWorkerKafkaUnavailableReleaseError(),
+              "kafka async event bus is required in release mode but unavailable in this build");
 }

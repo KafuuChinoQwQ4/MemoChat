@@ -7,6 +7,7 @@
 | 子目录 | 作用概括 |
 | --- | --- |
 | [`app/`](app/_TREE.md) | 应用装配层，负责启动引导、依赖组合、信号路由与会话协调 |
+| [`cmake/`](cmake/_TREE.md) | 客户端发布构建的 CMake 校验模块 |
 | [`core/`](core/_TREE.md) | 客户端核心运行时与基础设施 |
 | [`docs/`](docs/_TREE.md) | 工程文档 |
 | [`features/`](features/_TREE.md) | 业务功能模块（聊天、联系人、群组、通话等） |

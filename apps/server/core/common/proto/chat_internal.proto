@@ -47,9 +47,31 @@ message BootstrapResponse {
   string payload_json = 2;
 }
 
+message FriendshipRequest {
+  int32 uid = 1;
+  int32 peer_uid = 2;
+}
+
+message FriendshipResponse {
+  bool are_friends = 1;
+}
+
+message RelationHealthRequest {}
+
+message RelationHealthResponse {
+  bool ready = 1;
+  string error = 2;
+}
+
 service ChatRelationInternalService {
   rpc AppendRelationBootstrap(BootstrapRequest) returns (BootstrapResponse) {}
   rpc BuildDialogList(BootstrapRequest) returns (BootstrapResponse) {}
+  // Strict authorization query backed only by the current friend table.
+  // Historical accepted friend applications must never satisfy this RPC.
+  rpc CheckFriendship(FriendshipRequest) returns (FriendshipResponse) {}
+  // Authenticated dependency probe. Unlike CheckFriendship, this executes a
+  // live relation-database health check and fails with UNAVAILABLE on error.
+  rpc CheckHealth(RelationHealthRequest) returns (RelationHealthResponse) {}
   rpc SearchUser(JsonPayloadRequest) returns (JsonPayloadResponse) {}
   rpc AddFriendApply(JsonPayloadRequest) returns (JsonPayloadResponse) {}
   rpc AuthFriendApply(JsonPayloadRequest) returns (JsonPayloadResponse) {}
@@ -60,9 +82,9 @@ service ChatRelationInternalService {
   // Read-only friendship filter for cross-service visibility checks (e.g.
   // MomentsService feed). payload_json in: {"viewer_uid":N,"author_uids":[...]},
   // out: {"error":0,"friend_uids":[...]} — the subset of author_uids that are
-  // bidirectional friends of viewer_uid or have an accepted (status=1)
-  // friend_apply. Lets services that don't own the friend tables (in memo_pg)
-  // resolve visibility without a cross-database query.
+  // current bidirectional friends of viewer_uid. Historical friend applications
+  // are never authorization state. Lets services that don't own the friend
+  // tables (in memo_pg) resolve visibility without a cross-database query.
   rpc FilterFriendUids(JsonPayloadRequest) returns (JsonPayloadResponse) {}
 }
 

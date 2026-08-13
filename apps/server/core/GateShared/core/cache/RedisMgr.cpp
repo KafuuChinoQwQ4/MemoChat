@@ -40,6 +40,11 @@ bool RedisMgr::Ready() const noexcept
     return _con_pool && _con_pool->Ready();
 }
 
+bool RedisMgr::Healthy() const noexcept
+{
+    return _con_pool && _con_pool->Healthy();
+}
+
 const std::string& RedisMgr::StartupError() const noexcept
 {
     static const std::string allocation_error = "redis pool allocation failed";

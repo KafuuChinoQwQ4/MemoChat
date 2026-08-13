@@ -4,7 +4,7 @@ export namespace memochat::chat::relation_grpc_service_adapter::modules
 {
 constexpr unsigned RelationQueryForwardCount()
 {
-    return 2U;
+    return 3U;
 }
 
 constexpr unsigned RelationCommandForwardCount()

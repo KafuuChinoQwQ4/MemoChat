@@ -8,9 +8,9 @@
 | --- | --- |
 | `Live2DAvatarOpenGLRenderer.cpp` | 头像 OpenGL 渲染器实现 |
 | `Live2DAvatarOpenGLRenderer.h` | 头像 OpenGL 渲染器的接口定义 |
-| `Live2DCoreRenderer.cpp` | 渲染核心调度逻辑实现 |
+| `Live2DCoreRenderer.cpp` | 渲染核心调度与运行时 Cubism Core 动态发现实现 |
 | `Live2DCoreRenderer.h` | 渲染核心调度的接口定义 |
-| `Live2DOfficialOpenGLRenderer.cpp` | 基于官方 Cubism SDK 的 OpenGL 渲染实现 |
+| `Live2DOfficialOpenGLRenderer.cpp` | 基于官方 Cubism SDK 的 OpenGL 渲染及运行时着色器定位实现 |
 | `Live2DOfficialOpenGLRenderer.h` | 官方 SDK 渲染器的接口定义 |
 | `Live2DPlaceholderRenderer.cpp` | 无模型时的占位渲染实现 |
 | `Live2DPlaceholderRenderer.h` | 占位渲染器的接口定义 |

@@ -1,4 +1,5 @@
 #include "QuicChatTransport.h"
+#include "HttpMgrRequestUtils.h"
 
 #include <QDebug>
 #include <QMetaObject>
@@ -165,7 +166,13 @@ bool QuicChatTransport::ensureQuicReady(QString* errorText)
 
     QUIC_CREDENTIAL_CONFIG cred{};
     cred.Type = QUIC_CREDENTIAL_TYPE_NONE;
-    cred.Flags = QUIC_CREDENTIAL_FLAG_CLIENT | QUIC_CREDENTIAL_FLAG_NO_CERTIFICATE_VALIDATION;
+    cred.Flags = QUIC_CREDENTIAL_FLAG_CLIENT | QUIC_CREDENTIAL_FLAG_USE_TLS_BUILTIN_CERTIFICATE_VALIDATION;
+    const QByteArray caPath = deploymentCaFilePath().toUtf8();
+    if (!caPath.isEmpty())
+    {
+        cred.CaCertificateFile = caPath.constData();
+        cred.Flags |= QUIC_CREDENTIAL_FLAG_SET_CA_CERTIFICATE_FILE;
+    }
     status = _api->ConfigurationLoadCredential(_configuration, &cred);
     if (QUIC_FAILED(status))
     {

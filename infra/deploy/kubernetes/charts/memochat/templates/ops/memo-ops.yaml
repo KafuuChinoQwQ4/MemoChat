@@ -1,3 +1,4 @@
+{{- if .Values.memoOps.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,10 +19,15 @@ spec:
         app.kubernetes.io/component: memo-ops-server
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: memo-ops-server
           image: "{{ .Values.images.memoOps.repository }}:{{ .Values.images.memoOps.tag }}"
           imagePullPolicy: {{ .Values.images.memoOps.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           command: ["python", "-m", "Memo_ops.server.ops_server.main", "--config", "/app/config/opsserver.yaml"]
           ports:
             - name: http
@@ -32,6 +38,12 @@ spec:
             - name: MEMO_OPS_REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: redis-password } }
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ops-reports
+              mountPath: /app/Memo_ops/reports
+            - name: ops-runtime
+              mountPath: /app/runtime
             - name: config
               mountPath: /app/config/opsserver.yaml
               subPath: opsserver.yaml
@@ -45,6 +57,12 @@ spec:
           resources:
             {{- toYaml .Values.memoOps.server.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ops-reports
+          emptyDir: {}
+        - name: ops-runtime
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-ops-config
@@ -86,10 +104,15 @@ spec:
         app.kubernetes.io/component: memo-ops-collector
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: memo-ops-collector
           image: "{{ .Values.images.memoOps.repository }}:{{ .Values.images.memoOps.tag }}"
           imagePullPolicy: {{ .Values.images.memoOps.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           command: ["python", "-m", "Memo_ops.server.ops_collector.main", "--config", "/app/config/opscollector.yaml"]
           ports:
             - name: metrics
@@ -100,6 +123,12 @@ spec:
             - name: MEMO_OPS_REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-ops-secrets, key: redis-password } }
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: ops-reports
+              mountPath: /app/Memo_ops/reports
+            - name: ops-runtime
+              mountPath: /app/runtime
             - name: config
               mountPath: /app/config/opscollector.yaml
               subPath: opscollector.yaml
@@ -113,6 +142,12 @@ spec:
           resources:
             {{- toYaml .Values.memoOps.collector.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: ops-reports
+          emptyDir: {}
+        - name: ops-runtime
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-ops-config
@@ -140,3 +175,4 @@ spec:
     - name: metrics
       port: {{ .Values.memoOps.collector.metricsPort }}
       targetPort: metrics
+{{- end }}

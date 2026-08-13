@@ -14,6 +14,8 @@
 | --- | --- |
 | `CallPersistence.cpp` | 通话本地持久化 Adapter，实现会话、好友关系和用户资料访问 |
 | `CallPersistence.hpp` | 通话本地持久化 Interface，隔离核心服务与宽 Postgres 管理器 |
+| `CallRelationClient.cpp` | 通过 relation-query gRPC 服务执行通话好友关系校验，失败时拒绝通话 |
+| `CallRelationClient.hpp` | 通话域最小关系查询客户端声明 |
 | `CallPublicDtos.cpp` | 通话公共请求与固定成功响应 DTO 编解码实现 |
 | `CallPublicDtos.hpp` | 通话公共请求与固定成功响应 DTO 声明 |
 | `CallSessionCacheDto.cpp` | 通话会话 Redis 缓存 DTO 编解码实现 |

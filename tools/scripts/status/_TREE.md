@@ -9,7 +9,7 @@
 | `cleanup-wsl-stale.ps1` | 清理 WSL 中的残留进程/资源 |
 | `deploy_services.bat` | 部署服务的批处理脚本 |
 | `deploy_services.ps1` | 部署服务的 PowerShell 脚本 |
-| `deploy_services.sh` | 部署服务的 shell 脚本 |
+| `deploy_services.sh` | 从全新白名单暂存原子部署 Linux 服务，并将旧运行时保存在仓库外私有目录 |
 | `ensure_minio_buckets.sh` | 确保 MinIO 所需 bucket 存在 |
 | `migrate_phase2_account_split.sh` | Phase2 账号库拆分迁移 |
 | `migrate_phase2_db_split.sh` | Phase2 数据库拆分迁移 |
@@ -23,7 +23,7 @@
 | `smoke_relation_query_grpc_runtime.sh` | Relation 查询服务 gRPC 运行时冒烟 |
 | `smoke_relation_service_grpc_runtime.sh` | Relation 服务 gRPC 运行时冒烟 |
 | `start-all-services.bat` | 启动全部服务（批处理） |
-| `start-all-services.sh` | 启动全部服务（shell，默认部署当前 build、同步 AI 内部认证并透传 transport 门禁） |
+| `start-all-services.sh` | 启动全部服务（shell，默认部署当前 build、同步 AI 内部认证、强制环境注入 MinIO 凭据、owner-only 运行文件并透传 transport 门禁） |
 | `start-local-k8s.ps1` | 启动本地 k8s 集群 |
 | `start-memochat-qml-wslg.sh` | 在 WSLg 下启动 MemoChat QML 客户端 |
 | `status-local-k8s.ps1` | 查看本地 k8s 状态 |

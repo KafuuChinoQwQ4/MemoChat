@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::memochat-avatar",
+        "arn:aws:s3:::memochat-file",
+        "arn:aws:s3:::memochat-image",
+        "arn:aws:s3:::memochat-video",
+        "arn:aws:s3:::memochat-moments"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": [
+        "arn:aws:s3:::memochat-avatar/*",
+        "arn:aws:s3:::memochat-file/*",
+        "arn:aws:s3:::memochat-image/*",
+        "arn:aws:s3:::memochat-video/*",
+        "arn:aws:s3:::memochat-moments/*"
+      ]
+    }
+  ]
+}

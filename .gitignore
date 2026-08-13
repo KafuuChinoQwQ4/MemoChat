@@ -13,6 +13,7 @@ build-*
 .env
 .env.*
 !.env.example
+!infra/deploy/local/.env.release.example
 *.local
 *.secret
 *.secrets
@@ -109,6 +110,7 @@ tools/scripts/__pycache__/
 /Memo_ops/artifacts/reports/
 !/Memo_ops/artifacts/index/
 !/Memo_ops/artifacts/index/README.md
+/apps/server/Memo_ops/artifacts/logs/
 /Memo_ops/runtime/artifacts/postgresql_rehearsal/
 /infra/Memo_ops/artifacts/logs/
 /infra/Memo_ops/artifacts/loadtest/

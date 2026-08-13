@@ -7,7 +7,7 @@
 | 文件 | 作用概括 |
 | --- | --- |
 | `AuthCredentialStore.cpp` | 凭据存储实现 |
-| `AuthCredentialStore.h` | 凭据存储声明 |
+| `AuthCredentialStore.h` | 仅缓存邮箱的本地凭据存储声明与 Unix owner-only 文件保护 |
 | `AuthService.cpp` | 认证服务实现 |
 | `AuthService.h` | 认证服务声明 |
 

@@ -25,6 +25,6 @@
 | `test_focused_persistence_seams.py` | 校验 focused service handler 只能通过本地持久化 Interface 访问 Postgres |
 | `test_registration_identity_contract.py` | 校验注册/身份相关的跨服务契约 |
 | `test_r18_gate_header_security_contract.py` | 校验 R18 上游 TLS/ECB 边界与 Gate HTTP header 注入防护契约 |
-| `test_security_hardening_contract.py` | 校验认证安全加固契约：登录限流与密钥注入防呆 |
+| `test_security_hardening_contract.py` | 校验认证安全加固契约：登录限流、密钥注入防呆与日志敏感字段脱敏 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

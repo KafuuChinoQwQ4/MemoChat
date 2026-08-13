@@ -15,7 +15,7 @@
 | `ChatDeliveryWorker.cpp` | 投递 worker 进程入口，消费投递任务 |
 | `ChatMessageService.cpp` | 消息服务进程入口，承载私聊/群聊内部 gRPC |
 | `ChatRelationQueryService.cpp` | 关系查询服务进程入口（只读关系查询） |
-| `ChatRelationServiceWorker.cpp` | 关系服务 worker 进程入口（关系写入 + 事件） |
+| `ChatRelationServiceWorker.cpp` | 关系服务 worker 进程入口（关系写入、事件与正式模式消息总线能力门禁） |
 | `ChatRuntime.cpp` | 各服务共享的运行时启动/装配实现 |
 | `ChatRuntime.h` | 运行时装配声明 |
 | `ChatServer.cpp` | 接入服务进程入口（TCP/QUIC 接入） |

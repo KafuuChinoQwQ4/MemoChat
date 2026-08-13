@@ -1,6 +1,10 @@
+import importlib.util
+import os
 import re
+import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.python.support.paths import repo_root
 
@@ -36,11 +40,12 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
             '("memochat", "123456")',
             "INFLUX_TOKEN =",
             "my-super-secret-admin-token",
-            'access_key="memochat_admin"',
-            'secret_key="MinioPass2026!"',
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
+
+        self.assertIn("access_key=_required_env_first(MINIO_ACCESS_KEY_ENV)", text)
+        self.assertIn("secret_key=_required_env_first(MINIO_SECRET_KEY_ENV)", text)
 
     def test_mongodb_mcp_builds_uri_from_environment(self):
         text = read(TOOLS / "mcps/user-mongodb/user_mongodb_mcp_server.py")
@@ -59,6 +64,31 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
 
         self.assertNotIn("mongodb://memochat_app:123456@127.0.0.1:27017/memochat", text)
         self.assertNotIn('MONGO_URI = "mongodb://', text)
+
+    def test_mongodb_mcp_keeps_uri_out_of_process_arguments(self):
+        module_path = TOOLS / "mcps/user-mongodb/user_mongodb_mcp_server.py"
+        spec = importlib.util.spec_from_file_location("user_mongodb_mcp_server", module_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        sentinel_uri = "mongodb://fixture-user:fixture-password-0123456789@127.0.0.1:27017/memochat"
+        completed = mock.Mock(returncode=0, stdout='{"ok":true}\n', stderr="")
+        with (
+            mock.patch.dict(os.environ, {"MEMOCHAT_MONGO_URI": sentinel_uri}, clear=False),
+            mock.patch.object(module.subprocess, "run", return_value=completed) as run_mock,
+        ):
+            self.assertEqual(module._run_mongosh("JSON.stringify({ok: true})"), {"ok": True})
+
+        command = run_mock.call_args.args[0]
+        options = run_mock.call_args.kwargs
+        self.assertNotIn(sentinel_uri, "\n".join(command))
+        self.assertIn("--nodb", command)
+        self.assertIn("--file", command)
+        self.assertIn("/dev/stdin", command)
+        self.assertNotIn("--eval", command)
+        self.assertIn(sentinel_uri, options["input"])
 
     def test_neo4j_mcp_reads_password_from_environment(self):
         text = read(TOOLS / "mcps/user-neo4j/user_neo4j_mcp_server.py")
@@ -107,8 +137,10 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
             TOOLS / "scripts/status/ensure_minio_buckets.sh",
             TOOLS / "scripts/dev/runtime_smoke_full_chat.py",
             TOOLS / "scripts/status/smoke_domain_gateway_runtime.sh",
+            TOOLS / "scripts/status/start-all-services.sh",
             TOOLS / "scripts/gateserver/start_gateserver.bat",
             REPO_ROOT / "infra/Memo_ops/bin/start_minio.bat",
+            REPO_ROOT / "docs/debug/quic-chatserver-crash.md",
         )
 
         combined = "\n".join(read(path) for path in paths)
@@ -121,16 +153,69 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, combined)
 
-        for forbidden in (
-            "MINIO_SECRET_KEY:-MinioPass2026!",
-            'secret_key="MinioPass2026!"',
-            'set "MINIO_ROOT_PASSWORD=MinioPass2026!"',
-            "Console 密码: MinioPass2026!",
-            "AccessKey=memochat_admin",
-            "SecretKey=MinioPass2026!",
-        ):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, combined)
+        self.assertNotRegex(
+            combined,
+            r'''(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*='''
+            r'''["'](?![$%])[^"']+["']''',
+        )
+        self.assertNotRegex(
+            combined,
+            r'''(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*='''
+            r'''(?![$%])[^"'$%(\s]+\s*$''',
+        )
+        self.assertNotRegex(combined, r'''--minio-(?:access|secret)-key\s+(?!["']?\$)\S+''')
+
+    def test_start_all_services_minio_credentials_fail_closed(self):
+        source = read(TOOLS / "scripts/status/start-all-services.sh")
+
+        def extract_function(name: str) -> str:
+            match = re.search(rf"(?ms)^{name}\(\) \{{\n.*?^\}}\n", source)
+            self.assertIsNotNone(match, name)
+            return match.group(0)
+
+        harness = "\n".join(
+            (
+                "set -Eeuo pipefail",
+                extract_function("first_env_value"),
+                extract_function("export_minio_runtime_credentials"),
+                "export_minio_runtime_credentials",
+            )
+        )
+        valid_access_key = "a" * 12
+        valid_secret_key = "b" * 16
+        cases = (
+            ("missing", {}, 1),
+            (
+                "short",
+                {"MEMOCHAT_MINIO_ACCESSKEY": "ab", "MEMOCHAT_MINIO_SECRETKEY": "short"},
+                1,
+            ),
+            (
+                "canonical",
+                {"MEMOCHAT_MINIO_ACCESSKEY": valid_access_key, "MEMOCHAT_MINIO_SECRETKEY": valid_secret_key},
+                0,
+            ),
+            (
+                "root-aliases",
+                {"MINIO_ROOT_USER": valid_access_key, "MINIO_ROOT_PASSWORD": valid_secret_key},
+                0,
+            ),
+        )
+        for label, additions, expected_return_code in cases:
+            with self.subTest(label=label):
+                environment = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **additions}
+                result = subprocess.run(
+                    ["bash", "-c", harness],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                    timeout=10,
+                )
+                self.assertEqual(result.returncode, expected_return_code, result.stderr)
+                output = result.stdout + result.stderr
+                for value in additions.values():
+                    self.assertNotIn(value, output)
 
     def test_local_maintenance_scripts_externalize_infrastructure_passwords(self):
         paths = (

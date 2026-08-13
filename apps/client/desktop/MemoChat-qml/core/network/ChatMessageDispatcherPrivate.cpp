@@ -43,7 +43,7 @@ void ChatMessageDispatcher::registerPrivateMessageHandlers()
                      [this](ReqId id, int len, QByteArray data)
                      {
                          Q_UNUSED(len);
-                         qDebug() << "handle id is " << id << " data is " << data;
+                         qDebug() << "private message notification. req id:" << id << "bytes:" << data.size();
 
                          QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
                          if (jsonDoc.isNull())

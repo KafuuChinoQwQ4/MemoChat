@@ -9,12 +9,19 @@ receivers:
     endpoint: 0.0.0.0:9411
   filelog:
     include:
-      - /workspace/Memo_ops/runtime/**/*.json
-      - /workspace/build/bin/**/*.json
+      - /workspace/Memo_ops/runtime/artifacts/logs/**/*.json
+      - /workspace/Memo_ops/runtime/services/*/logs/*.json
+      - /workspace/build/bin/**/logs/*.json
+    exclude:
+      - /workspace/**/data/**
+      - /workspace/**/credentials/**
+      - /workspace/**/cookies/**
+      - /workspace/**/sessions/**
     start_at: end
     operators:
       - type: json_parser
         parse_from: body
+
   filelog/envoy:
     include:
       - /workspace/envoy/logs/access.json
@@ -23,6 +30,26 @@ receivers:
       - type: json_parser
         parse_from: body
         parse_to: attributes
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /healthz
+    # The distroless image has no HTTP client. This safe static config lets the
+    # collector's own HTTP config provider turn the live endpoint into a probe.
+    response_body:
+      healthy: |
+        receivers:
+          otlp:
+            protocols:
+              grpc: {}
+        exporters:
+          debug: {}
+        service:
+          pipelines:
+            traces:
+              receivers: [otlp]
+              exporters: [debug]
 
 processors:
   attributes/envoy_loki:
@@ -49,6 +76,7 @@ exporters:
     endpoint: http://memochat-loki:3100/loki/api/v1/push
 
 service:
+  extensions: [health_check]
   telemetry:
     metrics:
       address: 0.0.0.0:9464

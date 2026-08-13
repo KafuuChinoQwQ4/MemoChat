@@ -6,6 +6,7 @@
 
 #include <charconv>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <filesystem>
 #include <map>
@@ -653,7 +654,10 @@ static bool ValidatePfxReadable(const std::string& pfx_path)
     return true;
 }
 
-static bool EnsureSelfSignedCert(std::string& crt_path, std::string& key_path, std::string& pfx_path)
+static bool EnsureSelfSignedCert(std::string& crt_path,
+                                 std::string& key_path,
+                                 std::string& pfx_path,
+                                 const std::string& pfx_password)
 {
     std::error_code filesystem_error;
     std::filesystem::path exe_dir = std::filesystem::current_path(filesystem_error);
@@ -675,10 +679,13 @@ static bool EnsureSelfSignedCert(std::string& crt_path, std::string& key_path, s
         return true;
     }
 
-    return CertUtil::GenerateSelfSignedCertPfx(pfx_path, crt_path, key_path, "memochat");
+    return CertUtil::GenerateSelfSignedCertPfx(pfx_path, crt_path, key_path, pfx_password);
 }
 
-static bool LoadSelfSignedCertFromPfx(HQUIC Configuration, const std::string& pfx_path, std::string& error_out)
+static bool LoadSelfSignedCertFromPfx(HQUIC Configuration,
+                                      const std::string& pfx_path,
+                                      const std::string& pfx_password,
+                                      std::string& error_out)
 {
     std::error_code filesystem_error;
     if (!std::filesystem::exists(pfx_path, filesystem_error) || filesystem_error)
@@ -707,7 +714,7 @@ static bool LoadSelfSignedCertFromPfx(HQUIC Configuration, const std::string& pf
     QUIC_CERTIFICATE_PKCS12 pkcs12{};
     pkcs12.Asn1Blob = pfx_data.data();
     pkcs12.Asn1BlobLength = static_cast<uint32_t>(pfx_data.size());
-    pkcs12.PrivateKeyPassword = const_cast<char*>("memochat");
+    pkcs12.PrivateKeyPassword = const_cast<char*>(pfx_password.c_str());
 
     QUIC_CREDENTIAL_CONFIG cred{};
     cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_PKCS12;
@@ -809,9 +816,16 @@ bool GateHttp3Listener::Start(std::string& error)
     std::string crt_path = (exe_dir / "server.crt").string();
     std::string key_path = (exe_dir / "server.key").string();
     std::string pfx_path = (exe_dir / "server.pfx").string();
+    const char* configured_pfx_password = std::getenv("MEMOCHAT_GATE_HTTP3_PFX_PASSWORD");
+    if (configured_pfx_password == nullptr || configured_pfx_password[0] == '\0')
+    {
+        error = "MEMOCHAT_GATE_HTTP3_PFX_PASSWORD is required for the legacy HTTP/3 listener";
+        return false;
+    }
+    const std::string pfx_password(configured_pfx_password);
 
     // Ensure the certificate files exist (generate if needed)
-    if (!EnsureSelfSignedCert(crt_path, key_path, pfx_path))
+    if (!EnsureSelfSignedCert(crt_path, key_path, pfx_path, pfx_password))
     {
         error = "Failed to generate self-signed certificate files";
         return false;
@@ -822,7 +836,7 @@ bool GateHttp3Listener::Start(std::string& error)
     QUIC_CERTIFICATE_FILE_PROTECTED cert_file{};
     cert_file.CertificateFile = crt_path.c_str();
     cert_file.PrivateKeyFile = key_path.c_str();
-    cert_file.PrivateKeyPassword = "memochat";
+    cert_file.PrivateKeyPassword = pfx_password.c_str();
 
     QUIC_CREDENTIAL_CONFIG cred{};
     cred.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE_PROTECTED;
@@ -839,7 +853,7 @@ bool GateHttp3Listener::Start(std::string& error)
         memolog::LogError("http3.cred.fail.file_protected", "ConfigurationLoadCredential (FILE_PROTECTED) failed", ef);
         // Fallback: attempt PFX blob loading.
         std::string pfx_err;
-        if (!LoadSelfSignedCertFromPfx(pImpl_->Configuration, pfx_path, pfx_err))
+        if (!LoadSelfSignedCertFromPfx(pImpl_->Configuration, pfx_path, pfx_password, pfx_err))
         {
             error = "Both FILE_PROTECTED and PFX certificate loading failed: " + pfx_err;
             return false;

@@ -41,7 +41,7 @@ MomentsRelationClient& RelationClient()
         {
             endpoint = memochat::moments::service::modules::DefaultRelationQueryEndpoint();
         }
-        return MomentsRelationClient(endpoint);
+        return MomentsRelationClient(endpoint, ConfigMgr::Inst()["RelationQueryService"]["MomentsAuthToken"]);
     }();
     return client;
 }

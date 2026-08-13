@@ -24,7 +24,7 @@
 | `RelationGrpcServiceAdapter.h` | 关系服务适配器声明 |
 | `RelationQueryGrpcClient.cpp` | 关系查询 gRPC 客户端实现，导入轻量算法 module 处理方法名、远程错误字段与 payload guard。 |
 | `RelationQueryGrpcClient.h` | 关系查询客户端声明 |
-| `RelationQueryServiceFactory.cpp` | 关系查询服务工厂（本地/远程切换）实现 |
+| `RelationQueryServiceFactory.cpp` | 关系查询服务工厂实现；远端默认失败关闭，仅允许显式非发布环境启用本地降级。 |
 | `RelationQueryServiceFactory.h` | 关系查询服务工厂声明 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

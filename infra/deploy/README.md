@@ -17,14 +17,24 @@ This directory is split by deployment concern instead of by tool name.
 
 ## Common Entry Points
 
-Build images:
+Build the release images from fresh, verified service bundles. The Dockerfile
+expects the commit-bound vcpkg SPDX produced by the packager; do not build a
+service directly from the repository or use mutable `latest` tags:
 
 ```bash
-docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=GateServer -t memochat/gateserver:latest .
-docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=ChatServer -t memochat/chatserver:latest .
-docker build -f deploy/images/services/cpp-service.Dockerfile --build-arg TARGET=VarifyServer -t memochat/varifyserver:latest .
-docker build -f deploy/images/services/memo-ops.Dockerfile -t memochat/memo-ops:latest .
+tools/scripts/release/package_backend_services.sh \
+  --vcpkg-installed-root "$VCPKG_ROOT/installed-memochat-gcc16-server-release" \
+  --vcpkg-triplet x64-linux-memochat-release \
+  --output /data/releases/memochat/backend
+tools/scripts/release/build_backend_images.sh \
+  --bundle-root /data/releases/memochat/backend \
+  --image-prefix memochat \
+  --tag local
 ```
+
+For a formal versioned release, use the tag-triggered CI artifacts and their
+immutable `sha-<commit>` references; the workflow is the only path that writes
+GHCR or creates version aliases.
 
 Install chart:
 

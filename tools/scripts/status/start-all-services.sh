@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
@@ -344,9 +345,14 @@ export_minio_runtime_credentials() {
         MINIO_ROOT_PASSWORD \
         MINIO_SECRET_KEY || true)"
 
-    # Local compose defaults. Production deployments should provide explicit env/config values.
-    access_key="${access_key:-memochat_admin}"
-    secret_key="${secret_key:-MinioPass2026!}"
+    if [[ -z "$access_key" || -z "$secret_key" ]]; then
+        echo "[FAIL] MinIO credentials are required; set MEMOCHAT_MINIO_ACCESSKEY and MEMOCHAT_MINIO_SECRETKEY" >&2
+        return 1
+    fi
+    if (( ${#access_key} < 3 || ${#secret_key} < 8 )); then
+        echo "[FAIL] MinIO credentials do not meet the minimum length requirements" >&2
+        return 1
+    fi
 
     export MINIO_ACCESS_KEY="$access_key"
     export MINIO_SECRET_KEY="$secret_key"

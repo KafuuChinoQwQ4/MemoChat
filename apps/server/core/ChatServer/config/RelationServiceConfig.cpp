@@ -19,3 +19,8 @@ std::string RelationServiceConfig::RelationServiceEndpoint() const
 {
     return ConfigMgr::Inst().GetValue("RelationService", "Endpoint");
 }
+
+std::string RelationServiceConfig::RelationServiceAuthToken() const
+{
+    return ConfigMgr::Inst().GetValue("RelationService", "AuthToken");
+}

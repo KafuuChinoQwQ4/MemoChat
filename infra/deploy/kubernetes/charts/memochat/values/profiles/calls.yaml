@@ -1,0 +1,10 @@
+# Enable only the CallGateway path. The relation-query service is its explicit
+# dependency; R18 and observability remain controlled by their own profiles.
+focusedGateways:
+  services:
+    callgateway:
+      enabled: true
+
+chat:
+  relationQuery:
+    enabled: true

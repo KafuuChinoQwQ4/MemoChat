@@ -4,11 +4,14 @@
 #include "usermgr.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QSettings>
+#include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslSocket>
 #include <QString>
@@ -26,6 +29,7 @@ struct GateEndpointSettings
     int h1DirectPort = 8080;
     int h2Port = 0;
     int h3Port = 0;
+    QString configuredScheme;
     QString preferredProtocol;
 };
 
@@ -80,6 +84,11 @@ GateEndpointSettings readGateEndpointSettings()
         parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http_port")), result.configuredPort);
     result.h2Port = parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http2_port")), 0);
     result.h3Port = parsePort(gateConfigValue(settings, QStringLiteral("GateServer/http3_port")), 0);
+    result.configuredScheme = gateConfigValue(settings, QStringLiteral("GateServer/scheme")).toLower();
+    if (result.configuredScheme != QStringLiteral("https") && result.configuredScheme != QStringLiteral("http"))
+    {
+        result.configuredScheme = result.configuredPort == 8443 ? QStringLiteral("https") : QStringLiteral("http");
+    }
     result.preferredProtocol = gateConfigValue(settings, QStringLiteral("GateServer/preferred_http_protocol"));
     return result;
 }
@@ -127,40 +136,65 @@ void appendUniqueUrl(QVector<QUrl>& urls, const QUrl& url)
     urls.push_back(url);
 }
 
-QStringList protocolOrder(const QString& preferred)
+} // namespace
+
+QString deploymentCaFilePath()
 {
-    const QString normalized = preferred.trimmed().toLower();
-    if (normalized == QStringLiteral("http1") || normalized == QStringLiteral("http1.1") ||
-                                                                              normalized == QStringLiteral("h1"))
+    QString configuredPath = qEnvironmentVariable("MEMOCHAT_CLIENT_CA_FILE").trimmed();
+    if (configuredPath.isEmpty())
     {
-        return {QStringLiteral("http1")};
+        const QString configPath = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("config.ini"));
+        QSettings settings(configPath, QSettings::IniFormat);
+        configuredPath = settings.value(QStringLiteral("GateServer/ca_file")).toString().trimmed();
     }
-    if (normalized == QStringLiteral("http2") || normalized == QStringLiteral("h2"))
+    if (configuredPath.isEmpty())
     {
-        return {QStringLiteral("http2"), QStringLiteral("http1")};
+        return {};
     }
-    return {QStringLiteral("http3"), QStringLiteral("http2"), QStringLiteral("http1")};
+
+    QFileInfo info(configuredPath);
+    if (info.isRelative())
+    {
+        info.setFile(QDir(QCoreApplication::applicationDirPath()).filePath(configuredPath));
+    }
+    return info.absoluteFilePath();
 }
 
-void prepareRequestTransport(QNetworkRequest& request)
+bool configureSecureNetworkRequest(QNetworkRequest& request)
 {
-    const QUrl url = request.url();
-    if (url.scheme().toLower() == QLatin1String("http"))
+    const QString scheme = request.url().scheme().trimmed().toLower();
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    if (scheme != QLatin1String("https"))
+    {
+        qWarning() << "Distributable client rejected a non-HTTPS network request";
+        request.setUrl(QUrl());
+        return false;
+    }
+#else
+    if (scheme == QLatin1String("http"))
     {
         request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
+        return true;
     }
-
-    if (url.scheme().toLower() == QLatin1String("https"))
+    if (scheme != QLatin1String("https"))
     {
-        QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        request.setSslConfiguration(sslConfig);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-        request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
-#endif
+        return false;
     }
+#endif
+
+    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+    sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
+    const QString caFile = deploymentCaFilePath();
+    if (!caFile.isEmpty() && !sslConfig.addCaCertificates(caFile, QSsl::Pem))
+    {
+        qWarning() << "Configured deployment CA could not be loaded:" << caFile;
+    }
+    request.setSslConfiguration(sslConfig);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
+#endif
+    return true;
 }
-} // namespace
 
 int httpTimeoutForRequest(const QUrl& url, const QString& module)
 {
@@ -169,6 +203,13 @@ int httpTimeoutForRequest(const QUrl& url, const QString& module)
 
 QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
 {
+#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
+    if (url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0)
+    {
+        qWarning() << "Distributable client rejected a non-HTTPS gate endpoint";
+        return {};
+    }
+#endif
     const GateEndpointSettings settings = readGateEndpointSettings();
     if (!isConfiguredGateEndpoint(url, settings))
     {
@@ -176,35 +217,24 @@ QVector<QUrl> gateProtocolFallbackUrls(const QUrl& url)
     }
 
     QVector<QUrl> urls;
-    const QStringList order = protocolOrder(settings.preferredProtocol);
-    for (const QString& protocol : order)
+    const bool tlsConfigured = settings.configuredScheme == QStringLiteral("https") || settings.h2Port > 0;
+    if (tlsConfigured)
     {
-        if (protocol == QStringLiteral("http3"))
+        if ((settings.preferredProtocol ==
+             QStringLiteral("http3") || settings.preferredProtocol == QStringLiteral("h3")) && settings.h3Port > 0)
         {
-            if (settings.h3Port > 0)
-            {
-                qInfo() << "HTTP/3 gate endpoint configured at" << settings.host << settings.h3Port
-                        << "but Qt Network has no HTTP/3 transport here; falling back to HTTP/2/HTTP/1.1";
-            }
-            continue;
+            qInfo() << "HTTP/3 gate endpoint configured at" << settings.host << settings.h3Port
+                    << "but Qt Network has no HTTP/3 transport here; using TLS with HTTP/2 negotiation";
         }
-        if (protocol == QStringLiteral("http2") && settings.h2Port > 0)
-        {
-            appendUniqueUrl(urls, withGateEndpoint(url, QStringLiteral("https"), settings.host, settings.h2Port));
-            continue;
-        }
-        if (protocol == QStringLiteral("http1"))
-        {
-            appendUniqueUrl(urls,
-                            withGateEndpoint(url, QStringLiteral("http"), settings.host, settings.configuredPort));
-            if (settings.h1DirectPort != settings.configuredPort)
-            {
-                appendUniqueUrl(urls,
-                                withGateEndpoint(url, QStringLiteral("http"), settings.host, settings.h1DirectPort));
-            }
-        }
+        const int tlsPort = settings.h2Port > 0 ? settings.h2Port : settings.configuredPort;
+        appendUniqueUrl(urls, withGateEndpoint(url, QStringLiteral("https"), settings.host, tlsPort));
     }
-    appendUniqueUrl(urls, url);
+
+    // Never downgrade a credential-bearing HTTPS request to plaintext during retry.
+    if (url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0 || !tlsConfigured)
+    {
+        appendUniqueUrl(urls, url);
+    }
     if (urls.isEmpty())
     {
         urls.push_back(url);
@@ -222,28 +252,28 @@ void applyBearerAccessTokenHeader(QNetworkRequest& request)
     }
 }
 
-void prepareJsonRequest(QNetworkRequest& request, const QByteArray& data)
+bool prepareJsonRequest(QNetworkRequest& request, const QByteArray& data)
 {
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
     applyBearerAccessTokenHeader(request);
-    prepareRequestTransport(request);
+    return configureSecureNetworkRequest(request);
 }
 
-void prepareUnauthenticatedJsonRequest(QNetworkRequest& request, const QByteArray& data)
+bool prepareUnauthenticatedJsonRequest(QNetworkRequest& request, const QByteArray& data)
 {
     // No Authorization header — use for credential-exchange endpoints such as
     // /user_login, /user_register, and /get_varifycode where a stale Bearer
     // token must not be sent.
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
-    prepareRequestTransport(request);
+    return configureSecureNetworkRequest(request);
 }
 
-void prepareGetRequest(QNetworkRequest& request)
+bool prepareGetRequest(QNetworkRequest& request)
 {
     applyBearerAccessTokenHeader(request);
-    prepareRequestTransport(request);
+    return configureSecureNetworkRequest(request);
 }
 
 QString

@@ -1,7 +1,6 @@
 /*************************************************************************
  *  class:          ImageCropperLabel
  *  author:         github@Leopard-C
- *  email:          leopard.c@outlook.com
  *  last change:    2020-03-06
  *************************************************************************/
 #ifndef IMAGECROPPERLABEL_H

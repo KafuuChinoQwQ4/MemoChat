@@ -1,0 +1,26 @@
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Qt is available under the GNU Lesser General Public License version 3
+(LGPLv3). The MemoChat Linux client links Qt 6 as a shared library and
+does not statically incorporate Qt's LGPL-covered code into any
+proprietary object.
+
+Qt copyright: Copyright (C) 2024 The Qt Company Ltd.
+Qt project home: https://www.qt.io/
+Qt open-source compliance: https://www.qt.io/qt-in-use/open-source-compliance
+
+Modules distributed in the MemoChat Linux client package:
+  Qt6Core, Qt6Gui, Qt6Qml, Qt6Quick, Qt6QuickControls2,
+  Qt6Network, Qt6Sql, Qt6Multimedia, Qt6MultimediaQuick,
+  Qt6WebChannel, Qt6WebSockets, Qt6Svg, Qt6Xml,
+  Qt6DBus, Qt6XcbQpa (XCB platform plugin),
+  Qt6Concurrent
+
+All Qt shared libraries are distributed unmodified as obtained from the
+Qt 6 open-source release. Source code for Qt is available at:
+  https://code.qt.io/cgit/qt/
+
+LGPL v3 full text: https://www.gnu.org/licenses/lgpl-3.0.txt
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

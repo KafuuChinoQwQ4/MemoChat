@@ -440,7 +440,10 @@ class PetAssetSettingsContractTests(unittest.TestCase):
         self.assertNotIn("src/KafuuChino", qml)
         self.assertNotIn(DEVELOPER_LIVE2D_RESOURCE_ROOT, qml)
 
-        self.assertContains(cmake, "MEMOCHAT_QML_SOURCE_DIR")
+        self.assertNotIn('MEMOCHAT_QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"', cmake)
+        self.assertContains(source, 'qEnvironmentVariable("MEMOCHAT_QML_SOURCE_DIR")')
+        self.assertContains(source, "QCoreApplication::applicationDirPath()")
+        self.assertNotIn("QString::fromUtf8(MEMOCHAT_QML_SOURCE_DIR)", source)
 
     def test_pet_asset_settings_does_not_reference_bundled_developer_assets(self):
         header = read(PET_ASSET_SETTINGS_H)

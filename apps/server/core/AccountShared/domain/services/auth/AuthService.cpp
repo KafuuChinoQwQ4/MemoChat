@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <sstream>
 #include <string_view>
 
@@ -35,6 +36,12 @@ using memochat::gate::core::AuthCache;
 
 namespace
 {
+
+bool ReleaseModeEnabled()
+{
+    const char* value = std::getenv("MEMOCHAT_RELEASE_MODE");
+    return value != nullptr && std::string_view(value) == std::string_view("1");
+}
 
 class CredentialMutationGuard
 {
@@ -294,6 +301,15 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
         root["error"] = ErrorCodes::RPCFailed;
         return false;
     }
+    const bool release_mode = ReleaseModeEnabled();
+    if (release_mode && (route_nodes.front().quic_host.empty() || route_nodes.front().quic_port.empty()))
+    {
+        memolog::LogError("gate.auth.session_issue_failed",
+                          "release mode requires an authenticated QUIC chat route",
+                          {{"uid", std::to_string(userInfo.uid)}, {"error_type", "quic_route_missing"}});
+        root["error"] = ErrorCodes::RPCFailed;
+        return false;
+    }
 
     const auto ticket_start_ms = gateauthsupport::NowMs();
     const int access_token_ttl_sec = gateauthsupport::GetAccessTokenTtlSec();
@@ -354,7 +370,7 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
     root["protocol_version"] = gateauthsupport::LoginProtocolVersion();
     root["preferred_transport"] =
         auth_algo::PreferredTransport(!route_nodes.front().quic_host.empty(), !route_nodes.front().quic_port.empty());
-    root["fallback_transport"] = auth_algo::FallbackTransport();
+    root["fallback_transport"] = release_mode ? auth_algo::QuicTransport() : auth_algo::FallbackTransport();
     root["email"] = userInfo.email;
     root["uid"] = userInfo.uid;
     root["user_id"] = userInfo.user_id;
@@ -410,20 +426,23 @@ bool IssueLoginSessionForUser(const memochat::gate::routing::GateRequest& reques
                                                          .host = route_node.quic_host,
                                                          .port = route_node.quic_port,
                                                          .path = "",
+                                                         .tls = true,
+                                                         .server_name = route_node.name,
+                                                         .priority = route_node.priority}));
+        }
+        if (!release_mode)
+        {
+            memochat::json::glaze_array_append(
+                chat_endpoints_arr,
+                gateauthsupport::AuthChatEndpointToJsonValue(
+                    gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::TcpTransport(),
+                                                         .host = route_node.host,
+                                                         .port = route_node.port,
+                                                         .path = "",
                                                          .tls = false,
                                                          .server_name = route_node.name,
                                                          .priority = route_node.priority}));
         }
-        memochat::json::glaze_array_append(
-            chat_endpoints_arr,
-            gateauthsupport::AuthChatEndpointToJsonValue(
-                gateauthsupport::AuthChatEndpointDto{.transport = auth_algo::TcpTransport(),
-                                                     .host = route_node.host,
-                                                     .port = route_node.port,
-                                                     .path = "",
-                                                     .tls = false,
-                                                     .server_name = route_node.name,
-                                                     .priority = route_node.priority}));
     }
     root["chat_endpoints"] = chat_endpoints_arr;
 

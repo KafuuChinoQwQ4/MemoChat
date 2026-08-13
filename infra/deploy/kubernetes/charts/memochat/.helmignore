@@ -1,0 +1,3 @@
+# Repository navigation files are documentation, not Kubernetes templates.
+templates/_TREE.md
+templates/*/_TREE.md

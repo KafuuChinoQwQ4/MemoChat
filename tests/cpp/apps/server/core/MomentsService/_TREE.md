@@ -17,6 +17,7 @@
 | `MomentsServiceAlgorithmsTest.cpp` | 验证朋友圈 service facade module 的 endpoint、可见性、认证、ID 和 limit guard |
 | `MomentsRelationClientAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入朋友圈关系客户端字段名/RPC 截止/过滤 guard 算法。 |
 | `MomentsRelationClientAlgorithmsTest.cpp` | 验证朋友圈关系客户端 module 的请求/响应字段名、RPC 截止时间与 fail-closed 过滤 guard |
+| `MomentsRelationClientTest.cpp` | 通过真实 gRPC 验证 Moments 专属关系 token 注入、响应解析和错误 token fail-closed |
 | `MomentsGatewayRuntimeAlgorithmsConsumer.cpp` | 测试专用 module consumer，导入朋友圈网关入口运行时字面量/guard 算法。 |
 | `MomentsGatewayRuntimeAlgorithmsTest.cpp` | 验证朋友圈网关入口 module 的服务名、网关名、默认端口与 AWS 初始化 guard |
 

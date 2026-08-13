@@ -23,7 +23,6 @@ void ChatMessageDispatcher::registerAuthHandlers()
                          }
 
                          QJsonObject jsonObj = jsonDoc.object();
-                         qDebug() << "data jsonobj is " << jsonObj;
 
                          if (!jsonObj.contains("error"))
                          {

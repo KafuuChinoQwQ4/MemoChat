@@ -1,8 +1,43 @@
+{{- if and .Values.focusedGateways.enabled (not .Values.chat.relationQuery.enabled) (or .Values.focusedGateways.services.callgateway.enabled .Values.focusedGateways.services.momentsgateway.enabled) }}
+{{- fail "CallGateway requires chat.relationQuery.enabled=true" }}
+{{- end }}
+{{- $r18 := .Values.focusedGateways.services.r18gateway }}
+{{- if and .Values.focusedGateways.enabled $r18.enabled (not $r18.persistence.enabled) }}
+{{- fail "R18Gateway requires persistence.enabled=true for encrypted credential storage" }}
+{{- end }}
+{{- if and .Values.focusedGateways.enabled $r18.enabled (gt (int $r18.replicaCount) 1) (not (has "ReadWriteMany" $r18.persistence.accessModes)) }}
+{{- fail "R18Gateway with more than one replica requires ReadWriteMany persistence" }}
+{{- end }}
+{{- if and .Values.focusedGateways.enabled $r18.enabled $r18.persistence.enabled (not $r18.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: memochat-r18-data
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: r18gateway
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml $r18.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ $r18.persistence.size | quote }}
+  {{- with $r18.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+{{- end }}
 {{- if .Values.focusedGateways.enabled }}
 {{- $root := . }}
 {{- range $name := list "aigateway" "mediagateway" "momentsgateway" "callgateway" "r18gateway" "register" "login" "account" }}
 {{- $svc := index $root.Values.focusedGateways.services $name }}
 {{- $image := index $root.Values.images.focusedGateways $name }}
+{{- $postgresSecretKey := "postgres-account-password" }}
+{{- if eq $name "mediagateway" }}{{- $postgresSecretKey = "postgres-media-password" }}{{- end }}
+{{- if eq $name "momentsgateway" }}{{- $postgresSecretKey = "postgres-moments-password" }}{{- end }}
+{{- if eq $name "callgateway" }}{{- $postgresSecretKey = "postgres-call-password" }}{{- end }}
+{{- if $svc.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,11 +57,20 @@ spec:
       labels:
         app.kubernetes.io/component: {{ $svc.serviceName }}
         {{- include "memochat.selectorLabels" $root | nindent 8 }}
+      annotations:
+        {{- if and $root.Values.mesh.enabled (eq $root.Values.mesh.provider "istio") }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" $root | nindent 8 }}
       containers:
         - name: {{ $svc.serviceName }}
-          image: "{{ $image.repository }}:{{ $image.tag }}"
+          image: {{ include "memochat.image" (dict "root" $root "image" $image) | quote }}
           imagePullPolicy: {{ $image.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $root | nindent 12 }}
           env:
             - name: MEMOCHAT_ENV
               value: production
@@ -37,9 +81,9 @@ spec:
             - name: RUN_WITH_CONFIG_ARG
               value: "false"
             - name: CONFIG_PATH
-              value: /app/config.ini
+              value: {{ if eq $name "r18gateway" }}/run/memochat/config.ini{{ else }}/app/config.ini{{ end }}
             - name: MEMOCHAT_POSTGRES_PASSWD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: {{ $postgresSecretKey }} } }
             - name: MEMOCHAT_REDIS_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
             - name: MEMOCHAT_CHATAUTH_HMACSECRET
@@ -53,18 +97,38 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-internal-api-key } }
             - name: MEMOCHAT_AI_PROVIDER_ADMIN_KEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: ai-provider-admin-key } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_AI_INTERNAL_API_KEY MEMOCHAT_AI_PROVIDER_ADMIN_KEY
             {{- end }}
             {{- if eq $name "callgateway" }}
+            - name: MEMOCHAT_ACCOUNTPOSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-account-password } }
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-call-auth-token } }
             - name: MEMOCHAT_CALL_APIKEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-key } }
             - name: MEMOCHAT_CALL_APISECRET
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: livekit-api-secret } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN MEMOCHAT_CALL_APIKEY MEMOCHAT_CALL_APISECRET
+            {{- end }}
+            {{- if eq $name "momentsgateway" }}
+            - name: MEMOCHAT_ACCOUNTPOSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-account-password } }
+            - name: MEMOCHAT_MONGO_URI
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: mongodb-uri } }
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-moments-auth-token } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
             {{- end }}
             {{- if eq $name "mediagateway" }}
             - name: MEMOCHAT_MINIO_ACCESSKEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: minio-access-key } }
             - name: MEMOCHAT_MINIO_SECRETKEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: minio-secret-key } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_MINIO_ACCESSKEY MEMOCHAT_MINIO_SECRETKEY MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET
             {{- end }}
             {{- if eq $name "r18gateway" }}
             - name: MEMOCHAT_R18SOURCEADMIN_ADMINKEY
@@ -73,6 +137,14 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-picacg-api-key } }
             - name: MEMOCHAT_R18_PICACG_HMAC_KEY
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-picacg-hmac-key } }
+            - name: MEMOCHAT_R18_CREDENTIAL_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-credential-master-key } }
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_R18SOURCEADMIN_ADMINKEY MEMOCHAT_R18_PICACG_API_KEY MEMOCHAT_R18_PICACG_HMAC_KEY MEMOCHAT_R18_CREDENTIAL_MASTER_KEY
+            {{- end }}
+            {{- if or (eq $name "register") (eq $name "login") (eq $name "account") }}
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_AUTHTOKEN_JWTSECRET MEMOCHAT_AUTH_REFRESH_PEPPER
             {{- end }}
             {{- with $root.Values.focusedGateways.env }}
             {{- toYaml . | nindent 12 }}
@@ -81,23 +153,55 @@ spec:
             - name: http
               containerPort: {{ $svc.port }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
             - name: config
-              mountPath: /app/config.ini
+              mountPath: {{ if eq $name "r18gateway" }}/run/memochat/config.ini{{ else }}/app/config.ini{{ end }}
               subPath: {{ $svc.configKey }}
+            {{- if and (eq $name "mediagateway") (eq (lower (toString $root.Values.gate.media.provider)) "local") }}
+            - name: runtime-uploads
+              mountPath: /run/memochat/uploads
+            - name: media-uploads
+              mountPath: /data/uploads
+            {{- end }}
+            {{- if eq $name "r18gateway" }}
+            - name: r18-data
+              mountPath: /run/memochat/data/r18
+            {{- end }}
           livenessProbe:
             httpGet: { path: /healthz, port: http }
+            timeoutSeconds: 2
           readinessProbe:
             httpGet: { path: /readyz, port: http }
+            timeoutSeconds: 2
           startupProbe:
             httpGet: { path: /healthz, port: http }
             failureThreshold: 30
             periodSeconds: 5
+            timeoutSeconds: 2
           resources:
             {{- toYaml $root.Values.focusedGateways.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-config
+        {{- if and (eq $name "mediagateway") (eq (lower (toString $root.Values.gate.media.provider)) "local") }}
+        - name: runtime-uploads
+          emptyDir: {}
+        - name: media-uploads
+          emptyDir: {}
+        {{- end }}
+        {{- if eq $name "r18gateway" }}
+        - name: r18-data
+          persistentVolumeClaim:
+            claimName: {{ default "memochat-r18-data" $svc.persistence.existingClaim | quote }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -126,6 +230,7 @@ spec:
       app.kubernetes.io/component: {{ $svc.serviceName }}
       {{- include "memochat.selectorLabels" $root | nindent 6 }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

@@ -13,7 +13,7 @@ namespace
 {
 
 constexpr int64_t kNow = 1'800'000'000;
-const std::string kSecret = "0123456789abcdef0123456789abcdef";
+const std::string kSecret(32, 'a');
 
 memochat::auth::JwtAccessTokenClaims ValidClaims()
 {

@@ -1,3 +1,25 @@
+{{- if .Values.chat.relationQuery.enabled }}
+{{- if not .Values.mesh.enabled }}
+{{- fail "chat.relationQuery.enabled=true requires mesh.enabled=true because relation gRPC bearer tokens require mTLS" }}
+{{- end }}
+{{- if ne .Values.mesh.provider "istio" }}
+{{- fail "chat.relationQuery.enabled=true requires mesh.provider=istio" }}
+{{- end }}
+{{- if ne (upper (trim (toString .Values.mesh.istio.mtlsMode))) "STRICT" }}
+{{- fail "chat.relationQuery.enabled=true requires mesh.istio.mtlsMode=STRICT" }}
+{{- end }}
+{{- end }}
+{{- if .Values.chat.relationService.enabled }}
+{{- if not .Values.mesh.enabled }}
+{{- fail "chat.relationService.enabled=true requires mesh.enabled=true because relation gRPC bearer tokens require mTLS" }}
+{{- end }}
+{{- if ne .Values.mesh.provider "istio" }}
+{{- fail "chat.relationService.enabled=true requires mesh.provider=istio" }}
+{{- end }}
+{{- if ne (upper (trim (toString .Values.mesh.istio.mtlsMode))) "STRICT" }}
+{{- fail "chat.relationService.enabled=true requires mesh.istio.mtlsMode=STRICT" }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -36,11 +58,20 @@ spec:
       labels:
         app.kubernetes.io/component: chatserver
         {{- include "memochat.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if and .Values.mesh.enabled (eq .Values.mesh.provider "istio") }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: chatserver
-          image: "{{ .Values.images.chat.repository }}:{{ .Values.images.chat.tag }}"
+          image: {{ include "memochat.image" (dict "root" . "image" .Values.images.chat) | quote }}
           imagePullPolicy: {{ .Values.images.chat.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
             - name: MEMOCHAT_ENV
               value: production
@@ -55,19 +86,39 @@ spec:
             - name: CONFIG_PATH
               value: /app/config/config.ini
             - name: MEMOCHAT_POSTGRES_PASSWD
-              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-password } }
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-chat-password } }
+            - name: MEMOCHAT_ACCOUNTPOSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-account-password } }
             - name: MEMOCHAT_REDIS_PASSWD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_MONGO_URI
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: mongodb-uri } }
             - name: MEMOCHAT_CHATAUTH_HMACSECRET
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: chat-auth-secret } }
+            {{- if .Values.chat.relationService.enabled }}
+            - name: MEMOCHAT_RELATIONSERVICE_AUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-command-auth-token } }
+            {{- end }}
             - name: MEMOCHAT_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
+            {{- if .Values.chat.relationQuery.enabled }}
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-chat-query-auth-token } }
+            {{- end }}
+            - name: REQUIRED_ENV_VARS
+              value: "MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_MONGO_URI MEMOCHAT_CHATAUTH_HMACSECRET MEMOCHAT_RABBITMQ_USERNAME MEMOCHAT_RABBITMQ_PASSWORD{{ if .Values.chat.relationService.enabled }} MEMOCHAT_RELATIONSERVICE_AUTHTOKEN{{ end }}{{ if .Values.chat.relationQuery.enabled }} MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN{{ end }}"
           ports:
             - name: tcp
               containerPort: {{ .Values.chat.tcpPort }}
             - name: grpc
               containerPort: {{ .Values.chat.rpcPort }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
             - name: config
               mountPath: /app/config/config.ini
               subPath: chat.ini
@@ -82,6 +133,10 @@ spec:
           resources:
             {{- toYaml .Values.chat.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
         - name: config
           configMap:
             name: memochat-config
@@ -104,6 +159,117 @@ spec:
       port: {{ .Values.chat.tcpPort }}
       targetPort: tcp
 {{- end }}
+{{- if .Values.chat.relationService.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.chat.relationService.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.chat.relationService.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.chat.relationService.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ .Values.chat.relationService.serviceName }}
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: {{ .Values.chat.relationService.serviceName }}
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if and .Values.mesh.enabled (eq .Values.mesh.provider "istio") }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: {{ .Values.chat.relationService.serviceName }}
+          image: {{ include "memochat.image" (dict "root" . "image" .Values.images.chatRelationService) | quote }}
+          imagePullPolicy: {{ .Values.images.chatRelationService.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
+          env:
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_SERVICE
+              value: ChatRelationServiceWorker
+            - name: CONFIG_PATH
+              value: /run/memochat/config.ini
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RABBITMQ_USERNAME MEMOCHAT_RABBITMQ_PASSWORD MEMOCHAT_RELATIONSERVICE_AUTHTOKEN
+            - name: MEMOCHAT_SELFSERVER_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: MEMOCHAT_INSTANCE_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-chat-password } }
+            - name: MEMOCHAT_ACCOUNTPOSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-account-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
+            - name: MEMOCHAT_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_RELATIONSERVICE_AUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-command-auth-token } }
+            {{- with .Values.chat.relationService.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.chat.relationService.grpcPort }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
+            - name: config
+              mountPath: /run/memochat/config.ini
+              subPath: {{ .Values.chat.relationService.configKey }}
+              readOnly: true
+          livenessProbe:
+            tcpSocket: { port: grpc }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+          startupProbe:
+            tcpSocket: { port: grpc }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.chat.relationService.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.chat.relationService.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.chat.relationService.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/component: {{ .Values.chat.relationService.serviceName }}
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.chat.relationService.grpcPort }}
+      targetPort: grpc
+{{- end }}
 ---
 {{- if .Values.chat.pdb.enabled }}
 apiVersion: policy/v1
@@ -117,4 +283,115 @@ spec:
     matchLabels:
       app.kubernetes.io/component: chatserver
       {{- include "memochat.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- if .Values.chat.relationQuery.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.chat.relationQuery.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.chat.relationQuery.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.chat.relationQuery.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: {{ .Values.chat.relationQuery.serviceName }}
+      {{- include "memochat.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: {{ .Values.chat.relationQuery.serviceName }}
+        {{- include "memochat.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if and .Values.mesh.enabled (eq .Values.mesh.provider "istio") }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: {{ .Values.chat.relationQuery.serviceName }}
+          image: {{ include "memochat.image" (dict "root" . "image" .Values.images.chatRelationQuery) | quote }}
+          imagePullPolicy: {{ .Values.images.chatRelationQuery.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
+          env:
+            - name: MEMOCHAT_ENV
+              value: production
+            - name: MEMOCHAT_SERVICE
+              value: ChatRelationQueryService
+            - name: CONFIG_PATH
+              value: /run/memochat/config.ini
+            - name: REQUIRED_ENV_VARS
+              value: MEMOCHAT_POSTGRES_PASSWD MEMOCHAT_ACCOUNTPOSTGRES_PASSWD MEMOCHAT_REDIS_PASSWD MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
+            - name: MEMOCHAT_SELFSERVER_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: MEMOCHAT_INSTANCE_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: MEMOCHAT_POSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-chat-password } }
+            - name: MEMOCHAT_ACCOUNTPOSTGRES_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: postgres-account-password } }
+            - name: MEMOCHAT_REDIS_PASSWD
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: redis-password } }
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_CHATAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-chat-query-auth-token } }
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_CALLAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-call-auth-token } }
+            - name: MEMOCHAT_RELATIONQUERYSERVICE_MOMENTSAUTHTOKEN
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: relation-moments-auth-token } }
+            {{- with .Values.chat.relationQuery.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.chat.relationQuery.grpcPort }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
+            - name: config
+              mountPath: /run/memochat/config.ini
+              subPath: {{ .Values.chat.relationQuery.configKey }}
+              readOnly: true
+          livenessProbe:
+            tcpSocket: { port: grpc }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+          startupProbe:
+            tcpSocket: { port: grpc }
+            failureThreshold: 30
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.chat.relationQuery.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: memochat-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.chat.relationQuery.serviceName }}
+  namespace: {{ .Values.namespaces.prod }}
+  labels:
+    app.kubernetes.io/component: {{ .Values.chat.relationQuery.serviceName }}
+    {{- include "memochat.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/component: {{ .Values.chat.relationQuery.serviceName }}
+    {{- include "memochat.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.chat.relationQuery.grpcPort }}
+      targetPort: grpc
 {{- end }}

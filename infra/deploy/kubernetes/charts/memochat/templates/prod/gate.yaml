@@ -1,3 +1,10 @@
+{{- if .Values.legacyGate.enabled }}
+{{- if eq (lower (toString .Values.gate.media.provider)) "local" }}
+{{- $mediaRoot := trimSuffix "/" (toString .Values.gate.media.rootPath) }}
+{{- if or (not (regexMatch "^/[A-Za-z0-9][A-Za-z0-9._/-]*$" $mediaRoot)) (contains ".." $mediaRoot) }}
+{{- fail "gate.media.rootPath must be a non-root absolute path when local media storage is enabled" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,10 +25,15 @@ spec:
         app.kubernetes.io/component: gateserver
         {{- include "memochat.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "memochat.podSecurityContext" . | nindent 8 }}
       containers:
         - name: gateserver
           image: "{{ .Values.images.gate.repository }}:{{ .Values.images.gate.tag }}"
           imagePullPolicy: {{ .Values.images.gate.pullPolicy }}
+          securityContext:
+            {{- include "memochat.containerSecurityContext" $ | nindent 12 }}
           env:
             - name: MEMOCHAT_ENV
               value: production
@@ -55,10 +67,22 @@ spec:
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: r18-picacg-hmac-key } }
             - name: MEMOCHAT_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-password } }
+            - name: MEMOCHAT_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: memochat-secrets, key: rabbitmq-username } }
           ports:
             - name: http
               containerPort: 8080
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/memochat
+            {{- if eq (lower (toString .Values.gate.media.provider)) "local" }}
+            - name: media-uploads
+              mountPath: {{ .Values.gate.media.rootPath | quote }}
+            - name: runtime-uploads
+              mountPath: /run/memochat/uploads
+            {{- end }}
             - name: config
               mountPath: /app/config.ini
               subPath: gate.ini
@@ -73,6 +97,16 @@ spec:
           resources:
             {{- toYaml .Values.gate.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        {{- if eq (lower (toString .Values.gate.media.provider)) "local" }}
+        - name: media-uploads
+          emptyDir: {}
+        - name: runtime-uploads
+          emptyDir: {}
+        {{- end }}
         - name: config
           configMap:
             name: memochat-config
@@ -128,4 +162,5 @@ spec:
                   number: {{ .Values.gate.service.port }}
   tls:
     {{- toYaml .Values.gate.ingress.tls | nindent 4 }}
+{{- end }}
 {{- end }}

@@ -9,9 +9,9 @@ bool MemoChatTestRelationAdapterDidForwardExpectedSurface(unsigned query_count, 
 
 TEST(RelationGrpcServiceAdapterAlgorithmsTest, ExposesForwardedRelationSurfaceCounts)
 {
-    EXPECT_EQ(MemoChatTestRelationAdapterQueryForwardCount(), 2U);
+    EXPECT_EQ(MemoChatTestRelationAdapterQueryForwardCount(), 3U);
     EXPECT_EQ(MemoChatTestRelationAdapterCommandForwardCount(), 8U);
-    EXPECT_EQ(MemoChatTestRelationAdapterTotalForwardCount(), 10U);
+    EXPECT_EQ(MemoChatTestRelationAdapterTotalForwardCount(), 11U);
 }
 
 TEST(RelationGrpcServiceAdapterAlgorithmsTest, KeepsDefaultTimeoutContract)
@@ -24,8 +24,8 @@ TEST(RelationGrpcServiceAdapterAlgorithmsTest, KeepsDefaultTimeoutContract)
 
 TEST(RelationGrpcServiceAdapterAlgorithmsTest, ClassifiesCompleteForwardingSurface)
 {
-    EXPECT_TRUE(MemoChatTestRelationAdapterDidForwardExpectedSurface(2U, 8U));
-    EXPECT_FALSE(MemoChatTestRelationAdapterDidForwardExpectedSurface(1U, 8U));
-    EXPECT_FALSE(MemoChatTestRelationAdapterDidForwardExpectedSurface(2U, 7U));
+    EXPECT_TRUE(MemoChatTestRelationAdapterDidForwardExpectedSurface(3U, 8U));
+    EXPECT_FALSE(MemoChatTestRelationAdapterDidForwardExpectedSurface(2U, 8U));
+    EXPECT_FALSE(MemoChatTestRelationAdapterDidForwardExpectedSurface(3U, 7U));
     EXPECT_FALSE(MemoChatTestRelationAdapterDidForwardExpectedSurface(10U, 0U));
 }

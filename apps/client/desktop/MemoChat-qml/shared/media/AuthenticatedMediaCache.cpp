@@ -1,4 +1,5 @@
 #include "AuthenticatedMediaCache.h"
+#include "HttpMgrRequestUtils.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -9,33 +10,12 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSaveFile>
-#include <QSslConfiguration>
-#include <QSslSocket>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
 
 namespace
 {
-
-bool isLocalMediaHost(const QString& host)
-{
-    const QString normalized = host.trimmed().toLower();
-    return normalized == QStringLiteral("localhost") ||
-                                        normalized == QStringLiteral("127.0.0.1") ||
-                                                                     normalized == QStringLiteral("::1");
-}
-
-void configureLocalSsl(QNetworkRequest& request, const QUrl& url)
-{
-    if (url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0 || !isLocalMediaHost(url.host()))
-    {
-        return;
-    }
-    QSslConfiguration ssl = request.sslConfiguration();
-    ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
-    request.setSslConfiguration(ssl);
-}
 
 QString cacheRoot()
 {
@@ -91,7 +71,8 @@ QString resolveAuthenticatedMediaDownloadUrl(const QString& remoteUrl, const QSt
 {
     const QUrl url(remoteUrl);
     const QString token = accessToken.trimmed();
-    if (!url.isValid() || url.scheme().isEmpty() || token.isEmpty() || QCoreApplication::instance() == nullptr)
+    if (!url.isValid() || url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0 || token.isEmpty() ||
+                                               QCoreApplication::instance() == nullptr)
     {
         return remoteUrl;
     }
@@ -105,7 +86,7 @@ QString resolveAuthenticatedMediaDownloadUrl(const QString& remoteUrl, const QSt
     QNetworkRequest request(url);
     request.setRawHeader(QByteArrayLiteral("Authorization"), QByteArrayLiteral("Bearer ") + token.toUtf8());
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    configureLocalSsl(request, url);
+    configureSecureNetworkRequest(request);
 
     QNetworkAccessManager manager;
     QNetworkReply* reply = manager.get(request);

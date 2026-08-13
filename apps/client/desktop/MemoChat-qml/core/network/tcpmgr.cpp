@@ -219,12 +219,5 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
                                                    startAtMs,
                                                    qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - startAtMs),
                                                    spanAttrs);
-    if (reqId == ReqId::ID_CHAT_LOGIN)
-    {
-        qInfo() << "chat login payload sent. bytes:" << block.size();
-    }
-    else
-    {
-        qDebug() << "tcp mgr send byte data is " << block;
-    }
+    qDebug() << "tcp payload sent. req id:" << static_cast<int>(reqId) << "bytes:" << block.size();
 }

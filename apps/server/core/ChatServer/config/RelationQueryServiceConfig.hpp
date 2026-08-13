@@ -7,4 +7,5 @@ class RelationQueryServiceConfig : public IRelationQueryServiceConfig
 public:
     std::string RelationQueryServiceBackend() const override;
     std::string RelationQueryServiceEndpoint() const override;
+    std::string RelationQueryServiceChatAuthToken() const override;
 };

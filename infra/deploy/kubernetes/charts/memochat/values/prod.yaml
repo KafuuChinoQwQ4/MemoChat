@@ -1,5 +1,34 @@
 global:
+  environment: production
   domain: memochat.example.com
+
+# Production base is intentionally small. Optional calls, R18 persistence,
+# and the observability stack are enabled only through values/profiles/*.yaml.
+observability:
+  enabled: false
+
+focusedGateways:
+  services:
+    callgateway:
+      enabled: false
+    r18gateway:
+      enabled: false
+
+mesh:
+  enabled: true
+  provider: istio
+  istio:
+    mtlsMode: STRICT
+
+images:
+  # Set this to the exact CI manifest tag, for example sha-<commit SHA>.
+  releaseTag: ""
+
+aiOrchestrator:
+  enabled: false
+
+memoOps:
+  enabled: false
 
 gate:
   replicaCount: 4

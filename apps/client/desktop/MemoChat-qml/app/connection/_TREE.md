@@ -8,7 +8,7 @@
 | --- | --- |
 | `AppChatConnectionCoordinator.cpp` | 聊天连接协调器实现 |
 | `AppChatConnectionCoordinator.h` | 聊天连接协调器接口与连接快照结构声明 |
-| `AppChatConnectionPolicy.cpp` | 聊天连接策略（超时、备用拨号等）实现 |
+| `AppChatConnectionPolicy.cpp` | 聊天连接策略实现；可分发构建仅允许经校验证书的 QUIC，不回退明文 TCP |
 | `AppChatConnectionPolicy.h` | 聊天连接策略声明 |
 | `AppControllerChatBootstrap.cpp` | 控制器聊天连接引导逻辑 |
 | `AppControllerConnectionState.h` | 控制器连接状态定义，包含登录后内存态 token/ticket/refresh token |

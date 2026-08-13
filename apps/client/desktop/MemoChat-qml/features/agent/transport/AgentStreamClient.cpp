@@ -42,12 +42,6 @@ void AgentStreamClient::startRequest(const QUrl& url)
     configureAgentLocalGateRequest(request);
 
     _reply = _network->post(request, _payload);
-    // Same as HttpMgr: VerifyNone alone is insufficient — the manager-level
-    // SSL error handling also needs to be bypassed for self-signed certs.
-    if (url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0)
-    {
-        _reply->ignoreSslErrors();
-    }
     connect(_reply, &QNetworkReply::readyRead, this, &AgentStreamClient::onReadyRead);
     connect(_reply, &QNetworkReply::finished, this, &AgentStreamClient::onFinished);
 }

@@ -8,6 +8,8 @@ import os
 import re
 import socket
 import ssl
+import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator, Iterable
@@ -420,6 +422,7 @@ class LLMEndpointRegistry:
         self._manager = LLMManager.get_instance()
         self._custom_clients: dict[str, object] = {}
         self._runtime_provider_api_keys: dict[str, str] = {}
+        self._load_runtime_providers()
 
     def list_endpoints(self) -> list[ProviderEndpoint]:
         endpoints: list[ProviderEndpoint] = []
@@ -632,7 +635,6 @@ class LLMEndpointRegistry:
             "base_url": normalized_url,
             "api_key_env": api_key_env,
             "api_key_fingerprint": _provider_api_fingerprint(api_key),
-            "api_key": api_key,  # persisted so key survives container restart
             "default_model": models[0]["name"],
             "enabled": True,
             "timeout_sec": 120,
@@ -852,18 +854,54 @@ class LLMEndpointRegistry:
                 return []
             with _RUNTIME_PROVIDER_FILE.open("r", encoding="utf-8") as file:
                 data = json.load(file)
-            providers = data.get("providers", []) if isinstance(data, dict) else []
-            return _dedupe_runtime_providers([provider for provider in providers if isinstance(provider, dict)])
+            raw_providers = data.get("providers", []) if isinstance(data, dict) else []
         except Exception:
             return []
+
+        if not isinstance(raw_providers, list):
+            return []
+        providers = [provider for provider in raw_providers if isinstance(provider, dict)]
+        sanitized_providers = _dedupe_runtime_providers(providers)
+        if any("api_key" in provider for provider in providers):
+            try:
+                self._save_runtime_providers(sanitized_providers)
+            except Exception:
+                raise RuntimeError("runtime provider credential migration failed") from None
+        return sanitized_providers
 
     def _save_runtime_providers(self, providers: list[dict]) -> None:
         providers = _dedupe_runtime_providers(providers)
         _RUNTIME_PROVIDER_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = _RUNTIME_PROVIDER_FILE.with_suffix(".tmp")
-        with tmp_path.open("w", encoding="utf-8") as file:
-            json.dump({"providers": providers}, file, ensure_ascii=False, indent=2)
-        tmp_path.replace(_RUNTIME_PROVIDER_FILE)
+        descriptor, tmp_name = tempfile.mkstemp(
+            prefix=f".{_RUNTIME_PROVIDER_FILE.name}.",
+            suffix=".tmp",
+            dir=_RUNTIME_PROVIDER_FILE.parent,
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            os.fchmod(descriptor, 0o600)
+            output = os.fdopen(descriptor, "w", encoding="utf-8")
+            descriptor = -1
+            with output as file:
+                json.dump({"providers": providers}, file, ensure_ascii=False, indent=2)
+                file.write("\n")
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(tmp_path, _RUNTIME_PROVIDER_FILE)
+            directory_descriptor = os.open(
+                _RUNTIME_PROVIDER_FILE.parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+        except Exception:
+            if descriptor >= 0:
+                os.close(descriptor)
+            with suppress(OSError):
+                tmp_path.unlink()
+            raise
 
     def _find_runtime_provider(self, provider_id: str) -> dict | None:
         return next(
@@ -887,10 +925,6 @@ class LLMEndpointRegistry:
         provider_name = str(provider_cfg.get("name") or "").strip()
         if provider_name and provider_name in self._runtime_provider_api_keys:
             return self._runtime_provider_api_keys[provider_name]
-        # Persisted key (written by register_api_provider, survives restarts)
-        persisted = str(provider_cfg.get("api_key") or "").strip()
-        if persisted:
-            return persisted
         env_name = str(provider_cfg.get("api_key_env") or "").strip()
         if not env_name and provider_name:
             env_name = _runtime_provider_api_key_env_name(provider_name)
@@ -1004,7 +1038,7 @@ def _dedupe_runtime_providers(providers: list[dict]) -> list[dict]:
         legacy_api_key = str(provider.get("api_key", "") or "").strip()
         if not provider.get("api_key_fingerprint") and legacy_api_key:
             provider["api_key_fingerprint"] = _provider_api_fingerprint(legacy_api_key)
-        # Keep api_key in the dict so it can be read back on restart
+        provider.pop("api_key", None)
         name = str(provider.get("name") or "").strip()
         identity = _runtime_provider_identity(provider)
         if name and not provider.get("api_key_env"):

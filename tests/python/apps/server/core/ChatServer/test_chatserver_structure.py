@@ -2074,10 +2074,11 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("DecodeChatUserProfileCache(info_str, &profile);", support_body)
         self.assertIn("user_support_modules::ShouldUseCachedProfile(cache_hit, profile.user_id.empty())", support_body)
         self.assertIn("FillUserInfoFromChatUserProfile(profile, *userinfo);", support_body)
-        self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", support_body)
+        self.assertIn("auto user_info = AccountDirectory().GetByUid(uid);", support_body)
+        self.assertNotIn("PostgresMgr::GetInstance()->GetUser(uid)", support_body)
         self.assertLess(
             support_body.index("user_support_modules::ShouldUseCachedProfile(cache_hit, profile.user_id.empty())"),
-            support_body.index("PostgresMgr::GetInstance()->GetUser(uid)"),
+            support_body.index("AccountDirectory().GetByUid(uid)"),
         )
 
         transport_body = extract_function(
@@ -2086,7 +2087,8 @@ class ChatServerStructureTests(unittest.TestCase):
         )
         self.assertIn('userinfo->user_id = root["user_id"].asString();', transport_body)
         self.assertIn("if (userinfo->user_id.empty())", transport_body)
-        self.assertIn("auto user_info = PostgresMgr::GetInstance()->GetUser(uid);", transport_body)
+        self.assertIn("auto user_info = AccountDirectory().GetByUid(uid);", transport_body)
+        self.assertNotIn("PostgresMgr::GetInstance()->GetUser(uid)", transport_body)
         self.assertIn('redis_root["user_id"] = userinfo->user_id;', transport_body)
 
         constructor_block = text_between(
@@ -2426,7 +2428,7 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("Relation service remote endpoint is empty", factory_source)
         self.assertNotIn("chat.relation_service.remote_backend_not_implemented", factory_source)
         self.assertIn("chat.relation_service.unsupported_backend", factory_source)
-        self.assertIn('{"fallback_backend", "inprocess"}', factory_source)
+        self.assertNotIn('{"fallback_backend", "inprocess"}', factory_source)
         self.assertNotIn('#include "LogicSystem.hpp"', factory_source)
 
         cmake = read_cmake()
@@ -2661,7 +2663,10 @@ class ChatServerStructureTests(unittest.TestCase):
         self.assertIn("memochat::chat::factory::modules::IsRemoteBackend", factory_source)
         self.assertIn("Relation query service remote endpoint is empty", factory_source)
         self.assertIn("chat.relation_query_service.unsupported_backend", factory_source)
-        self.assertIn('{"fallback_backend", "inprocess"}', factory_source)
+        self.assertIn("MEMOCHAT_RELATION_QUERY_ALLOW_INPROCESS_FALLBACK", factory_source)
+        self.assertIn("MEMOCHAT_RELEASE_MODE", factory_source)
+        self.assertIn("InProcessFallbackExplicitlyEnabled()", factory_source)
+        self.assertNotIn('{"fallback_backend", "inprocess"}', factory_source)
         self.assertNotIn("IRelationService", factory_source)
 
         cmake = read_cmake()

@@ -1,0 +1,26 @@
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 2.1, February 1999
+
+Copyright (C) 1991, 1999 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+FFmpeg is licensed under the GNU Lesser General Public License (LGPL) version
+2.1 or later. However, FFmpeg incorporates several optional parts and
+optimizations that are covered by the GNU General Public License (GPL) version
+2 or later. If those parts get used the GPL applies to all of FFmpeg.
+
+Read the file COPYING.LGPLv2.1 for the full text of the LGPL.
+Read the file COPYING.GPLv2 for the full text of the GPL.
+
+The MemoChat Linux client build links FFmpeg via Qt Multimedia's bundled
+FFmpeg plugin (libffmpegmediaplugin.so). Only LGPL-licensed codecs are
+enabled; no GPL-only or proprietary codec is activated. The shared library
+is distributed unmodified from the Qt installation.
+
+Source code for the FFmpeg version shipped with Qt 6 is available at:
+  https://code.qt.io/cgit/qt/qtwebengine-chromium.git/
+and via Qt's Open Source compliance pages at:
+  https://www.qt.io/qt-in-use/open-source-compliance
+
+FFmpeg project home: https://ffmpeg.org/
+FFmpeg copyright: Copyright (c) 2000-2024 the FFmpeg developers

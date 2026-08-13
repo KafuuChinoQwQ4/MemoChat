@@ -6,6 +6,7 @@
 
 | 文件 | 作用概括 |
 | --- | --- |
+| `test_r18_credential_file_security_contract.py` | 校验 R18 本地凭据目录和文件仅允许服务账号访问 |
 | `test_r18_access_policy_contract.py` | 校验账号持久化的成人确认、默认拒绝、撤销保护及全部 R18 内容路由守卫 |
 
 <!-- TREE-DOC: 自动维护。文件夹内容变更时同步更新本表与上面的一句话概括。 -->

@@ -7,6 +7,7 @@
 | 子目录 | 作用概括 |
 | --- | --- |
 | [`client/`](client/_TREE.md) | 桌面客户端契约/结构测试 |
+| [`client_release/`](client_release/_TREE.md) | Linux 客户端日志脱敏、资源隔离与便携打包安全契约测试 |
 | [`server/`](server/_TREE.md) | 后端服务契约/结构测试 |
 
 ## 文件
