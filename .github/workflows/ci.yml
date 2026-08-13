@@ -139,9 +139,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          git fetch --no-tags origin \
-            '+refs/pull/*/head:refs/remotes/origin/pull/*'
-          git log --all --name-only --pretty=format: | sed '/^$/d' | sort -u > "${RUNNER_TEMP}/history-paths.txt"
+          git log --all --branches --tags --name-only --pretty=format: | sed '/^$/d' | sort -u > "${RUNNER_TEMP}/history-paths.txt"
           git ls-files | sort -u > "${RUNNER_TEMP}/current-paths.txt"
           comm -23 "${RUNNER_TEMP}/history-paths.txt" "${RUNNER_TEMP}/current-paths.txt" \
             | grep -Ei \
