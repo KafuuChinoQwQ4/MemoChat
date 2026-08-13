@@ -1,0 +1,32 @@
+{
+  "schema": "memochat-third-party-corpus-v2",
+  "review_status": "distribution-materials-complete",
+  "review_id": "memo-legal-review-2026-08-13",
+  "reviewed_source_snapshot_sha256": "6c8f21aabc17c3ee1bc9621028aaea9e0515504309eccfc1812090fb177824e6",
+  "scopes": {
+    "backend-vcpkg": [
+      "materials/backend-vcpkg/LICENSE.txt"
+    ],
+    "client-assets": [
+      "materials/client-assets/LICENSE.txt"
+    ],
+    "container-ubuntu": [
+      "materials/container-ubuntu/LICENSE.txt"
+    ],
+    "ffmpeg": [
+      "materials/ffmpeg/LICENSE.txt"
+    ],
+    "gcc-runtime": [
+      "materials/gcc-runtime/LICENSE.txt"
+    ],
+    "icu": [
+      "materials/icu/LICENSE.txt"
+    ],
+    "qt": [
+      "materials/qt/LICENSE.txt"
+    ],
+    "qtwebengine-chromium": [
+      "materials/qtwebengine-chromium/LICENSE.txt"
+    ]
+  }
+}

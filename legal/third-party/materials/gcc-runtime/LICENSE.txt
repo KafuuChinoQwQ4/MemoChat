@@ -1,0 +1,75 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007 — Runtime Library Exception
+
+GCC RUNTIME LIBRARY EXCEPTION
+
+Version 3.1, 31 March 2009
+
+Copyright (C) 2009 Free Software Foundation, Inc.
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+This GCC Runtime Library Exception ("Exception") is an additional
+permission under section 7 of the GNU General Public License, version 3
+("GPLv3"). It applies to a given file (the "Runtime Library") that bears
+a notice placed by the copyright holder of the file stating that the file
+is governed by GPLv3 along with this Exception.
+
+When you use GCC to compile a program, GCC may combine portions of
+certain GCC header files and runtime libraries with the compiled program.
+The purpose of this Exception is to allow compilation of non-GPL
+(including proprietary) programs to use, in this way, the header files
+and runtime libraries covered by this Exception.
+
+0. Definitions.
+
+A file is an "Independent Module" if it either requires no Runtime
+Library, or, more commonly, if it is part of no Compilation Unit of the
+Runtime Library.
+
+"Eligible Compilation Units" means the Compilation Units of the Runtime
+Library, and of any file that depends solely on header files provided
+as part of the Runtime Library.
+
+"Covered Code" is source code governed by and subject to the GPLv3,
+including sections 1 through 17 of GPLv3.
+
+"Compilation Unit" is the smallest unit of source code that can be
+compiled into a single object file.
+
+1. Grant of Additional Permission.
+
+You have permission to propagate a work of Covered Code, even if such
+propagation would otherwise violate the terms of GPLv3, provided that
+all the conditions in the following sections 1, 2, 3, and 4 are met.
+
+2. Reproduced in Object Code.
+
+The Covered Code must reproduce the above copyright notice and this
+license in the documentation and/or other materials provided with the
+distribution.
+
+3. Eligibility.
+
+The Covered Code must be compiled with a version of GCC, the GNU
+Compiler Collection, that enables, by default, a language that has
+signed and/or unsigned integer types that are not less than 16 bits in
+width.
+
+4. No Weakening of GCC Copyleft.
+
+The availability of this Exception does not imply any general
+presumption that third-party software is unaffected by the copyleft
+requirements of the license of GCC.
+
+---
+
+Runtime libraries distributed:
+  libstdc++.so.6   — GNU Standard C++ Library (GPLv3 + Runtime Exception)
+  libgcc_s.so.1    — GCC low-level runtime (GPLv3 + Runtime Exception)
+  libatomic.so.1   — GCC atomic built-ins (GPLv3 + Runtime Exception)
+
+GCC version used: GCC 16 (Ubuntu 24.04 toolchain)
+GCC project home: https://gcc.gnu.org/
+Source: https://gcc.gnu.org/git/gcc.git

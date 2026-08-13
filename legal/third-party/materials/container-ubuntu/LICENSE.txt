@@ -1,0 +1,28 @@
+Ubuntu 24.04 LTS (Noble Numbat) base image
+
+The MemoChat service container images are built FROM ubuntu:24.04. The
+Ubuntu base image bundles packages published by Canonical and upstream
+project maintainers under a variety of open-source licenses.
+
+Primary license categories present in the Ubuntu 24.04 minimal base:
+  GPL-2.0   — Linux kernel interfaces (glibc, procps, util-linux)
+  LGPL-2.1  — GNU C Library (glibc), libgcc, libstdc++
+  MIT       — ca-certificates, curl dependencies
+  ISC       — OpenSSL helper libraries
+  BSD-2/3   — Various system utilities
+  Apache-2.0 — Some Canonical-owned tooling
+
+The complete per-package copyright notices are embedded in the image at
+  /usr/share/doc/<package>/copyright
+as required by the Debian Policy Manual.
+
+Canonical Ubuntu project: https://ubuntu.com/
+Ubuntu packages source:   https://launchpad.net/ubuntu
+Debian policy (copyright): https://www.debian.org/doc/debian-policy/ch-docs.html#s-copyrightfile
+
+Relevant top-level packages included in the minimal runtime layer:
+  libc6, libgcc-s1, libstdc++6, zlib1g, libssl3, ca-certificates,
+  libcurl4, libpq5, libmongoc-1.0-0, openssl
+
+All packages are obtained unmodified from the official Ubuntu 24.04
+package archive (archive.ubuntu.com / security.ubuntu.com).

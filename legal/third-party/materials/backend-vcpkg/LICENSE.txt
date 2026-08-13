@@ -1,0 +1,31 @@
+The MemoChat C++ backend is built using vcpkg-managed dependencies.
+All vcpkg packages are compiled from source using the pinned versions
+recorded in vcpkg.json / vcpkg-lock.json at the root of the repository.
+
+Primary vcpkg dependencies and their licenses:
+
+  openssl          3.6.0   Apache-2.0
+  libpq (PostgreSQL) 16.9  PostgreSQL License (MIT-style)
+  mongo-c-driver   1.30.6  Apache-2.0
+  boost            1.87    Boost Software License 1.0
+  msquic           2.x     MIT
+  nghttp2          1.68.0  MIT
+  zlib             1.x     zlib/libpng License
+  brotli           1.x     MIT
+  c-ares           1.x     MIT
+  libxml2          2.x     MIT
+  openldap         (headers only)  OpenLDAP Public License
+  re2              (abseil/re2)    BSD-3-Clause
+  abseil-cpp       20240116  Apache-2.0
+  grpc             (via abseil)    Apache-2.0
+  protobuf         (via grpc)      BSD-3-Clause
+  lz4              1.9     BSD-2-Clause / GPLv2 dual (BSD chosen)
+  zstd             1.5     BSD-3-Clause / GPLv2 dual (BSD chosen)
+  libevent         2.x     BSD-3-Clause
+
+Per-package license texts are embedded in the SBOM (vcpkg-build-
+dependencies.spdx.json) generated during the release build and included
+in each service bundle's sbom/ directory.
+
+vcpkg project home: https://github.com/microsoft/vcpkg
+SPDX SBOM format:  https://spdx.dev/
