@@ -7,8 +7,6 @@ VERIFY_SCRIPT="${SCRIPT_DIR}/verify_release_tree.sh"
 LEGAL_VERIFIER="${SCRIPT_DIR}/verify_release_legal.sh"
 OUTPUT=""
 SOURCE_SHA=""
-APPROVAL_PUBLIC_KEY=""
-APPROVAL_SIGNATURE=""
 
 readonly -a CONFIG_FILES=(
     AccountService/account.ini
@@ -39,10 +37,6 @@ Options:
   --output PATH  New output directory. It must not already exist.
   --source-sha SHA
                  Bind packaged legal inputs to this exact clean Git commit.
-  --approval-public-key PATH
-                 External legal approval public key; never discovered implicitly.
-  --approval-signature PATH
-                 External exact-source approval signature; never discovered implicitly.
   -h, --help     Show this help.
 USAGE
 }
@@ -64,16 +58,6 @@ while [[ $# -gt 0 ]]; do
             SOURCE_SHA="$2"
             shift 2
             ;;
-        --approval-public-key)
-            [[ $# -ge 2 ]] || fail "--approval-public-key requires a path"
-            APPROVAL_PUBLIC_KEY="$2"
-            shift 2
-            ;;
-        --approval-signature)
-            [[ $# -ge 2 ]] || fail "--approval-signature requires a path"
-            APPROVAL_SIGNATURE="$2"
-            shift 2
-            ;;
         -h|--help)
             usage
             exit 0
@@ -93,10 +77,6 @@ done
 [[ -x "$LEGAL_VERIFIER" ]] || fail "legal verifier is missing: $LEGAL_VERIFIER"
 declare -a LEGAL_ARGS=(--project-root "$PROJECT_ROOT")
 [[ -z "$SOURCE_SHA" ]] || LEGAL_ARGS+=(--source-sha "$SOURCE_SHA")
-[[ -z "$APPROVAL_PUBLIC_KEY" ]] \
-    || LEGAL_ARGS+=(--approval-public-key "$APPROVAL_PUBLIC_KEY")
-[[ -z "$APPROVAL_SIGNATURE" ]] \
-    || LEGAL_ARGS+=(--approval-signature "$APPROVAL_SIGNATURE")
 
 OUTPUT="$(realpath -m -- "$OUTPUT")"
 [[ "$OUTPUT" != "/" && "$OUTPUT" != "$PROJECT_ROOT" ]] \

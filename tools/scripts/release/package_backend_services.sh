@@ -8,8 +8,6 @@ VCPKG_SBOM_GENERATOR="${SCRIPT_DIR}/generate_vcpkg_installed_sbom.py"
 BUILD_BIN="${PROJECT_ROOT}/build-linux-server-release-gcc16/bin"
 OUTPUT=""
 SOURCE_SHA=""
-APPROVAL_PUBLIC_KEY=""
-APPROVAL_SIGNATURE=""
 VCPKG_INSTALLED_ROOT=""
 VCPKG_TRIPLET=""
 SBOM_TEMPLATE=""
@@ -54,10 +52,6 @@ Options:
   --vcpkg-triplet NAME
                     Target triplet whose complete installed closure is recorded.
   --source-sha SHA  Bind packaged legal inputs to this exact clean Git commit.
-  --approval-public-key PATH
-                    External legal approval public key; never discovered implicitly.
-  --approval-signature PATH
-                    External exact-source approval signature; never discovered implicitly.
   --target NAME     Package one supported target. May be repeated.
                     Without --target, all current service targets are packaged.
   -h, --help        Show this help.
@@ -119,16 +113,6 @@ while [[ $# -gt 0 ]]; do
             SOURCE_SHA="$2"
             shift 2
             ;;
-        --approval-public-key)
-            [[ $# -ge 2 ]] || fail "--approval-public-key requires a path"
-            APPROVAL_PUBLIC_KEY="$2"
-            shift 2
-            ;;
-        --approval-signature)
-            [[ $# -ge 2 ]] || fail "--approval-signature requires a path"
-            APPROVAL_SIGNATURE="$2"
-            shift 2
-            ;;
         -h|--help)
             usage
             exit 0
@@ -156,10 +140,6 @@ if [[ -n "$VCPKG_INSTALLED_ROOT" ]]; then
 fi
 declare -a LEGAL_ARGS=(--project-root "$PROJECT_ROOT")
 [[ -z "$SOURCE_SHA" ]] || LEGAL_ARGS+=(--source-sha "$SOURCE_SHA")
-[[ -z "$APPROVAL_PUBLIC_KEY" ]] \
-    || LEGAL_ARGS+=(--approval-public-key "$APPROVAL_PUBLIC_KEY")
-[[ -z "$APPROVAL_SIGNATURE" ]] \
-    || LEGAL_ARGS+=(--approval-signature "$APPROVAL_SIGNATURE")
 "$LEGAL_VERIFIER" "${LEGAL_ARGS[@]}"
 
 BUILD_BIN="$(realpath -e -- "$BUILD_BIN")" || fail "build directory does not exist: $BUILD_BIN"

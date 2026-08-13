@@ -66,7 +66,7 @@ all business migrations, and the PostgreSQL/MongoDB/MinIO provisioners. Normal
 local packaging fails if the root MIT license or third-party inventory is
 missing or malformed. It otherwise writes `LEGAL-STATUS.txt` and may explicitly
 report an incomplete formal corpus. Versioned tag CI additionally fails closed
-until `legal/third-party` passes scope, checksum, approval-state, and release
+until `legal/third-party` passes scope, checksum, materials-completeness, and release
 commit binding checks; only then is that corpus copied into bundles and the
 deployment kit.
 

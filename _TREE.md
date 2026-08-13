@@ -27,8 +27,8 @@
 | `CMakeLists.txt` | 顶层 CMake 构建入口 |
 | `CMakePresets.json` | CMake 预设（含 linux-full-gcc16 等构建配置） |
 | `LICENSE` | MemoChat 项目的 MIT 开源许可证全文 |
-| `README.md` | 项目概览、构建入口与仅标签正式发布的外部法律签名/SBOM 门禁说明 |
-| `THIRD_PARTY_NOTICES.md` | Linux 客户端、C++ 后端、容器与外部部署依赖的第三方许可证清单、外部审批签名及发布前法律材料要求 |
+| `README.md` | 项目概览、构建入口与仅标签正式发布的第三方材料完整性/SBOM 门禁说明 |
+| `THIRD_PARTY_NOTICES.md` | Linux 客户端、C++ 后端、容器与外部部署依赖的第三方许可证清单及发布前材料要求 |
 | `pyproject.toml` | Python 工具链/项目配置 |
 | `pytest.ini` | pytest 测试配置 |
 | `requirements-dev.txt` | 开发期 Python 依赖清单 |

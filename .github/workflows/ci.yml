@@ -185,36 +185,11 @@ jobs:
       - name: Require complete distribution legal corpus
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        env:
-          MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM }}
-          MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64 }}
         run: |
           set -Eeuo pipefail
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" ]] || {
-            echo "Protected legal approval public key is not configured" >&2
-            exit 1
-          }
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" ]] || {
-            echo "Protected exact-source legal approval signature is not configured" >&2
-            exit 1
-          }
-          public_key="${RUNNER_TEMP}/memochat-legal-approval-public.pem"
-          signature="${RUNNER_TEMP}/memochat-legal-approval.sig"
-          [[ "$public_key" == "${RUNNER_TEMP}/"* && "$signature" == "${RUNNER_TEMP}/"* ]]
-          [[ "$RUNNER_TEMP" != "$GITHUB_WORKSPACE" ]]
-          cleanup_legal_approval() {
-            rm -f -- "$public_key" "$signature"
-          }
-          trap cleanup_legal_approval EXIT
-          (umask 077; printf '%s\n' "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" > "$public_key")
-          (umask 077; printf '%s' "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" | base64 --decode > "$signature")
-          chmod 0400 "$public_key" "$signature"
-          [[ -s "$public_key" && -s "$signature" ]]
           tools/scripts/release/verify_release_legal.sh \
             --require-distribution-corpus \
-            --source-sha "$GITHUB_SHA" \
-            --approval-public-key "$public_key" \
-            --approval-signature "$signature"
+            --source-sha "$GITHUB_SHA"
 
       - name: Validate release shell entrypoints
         shell: bash
@@ -333,34 +308,6 @@ jobs:
           cmake --preset linux-client-release-gcc16
           cmake --build --preset linux-client-release-gcc16 --target MemoChatQml
 
-      - name: Prepare external legal approval evidence
-        id: legal_approval_key
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        env:
-          MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM }}
-          MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64 }}
-        run: |
-          set -Eeuo pipefail
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" ]] || {
-            echo "Protected legal approval public key is not configured" >&2
-            exit 1
-          }
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" ]] || {
-            echo "Protected exact-source legal approval signature is not configured" >&2
-            exit 1
-          }
-          public_key="${RUNNER_TEMP}/memochat-client-legal-approval-public.pem"
-          signature="${RUNNER_TEMP}/memochat-client-legal-approval.sig"
-          [[ "$public_key" == "${RUNNER_TEMP}/"* && "$signature" == "${RUNNER_TEMP}/"* ]]
-          [[ "$RUNNER_TEMP" != "$GITHUB_WORKSPACE" ]]
-          (umask 077; printf '%s\n' "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" > "$public_key")
-          (umask 077; printf '%s' "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" | base64 --decode > "$signature")
-          chmod 0400 "$public_key" "$signature"
-          [[ -s "$public_key" && -s "$signature" ]]
-          echo "path=$public_key" >> "$GITHUB_OUTPUT"
-          echo "signature_path=$signature" >> "$GITHUB_OUTPUT"
-
       - name: Package and verify client
         id: package
         shell: bash
@@ -369,25 +316,13 @@ jobs:
           source tools/scripts/release/load_build_environment.sh /root/.memochat-linux-env
           release_root="$(mktemp -d "${RUNNER_TEMP}/memochat-client-release.XXXXXX")"
           artifact_name="MemoChatQml-${GITHUB_SHA:0:12}-linux-x86_64"
-          legal_approval_args=()
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            approval_public_key="${{ steps.legal_approval_key.outputs.path }}"
-            approval_signature="${{ steps.legal_approval_key.outputs.signature_path }}"
-            [[ -f "$approval_public_key" && "$approval_public_key" == "${RUNNER_TEMP}/"* ]]
-            [[ -f "$approval_signature" && "$approval_signature" == "${RUNNER_TEMP}/"* ]]
-            legal_approval_args=(
-              --approval-public-key "$approval_public_key"
-              --approval-signature "$approval_signature"
-            )
-          fi
           tools/scripts/release/package_linux_client.sh \
             --binary build-linux-client-release-gcc16/bin/MemoChatQml \
             --config build-linux-client-release-gcc16/bin/config.ini \
             --library-dir "$VCPKG_ROOT/installed-memochat-gcc16-client-release/x64-linux-memochat-release/lib" \
             --output-dir "$release_root" \
             --source-sha "$GITHUB_SHA" \
-            --artifact-name "$artifact_name" \
-            "${legal_approval_args[@]}"
+            --artifact-name "$artifact_name"
           tools/scripts/release/verify_release_tree.sh \
             --allow-file tools/scripts/release/client_release_scan.allowlist \
             "${release_root}/${artifact_name}"
@@ -450,22 +385,6 @@ jobs:
           PY
           echo "release_root=$release_root" >> "$GITHUB_OUTPUT"
 
-      - name: Remove external legal approval evidence
-        if: always() && startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          public_key="${{ steps.legal_approval_key.outputs.path }}"
-          signature="${{ steps.legal_approval_key.outputs.signature_path }}"
-          if [[ -n "$public_key" ]]; then
-            [[ "$public_key" == "${RUNNER_TEMP}/"* ]]
-            rm -f -- "$public_key"
-          fi
-          if [[ -n "$signature" ]]; then
-            [[ "$signature" == "${RUNNER_TEMP}/"* ]]
-            rm -f -- "$signature"
-          fi
-
       - name: Upload Linux client
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -513,34 +432,6 @@ jobs:
           cmake --preset linux-server-release-gcc16
           cmake --build --preset linux-server-release-gcc16
 
-      - name: Prepare external legal approval evidence
-        id: legal_approval_key
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        env:
-          MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM }}
-          MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64: ${{ secrets.MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64 }}
-        run: |
-          set -Eeuo pipefail
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" ]] || {
-            echo "Protected legal approval public key is not configured" >&2
-            exit 1
-          }
-          [[ -n "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" ]] || {
-            echo "Protected exact-source legal approval signature is not configured" >&2
-            exit 1
-          }
-          public_key="${RUNNER_TEMP}/memochat-backend-legal-approval-public.pem"
-          signature="${RUNNER_TEMP}/memochat-backend-legal-approval.sig"
-          [[ "$public_key" == "${RUNNER_TEMP}/"* && "$signature" == "${RUNNER_TEMP}/"* ]]
-          [[ "$RUNNER_TEMP" != "$GITHUB_WORKSPACE" ]]
-          (umask 077; printf '%s\n' "$MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM" > "$public_key")
-          (umask 077; printf '%s' "$MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64" | base64 --decode > "$signature")
-          chmod 0400 "$public_key" "$signature"
-          [[ -s "$public_key" && -s "$signature" ]]
-          echo "path=$public_key" >> "$GITHUB_OUTPUT"
-          echo "signature_path=$signature" >> "$GITHUB_OUTPUT"
-
       - name: Package and verify backend bundles
         id: package
         shell: bash
@@ -549,32 +440,19 @@ jobs:
           source tools/scripts/release/load_build_environment.sh /root/.memochat-linux-env
           release_parent="$(mktemp -d "${RUNNER_TEMP}/memochat-backend-release.XXXXXX")"
           release_root="${release_parent}/backend"
-          legal_approval_args=()
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            approval_public_key="${{ steps.legal_approval_key.outputs.path }}"
-            approval_signature="${{ steps.legal_approval_key.outputs.signature_path }}"
-            [[ -f "$approval_public_key" && "$approval_public_key" == "${RUNNER_TEMP}/"* ]]
-            [[ -f "$approval_signature" && "$approval_signature" == "${RUNNER_TEMP}/"* ]]
-            legal_approval_args=(
-              --approval-public-key "$approval_public_key"
-              --approval-signature "$approval_signature"
-            )
-          fi
           tools/scripts/release/package_backend_services.sh \
             --build-bin build-linux-server-release-gcc16/bin \
             --library-dir "$VCPKG_ROOT/installed-memochat-gcc16-server-release/x64-linux-memochat-release/lib" \
             --vcpkg-installed-root "$VCPKG_ROOT/installed-memochat-gcc16-server-release" \
             --vcpkg-triplet x64-linux-memochat-release \
             --source-sha "$GITHUB_SHA" \
-            --output "$release_root" \
-            "${legal_approval_args[@]}"
+            --output "$release_root"
           for service_bundle in "$release_root"/*; do
             tools/scripts/release/verify_release_tree.sh "$service_bundle"
           done
           tools/scripts/release/package_backend_deployment_kit.sh \
             --source-sha "$GITHUB_SHA" \
-            --output "${release_parent}/deployment" \
-            "${legal_approval_args[@]}"
+            --output "${release_parent}/deployment"
           sbom_root="${release_parent}/vcpkg-sboms"
           mkdir -m 0700 "$sbom_root"
           declare -A image_slugs=(
@@ -617,22 +495,6 @@ jobs:
           echo "release_parent=$release_parent" >> "$GITHUB_OUTPUT"
           echo "release_root=$release_root" >> "$GITHUB_OUTPUT"
           echo "sbom_root=$sbom_root" >> "$GITHUB_OUTPUT"
-
-      - name: Remove external legal approval evidence
-        if: always() && startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          public_key="${{ steps.legal_approval_key.outputs.path }}"
-          signature="${{ steps.legal_approval_key.outputs.signature_path }}"
-          if [[ -n "$public_key" ]]; then
-            [[ "$public_key" == "${RUNNER_TEMP}/"* ]]
-            rm -f -- "$public_key"
-          fi
-          if [[ -n "$signature" ]]; then
-            [[ "$signature" == "${RUNNER_TEMP}/"* ]]
-            rm -f -- "$signature"
-          fi
 
       - name: Validate representative runtime image
         shell: bash

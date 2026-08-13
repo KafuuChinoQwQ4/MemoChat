@@ -26,106 +26,50 @@ the source manifests.
 formal distribution corpus as separate states. Ordinary CI and local packages
 may report `third_party_legal_corpus=incomplete`, but a version tag must require
 `legal/third-party/CORPUS.json`, `SHA256SUMS`, all required distribution scopes,
-an explicit `approved-for-distribution` review status, and a stable `review_id`.
+an explicit `distribution-materials-complete` status, and a stable `review_id`.
 A present but partial or checksum-invalid corpus is an error even outside a
-versioned release. Formal approval is a separate external signature over a
-canonical payload generated only from an exact clean source commit. This gate
-records reviewed completeness; it does not replace legal review of the materials.
+versioned release. This is a technical materials-integrity gate: it records
+completeness, checksum integrity, and exact source provenance. It is not legal
+advice and does not claim that an external lawyer or regulator approved a release.
 
-The repository cannot approve its own legal corpus. `CORPUS.json` review fields
-are inputs to the approval payload, not a trust root. After the release source
-commit is final, the verifier writes a canonical
-`memochat-release-legal-approval-v2` payload outside the repository. That payload
-binds the exact source commit and Git tree, `LICENSE` and this notice by SHA-256,
-the corpus review ID, and the corpus `SHA256SUMS` digest. The legal approver signs
-those exact bytes with an OpenSSL SHA-256 detached signature. The payload,
-signature, signing private key, and approval public key all remain outside the
-repository. Version-tag CI materializes only the externally supplied payload
-signature and public key outside the checkout and passes their paths explicitly.
-The verifier rejects either input when it is a symlink or resolves anywhere
-under the repository root.
-
-`CORPUS.json` uses schema `memochat-third-party-corpus-v1` and contains only
-`schema`, `review_status`, `review_id`, and `scopes`. The required scope keys are
+`CORPUS.json` uses schema `memochat-third-party-corpus-v2` and contains only
+`schema`, `review_status`, `review_id`, `reviewed_source_snapshot_sha256`, and
+`scopes`. The required scope keys are
 `qt`, `qtwebengine-chromium`, `ffmpeg`, `icu`, `gcc-runtime`, `backend-vcpkg`,
 `container-ubuntu`, and `client-assets`. Every scope must list at least one
 nonempty regular file; every payload and `CORPUS.json` must appear exactly once
 in `SHA256SUMS`, and undeclared files, unsafe paths, symlinks, and checksum
 mismatches are rejected. Repository-owned `CORPUS.sig` files are undeclared and
-rejected. `LEGAL-STATUS.txt` records the canonical approval payload digest,
-external signature digest, normalized public-key fingerprint, exact source SHA
-and tree, and verification result. Only a verified external signature over that
-exact-source payload can set `formal_distribution_ready=true`.
+rejected. `LEGAL-STATUS.txt` records the corpus digest, exact source SHA and tree,
+and whether all formal distribution inputs are source-bound. Only a complete
+corpus verified from an exact clean commit can set
+`formal_distribution_ready=true`.
 
-After committing the complete corpus, use the following four-step approval flow.
-The detached signature is commit-specific and must be regenerated after any
-source, tree, license, notice, review ID, or corpus checksum change.
-
-1. In the exact clean release checkout, generate the canonical payload directly
-   to a new path outside the repository. Record its SHA-256 through a separately
-   authenticated channel for the approver:
+The reviewed source snapshot is SHA-256 over Git's NUL-terminated full-tree
+records, including modes, object IDs, and paths, with only `legal/third-party/`
+excluded to avoid a self-reference. Finalize and commit every non-corpus release
+input first, calculate that commit's snapshot, place it in `CORPUS.json`,
+regenerate `SHA256SUMS`, and commit only the corpus update:
 
 ```bash
-approval_payload=/secure/external/memochat-legal-approval-v2.txt
-release_source_sha="$(git rev-parse --verify HEAD)"
-
-tools/scripts/release/verify_release_legal.sh \
-  --source-sha "$release_source_sha" \
-  --write-approval-payload "$approval_payload"
-
-sha256sum -- "$approval_payload"
+reviewed_source_sha="$(git rev-parse --verify HEAD)"
+python3 tools/scripts/release/compute_release_source_snapshot.py \
+  --project-root . \
+  --source-sha "$reviewed_source_sha"
 ```
 
-2. Transfer only that payload into the isolated/offline signing environment,
-   confirm its SHA-256 against the authenticated value, and sign those exact
-   bytes. The private key remains offline; export only the detached signature
-   and matching public key:
-
-```bash
-approval_payload=/offline/inbox/memochat-legal-approval-v2.txt
-approval_signature=/offline/outbox/memochat-legal-approval-v2.sig
-signing_key_path=/offline/keys/memochat-legal-approval-private.pem
-approval_public_key=/offline/outbox/memochat-legal-approval-public.pem
-
-sha256sum -- "$approval_payload"
-openssl dgst -sha256 \
-  -sign "$signing_key_path" \
-  -out "$approval_signature" \
-  "$approval_payload"
-openssl pkey -in "$signing_key_path" -pubout -out "$approval_public_key"
-openssl dgst -sha256 \
-  -verify "$approval_public_key" \
-  -signature "$approval_signature" \
-  "$approval_payload"
-```
-
-3. On the connected release-administration machine, base64-encode the binary
-   signature as one line and configure these exact protected GitHub Actions
-   secrets. `MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM` contains the complete PEM
-   public key; `MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64` contains the detached
-   signature bytes encoded as base64. Neither secret contains the private key:
-
-```bash
-approval_signature=/secure/import/memochat-legal-approval-v2.sig
-approval_public_key=/secure/import/memochat-legal-approval-public.pem
-signature_base64=/secure/import/memochat-legal-approval-v2.sig.base64
-
-base64 --wrap=0 "$approval_signature" > "$signature_base64"
-gh secret set MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM < "$approval_public_key"
-gh secret set MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64 < "$signature_base64"
-```
-
-4. Before creating a version tag, CI materializes the protected public key and
-   detached signature under `$RUNNER_TEMP`, outside `$GITHUB_WORKSPACE`, and
-   invokes the verifier as follows:
+Because the snapshot excludes only the corpus, the digest remains stable across
+that corpus-only commit. Then run the same fail-closed command used by
+version-tag CI from the final clean checkout:
 
 ```bash
 tools/scripts/release/verify_release_legal.sh \
   --require-distribution-corpus \
-  --source-sha "$GITHUB_SHA" \
-  --approval-public-key "$RUNNER_TEMP/memochat-legal-approval-public.pem" \
-  --approval-signature "$RUNNER_TEMP/memochat-legal-approval.sig"
+  --source-sha "$(git rev-parse --verify HEAD)"
 ```
+
+Any change to the source tree, license, notice, review ID, corpus manifest, or
+declared material requires a new commit and regenerated `SHA256SUMS`.
 
 ## Linux Client Distribution
 
@@ -369,12 +313,9 @@ mean it has been completed:
    `legal/third-party` is still absent, it correctly marks local artifacts as
    incomplete rather than treating those two documents as sufficient for the
    copyleft and composite-license components above.
-10. After the release source commit is final, generate the canonical v2 approval
-    payload outside the repository and have the independent legal approver sign
-    those exact bytes offline. Configure the exported public key PEM as
-    `MEMOCHAT_LEGAL_APPROVAL_PUBLIC_KEY_PEM` and the detached signature's
-    single-line base64 as `MEMOCHAT_LEGAL_APPROVAL_SIGNATURE_BASE64`. The private
-    key must never enter Git, CI variables, build artifacts, or release archives.
+10. After the release source commit is final, regenerate `SHA256SUMS`, set
+    `review_status` to `distribution-materials-complete`, commit the exact corpus,
+    and run the source-bound verifier shown above from a clean checkout.
 
 Relevant primary licensing references include:
 
