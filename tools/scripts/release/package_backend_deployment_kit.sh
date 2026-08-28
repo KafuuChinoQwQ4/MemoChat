@@ -179,6 +179,9 @@ chmod 0444 "${STAGING}/infra/deploy/local/docker-compose.yml"
 
 for relative_config in "${CONFIG_FILES[@]}"; do
     config_path="${STAGING}/apps/server/core/${relative_config}"
+    # Sanitization rewrites the staged copy; keep the final release config
+    # read-only after the transformation completes.
+    chmod 0644 "$config_path"
     python3 - "$config_path" <<'PY'
 from configparser import ConfigParser
 from pathlib import Path
@@ -201,6 +204,7 @@ for section in config.sections():
 with path.open("w", encoding="utf-8", newline="\n") as stream:
     config.write(stream, space_around_delimiters=False)
 PY
+    chmod 0444 "$config_path"
     if grep -Eiq 'memochat-dev-|^[[:space:]]*(Passwd|Password|PfxPassword|HmacSecret|JwtSecret|InternalApiKey|AdminKey|ApiKey|ApiSecret|AccessKey|SecretKey|SMTPUser|SMTPPass|From|Uri)[[:space:]]*=[[:space:]]*[^[:space:]]' "$config_path"; then
         fail "sanitized release config still contains a credential: $relative_config"
     fi
