@@ -19,8 +19,8 @@
 | `ChatMessageDispatcherGroupPayload.h` | 群组消息载荷处理声明 |
 | `ChatMessageDispatcherPrivate.cpp` | 私聊类消息分发处理 |
 | `ChatMessageDispatcherSystem.cpp` | 系统类消息分发处理 |
-| `HttpMgrRequestUtils.cpp` | HTTP 请求工具实现（TLS 配置与 Release 明文请求拒绝） |
-| `HttpMgrRequestUtils.h` | HTTP 请求工具声明 |
+| `HttpMgrRequestUtils.cpp` | HTTP 请求工具实现（超时、协议回退、Bearer 头与 JSON 请求准备） |
+| `HttpMgrRequestUtils.h` | HTTP 请求工具声明，内联 TLS/CA 配置与 Release 明文请求拒绝 |
 | `IChatTransport.h` | 聊天传输抽象接口 |
 | `QuicChatTransport.cpp` | QUIC 聊天传输实现 |
 | `QuicChatTransport.h` | QUIC 聊天传输声明 |

@@ -6,14 +6,10 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
-#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QSettings>
-#include <QSslCertificate>
-#include <QSslConfiguration>
-#include <QSslSocket>
 #include <QString>
 #include <QStringList>
 
@@ -137,64 +133,6 @@ void appendUniqueUrl(QVector<QUrl>& urls, const QUrl& url)
 }
 
 } // namespace
-
-QString deploymentCaFilePath()
-{
-    QString configuredPath = qEnvironmentVariable("MEMOCHAT_CLIENT_CA_FILE").trimmed();
-    if (configuredPath.isEmpty())
-    {
-        const QString configPath = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("config.ini"));
-        QSettings settings(configPath, QSettings::IniFormat);
-        configuredPath = settings.value(QStringLiteral("GateServer/ca_file")).toString().trimmed();
-    }
-    if (configuredPath.isEmpty())
-    {
-        return {};
-    }
-
-    QFileInfo info(configuredPath);
-    if (info.isRelative())
-    {
-        info.setFile(QDir(QCoreApplication::applicationDirPath()).filePath(configuredPath));
-    }
-    return info.absoluteFilePath();
-}
-
-bool configureSecureNetworkRequest(QNetworkRequest& request)
-{
-    const QString scheme = request.url().scheme().trimmed().toLower();
-#if MEMOCHAT_CLIENT_DISTRIBUTABLE_BUILD
-    if (scheme != QLatin1String("https"))
-    {
-        qWarning() << "Distributable client rejected a non-HTTPS network request";
-        request.setUrl(QUrl());
-        return false;
-    }
-#else
-    if (scheme == QLatin1String("http"))
-    {
-        request.setRawHeader(QByteArrayLiteral("Connection"), QByteArrayLiteral("close"));
-        return true;
-    }
-    if (scheme != QLatin1String("https"))
-    {
-        return false;
-    }
-#endif
-
-    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-    sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
-    const QString caFile = deploymentCaFilePath();
-    if (!caFile.isEmpty() && !sslConfig.addCaCertificates(caFile, QSsl::Pem))
-    {
-        qWarning() << "Configured deployment CA could not be loaded:" << caFile;
-    }
-    request.setSslConfiguration(sslConfig);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, true);
-#endif
-    return true;
-}
 
 int httpTimeoutForRequest(const QUrl& url, const QString& module)
 {

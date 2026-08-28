@@ -90,7 +90,12 @@ if(BUILD_CLIENT)
 endif()
 
 if(BUILD_OPS)
-    add_subdirectory(infra/Memo_ops)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/infra/Memo_ops/CMakeLists.txt")
+        add_subdirectory(infra/Memo_ops)
+    else()
+        message(WARNING "BUILD_OPS=ON but infra/Memo_ops/CMakeLists.txt is missing; skipping MemoOps")
+        set(BUILD_OPS OFF)
+    endif()
 endif()
 
 if(BUILD_TESTS)

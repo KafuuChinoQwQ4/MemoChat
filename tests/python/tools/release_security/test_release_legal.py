@@ -205,8 +205,7 @@ def test_present_but_incomplete_corpus_fails_even_status_mode(
         manifest_path.write_text(
             original.replace(
                 '  "review_status": "distribution-materials-complete",',
-                '  "review_status": "draft",\n'
-                '  "review_status": "distribution-materials-complete",',
+                '  "review_status": "draft",\n  "review_status": "distribution-materials-complete",',
             ),
             encoding="utf-8",
         )

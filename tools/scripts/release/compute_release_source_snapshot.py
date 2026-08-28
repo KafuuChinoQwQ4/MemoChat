@@ -69,9 +69,9 @@ def main() -> int:
     if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", arguments.source_sha) is None:
         fail("source SHA must be a lowercase 40- or 64-character Git object ID")
 
-    git_root = Path(
-        git_output(project_root, "rev-parse", "--show-toplevel").decode("utf-8").strip()
-    ).resolve(strict=True)
+    git_root = Path(git_output(project_root, "rev-parse", "--show-toplevel").decode("utf-8").strip()).resolve(
+        strict=True
+    )
     if git_root != project_root:
         fail("project root must equal the Git checkout root")
     git_output(project_root, "cat-file", "-e", f"{arguments.source_sha}^{{commit}}")

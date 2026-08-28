@@ -191,9 +191,7 @@ class BackendDeploymentKitTests(unittest.TestCase):
             canary.write_text("CANARY_PRIVATE_TLS_VALUE\n", encoding="utf-8")
             builder_ca_target = archive_root / "operator-builder-ca-source.pem"
             builder_ca_target.write_text(
-                "-----BEGIN CERTIFICATE-----\n"
-                "cmVsZWFzZS10ZXN0LWJ1aWxkZXItY2E=\n"
-                "-----END CERTIFICATE-----\n",
+                "-----BEGIN CERTIFICATE-----\ncmVsZWFzZS10ZXN0LWJ1aWxkZXItY2E=\n-----END CERTIFICATE-----\n",
                 encoding="utf-8",
             )
             builder_ca = archive_root / "operator-builder-ca.pem"

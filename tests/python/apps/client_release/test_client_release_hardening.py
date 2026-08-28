@@ -24,6 +24,7 @@ CLIENT_MAIN = CLIENT_ROOT / "app/bootstrap/main.cpp"
 CLIENT_CONFIG = CLIENT_ROOT / "core/config.ini"
 CLIENT_NETWORK_ROOT = CLIENT_ROOT
 HTTP_REQUEST_UTILS = CLIENT_ROOT / "core/network/HttpMgrRequestUtils.cpp"
+HTTP_REQUEST_UTILS_HEADER = CLIENT_ROOT / "core/network/HttpMgrRequestUtils.h"
 TELEMETRY_HEADER = CLIENT_ROOT / "core/network/TelemetryUtils.h"
 TELEMETRY_SOURCE = CLIENT_ROOT / "core/network/TelemetryUtils.cpp"
 MAIN_RUNTIME_CONFIG = CLIENT_ROOT / "app/bootstrap/MainRuntimeConfig.cpp"
@@ -133,10 +134,11 @@ def test_release_client_never_disables_tls_certificate_validation() -> None:
 
 def test_gate_retry_policy_does_not_construct_a_plaintext_fallback() -> None:
     source = HTTP_REQUEST_UTILS.read_text(encoding="utf-8")
+    header = HTTP_REQUEST_UTILS_HEADER.read_text(encoding="utf-8")
 
     assert 'withGateEndpoint(url, QStringLiteral("http")' not in source
     assert "Never downgrade a credential-bearing HTTPS request" in source
-    assert "request.setUrl(QUrl())" in source
+    assert "request.setUrl(QUrl())" in header
     assert "Distributable client rejected a non-HTTPS" in source
 
 

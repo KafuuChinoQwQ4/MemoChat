@@ -769,8 +769,9 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
             release_contract_job,
         )
         self.assertIn('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', release_contract_job)
+        self.assertIn("git log --all --branches --tags --name-only", release_contract_job)
         self.assertIn('comm -23 "${RUNNER_TEMP}/history-paths.txt"', release_contract_job)
-        self.assertIn("+refs/pull/*/head:refs/remotes/origin/pull/*", release_contract_job)
+        self.assertNotIn("+refs/pull/*/head:refs/remotes/origin/pull/*", release_contract_job)
         self.assertIn("Rewrite all refs and rotate affected credentials", release_contract_job)
         self.assertIn("gitleaks_${version}_linux_x64.tar.gz", release_contract_job)
         self.assertIn('gitleaks" git', release_contract_job)

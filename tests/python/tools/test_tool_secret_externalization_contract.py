@@ -155,15 +155,15 @@ class ToolSecretExternalizationContractTests(unittest.TestCase):
 
         self.assertNotRegex(
             combined,
-            r'''(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*='''
-            r'''["'](?![$%])[^"']+["']''',
+            r"""(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*="""
+            r"""["'](?![$%])[^"']+["']""",
         )
         self.assertNotRegex(
             combined,
-            r'''(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*='''
-            r'''(?![$%])[^"'$%(\s]+\s*$''',
+            r"""(?m)^\s*(?:export\s+)?(?:access_key|secret_key|MINIO_(?:ROOT_PASSWORD|SECRET_KEY))\s*="""
+            r"""(?![$%])[^"'$%(\s]+\s*$""",
         )
-        self.assertNotRegex(combined, r'''--minio-(?:access|secret)-key\s+(?!["']?\$)\S+''')
+        self.assertNotRegex(combined, r"""--minio-(?:access|secret)-key\s+(?!["']?\$)\S+""")
 
     def test_start_all_services_minio_credentials_fail_closed(self):
         source = read(TOOLS / "scripts/status/start-all-services.sh")

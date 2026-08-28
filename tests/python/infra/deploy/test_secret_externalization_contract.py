@@ -81,7 +81,7 @@ class SecretExternalizationContractTests(unittest.TestCase):
             with self.subTest(function_name=function_name):
                 self.assertRegex(
                     picacg_module,
-                    rf'const char\* {function_name}\(\)\s*\{{\s*'
+                    rf"const char\* {function_name}\(\)\s*\{{\s*"
                     rf'const char\* value = std::getenv\("{environment_name}"\);\s*'
                     r'return value == nullptr \? "" : value;\s*\}',
                 )

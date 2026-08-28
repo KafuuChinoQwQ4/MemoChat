@@ -241,7 +241,7 @@ class BackendReleaseContractTests(unittest.TestCase):
         self.assertIn("--pull=false", build_images)
         self.assertIn('--build-arg "RUNTIME_IMAGE=${RUNTIME_IMAGE}"', build_images)
         self.assertIn("--builder-ca", build_images)
-        self.assertIn('id=memochat_builder_ca,src=${BUILDER_CA}', build_images)
+        self.assertIn("id=memochat_builder_ca,src=${BUILDER_CA}", build_images)
         self.assertIn('builder_ca_input="$BUILDER_CA"', build_images)
         self.assertIn('BUILDER_CA="$(realpath -e -- "$builder_ca_input")"', build_images)
         self.assertIn('[[ -f "$BUILDER_CA" && -s "$BUILDER_CA" ]]', build_images)

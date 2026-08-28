@@ -361,7 +361,7 @@ class MediaUploadContractTest(unittest.TestCase):
         self.assertIn("export_minio_runtime_credentials", startup)
         self.assertIn("first_env_value", startup)
         self.assertIn('[[ -z "$access_key" || -z "$secret_key" ]]', startup)
-        self.assertIn('(( ${#access_key} < 3 || ${#secret_key} < 8 ))', startup)
+        self.assertIn("(( ${#access_key} < 3 || ${#secret_key} < 8 ))", startup)
         self.assertIn('if is_truthy "$START_DOCKER_DEPS" || is_truthy "$START_MEDIAGATEWAY"; then', startup)
         self.assertIn('MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-}"', startup)
         self.assertIn('MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-}"', startup)

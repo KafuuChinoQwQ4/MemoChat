@@ -1,5 +1,5 @@
 #include "AuthenticatedMediaCache.h"
-#include "HttpMgrRequestUtils.h"
+#include "../../core/network/HttpMgrRequestUtils.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
