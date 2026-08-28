@@ -142,6 +142,10 @@ for relative_config in "${CONFIG_FILES[@]}"; do
     copy_file "apps/server/core/${relative_config}" 0444
 done
 
+# The staged Compose file is intentionally read-only in the final kit. Make it
+# owner-writable only while pinning the mutable image reference below so this
+# also works when the packager runs as an unprivileged CI user.
+chmod 0644 "${STAGING}/infra/deploy/local/docker-compose.yml"
 python3 - "${STAGING}/infra/deploy/local/docker-compose.yml" <<'PY'
 from pathlib import Path
 import sys
@@ -171,6 +175,7 @@ text = text.replace(
 )
 path.write_text(text, encoding="utf-8")
 PY
+chmod 0444 "${STAGING}/infra/deploy/local/docker-compose.yml"
 
 for relative_config in "${CONFIG_FILES[@]}"; do
     config_path="${STAGING}/apps/server/core/${relative_config}"
