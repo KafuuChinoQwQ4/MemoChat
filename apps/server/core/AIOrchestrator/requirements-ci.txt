@@ -5,6 +5,7 @@ langchain-core==0.3.29
 langgraph==0.2.62
 pydantic==2.10.5
 pydantic-settings==2.7.1
+neo4j==5.28.1
 pytest==9.1.1
 pyyaml==6.0.2
 structlog==24.4.0

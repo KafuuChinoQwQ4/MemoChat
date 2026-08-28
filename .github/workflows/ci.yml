@@ -130,7 +130,7 @@ jobs:
             || { echo "Release tag must be a semantic vX.Y.Z tag" >&2; exit 1; }
           [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" == tag ]] \
             || { echo "Release tags must be annotated" >&2; exit 1; }
-          git fetch --no-tags origin main
+          git fetch --no-tags origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "Release tag commit is not contained in origin/main" >&2; exit 1; }
 
@@ -274,8 +274,9 @@ jobs:
           python -m pip install -r apps/server/core/AIOrchestrator/requirements-ci.txt
 
       - name: Run offline tests
-        working-directory: apps/server/core/AIOrchestrator
-        run: python -m unittest tests.test_ollama_recovery tests.test_harness_structure
+        env:
+          PYTHONPATH: apps/server/core/AIOrchestrator
+        run: python -m unittest tests.python.apps.server.core.AIOrchestrator.test_ollama_recovery tests.python.apps.server.core.AIOrchestrator.test_harness_structure
 
   build-linux-client:
     name: Build portable Linux client
