@@ -128,12 +128,22 @@ jobs:
           set -Eeuo pipefail
           [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
             || { echo "Release tag must be a semantic vX.Y.Z tag" >&2; exit 1; }
+          git fetch --force --no-tags origin \
+            "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git fetch --force --no-tags origin \
+            "refs/heads/main:refs/remotes/origin/main"
           [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" == tag ]] \
             || { echo "Release tags must be annotated" >&2; exit 1; }
-          git fetch --force origin \
-            "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" \
-            "refs/heads/main:refs/remotes/origin/main"
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+          tag_commit="$(git rev-list -n 1 "refs/tags/${GITHUB_REF_NAME}")"
+          [[ "$tag_commit" == "$GITHUB_SHA" ]] \
+            || { echo "Release tag commit ${tag_commit} does not match GITHUB_SHA ${GITHUB_SHA}" >&2; exit 1; }
+          {
+            echo "tag_ref=${GITHUB_REF_NAME}"
+            echo "tag_commit=${tag_commit}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "origin_main=$(git rev-parse origin/main)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          git merge-base --is-ancestor "$tag_commit" origin/main \
             || { echo "Release tag commit is not contained in origin/main" >&2; exit 1; }
 
       - name: Scan complete Git history before a versioned release
