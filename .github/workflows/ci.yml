@@ -130,7 +130,9 @@ jobs:
             || { echo "Release tag must be a semantic vX.Y.Z tag" >&2; exit 1; }
           [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" == tag ]] \
             || { echo "Release tags must be annotated" >&2; exit 1; }
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          git fetch --force origin \
+            "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" \
+            "refs/heads/main:refs/remotes/origin/main"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "Release tag commit is not contained in origin/main" >&2; exit 1; }
 
