@@ -40,6 +40,7 @@
 | `.dockerignore` | Docker 构建上下文忽略规则 |
 | `.editorconfig` | 编辑器统一缩进/编码规则 |
 | `.env.example` | 环境变量示例模板 |
+| `.gitleaks.toml` | Gitleaks 精确非秘密占位符白名单 |
 | `.gitattributes` | Git 属性（换行/LFS 等）规则 |
 | `.gitignore` | Git 忽略规则 |
 

@@ -758,6 +758,7 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn("Scan the current source tree with Gitleaks", secret_scan_job)
         self.assertIn("gitleaks_${version}_linux_x64.tar.gz", secret_scan_job)
         self.assertIn('gitleaks" dir', secret_scan_job)
+        self.assertIn("--config .gitleaks.toml", secret_scan_job)
         self.assertIn("Scan every commit introduced by this event with Gitleaks", secret_scan_job)
         self.assertIn('commit_range="${PULL_REQUEST_BASE_SHA}..${GITHUB_SHA}"', secret_scan_job)
         self.assertIn('--log-opts="$commit_range"', secret_scan_job)
@@ -775,6 +776,7 @@ class SourceAndWorkflowSecurityContractTests(unittest.TestCase):
         self.assertIn("Rewrite all refs and rotate affected credentials", release_contract_job)
         self.assertIn("gitleaks_${version}_linux_x64.tar.gz", release_contract_job)
         self.assertIn('gitleaks" git', release_contract_job)
+        self.assertIn("--config .gitleaks.toml", release_contract_job)
         self.assertIn('--log-opts="--all"', release_contract_job)
         self.assertIn("--redact", release_contract_job)
 

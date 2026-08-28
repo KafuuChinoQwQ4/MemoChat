@@ -1,0 +1,9 @@
+# Exact deterministic test/documentation placeholders; all other findings block.
+[allowlist]
+description = "MemoChat non-secret test and documentation placeholders"
+regexTarget = "match"
+regexes = [
+  '''0123456789abcdef0123456789abcdef''',
+  '''abcdef0123456789abcdef0123456789''',
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.''',
+]

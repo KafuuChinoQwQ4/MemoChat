@@ -54,7 +54,7 @@ jobs:
             "${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
           tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}/gitleaks-bin" gitleaks
           "${RUNNER_TEMP}/gitleaks-bin/gitleaks" dir \
-            --no-banner --redact .
+            --no-banner --redact --config .gitleaks.toml .
 
       - name: Scan every commit introduced by this event with Gitleaks
         shell: bash
@@ -79,7 +79,7 @@ jobs:
           fi
           [[ "$(git rev-list --count "$commit_range")" -gt 0 ]] || exit 0
           "${RUNNER_TEMP}/gitleaks-bin/gitleaks" git \
-            --no-banner --redact --log-opts="$commit_range" .
+            --no-banner --redact --config .gitleaks.toml --log-opts="$commit_range" .
 
   release-contracts:
     name: Release and security contracts
@@ -176,7 +176,7 @@ jobs:
             "${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
           tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}/gitleaks-bin" gitleaks
           "${RUNNER_TEMP}/gitleaks-bin/gitleaks" git \
-            --no-banner --redact --log-opts="--all" .
+            --no-banner --redact --config .gitleaks.toml --log-opts="--all" .
 
       - name: Inspect distribution legal status
         shell: bash
