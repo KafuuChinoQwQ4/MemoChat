@@ -2,7 +2,7 @@
   "schema": "memochat-third-party-corpus-v2",
   "review_status": "distribution-materials-complete",
   "review_id": "memo-legal-review-2026-08-13",
-  "reviewed_source_snapshot_sha256": "0a04cc924722d2d14de024874d86dc99cb2b429029055371d3f9c78bd778a203",
+  "reviewed_source_snapshot_sha256": "f2fa7bef188c077fdcdccc771b2498ba63430b7d896e4a6bfc1e0ab789fd59fe",
   "scopes": {
     "backend-vcpkg": [
       "materials/backend-vcpkg/LICENSE.txt"
