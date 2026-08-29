@@ -560,6 +560,13 @@ jobs:
           name: linux-backend-release
           path: incoming
 
+      - name: Install runtime libraries for bundle verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libturbojpeg libwebp7
+
       - name: Verify and extract backend release
         id: extract
         shell: bash
