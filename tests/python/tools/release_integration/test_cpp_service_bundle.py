@@ -190,6 +190,14 @@ class CppServiceBundleTests(unittest.TestCase):
             sbom["documentComment"],
         )
         self.assertEqual(["zlib"], [package["name"] for package in sbom["packages"]])
+        self.assertEqual(
+            ["pkg:vcpkg/zlib@1.3.1"],
+            [
+                reference["referenceLocator"]
+                for reference in sbom["packages"][0]["externalRefs"]
+                if reference["referenceType"] == "purl"
+            ],
+        )
         manifest = service.joinpath("MANIFEST.txt").read_text(encoding="utf-8")
         self.assertIn("vcpkg_sbom_coverage=installed-closure-overapproximation", manifest)
         self.assertRegex(manifest, r"(?m)^vcpkg_sbom_sha256=[0-9a-f]{64}$")

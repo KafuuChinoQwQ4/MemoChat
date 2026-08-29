@@ -10,6 +10,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 PACKAGE_NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9+.-]*")
 TRIPLET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -82,6 +83,12 @@ def string_or_default(value: object, default: str = "NOASSERTION") -> str:
     return value if isinstance(value, str) and value else default
 
 
+def vcpkg_purl(package_name: str, version: str) -> str:
+    encoded_name = quote(package_name, safe="-._~")
+    encoded_version = quote(version, safe="-._~")
+    return f"pkg:vcpkg/{encoded_name}@{encoded_version}"
+
+
 def build_document(installed_root: Path, triplet: str, source_sha: str) -> dict[str, Any]:
     status_packages = parse_status(installed_root / "vcpkg/status", triplet)
     share_root = installed_root / triplet / "share"
@@ -134,6 +141,13 @@ def build_document(installed_root: Path, triplet: str, source_sha: str) -> dict[
         }
         if isinstance(primary.get("externalRefs"), list):
             package["externalRefs"] = primary["externalRefs"]
+        package.setdefault("externalRefs", []).append(
+            {
+                "referenceCategory": "PACKAGE-MANAGER",
+                "referenceType": "purl",
+                "referenceLocator": vcpkg_purl(package_name, version),
+            }
+        )
         packages.append(package)
         relationships.append(
             {
